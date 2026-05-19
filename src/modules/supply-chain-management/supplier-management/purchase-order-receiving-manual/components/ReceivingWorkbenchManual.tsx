@@ -4,7 +4,6 @@ import * as React from "react";
 import { useReceivingProductsManual } from "../providers/ReceivingProductsManualProvider";
 import { ReceiptDetailsStep } from "./steps/ReceiptDetailsStep";
 import { ProductVerificationStep } from "./steps/ProductVerificationStep";
-import { ManualProductsStep } from "./steps/ManualProductsStep";
 import { ReviewReceiptStep } from "./steps/ReviewReceiptStep";
 
 import { Card } from "@/components/ui/card";
@@ -27,11 +26,10 @@ export function ReceivingWorkbenchManual({ receiverName }: { receiverName?: stri
         if (!selectedPO) setStep(0);
     }, [selectedPO]);
 
-    // If receipt is saved, we usually stay on step 3 or the module handles visibility
+    // If receipt is saved, we usually stay on the last step (index 2)
     React.useEffect(() => {
         if (receiptSaved) {
-            // Keep on review step (index 3) to show success state
-            setStep(3);
+            setStep(2);
         }
     }, [receiptSaved]);
 
@@ -65,7 +63,6 @@ export function ReceivingWorkbenchManual({ receiverName }: { receiverName?: stri
                     <StepDot active={step === 0} />
                     <StepDot active={step === 1} />
                     <StepDot active={step === 2} />
-                    <StepDot active={step === 3} />
                 </div>
             </div>
 
@@ -73,11 +70,9 @@ export function ReceivingWorkbenchManual({ receiverName }: { receiverName?: stri
                 {step === 0 ? (
                     <ReceiptDetailsStep onContinue={() => setStep(1)} />
                 ) : step === 1 ? (
-                    <ProductVerificationStep onContinue={() => setStep(2)} />
+                    <ProductVerificationStep onContinue={() => setStep(2)} onBack={() => setStep(0)} />
                 ) : step === 2 ? (
-                    <ManualProductsStep onContinue={() => setStep(3)} onBack={() => setStep(1)} />
-                ) : step === 3 ? (
-                    <ReviewReceiptStep onBack={() => setStep(2)} receiverName={receiverName} />
+                    <ReviewReceiptStep onBack={() => setStep(1)} receiverName={receiverName} />
                 ) : null}
             </div>
         </Card>

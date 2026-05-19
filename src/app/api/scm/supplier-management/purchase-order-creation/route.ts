@@ -512,6 +512,8 @@ export async function POST(req: NextRequest) {
         }
 
         const upstream = `${base}/items/purchase_order`;
+        
+        // 1. Create Header First
         const res = await directusFetch(upstream, { method: "POST", body: JSON.stringify(payload) });
         const parsed = await safeJson(res);
 
@@ -537,45 +539,47 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const created = parsed.json?.data ?? parsed.json;
-        const createdPoId = extractPoId(created as Record<string, unknown>);
+        const createdPo = (parsed.json?.data ?? parsed.json) as Record<string, unknown>;
+        const poId = numOrZero(createdPo?.purchase_order_id);
+        if (!poId) throw new Error("Failed to retrieve created PO ID.");
 
-        if (createdPoId) {
-            try {
-                const linesMeta = await ensurePoProducts(base, createdPoId, input, isInvoiceFlag);
-
-                return NextResponse.json({
-                    data: created,
-                    meta: { alreadyExists: false, purchase_order_no: poNumber, po_products: linesMeta },
-                });
-            } catch (e: unknown) {
-                const error = e as Error;
-                let rolledBack = false;
+        // 2. Create Product Lines (Batch POST)
+        // ✅ ATOMIC HARDENING: Create ALL lines in ONE high-performance request
+        const discountMap = await fetchDiscountTypesMap(base);
+        const lines = buildPoProductLines(input, poId, discountMap, isInvoiceFlag);
+        
+        if (lines.length > 0) {
+            const linesUrl = `${base}/items/purchase_order_products`;
+            const lineRes = await directusFetch(linesUrl, { 
+                method: "POST", 
+                body: JSON.stringify(lines) 
+            });
+            if (!lineRes.ok) {
+                const lineErr = await safeJson(lineRes);
+                console.error("Batch line creation failed:", lineErr.json);
+                // Rollback the header
                 try {
-                    await deletePurchaseOrderHeader(base, createdPoId);
-                    rolledBack = true;
-                } catch {
-                    rolledBack = false;
+                    await deletePurchaseOrderHeader(base, poId);
+                } catch (rollbackErr) {
+                    console.error("Failed to rollback header after line failure:", rollbackErr);
+                    // We throw here if rollback fails so we know it's a critical error
+                    throw new Error(`Line creation failed, AND rollback failed: ${String(rollbackErr)}`);
                 }
-
+                
                 return NextResponse.json(
-                    {
-                        error: "PO header created but failed to create PO product lines",
-                        details: error.message,
-                        meta: {
-                            purchase_order_no: poNumber,
-                            purchase_order_id: createdPoId,
-                            rolledBack,
-                        },
-                    },
-                    { status: 500 }
+                    { error: "Failed to create PO product lines. Order creation was rolled back.", details: lineErr.json },
+                    { status: lineRes.status }
                 );
             }
         }
 
         return NextResponse.json({
-            data: created,
-            meta: { alreadyExists: false, purchase_order_no: poNumber, po_products: { created: 0, skipped: true } },
+            data: createdPo,
+            meta: { 
+                alreadyExists: false, 
+                purchase_order_no: poNumber, 
+                po_products: { created: lines.length, skipped: false } 
+            },
         });
     } catch (e: unknown) {
         const error = e as Error;

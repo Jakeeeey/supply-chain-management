@@ -612,6 +612,37 @@ export async function POST(req: NextRequest) {
         const base = getDirectusBase();
         const body = await req.json().catch(() => ({}));
         const action = toStr(body.action);
+
+        if (action === "load_receipt") {
+            const { poId, receiptNo } = body;
+            const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=purchase_order_product_id,product_id,branch_id,received_quantity,lot_id,batch_no,expiry_date`;
+            const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
+            
+            const porIds = (j?.data || []).map(r => toNum(r.purchase_order_product_id)).filter(id => id > 0);
+            let rfids: Record<string, unknown>[] = [];
+            if (porIds.length > 0) {
+                const rfidUrl = `${base}/items/${POR_ITEMS_COLLECTION}?limit=-1&filter[purchase_order_product_id][_in]=${porIds.join(",")}&fields=rfid_code,product_id,purchase_order_product_id,created_at`;
+                const rfidJ = await fetchJson<{ data: Record<string, unknown>[] }>(rfidUrl);
+                rfids = rfidJ?.data || [];
+            }
+            
+            return ok({ items: j?.data || [], rfids });
+        }
+
+        // ✅ Real-time receipt number duplicate check (lightweight — used by frontend onBlur)
+        if (action === "check_receipt_no") {
+            const receiptNoCheck = toStr(body.receiptNo).trim();
+            const poIdCheck = toNum(body.poId);
+            if (!receiptNoCheck || !poIdCheck) return ok({ isDuplicate: false });
+
+            const checkUrl = `${base}/items/${POR_COLLECTION}?limit=1&filter[receipt_no][_eq]=${encodeURIComponent(receiptNoCheck)}&filter[purchase_order_id][_neq]=${poIdCheck}&filter[is_reverted][_neq]=1&fields=purchase_order_id`;
+            const checkJ = await fetchJson<{ data: Array<Record<string, unknown>> }>(checkUrl).catch(() => ({ data: [] }));
+            if (checkJ?.data?.length) {
+                return ok({ isDuplicate: true, existingPoId: checkJ.data[0]?.purchase_order_id });
+            }
+            return ok({ isDuplicate: false });
+        }
+
         if (action === "open_po") {
             const poId = toNum(body.poId);
             if (!poId) return bad("Missing PO ID");
@@ -666,7 +697,6 @@ export async function POST(req: NextRequest) {
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
 
                 const orderedQty = toNum(ln.ordered_quantity);
-                const remainingQty = Math.max(0, orderedQty - receivedQty);
 
                 const item: POItem = {
                     id: porIdStr,
@@ -676,7 +706,7 @@ export async function POST(req: NextRequest) {
                     barcode: productDisplayCode(p, pid),
                     uom: String(p?.unit_of_measurement?.unit_shortcut ?? p?.unit_of_measurement?.unit_name ?? "BOX").toUpperCase(),
                     uomCount: Number(p?.unit_of_measurement_count) || 1,
-                    expectedQty: remainingQty,
+                    expectedQty: orderedQty,
                     receivedQty,
                     requiresRfid: true,
                     taggedQty: taggedCountByKey.get(k) || 0,
@@ -948,9 +978,28 @@ export async function POST(req: NextRequest) {
             const porMetaData = body.porMetaData as Record<string, Record<string, unknown>>;
             const receiverId = body.receiverId;
             const newTags = body.newTags as Array<{ rfid: string; productId: string; porId?: string }>;
+            const isEdit = !!body.isEdit;
 
             if (!poId) return bad("Missing poId.");
             if (!receiptNo) return bad("Missing receipt number.");
+
+            // ✅ Date Validation: Prevent invalid years (e.g., 6-digit years like "151531")
+            const trimmedDate = receiptDate.trim();
+            if (trimmedDate) {
+                const parsedDate = new Date(trimmedDate);
+                const year = parsedDate.getFullYear();
+                if (isNaN(year) || year < 2000 || year > 3000) {
+                    return bad("Invalid Receipt Date. Year must be between 2000 and 3000.", 400);
+                }
+            }
+
+            // ✅ Cross-PO Receipt Number Uniqueness Check
+            const trimmedReceiptNo = receiptNo.trim();
+            const dupCheckUrl = `${base}/items/${POR_COLLECTION}?limit=1&filter[receipt_no][_eq]=${encodeURIComponent(trimmedReceiptNo)}&filter[purchase_order_id][_neq]=${poId}&filter[is_reverted][_neq]=1&fields=purchase_order_product_id,purchase_order_id`;
+            const dupCheckJ = await fetchJson<{ data: Array<Record<string, unknown>> }>(dupCheckUrl).catch(() => ({ data: [] }));
+            if (dupCheckJ?.data?.length) {
+                return bad(`Receipt Number "${trimmedReceiptNo}" is already in use on another Purchase Order (PO ID: ${dupCheckJ.data[0]?.purchase_order_id}).`, 409);
+            }
 
             const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=purchase_order_id,purchase_order_no,supplier_name,discount_type.*,discount_type.line_per_discount_type.line_id.*,inventory_status,price_type,date_encoded,vat_amount,withholding_tax_amount`;
             const pj = await fetchJson<{ data: POHeaderRow }>(poUrl);
@@ -1014,6 +1063,25 @@ export async function POST(req: NextRequest) {
                     });
                 } else {
                     realPorIdsByLocalKey.set(key, toNum(key));
+                }
+            }
+
+            // ✅ Handle Edit Mode: Remove tags that were deleted from the UI
+            if (isEdit) {
+                const existingRows = porRows.filter(r => toStr(r.receipt_no) === receiptNo);
+                const existingPorIds = existingRows.map(r => toNum(r.purchase_order_product_id)).filter(id => id > 0);
+                
+                if (existingPorIds.length > 0) {
+                    const rfidUrl = `${base}/items/${POR_ITEMS_COLLECTION}?limit=-1&filter[purchase_order_product_id][_in]=${existingPorIds.join(",")}&fields=receiving_item_id,rfid_code`;
+                    const existingRfidsRes = await fetchJson<{ data: Array<{ receiving_item_id: number, rfid_code: string }> }>(rfidUrl).catch(() => null);
+                    const existingRfids = existingRfidsRes?.data || [];
+                    
+                    const newRfidCodes = new Set(Array.isArray(newTags) ? newTags.map(t => t.rfid) : []);
+                    const toDelete = existingRfids.filter(r => !newRfidCodes.has(r.rfid_code));
+                    
+                    for (const r of toDelete) {
+                        await fetchJson(`${base}/items/${POR_ITEMS_COLLECTION}/${r.receiving_item_id}`, { method: "DELETE" }).catch(() => {});
+                    }
                 }
             }
 

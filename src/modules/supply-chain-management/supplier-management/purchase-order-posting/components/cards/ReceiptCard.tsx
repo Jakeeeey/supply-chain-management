@@ -64,8 +64,11 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant={isPosted ? "outline" : "secondary"}>
-                        {isPosted ? "POSTED" : "UNPOSTED"}
+                    <Badge
+                        variant={isPosted ? "outline" : "secondary"}
+                        className={isPosted ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" : "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30"}
+                    >
+                        {isPosted ? "POSTED INVENTORY" : "UNPOSTED"}
                     </Badge>
 
                     {canRevert && (

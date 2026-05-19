@@ -157,7 +157,10 @@ export const SalesReturnFilters = ({ logic }: { logic: SalesReturnReportHook }) 
             Customer
           </label>
           <SearchableSelect
-            options={options.customers}
+            options={options.customers.map((c) => ({
+              value: String(c.value),
+              label: c.value && c.value !== "All" ? `[${c.value}] ${c.label}` : c.label,
+            }))}
             value={filters.customerCode || ""}
             onChange={(v) => handleFilterChange("customerCode", v)}
             placeholder="All Customers"
@@ -188,7 +191,7 @@ export const SalesReturnFilters = ({ logic }: { logic: SalesReturnReportHook }) 
           <SearchableSelect
             options={options.suppliers.map((s: SummarySupplierOption) => ({
               value: String(s.id),
-              label: s.name,
+              label: s.shortcut ? `[${s.shortcut}] ${s.name}` : s.name,
             }))}
             value={filters.supplierName || ""}
             onChange={(v) => handleFilterChange("supplierName", v)}

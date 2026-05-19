@@ -182,11 +182,7 @@ export const SalesReturnTable = ({
           <SalesReturnExportDialog
             customers={options.customers}
             salesmen={options.salesmen}
-            suppliers={options.suppliers.map((s: SummarySupplierOption) => ({
-              ...s,
-              value: s.name,
-              label: s.name,
-            }))}
+            suppliers={options.suppliers}
             returnTypes={options.returnTypes}
           />
           <span className="text-sm text-slate-500 dark:text-slate-400">

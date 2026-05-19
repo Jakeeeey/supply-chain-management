@@ -54,52 +54,52 @@ export function useStockTransferApproval() {
         const newAvailable: Record<number, number> = {};
         const newAllocated: Record<number, number> = {};
 
-        // Fetch all product inventories in parallel (eliminates serial N+1 waterfall)
+        // Fetch branch aggregate inventory in a single call (eliminates client-side N+1 waterfalls)
         const group = base.selectedGroup!;
-        await Promise.all(group.items.map(async (item: OrderGroupItem) => {
-          const product = item.product_id as ProductRow;
-          const pid = product?.product_id || item.product_id;
+        const params = new URLSearchParams({
+          branchName: sourceBranchName,
+          branchId: String(group.sourceBranch),
+          current: '0'
+        });
 
-          const params = new URLSearchParams({
-            branchName: sourceBranchName,
-            branchId: String(group.sourceBranch),
-            productId: String(pid),
-            current: '0'
+        const proxyUrl = `/api/scm/warehouse-management/stock-transfer/inventory-proxy?${params.toString()}`;
+        const res = await fetch(proxyUrl);
+        
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data) ? data : (data.data || []);
+          
+          // Build a lookup map of product ID to running inventory
+          const invMap = new Map<string, number>();
+          list.forEach((inv: Record<string, string | number | unknown>) => {
+            const pId = String(inv.productId ?? inv.product_id ?? "");
+            const qty = Number(inv.runningInventory ?? inv.running_inventory ?? 0);
+            if (pId) {
+              invMap.set(pId, (invMap.get(pId) || 0) + qty);
+            }
           });
 
-          const proxyUrl = `/api/scm/warehouse-management/stock-transfer/inventory-proxy?${params.toString()}`;
-          
-          try {
-            const res = await fetch(proxyUrl);
-            if (res.ok) {
-              const data = await res.json();
-              const list = Array.isArray(data) ? data : (data.data || []);
-              // Handle both camelCase (productId) and snake_case (product_id) from Spring API
-              const inventoryList = list.filter((inv: Record<string, string | number>) => 
-                 String(inv.productId ?? inv.product_id) === String(pid) && 
-                 String(inv.branchId ?? inv.branch_id) === String(group.sourceBranch)
-              );
-              
-              const availableCount = inventoryList.reduce((acc: number, inv: Record<string, string | number>) => acc + Number(inv.runningInventory ?? inv.running_inventory ?? 0), 0);
-              const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
-              const realAvailable = Math.max(0, Math.floor(availableCount / unitCount));
+          // Calculate available and allocated counts for each line item
+          group.items.forEach((item: OrderGroupItem) => {
+            const product = item.product_id as ProductRow;
+            const pid = String(product?.product_id || item.product_id);
+            
+            const availableCount = invMap.get(pid) || 0;
+            const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
+            const realAvailable = Math.max(0, Math.floor(availableCount / unitCount));
 
-              newAvailable[item.id] = realAvailable;
-              
-              // Strict Enforcement: Allocation cannot exceed available stock.
-              // If available is 0, allocation is 0.
-              newAllocated[item.id] = Math.min(item.ordered_quantity || 0, realAvailable);
-            } else {
-              // API Error - block allocation for safety
-              newAvailable[item.id] = 0;
-              newAllocated[item.id] = 0;
-            }
-          } catch {
-            // Network Error - block allocation for safety
+            newAvailable[item.id] = realAvailable;
+            
+            // Strict Enforcement: Allocation cannot exceed available stock.
+            newAllocated[item.id] = Math.min(item.ordered_quantity || 0, realAvailable);
+          });
+        } else {
+          // API Error - block allocation for safety
+          group.items.forEach((item: OrderGroupItem) => {
             newAvailable[item.id] = 0;
             newAllocated[item.id] = 0;
-          }
-        }));
+          });
+        }
 
         setAvailableQtys(newAvailable);
         setAllocatedQtys(newAllocated);

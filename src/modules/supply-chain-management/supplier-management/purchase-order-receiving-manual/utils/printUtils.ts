@@ -165,7 +165,7 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
 
             autoTable(doc, {
                 startY: detailsY + 15,
-                margin: { left: 10, right: 10 },
+                margin: { top: startY, left: 10, right: 10 },
                 head: [["Barcode", "Product", "Batch/Exp", "UOM", "Order Qty", "Received", "Unit Price", "Disc Amt", "Net Amt"]],
                 body: tableRows,
                 foot: [[
@@ -191,8 +191,9 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
                     7: { halign: "right", cellWidth: 18 },
                     8: { halign: "right", cellWidth: 20, fontStyle: "bold" },
                 },
-                didDrawPage: (data) => {
-                    if (data.pageNumber > 1 && config.elements) {
+                didDrawPage: () => {
+                    // Always render template elements on every page
+                    if (config.elements) {
                         Object.values(config.elements).forEach(el => {
                             renderElement(doc, el as PdfElementConfig, companyData as CompanyData);
                         });

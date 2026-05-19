@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
 
         if (rootIds.length === 0) return NextResponse.json({ data: [] });
 
-        // 2) Find All Family Members that are Box (UOM 11)
+        // 2) Find All Family Members that are Box (UOM 11) or Piece (UOM 1)
         const familyFilter = {
             _and: [
                 {
@@ -98,13 +98,46 @@ export async function GET(req: NextRequest) {
                         { parent_id: { _in: rootIds } }
                     ]
                 },
-                { unit_of_measurement: { _eq: 11 } }
+                { unit_of_measurement: { _in: [11, 1] } }
             ]
         };
-        const familyUrl = `${base}/items/products?limit=-1&fields=product_id,parent_id&filter=${encodeURIComponent(JSON.stringify(familyFilter))}`;
+        const familyUrl = `${base}/items/products?limit=-1&fields=product_id,parent_id,unit_of_measurement.*&filter=${encodeURIComponent(JSON.stringify(familyFilter))}`;
         const familyRes = await fetch(familyUrl, { headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN}` }, cache: "no-store" });
         const familyJson = await familyRes.json().catch(() => ({}));
-        const familyProducts = (familyJson.data ?? []) as ProductMeta[];
+        interface FamilyProduct {
+            product_id: string | number;
+            parent_id?: string | number | null;
+            unit_of_measurement?: number | string | Record<string, unknown> | null;
+        }
+
+        const rawFamilyProducts = (familyJson.data ?? []) as FamilyProduct[];
+
+        // ✅ Prioritize Box (11) over Piece (1)
+        const familyMap = new Map<string, FamilyProduct[]>();
+        for (const p of rawFamilyProducts) {
+            const rid = String(p.parent_id || p.product_id);
+            if (!familyMap.has(rid)) familyMap.set(rid, []);
+            familyMap.get(rid)!.push(p);
+        }
+
+        const familyProducts: ProductMeta[] = [];
+        for (const family of familyMap.values()) {
+            const boxProduct = family.find((p) => {
+                const rawUom = p.unit_of_measurement;
+                const uomId = Number(typeof rawUom === "object" && rawUom !== null ? rawUom.unit_id ?? rawUom.id : rawUom);
+                return uomId === 11;
+            });
+            if (boxProduct) {
+                familyProducts.push(boxProduct as ProductMeta);
+            } else {
+                const pieceProduct = family.find((p) => {
+                    const rawUom = p.unit_of_measurement;
+                    const uomId = Number(typeof rawUom === "object" && rawUom !== null ? rawUom.unit_id ?? rawUom.id : rawUom);
+                    return uomId === 1;
+                });
+                if (pieceProduct) familyProducts.push(pieceProduct as ProductMeta);
+            }
+        }
 
         // 3) Build Synthetic Links
         const discountByRootId = new Map<string, unknown>();

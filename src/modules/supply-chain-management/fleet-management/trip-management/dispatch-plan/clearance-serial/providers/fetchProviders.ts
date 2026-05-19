@@ -63,7 +63,7 @@ export const fetchSerialNumbersForDispatch = async (dispatchId: number): Promise
 };
 
 export const fetchSalesReturnsByInvoice = async (invoiceNo: string): Promise<{ id: number; returnNo: string; returnDate: string; totalAmount: number }[]> => {
-  const response = await fetch(`/api/scm/inventories/sales-return-manual?action=list&invoiceNo=${encodeURIComponent(invoiceNo)}`);
+  const response = await fetch(`/api/scm/inventories/sales-return-serial?action=list&invoiceNo=${encodeURIComponent(invoiceNo)}`);
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }

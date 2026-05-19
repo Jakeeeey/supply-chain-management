@@ -10,7 +10,7 @@ export function useSalesReturnList() {
   const [totalPages, setTotalPages] = useState(1);
 
   const [options, setOptions] = useState<{
-    salesmen: { value: string; label: string }[];
+    salesmen: { value: string; label: string; code?: string }[];
     customers: { value: string; label: string }[];
   }>({
     salesmen: [],

@@ -11,6 +11,7 @@ import { ProductsReceivingStatusCard } from "./cards/ProductsReceivingStatusCard
 import { ReceiptsCard } from "./cards/ReceiptsCard";
 import { PODetailsBreakdownCard } from "./cards/PODetailsBreakdownCard";
 import { PostingPOPrintAction } from "./PostingPOPrintAction";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function statusBadge(status: string) {
     const s = String(status || "").toUpperCase();
@@ -27,14 +28,34 @@ function statusBadge(status: string) {
 
 function statusLabel(status: string) {
     const s = String(status || "").toUpperCase();
-    if (s === "FOR_POSTING" || s === "FOR POSTING") return "FOR POSTING";
-    if (s === "PARTIAL_POSTED") return "PARTIAL POSTED";
+    if (s === "FOR_POSTING" || s === "FOR POSTING") return "AWAITING AMOUNTS";
+    if (s === "PARTIAL_POSTED") return "PARTIAL - AWAITING AMOUNTS";
     return s;
 }
 
 export function PostingPODetail() {
-    const { selectedPO, postError, successMsg, clearSuccess, postAllReceipts, posting } =
+    const { selectedPO, postError, successMsg, clearSuccess, postAllReceipts, posting, poLoading } =
         usePostingOfPo();
+
+    if (poLoading) {
+        return (
+            <Card className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                    <div className="space-y-2">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-24" />
+                    </div>
+                    <Skeleton className="h-8 w-20" />
+                </div>
+                <Skeleton className="h-24 w-full" />
+                <div className="grid grid-cols-2 gap-4">
+                    <Skeleton className="h-40 w-full" />
+                    <Skeleton className="h-40 w-full" />
+                </div>
+                <Skeleton className="h-64 w-full" />
+            </Card>
+        );
+    }
 
     if (!selectedPO) {
         return (
@@ -65,8 +86,7 @@ export function PostingPODetail() {
         status === "PARTIAL" ||
         status === "PARTIAL_POSTED";
 
-    // Info banner for partial-posted POs: clarify they can keep posting as more is received
-    const isPartialPosted = status === "PARTIAL_POSTED";
+
 
     return (
         <div className={cn(
@@ -88,7 +108,7 @@ export function PostingPODetail() {
                         <Button
                             type="button"
                             size="sm"
-                            disabled={posting}
+                            disabled={posting || selectedPO.unpostedReceiptsCount === 0}
                             onClick={() => postAllReceipts(String(selectedPO.id))}
                             className="bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-[10px] h-8 rounded-lg shadow-sm"
                         >
@@ -124,13 +144,7 @@ export function PostingPODetail() {
                     </div>
                 </div>
 
-                {/* Partial-posted info banner */}
-                {isPartialPosted && (
-                    <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 text-[11px] text-blue-700 dark:text-blue-300 font-medium">
-                        <span className="font-black uppercase mr-1">Partially posted.</span>
-                        This PO has been partially received and posted. It will remain here so you can post additional receipts as more items are received.
-                    </div>
-                )}
+
 
                 {successMsg ? (
                     <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-[11px] text-emerald-700 dark:text-emerald-300 font-medium">
