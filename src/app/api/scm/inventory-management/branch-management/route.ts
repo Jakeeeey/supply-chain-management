@@ -3,6 +3,15 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+interface SubscriptionLimitRecord {
+    module_name?: string;
+    limit_value?: string | number;
+}
+
+interface BranchRecord {
+    isBadStock?: number | string | boolean | null;
+}
+
 const DIRECTUS_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
 const DIRECTUS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN || "";
 
@@ -41,12 +50,14 @@ async function getSubscriptionLimit(): Promise<number> {
             return -1;
         }
         const limitData = await limitRes.json();
-        const limits = limitData.data || [];
+        const limits: SubscriptionLimitRecord[] = limitData.data || [];
         const limitRecord = limits.find(
-            (item: any) => item.module_name === "branch" || item.module_name === "branch-management"
+            (item: SubscriptionLimitRecord) => item.module_name === "branch" || item.module_name === "branch-management"
         );
         if (limitRecord) {
-            const val = parseInt(limitRecord.limit_value);
+            const val = typeof limitRecord.limit_value === "number"
+                ? limitRecord.limit_value
+                : parseInt(String(limitRecord.limit_value || ""));
             return isNaN(val) ? -1 : val;
         }
         return -1;
@@ -81,10 +92,10 @@ export async function GET() {
 
         const branchesData = await branchesRes.json();
         const usersData = await usersRes.json();
-        const branchesList = branchesData.data || [];
+        const branchesList: BranchRecord[] = branchesData.data || [];
 
         const currentCount = branchesList.filter(
-            (b: any) => b.isBadStock === 0 || b.isBadStock === "0" || b.isBadStock === false || !b.isBadStock
+            (b: BranchRecord) => b.isBadStock === 0 || b.isBadStock === "0" || b.isBadStock === false || !b.isBadStock
         ).length;
 
         const isReached = limitValue !== -1 && currentCount >= limitValue;
@@ -121,9 +132,9 @@ export async function POST(req: NextRequest) {
         }
 
         const branchesData = await branchesRes.json();
-        const branchesList = branchesData.data || [];
+        const branchesList: BranchRecord[] = branchesData.data || [];
         const currentCount = branchesList.filter(
-            (b: any) => b.isBadStock === 0 || b.isBadStock === "0" || b.isBadStock === false || !b.isBadStock
+            (b: BranchRecord) => b.isBadStock === 0 || b.isBadStock === "0" || b.isBadStock === false || !b.isBadStock
         ).length;
 
         if (limitValue !== -1 && currentCount >= limitValue) {
