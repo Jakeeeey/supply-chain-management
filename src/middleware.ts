@@ -1,6 +1,6 @@
 // src/middleware.ts
 import { NextRequest, NextResponse } from "next/server"
-import { decodeJwtPayload, COOKIE_NAME, REFRESH_COOKIE_NAME, LAST_VISITED_PATH_COOKIE, pickTokenFromPayload } from "@/lib/auth-utils"
+import { decodeJwtPayload, COOKIE_NAME, REFRESH_COOKIE_NAME, LAST_VISITED_PATH_COOKIE, pickTokenFromPayload, IS_SECURE_COOKIE } from "@/modules/supply-chain-management/inventory-management/stock-adjustment/utils/auth-utils"
 
 const PUBLIC_FILE = /\.(.*)$/
 const BASELINE_PREFIXES = ["/main-dashboard"]
@@ -302,7 +302,7 @@ export async function middleware(req: NextRequest) {
             value: token,
             httpOnly: true,
             sameSite: "lax",
-            secure: process.env.NODE_ENV === "production",
+            secure: IS_SECURE_COOKIE,
             path: "/",
             maxAge: 60 * 60 * 24 * 7, // 7 days (since it's a persistent session)
         });
@@ -323,7 +323,7 @@ export async function middleware(req: NextRequest) {
             maxAge: 60 * 60 * 24 * 7, // 7 days
             path: "/",
             sameSite: "lax",
-            secure: process.env.NODE_ENV === "production"
+            secure: IS_SECURE_COOKIE
         });
     }
 
@@ -333,4 +333,3 @@ export async function middleware(req: NextRequest) {
 export const config = {
     matcher: ["/:path*"],
 }
-

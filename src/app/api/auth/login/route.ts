@@ -9,8 +9,9 @@ import {
     COOKIE_MAX_AGE_CAP,
     extractClientIp,
     resolveIpGeo,
-    getCookieOptions
-} from "@/lib/auth-utils";
+    getCookieOptions,
+    IS_SECURE_COOKIE
+} from "@/modules/supply-chain-management/inventory-management/stock-adjustment/utils/auth-utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -231,7 +232,7 @@ export async function POST(req: NextRequest) {
                 lockedUntilTs = Date.now() + duration;
             }
 
-            // CRITICAL SAFETY: If the timestamp is in the past or too close to 'now', 
+            // CRITICAL SAFETY: If the timestamp is in the past or too close to 'now',
             // force a minimum duration so the client doesn't see "00:00"
             const minBuffer = 5000; // 5 second grace
             if (lockedUntilTs <= (Date.now() + minBuffer)) {
@@ -359,7 +360,7 @@ export async function POST(req: NextRequest) {
             value: String(latitude),
             httpOnly: true,
             sameSite: "lax",
-            secure: false,
+            secure: IS_SECURE_COOKIE,
             path: "/",
             ...(remember ? { maxAge: cookieMaxAge } : {}),
         });
@@ -368,7 +369,7 @@ export async function POST(req: NextRequest) {
             value: String(longitude),
             httpOnly: true,
             sameSite: "lax",
-            secure: false,
+            secure: IS_SECURE_COOKIE,
             path: "/",
             ...(remember ? { maxAge: cookieMaxAge } : {}),
         });
@@ -376,4 +377,3 @@ export async function POST(req: NextRequest) {
 
     return res;
 }
-
