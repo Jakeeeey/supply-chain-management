@@ -22,10 +22,9 @@ export interface UserRow {
  * We define this here to avoid modifying the shared global types.
  */
 export interface SummaryStockTransferRow extends StockTransferRow {
-  date_approved?: string | null;
-  date_dispatched?: string | null;
-  approver_id?: number | null;
-  dispatcher_id?: number | null;
+  approved_by?: number | null;
+  dispatched_by?: number | null;
+  dispatched_at?: string | null;
 }
 
 /** Extended OrderGroup for Summary specifically, including audit trail. */
@@ -164,12 +163,12 @@ export function useStockTransferSummary() {
           dateRequested: st.date_requested,
           dateEncoded: st.date_encoded || "",
           // Enrichment fields
-          dateApproved: st.date_approved,
-          dateDispatched: st.date_dispatched,
+          dateApproved: st.approved_by ? st.date_encoded : null,
+          dateDispatched: st.dispatched_at,
           dateReceived: st.date_received,
           encoderId: st.encoder_id,
-          approverId: st.approver_id,
-          dispatcherId: st.dispatcher_id,
+          approverId: st.approved_by,
+          dispatcherId: st.dispatched_by,
           receiverId: st.receiver_id,
           items: [],
           totalAmount: 0,
