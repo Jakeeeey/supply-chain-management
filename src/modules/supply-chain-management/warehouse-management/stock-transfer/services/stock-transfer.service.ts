@@ -112,6 +112,18 @@ export async function createTransfer(payload: CreateTransferPayload): Promise<{ 
 }
 
 /**
+ * Helper to return current PH Manila Time (UTC+8) as an ISO-like string
+ * but without the 'Z' suffix to ensure correct local interpretation.
+ */
+function nowPH(): string {
+  const date = new Date();
+  const phOffset = 8 * 60; // 8 hours in minutes
+  const localOffset = date.getTimezoneOffset(); // in minutes
+  const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
+  return phTime.toISOString().replace("Z", "");
+}
+
+/**
  * Updates status and handles optional RFID tracking logic.
  */
 export async function updateTransferStatus(payload: UpdateTransferPayload): Promise<{ success: boolean }> {
@@ -119,14 +131,23 @@ export async function updateTransferStatus(payload: UpdateTransferPayload): Prom
   const validated = UpdateStockTransferSchema.parse(payload);
   
   // 2. Normalize updates (handle both 'items' and 'ids' formats)
-  const now = new Date().toISOString();
+  const phNow = nowPH();
   const updates = (validated.items || (validated.ids || []).map(id => ({
     id,
     status: validated.status || "Unknown"
   }))).map(u => ({
     ...u,
-    ...(u.status === "Received" ? { date_received: now, receiver_id: validated.userId || null } : {})
+    ...(u.status === "Received" ? { date_received: phNow, receiver_id: validated.userId || null } : {}),
+    ...(u.status === "For Picking" ? { 
+      approved_by: validated.userId || null
+    } : {}),
+    ...(u.status === "For Loading" ? { 
+      dispatched_at: phNow, 
+      dispatched_by: validated.userId || null 
+    } : {})
   }));
+
+  console.log("[Stock Transfer Service] Mapped updates payload:", JSON.stringify(updates));
 
   if (updates.length === 0) return { success: true };
 
