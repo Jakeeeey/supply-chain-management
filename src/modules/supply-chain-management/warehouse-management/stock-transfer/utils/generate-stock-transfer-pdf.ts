@@ -370,8 +370,21 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
     y += 4; // Gap between groups
   });
 
+  // ── Reference Info (Below table) ──────────────────────────────
+  if (y > pageH - 45) {
+    doc.addPage();
+    y = 20;
+  }
+
+  y += 6;
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(80, 80, 80);
+  doc.text(`${orderNo.toUpperCase()} \u2014 ${pickerName.toUpperCase()}`, margin, y);
+  y += 2;
+
   // ── Signature Section ─────────────────────────────────────────
-  const sigY = Math.max(y + 10, pageH - 40);
+  const sigY = Math.max(y + 16, pageH - 40);
   const sigW = (contentW - 40) / 2;
 
   // Picker Confirmation
