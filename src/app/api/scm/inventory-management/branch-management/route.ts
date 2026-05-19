@@ -12,9 +12,53 @@ function directusHeaders() {
     return h;
 }
 
+async function getSubscriptionLimit(): Promise<number> {
+    try {
+        const companyRes = await fetch(`${DIRECTUS_BASE}/items/company?filter[company_id][_eq]=1`, {
+            cache: "no-store",
+            headers: directusHeaders(),
+        });
+        if (!companyRes.ok) {
+            console.error("Failed to fetch company subscription", await companyRes.text());
+            return -1;
+        }
+        const companyData = await companyRes.json();
+        const company = companyData.data?.[0];
+        const subscriptionId = company?.company_subscription;
+        if (!subscriptionId) {
+            return -1;
+        }
+
+        const limitRes = await fetch(
+            `${DIRECTUS_BASE}/items/subscription_limits?filter[subscription_id][_eq]=${subscriptionId}`,
+            {
+                cache: "no-store",
+                headers: directusHeaders(),
+            }
+        );
+        if (!limitRes.ok) {
+            console.error("Failed to fetch subscription limits", await limitRes.text());
+            return -1;
+        }
+        const limitData = await limitRes.json();
+        const limits = limitData.data || [];
+        const limitRecord = limits.find(
+            (item: any) => item.module_name === "branch" || item.module_name === "branch-management"
+        );
+        if (limitRecord) {
+            const val = parseInt(limitRecord.limit_value);
+            return isNaN(val) ? -1 : val;
+        }
+        return -1;
+    } catch (err) {
+        console.error("Error fetching subscription limit:", err);
+        return -1;
+    }
+}
+
 export async function GET() {
     try {
-        const [branchesRes, usersRes] = await Promise.all([
+        const [branchesRes, usersRes, limitValue] = await Promise.all([
             fetch(`${DIRECTUS_BASE}/items/branches?limit=-1`, {
                 cache: "no-store",
                 headers: directusHeaders(),
@@ -22,7 +66,8 @@ export async function GET() {
             fetch(`${DIRECTUS_BASE}/items/user?limit=-1`, {
                 cache: "no-store",
                 headers: directusHeaders(),
-            })
+            }),
+            getSubscriptionLimit()
         ]);
 
         if (!branchesRes.ok) {
@@ -36,10 +81,22 @@ export async function GET() {
 
         const branchesData = await branchesRes.json();
         const usersData = await usersRes.json();
+        const branchesList = branchesData.data || [];
+
+        const currentCount = branchesList.filter(
+            (b: any) => b.isBadStock === 0 || b.isBadStock === "0" || b.isBadStock === false || !b.isBadStock
+        ).length;
+
+        const isReached = limitValue !== -1 && currentCount >= limitValue;
 
         return NextResponse.json({
-            branches: branchesData.data || [],
-            users: usersData.data || []
+            branches: branchesList,
+            users: usersData.data || [],
+            subscriptionLimit: {
+                limitValue,
+                currentCount,
+                isReached
+            }
         });
     } catch (err: unknown) {
         const error = err as Error;
@@ -49,6 +106,36 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
     try {
+        // Check subscription limit first
+        const [limitValue, branchesRes] = await Promise.all([
+            getSubscriptionLimit(),
+            fetch(`${DIRECTUS_BASE}/items/branches?limit=-1`, {
+                cache: "no-store",
+                headers: directusHeaders(),
+            })
+        ]);
+
+        if (!branchesRes.ok) {
+            const errorText = await branchesRes.text();
+            return NextResponse.json({ error: "Failed to verify branch limits", details: errorText }, { status: branchesRes.status });
+        }
+
+        const branchesData = await branchesRes.json();
+        const branchesList = branchesData.data || [];
+        const currentCount = branchesList.filter(
+            (b: any) => b.isBadStock === 0 || b.isBadStock === "0" || b.isBadStock === false || !b.isBadStock
+        ).length;
+
+        if (limitValue !== -1 && currentCount >= limitValue) {
+            return NextResponse.json(
+                {
+                    error: "Subscription Limit Reached",
+                    details: `You have reached the maximum limit of ${limitValue} registered branches for your company subscription tier.`
+                },
+                { status: 403 }
+            );
+        }
+
         const body = await req.json();
         const {
             branch_name,

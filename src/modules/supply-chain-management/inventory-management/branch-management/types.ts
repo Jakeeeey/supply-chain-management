@@ -42,3 +42,10 @@ export interface Barangay {
     name: string;
     cityCode: string;
 }
+
+export interface SubscriptionLimit {
+    limitValue: number;
+    currentCount: number;
+    isReached: boolean;
+}
+
