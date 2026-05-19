@@ -31,6 +31,7 @@ export default function BranchManagementModule() {
         setCurrentPage,
         totalPages,
         itemsPerPage,
+        subscriptionLimit,
     } = useBranchManagement();
 
     const slicedBranches = React.useMemo(() => {
@@ -60,9 +61,29 @@ export default function BranchManagementModule() {
                     <div className="p-3.5 bg-primary/10 rounded-2xl border border-primary/20 shadow-inner">
                         <Building2 className="h-7 w-7 text-primary" />
                     </div>
-                    <div>
-                        <h1 className="text-3xl font-bold tracking-tight text-foreground">Branch Management</h1>
-                        <p className="text-muted-foreground text-sm mt-1 font-medium">Register and manage company branches and warehouses.</p>
+                    <div className="flex flex-col gap-1">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <h1 className="text-3xl font-bold tracking-tight text-foreground">Branch Management</h1>
+                            {subscriptionLimit && (
+                                <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border backdrop-blur-md transition-all duration-300 ${
+                                    subscriptionLimit.isReached 
+                                    ? "bg-red-500/10 text-red-500 border-red-500/20 shadow-sm animate-pulse" 
+                                    : "bg-primary/10 text-primary border-primary/20 shadow-sm"
+                                }`}>
+                                    <span className="relative flex h-2 w-2">
+                                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${subscriptionLimit.isReached ? "bg-red-500" : "bg-primary"}`}></span>
+                                        <span className={`relative inline-flex rounded-full h-2 w-2 ${subscriptionLimit.isReached ? "bg-red-500" : "bg-primary"}`}></span>
+                                    </span>
+                                    <span>
+                                        {subscriptionLimit.limitValue === -1 
+                                            ? `${subscriptionLimit.currentCount} / Unlimited`
+                                            : `${subscriptionLimit.currentCount} / ${subscriptionLimit.limitValue} Branches`
+                                        }
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                        <p className="text-muted-foreground text-sm font-medium">Register and manage company branches and warehouses.</p>
                     </div>
                 </div>
 
@@ -74,6 +95,21 @@ export default function BranchManagementModule() {
                     Add New Branch
                 </Button>
             </div>
+
+            {/* Subscription Limit Warning Alert */}
+            {subscriptionLimit?.isReached && (
+                <div className="bg-red-500/5 border border-red-500/20 text-red-500 text-sm font-medium p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in slide-in-from-top duration-300">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-red-500/10 rounded-xl shrink-0">
+                            <Building2 className="h-5 w-5 text-red-500" />
+                        </div>
+                        <div>
+                            <p className="font-bold text-sm">Subscription Limit Reached</p>
+                            <p className="text-xs text-red-500/80 mt-0.5">You have registered the maximum allowed branches ({subscriptionLimit.limitValue}) for your current subscription tier. Upgrade your subscription tier to add more branches.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Filters & Search Section */}
             <div className="bg-card/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-center gap-6">
@@ -150,6 +186,7 @@ export default function BranchManagementModule() {
                 }}
                 editingBranch={editingBranch}
                 users={users}
+                subscriptionLimit={subscriptionLimit}
                 onSuccess={refresh}
             />
         </div>
