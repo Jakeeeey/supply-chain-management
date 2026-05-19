@@ -112,3 +112,22 @@ export async function resolveIpGeo(ip: string): Promise<{ latitude: number; long
     return null;
   }
 }
+
+/**
+ * Extract User ID from JWT Payload
+ */
+export function getUserIdFromToken(token: string | null | undefined): number | null {
+  if (!token) return null;
+  const payload = decodeJwtPayload(token);
+  if (!payload) return null;
+
+  // Try common ID fields from payload
+  const idValue = payload.user_id ?? payload.userId ?? payload.id ?? payload.sub;
+
+  if (idValue !== undefined && idValue !== null) {
+    const num = Number(idValue);
+    return isNaN(num) ? null : num;
+  }
+
+  return null;
+}
