@@ -195,7 +195,18 @@ export async function createStockTransfers(payloads: StockTransferInsertPayload[
 /**
  * Updates status and allocated quantity for a batch of items.
  */
-export async function updateTransfersStatus(items: { id: number; status: string; allocated_quantity?: number; date_received?: string | null; receiver_id?: number | null }[]): Promise<void> {
+export async function updateTransfersStatus(
+  items: { 
+    id: number; 
+    status: string; 
+    allocated_quantity?: number; 
+    date_received?: string | null; 
+    receiver_id?: number | null;
+    dispatched_by?: number | null;
+    dispatched_at?: string | null;
+    approved_by?: number | null;
+  }[]
+): Promise<void> {
   if (items.length === 0) return;
 
   // Group items by their update payload shape so we can batch them
@@ -206,6 +217,9 @@ export async function updateTransfersStatus(items: { id: number; status: string;
       ...(item.allocated_quantity !== undefined ? { allocated_quantity: item.allocated_quantity } : {}),
       ...(item.date_received !== undefined ? { date_received: item.date_received } : {}),
       ...(item.receiver_id !== undefined ? { receiver_id: item.receiver_id } : {}),
+      ...(item.dispatched_by !== undefined ? { dispatched_by: item.dispatched_by } : {}),
+      ...(item.dispatched_at !== undefined ? { dispatched_at: item.dispatched_at } : {}),
+      ...(item.approved_by !== undefined ? { approved_by: item.approved_by } : {}),
     });
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push(item.id);
@@ -213,9 +227,10 @@ export async function updateTransfersStatus(items: { id: number; status: string;
 
   // Execute one bulk PATCH per unique payload shape
   await Promise.all(
-    Object.entries(grouped).map(([dataJson, ids]) =>
-      bulkUpdateItems("items/stock_transfer", ids, JSON.parse(dataJson) as Record<string, unknown>)
-    )
+    Object.entries(grouped).map(([dataJson, ids]) => {
+      console.log("[DEBUG] Executing bulkUpdateItems for IDs:", ids, "Payload:", dataJson);
+      return bulkUpdateItems("items/stock_transfer", ids, JSON.parse(dataJson) as Record<string, unknown>);
+    })
   );
 }
 
