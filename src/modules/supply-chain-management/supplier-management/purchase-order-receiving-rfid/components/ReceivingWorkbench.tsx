@@ -74,7 +74,7 @@ export function ReceivingWorkbench({ receiverName }: { receiverName?: string }) 
                 {step === 0 ? (
                     <ReceiptDetailsStep onContinue={() => setStep(1)} />
                 ) : step === 1 ? (
-                    <ProductChecklistStep onContinue={() => setStep(2)} />
+                    <ProductChecklistStep onContinue={() => setStep(2)} onBack={() => setStep(0)} />
                 ) : step === 2 ? (
                     <TagRFIDStep onContinue={() => setStep(3)} onBack={() => setStep(1)} />
                 ) : step === 3 ? (

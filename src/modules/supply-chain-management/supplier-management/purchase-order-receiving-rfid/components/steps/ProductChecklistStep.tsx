@@ -10,7 +10,7 @@ import { useReceivingProducts } from "../../providers/ReceivingProductsProvider"
 import { AddExtraProductModal } from "../AddExtraProductModal";
 import { cn } from "@/lib/utils";
 
-export function ProductChecklistStep({ onContinue }: { onContinue: () => void }) {
+export function ProductChecklistStep({ onContinue, onBack }: { onContinue: () => void; onBack: () => void }) {
     const {
         selectedPO,
         verifiedPorIds,
@@ -143,7 +143,14 @@ export function ProductChecklistStep({ onContinue }: { onContinue: () => void })
                     </Table>
                 </div>
 
-                <div className="mt-8 flex justify-end">
+                <div className="mt-8 flex justify-end gap-3">
+                    <Button
+                        variant="ghost"
+                        className="h-10 px-6 text-sm font-black uppercase tracking-widest text-muted-foreground hover:text-foreground"
+                        onClick={onBack}
+                    >
+                        ← Back
+                    </Button>
                     <Button
                         className="h-10 px-8 text-sm font-black uppercase tracking-widest gap-2"
                         onClick={onContinue}
