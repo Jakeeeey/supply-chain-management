@@ -156,7 +156,9 @@ export function StockConversionTable({
     const handler = setTimeout(() => {
       // Apply filters if there is a search query OR if the search query was just cleared
       // This ensures that deleting the search string actually resets the list.
-      handleApplyFilters();
+      if (localBranchId && supplierFilter) {
+        handleApplyFilters();
+      }
     }, 400);
 
     return () => clearTimeout(handler);
@@ -183,42 +185,34 @@ export function StockConversionTable({
 
   const filterActions = (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      {/* Primary Controls: Branch & Convertible Toggle */}
+      {/* Primary Controls: Branch & Supplier side by side */}
       <div className="flex items-center gap-2">
         <div className="w-[170px]">
-        <SearchableCombobox
-          options={branches?.map((b) => ({
-            value: String(b.id),
-            label: String(b.branch_name || b.name || b.id),
-          })) || []}
-          value={localBranchId ? String(localBranchId) : ""}
-          onValueChange={(val: string | null) => {
-            const nextBranchId = val ? Number(val) : undefined;
-            setLocalBranchId(nextBranchId);
-            handleApplyFilters(undefined, nextBranchId);
-          }}
-          placeholder="Select Branch"
-          className="h-9"
-        />
-      </div>
+          <SearchableCombobox
+            options={branches?.map((b) => ({
+              value: String(b.id),
+              label: String(b.branch_name || b.name || b.id),
+            })) || []}
+            value={localBranchId ? String(localBranchId) : ""}
+            onValueChange={(val: string | null) => setLocalBranchId(val ? Number(val) : undefined)}
+            placeholder="Select Branch"
+            className="h-9"
+            disabled={isLoading}
+          />
+        </div>
 
-      <div className="flex items-center space-x-2 bg-blue-500/5 px-3 py-1.5 rounded-md border border-blue-500/10 h-9">
-        <Checkbox 
-          id="convertible-only" 
-          checked={hasStockFilter} 
-          onCheckedChange={(checked) => {
-            const nextChecked = !!checked;
-            setHasStockFilter(nextChecked);
-            handleApplyFilters(undefined, undefined, nextChecked);
-          }}
-          disabled={!localBranchId}
-        />
-          <Label 
-            htmlFor="convertible-only" 
-            className={`text-[10px] font-bold cursor-pointer uppercase tracking-tight ${!localBranchId ? "text-muted-foreground opacity-50" : "text-blue-600 dark:text-blue-400"}`}
-          >
-            Convertible Only
-          </Label>
+        <div className="w-[175px]">
+          <SearchableCombobox
+            options={uniqueSuppliers.map(s => ({
+              value: s.name || "Unknown",
+              label: s.name || "Unknown",
+            }))}
+            value={supplierFilter}
+            onValueChange={setSupplierFilter}
+            placeholder="Select Supplier"
+            className="h-9"
+            disabled={isLoading}
+          />
         </div>
       </div>
 
@@ -227,87 +221,91 @@ export function StockConversionTable({
 
       {/* Secondary Filters Group */}
       <div className="flex flex-wrap items-center gap-2">
-
-        <div className="w-[145px]">
-        <SearchableCombobox
-          options={uniqueSuppliers.map(s => ({
-            value: s.name || "Unknown",
-            label: s.name || "Unknown",
-          }))}
-          value={supplierFilter}
-          onValueChange={setSupplierFilter}
-          placeholder="All Suppliers"
-          className="h-9"
-        />
-      </div>
+        <div className="flex items-center space-x-2 bg-blue-500/5 px-3 py-1.5 rounded-md border border-blue-500/10 h-9">
+          <Checkbox 
+            id="convertible-only" 
+            checked={hasStockFilter} 
+            onCheckedChange={(checked) => setHasStockFilter(!!checked)} 
+            disabled={isLoading || !localBranchId || !supplierFilter}
+          />
+          <Label 
+            htmlFor="convertible-only" 
+            className={`text-[10px] font-bold cursor-pointer uppercase tracking-tight ${(!localBranchId || !supplierFilter) ? "text-muted-foreground opacity-50" : "text-blue-600 dark:text-blue-400"}`}
+          >
+            Convertible Only
+          </Label>
+        </div>
 
         <div className="w-[120px]">
-        <SearchableCombobox
-          options={uniqueBrands.map(b => ({
-            value: b.name || "Unknown",
-            label: b.name || "Unknown",
-          }))}
-          value={brandFilter}
-          onValueChange={setBrandFilter}
-          placeholder="All Brands"
-          className="h-9"
-        />
-      </div>
+          <SearchableCombobox
+            options={uniqueBrands.map(b => ({
+              value: b.name || "Unknown",
+              label: b.name || "Unknown",
+            }))}
+            value={brandFilter}
+            onValueChange={setBrandFilter}
+            placeholder="All Brands"
+            className="h-9"
+            disabled={isLoading || !localBranchId || !supplierFilter}
+          />
+        </div>
 
         <div className="w-[130px]">
-        <SearchableCombobox
-          options={uniqueCategories.map(c => ({
-            value: c.name || "Unknown",
-            label: c.name || "Unknown",
-          }))}
-          value={categoryFilter}
-          onValueChange={setCategoryFilter}
-          placeholder="All Categories"
-          className="h-9"
-        />
-      </div>
+          <SearchableCombobox
+            options={uniqueCategories.map(c => ({
+              value: c.name || "Unknown",
+              label: c.name || "Unknown",
+            }))}
+            value={categoryFilter}
+            onValueChange={setCategoryFilter}
+            placeholder="All Categories"
+            className="h-9"
+            disabled={isLoading || !localBranchId || !supplierFilter}
+          />
+        </div>
 
         <div className="w-[105px]">
-        <SearchableCombobox
-          options={uniqueUnits.map(u => ({
-            value: u.name || "Unknown",
-            label: u.name || "Unknown",
-          }))}
-          value={unitFilter}
-          onValueChange={setUnitFilter}
-          placeholder="All Units"
-          className="h-9"
-        />
-      </div>
+          <SearchableCombobox
+            options={uniqueUnits.map(u => ({
+              value: u.name || "Unknown",
+              label: u.name || "Unknown",
+            }))}
+            value={unitFilter}
+            onValueChange={setUnitFilter}
+            placeholder="All Units"
+            className="h-9"
+            disabled={isLoading || !localBranchId || !supplierFilter}
+          />
+        </div>
 
-      <div className="flex items-center gap-1 ml-1">
-        <Button 
-          variant="default" 
-          size="sm" 
-          onClick={() => handleApplyFilters()} 
-          disabled={isLoading || !localBranchId}
-          className="h-9 px-3 text-xs font-bold uppercase bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all active:scale-95"
-        >
-          Apply
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={handleClearFilters} 
-          disabled={isLoading || !localBranchId}
-          className="h-9 px-3 text-xs font-bold uppercase border-slate-200 hover:bg-slate-50 transition-all active:scale-95"
-        >
-          Clear
-        </Button>
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          onClick={onRefresh} 
-          disabled={isLoading || !localBranchId} 
-          className="h-9 w-9 rounded-lg hover:bg-blue-50 text-blue-600"
-        >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-        </Button>
+        <div className="flex items-center gap-1 ml-1">
+          <Button 
+            variant="default" 
+            size="sm" 
+            onClick={() => handleApplyFilters()} 
+            disabled={isLoading || !localBranchId || !supplierFilter}
+            className="h-9 px-3 text-xs font-bold uppercase bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all active:scale-95 disabled:opacity-50"
+          >
+            Apply
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleClearFilters} 
+            disabled={isLoading || !localBranchId || !supplierFilter}
+            className="h-9 px-3 text-xs font-bold uppercase border-slate-200 hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-50"
+          >
+            Clear
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={onRefresh} 
+            disabled={isLoading || !localBranchId || !supplierFilter} 
+            className="h-9 w-9 rounded-lg hover:bg-blue-50 text-blue-600 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+          </Button>
         </div>
       </div>
     </div>
@@ -330,13 +328,12 @@ export function StockConversionTable({
         manualPagination={true}
         onSearch={(val) => {
           setSearchQuery(val);
-          // useEffect handles the filter trigger
         }}
         searchKey="productName"
         isLoading={isLoading}
         actionComponent={filterActions}
-        emptyTitle={!selectedBranchId ? "Select a Branch to start" : "No products found"}
-        emptyDescription={!selectedBranchId ? "Please choose a branch from the dropdown above to view stock levels." : "Try adjusting your filters."}
+        emptyTitle={(!selectedBranchId || !supplierFilter) ? "Select a Branch and Supplier to start" : "No products found"}
+        emptyDescription={(!selectedBranchId || !supplierFilter) ? "Please choose both a branch and a supplier from the filters above and click Apply to view stock levels." : "Try adjusting your filters."}
       />
     </div>
   );

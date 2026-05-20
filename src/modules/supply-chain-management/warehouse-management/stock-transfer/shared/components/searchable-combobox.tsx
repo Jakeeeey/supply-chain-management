@@ -23,6 +23,7 @@ interface SearchableComboboxProps {
   placeholder?: string;
   emptyMessage?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export function SearchableCombobox({
@@ -32,6 +33,7 @@ export function SearchableCombobox({
   placeholder = "Search...",
   emptyMessage = "No results found.",
   className,
+  disabled,
 }: SearchableComboboxProps) {
   // Separate query state for client-side filtering.
   const [filterQuery, setFilterQuery] = React.useState("");
@@ -65,12 +67,13 @@ export function SearchableCombobox({
         onValueChange(next);
       }}
       onOpenChange={handleOpenChange}
+      disabled={disabled}
     >
       <div className={cn("relative", className)}>
         <ComboboxInput
           placeholder={placeholder}
           showTrigger
-          showClear={!!value}
+          showClear={!!value && !disabled}
           value={isOpen ? filterQuery : selectedLabel}
           // Use native onChange to update our state while overriding standard Base UI input value
           onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
@@ -80,6 +83,7 @@ export function SearchableCombobox({
             "h-9 w-full",
             value ? "text-foreground" : "text-muted-foreground"
           )}
+          disabled={disabled}
         />
       </div>
 

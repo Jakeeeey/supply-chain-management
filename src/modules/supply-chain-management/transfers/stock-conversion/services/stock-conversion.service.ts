@@ -43,6 +43,12 @@ export const stockConversionService = {
     // 1. Resolve filter IDs first to avoid relational Forbidden joins
     const allOptions = await stockConversionRepo.fetchFilterOptions();
     console.log(`[Perf] Step 1 - fetchFilterOptions: ${Date.now() - t0}ms`);
+
+    // Do not show data on load if either branch or supplier is not selected
+    if (!branchId || !extraFilters?.supplierShortcut) {
+      return { data: [], totalCount: 0, options: allOptions };
+    }
+
     const finalFilters: string[] = [];
 
     let filterProductIds: number[] | null = null;
