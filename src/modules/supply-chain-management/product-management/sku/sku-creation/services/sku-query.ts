@@ -88,6 +88,13 @@ export const skuQueryService = {
     };
   },
 
+  async fetchDraftById(id: number | string): Promise<SKU> {
+    const { data } = await request<{ data: SKU }>(
+      `${API_BASE_URL}/items/product_draft/${id}?fields=*,parent_id.*`,
+    );
+    return data;
+  },
+
   async fetchMasterData(): Promise<MasterData> {
     const fetchResilient = async (
       names: string[],
@@ -103,11 +110,14 @@ export const skuQueryService = {
       return { data: [] };
     };
 
-    const [units, categories, brands, suppliers] = await Promise.all([
+    const [units, categories, brands, suppliers, classes, segments, sections] = await Promise.all([
       fetchResilient(["units", "unit", "product_unit"]),
       fetchResilient(["categories", "category", "product_category"]),
       fetchResilient(["brand", "brands", "product_brand"]),
       fetchResilient(["suppliers", "supplier", "product_supplier"]),
+      fetchResilient(["product_class", "class", "classes"]),
+      fetchResilient(["product_segment", "segment", "segments"]),
+      fetchResilient(["product_section", "section", "sections"]),
     ]);
 
     return {
@@ -115,6 +125,9 @@ export const skuQueryService = {
       categories: normalizeMasterData(categories.data || []),
       brands: normalizeMasterData(brands.data || []),
       suppliers: normalizeMasterData(suppliers.data || []),
+      classes: normalizeMasterData(classes.data || []),
+      segments: normalizeMasterData(segments.data || []),
+      sections: normalizeMasterData(sections.data || []),
     };
   },
 

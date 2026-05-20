@@ -11,12 +11,19 @@ import { skuQueryService } from "./sku-query";
 export const skuLifecycleService = {
   async createDraft(sku: SKU): Promise<SKU> {
     const { units: rawUnits = [], ...baseData } = sku;
+    const resolvedUnitId =
+      typeof sku.unit_of_measurement === "number"
+        ? sku.unit_of_measurement
+        : typeof sku.unit_of_measurement === "object" && sku.unit_of_measurement !== null
+          ? (sku.unit_of_measurement as { id?: number }).id || 1
+          : 1;
+
     const units =
       rawUnits.length > 0
         ? rawUnits
         : [
             {
-              unit_id: sku.unit_of_measurement || 1,
+              unit_id: resolvedUnitId,
               conversion_factor: sku.unit_of_measurement_count || 1,
               price: sku.price_per_unit,
               cost: sku.cost_per_unit,
@@ -142,6 +149,9 @@ export const skuLifecycleService = {
           product_name: data.product_name,
           product_brand: data.product_brand,
           product_category: data.product_category,
+          product_class: data.product_class,
+          product_segment: data.product_segment,
+          product_section: data.product_section,
           product_supplier: data.product_supplier,
           isActive: data.isActive,
           inventory_type: data.inventory_type,
