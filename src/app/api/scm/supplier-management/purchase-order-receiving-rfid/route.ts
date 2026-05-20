@@ -225,7 +225,7 @@ async function fetchApprovedNotReceivedPOs(base: string): Promise<POHeaderRow[]>
         "fields=purchase_order_id,purchase_order_no,date,date_encoded,approver_id,date_approved,payment_status,inventory_status,date_received,supplier_name,total_amount,price_type",
         "filter[_or][0][inventory_status][_eq]=3", "filter[_or][1][inventory_status][_eq]=9",
         "filter[_or][2][inventory_status][_eq]=11", "filter[_or][3][inventory_status][_eq]=12",
-        "filter[inventory_status][_neq]=13",
+        "filter[_or][4][inventory_status][_eq]=13",
     ].join("&");
     const url = `${base}/items/${PO_COLLECTION}?${qs}`;
     const j = await fetchJson<{ data: POHeaderRow[] }>(url);
@@ -606,13 +606,15 @@ export async function GET() {
             const lines = poLinesAll.filter((l) => toNum(l.purchase_order_id) === poId);
             const porRows = porRowsAll.filter((r) => toNum(r.purchase_order_id) === poId);
 
-            // ✅ Smarter check: If all items are received (or exceed) expected, it's done.
             const hasPending = lines.some(ln => {
                 const received = porRows.filter(r => toNum(r.product_id) === toNum(ln.product_id) && toNum(r.branch_id) === toNum(ln.branch_id));
                 const totalReceived = received.reduce((sum, r) => sum + effectiveReceivedQty(r), 0);
                 return totalReceived < toNum(ln.ordered_quantity);
             });
-            if (!hasPending && lines.length > 0) return null;
+
+            const hasUnposted = porRows.some(r => toNum(r.isPosted) === 0 && (toStr(r.receipt_no) || toNum(r.received_quantity) > 0 || toNum(r.is_reverted) === 1));
+
+            if (!hasPending && !hasUnposted && lines.length > 0) return null;
 
             return {
                 id: String(poId),
@@ -730,6 +732,9 @@ export async function POST(req: NextRequest) {
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
 
                 const orderedQty = toNum(ln.ordered_quantity);
+                const otherRows = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).filter(r => r && r.purchase_order_product_id !== openRow?.purchase_order_product_id);
+                const previousReceivedQty = otherRows.reduce((sum, r) => sum + effectiveReceivedQty(r), 0);
+                const remainingQty = Math.max(0, orderedQty - previousReceivedQty);
 
                 const item: POItem = {
                     id: porIdStr,
@@ -739,7 +744,7 @@ export async function POST(req: NextRequest) {
                     barcode: productDisplayCode(p, pid),
                     uom: String(p?.unit_of_measurement?.unit_shortcut ?? p?.unit_of_measurement?.unit_name ?? "BOX").toUpperCase(),
                     uomCount: Number(p?.unit_of_measurement_count) || 1,
-                    expectedQty: orderedQty,
+                    expectedQty: remainingQty,
                     receivedQty,
                     requiresRfid: true,
                     taggedQty: taggedCountByKey.get(k) || 0,

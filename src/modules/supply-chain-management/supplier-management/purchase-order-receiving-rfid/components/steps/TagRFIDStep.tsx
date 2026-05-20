@@ -4,7 +4,7 @@ import * as React from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, AlertTriangle, Plus, X } from "lucide-react";
+import { Trash2, AlertTriangle, Plus, X, Pencil } from "lucide-react";
 import { useReceivingProducts, ReceivingPOItem, ActivityRow } from "../../providers/ReceivingProductsProvider";
 import { useKeyboardScanner } from "../../hooks/useKeyboardScanner";
 import { toast } from "sonner";
@@ -39,6 +39,7 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
         editingReceiptId,
         clearEditingReceiptId,
         removeExtraProductLocally,
+        loadReceipt,
     } = useReceivingProducts();
 
     const [activityPage, setActivityPage] = React.useState(1);
@@ -86,17 +87,10 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
     const safeCounts: Record<string, number> = React.useMemo(() =>
         scannedCountByPorId && typeof scannedCountByPorId === "object" ? scannedCountByPorId : {}, [scannedCountByPorId]);
 
-    // Apply Reverted Edit Boundaries: Hide already tagged items if in edit session
+    // Apply Reverted Edit Boundaries: Keep all items visible to allow tag reviews/modification
     const visibleItems = React.useMemo(() => {
-        if (editingReceiptId) {
-            // Case B: Only display items that don't have RFID tags yet in the loaded receipt
-            return allItems.filter(item => {
-                const scanned = safeCounts[item.porId] || 0;
-                return scanned === 0;
-            });
-        }
         return allItems;
-    }, [allItems, editingReceiptId, safeCounts]);
+    }, [allItems]);
 
     // Derived active products (matching filtered list)
     const activeProducts = React.useMemo(() => {
@@ -187,6 +181,68 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
                             <X className="h-3.5 w-3.5" /> Cancel Edit
                         </Button>
                     </div>
+                )}
+
+                {/* ✅ Previous Receipts History */}
+                {selectedPO?.history && selectedPO.history.length > 0 && (
+                    <Card className="p-4 border-amber-500/20 bg-amber-500/5">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                            Previous Receipts History
+                        </div>
+                        <div className="mt-3 space-y-2">
+                            {selectedPO.history.map((h: any) => (
+                                <div
+                                    key={h.receiptNo}
+                                    className="flex items-center justify-between gap-3 text-xs border-b border-amber-500/10 pb-2 last:border-0 last:pb-0"
+                                >
+                                    <div className="flex flex-col">
+                                        <span className="font-mono font-medium text-amber-900 dark:text-amber-100">
+                                            {h.receiptNo}
+                                        </span>
+                                        <span className="text-[10px] text-amber-700/70 dark:text-amber-400/60 font-mono mt-0.5">
+                                            {h.receiptDate ? h.receiptDate.split("T")[0] : "—"}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-muted-foreground">
+                                            {h.itemsCount} {h.itemsCount === 1 ? "item" : "items"}
+                                        </span>
+                                        {h.isReverted ? (
+                                            <>
+                                                <Badge
+                                                    variant="outline"
+                                                    className="text-[10px] uppercase h-4 px-1 leading-none border-orange-500/40 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
+                                                >
+                                                    Reverted
+                                                </Badge>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-5 px-1.5 text-[10px] text-orange-700 hover:text-orange-900 hover:bg-orange-100 gap-1"
+                                                    onClick={() => loadReceipt(h.receiptNo)}
+                                                >
+                                                    <Pencil className="h-3 w-3" />
+                                                    Edit
+                                                </Button>
+                                            </>
+                                        ) : (
+                                            <Badge
+                                                variant="outline"
+                                                className={cn(
+                                                    "text-[10px] uppercase h-4 px-1 leading-none border-amber-500/30 font-bold",
+                                                    h.isPosted 
+                                                        ? "bg-amber-100 text-amber-800 border-amber-500/40" 
+                                                        : "bg-white text-muted-foreground"
+                                                )}
+                                            >
+                                                {h.isPosted ? "Posted" : "Unposted"}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </Card>
                 )}
 
                 <Card className="p-4 border-indigo-500/30 shadow-sm bg-indigo-50/20 dark:bg-indigo-950/5">
