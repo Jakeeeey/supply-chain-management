@@ -13,6 +13,8 @@ import {
   CheckCircle,
   ScanLine,
   Loader2,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 
 import {
@@ -108,6 +112,71 @@ const ReasonInputSection = React.memo(({ value, onChange }: { value: string, onC
   );
 });
 ReasonInputSection.displayName = "ReasonInputSection";
+
+// 🟢 LOCAL SEARCHABLE SELECT TO FIX SCROLL ISSUES IN DIALOG
+const LocalSearchableSelect = ({
+  options,
+  value,
+  onValueChange,
+  placeholder = "Select...",
+  className,
+  disabled = false,
+}: {
+  options: { value: string; label: string }[];
+  value: string;
+  onValueChange: (val: string) => void;
+  placeholder?: string;
+  className?: string;
+  disabled?: boolean;
+}) => {
+  const [open, setOpen] = useState(false);
+  const selectedLabel = options.find((opt) => opt.value === value)?.label;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen} modal={true}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn("w-full justify-between font-normal text-xs px-2 h-8", !value && "text-muted-foreground", className)}
+          disabled={disabled}
+        >
+          <span className="truncate">{selectedLabel || placeholder}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[9999]" align="start">
+        <Command>
+          <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
+          <CommandList className="max-h-[200px] overflow-y-auto">
+            <CommandEmpty>No results found.</CommandEmpty>
+            <CommandGroup>
+              {options.map((opt) => (
+                <CommandItem
+                  key={opt.value}
+                  value={opt.label}
+                  onSelect={() => {
+                    onValueChange(opt.value);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === opt.value ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {opt.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const searchParams = useSearchParams();
@@ -1313,22 +1382,27 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               ₱{(item.grossAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
                             <td className="px-4 py-2">
-                              <Select
-                                value={item.discountType?.toString() || "none"}
-                                onValueChange={(val) => handleItemChange(idx, "discountType", val === "none" ? "" : val)}
-                              >
-                                <SelectTrigger className="w-full h-8 px-2 text-sm border-border bg-background focus:ring-1 focus:ring-primary">
-                                  <SelectValue placeholder="None" />
-                                </SelectTrigger>
-                                <SelectContent className="z-[200]">
-                                  <SelectItem value="none">None</SelectItem>
-                                  {lineDiscountOptions.map((opt) => (
-                                    <SelectItem key={opt.id} value={opt.id.toString()}>
-                                      {opt.discount_type}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              {(() => {
+                                const noDiscountOpt = lineDiscountOptions.find(o => o.discount_type === "No Discount");
+                                const defaultVal = noDiscountOpt ? noDiscountOpt.id.toString() : "";
+                                const currentDiscVal = item.discountType?.toString() ? (
+                                  lineDiscountOptions.some(o => o.id.toString() === item.discountType?.toString())
+                                    ? item.discountType.toString()
+                                    : defaultVal
+                                ) : defaultVal;
+                                return (
+                                  <LocalSearchableSelect
+                                    value={currentDiscVal}
+                                    onValueChange={(val) => handleItemChange(idx, "discountType", val)}
+                                    options={lineDiscountOptions.map((opt) => ({
+                                      value: opt.id.toString(),
+                                      label: opt.discount_type,
+                                    }))}
+                                    placeholder="Select Discount..."
+                                    className="w-full h-8 text-xs"
+                                  />
+                                );
+                              })()}
                             </td>
                             <td className="px-4 py-2">
                               <input
@@ -1675,6 +1749,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         onConfirm={handleAddProducts}
         priceType={priceType} // 🟢 Pass prop
         customerCode={customerCode} // 🟢 Pass prop
+        lineDiscounts={lineDiscountOptions}
       />
 
       {/* SUCCESS MODAL */}

@@ -1100,25 +1100,30 @@ export function UpdateSalesReturnModal({
                             </TableCell>
                             <TableCell className="px-4 py-2">
                               {canEditAll ? (
-                                <Select
-                                  value={item.discountType?.toString() || "No Discount"}
-                                  onValueChange={(val) => handleDetailChange(idx, "discountType", val)}
-                                >
-                                  <SelectTrigger className="h-8 w-full text-sm border-border bg-background">
-                                    <SelectValue placeholder="None" />
-                                  </SelectTrigger>
-                                  <SelectContent className="z-[200]">
-                                    <SelectItem value="No Discount">None</SelectItem>
-                                    {discountOptions.map((opt) => (
-                                      <SelectItem key={opt.id} value={opt.id.toString()}>
-                                        {opt.discount_type}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                (() => {
+                                  const noDiscountOpt = discountOptions.find(o => o.discount_type === "No Discount");
+                                  const defaultVal = noDiscountOpt ? noDiscountOpt.id.toString() : "";
+                                  const currentDiscVal = item.discountType?.toString() ? (
+                                    discountOptions.some(o => o.id.toString() === item.discountType?.toString())
+                                      ? item.discountType.toString()
+                                      : defaultVal
+                                  ) : defaultVal;
+                                  return (
+                                    <LocalSearchableSelect
+                                      value={currentDiscVal}
+                                      onValueChange={(val) => handleDetailChange(idx, "discountType", val)}
+                                      options={discountOptions.map((opt) => ({
+                                        value: opt.id.toString(),
+                                        label: opt.discount_type,
+                                      }))}
+                                      placeholder="Select Discount..."
+                                      className="h-8 w-full text-xs"
+                                    />
+                                  );
+                                })()
                               ) : (
                                 <span className="text-sm text-muted-foreground">
-                                  {discountOptions.find(d => d.id.toString() == item.discountType)?.discount_type || "None"}
+                                  {discountOptions.find(d => d.id.toString() == item.discountType)?.discount_type || "No Discount"}
                                 </span>
                               )}
                             </TableCell>
@@ -1595,6 +1600,7 @@ export function UpdateSalesReturnModal({
         onConfirm={handleConfirmProductLookup}
         priceType={headerData.priceType || "A"}
         customerCode={headerData.customerCode}
+        lineDiscounts={discountOptions}
       />
 
       {/* CONFIRM DIALOGS (Update, Success, Receive) remain same structure */}

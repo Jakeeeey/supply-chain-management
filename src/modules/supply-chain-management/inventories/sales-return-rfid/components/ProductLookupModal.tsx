@@ -27,6 +27,7 @@ import {
   Product,
   ProductSupplierConnection,
   ProductCatalog,
+  API_LineDiscount,
 } from "../type";
 import { SalesReturnProvider } from "../providers/fetchProviders";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,7 @@ interface Props {
   onConfirm: (items: SalesReturnItem[]) => void;
   priceType: string; // 🟢 NEW
   customerCode?: string; // 🟢 NEW: Pass selected customer code
+  lineDiscounts?: API_LineDiscount[]; // 🟢 NEW
 }
 
 export function ProductLookupModal({
@@ -46,6 +48,7 @@ export function ProductLookupModal({
   onConfirm,
   priceType = "A", // 🟢 NEW
   customerCode,
+  lineDiscounts = [],
 }: Props) {
   // --- STATES ---
   const [searchCode, setSearchCode] = useState("");
@@ -277,13 +280,24 @@ export function ProductLookupModal({
         const newQuantity = currentItem.quantity + 1;
 
         // Recalculate gross for existing item
-        const newGross = newQuantity * currentItem.unitPrice;
+        const newGross = Math.round(newQuantity * currentItem.unitPrice * 100) / 100;
+        let percentage = 0;
+        if (currentItem.discountType) {
+          const matchedDisc = lineDiscounts?.find(
+            (d) => d.id.toString() === currentItem.discountType?.toString()
+          );
+          if (matchedDisc) {
+            percentage = parseFloat(matchedDisc.total_percent) || 0;
+          }
+        }
+        const discountAmt = Math.round(newGross * (percentage / 100) * 100) / 100;
 
         updatedItems[existingItemIndex] = {
           ...currentItem,
           quantity: newQuantity,
           grossAmount: newGross, // 🟢 Update Gross
-          totalAmount: newGross - (currentItem.discountAmount || 0),
+          discountAmount: discountAmt,
+          totalAmount: Math.round((newGross - discountAmt) * 100) / 100,
         };
         return updatedItems;
       } else {
@@ -298,6 +312,18 @@ export function ProductLookupModal({
         const initialQty = unitOrder === 3 ? 0 : 1;
         const initialGross = initialQty * selectedPrice;
 
+        let percentage = 0;
+        if (tiedDiscount) {
+          const matchedDisc = lineDiscounts?.find(
+            (d) => d.id.toString() === tiedDiscount.toString()
+          );
+          if (matchedDisc) {
+            percentage = parseFloat(matchedDisc.total_percent) || 0;
+          }
+        }
+        const discountAmt = Math.round(initialGross * (percentage / 100) * 100) / 100;
+        const totalAmount = Math.round((initialGross - discountAmt) * 100) / 100;
+
         // 🟢 FIX: Added 'grossAmount' and 'discountType'
         const newItem: SalesReturnItem = {
           tempId: `added-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -310,8 +336,8 @@ export function ProductLookupModal({
           unitPrice: selectedPrice,
           grossAmount: initialGross, // 0 if Box, selectedPrice if not
           discountType: tiedDiscount,
-          discountAmount: 0,
-          totalAmount: initialGross,
+          discountAmount: discountAmt,
+          totalAmount: totalAmount,
           returnType: "",
           reason: "",
           // 🟢 Store additional price info for recalculation
@@ -336,11 +362,23 @@ export function ProductLookupModal({
           if (item.unitOrder === 3) return item; // 🟢 Box units stay at 0
           const newQty = item.quantity + change;
           if (newQty < 1) return item;
+          const newGross = Math.round(newQty * item.unitPrice * 100) / 100;
+          let percentage = 0;
+          if (item.discountType) {
+            const matchedDisc = lineDiscounts?.find(
+              (d) => d.id.toString() === item.discountType?.toString()
+            );
+            if (matchedDisc) {
+              percentage = parseFloat(matchedDisc.total_percent) || 0;
+            }
+          }
+          const discountAmt = Math.round(newGross * (percentage / 100) * 100) / 100;
           return {
             ...item,
             quantity: newQty,
-            grossAmount: newQty * item.unitPrice,
-            totalAmount: newQty * item.unitPrice,
+            grossAmount: newGross,
+            discountAmount: discountAmt,
+            totalAmount: Math.round((newGross - discountAmt) * 100) / 100,
           };
         }
         return item;
@@ -355,11 +393,23 @@ export function ProductLookupModal({
         if (item.tempId === tempId) {
           if (item.unitOrder === 3) return item; // 🟢 Box units stay at 0
           const safeQty = Math.max(1, Math.floor(qty));
+          const newGross = Math.round(safeQty * item.unitPrice * 100) / 100;
+          let percentage = 0;
+          if (item.discountType) {
+            const matchedDisc = lineDiscounts?.find(
+              (d) => d.id.toString() === item.discountType?.toString()
+            );
+            if (matchedDisc) {
+              percentage = parseFloat(matchedDisc.total_percent) || 0;
+            }
+          }
+          const discountAmt = Math.round(newGross * (percentage / 100) * 100) / 100;
           return {
             ...item,
             quantity: safeQty,
-            grossAmount: safeQty * item.unitPrice,
-            totalAmount: safeQty * item.unitPrice,
+            grossAmount: newGross,
+            discountAmount: discountAmt,
+            totalAmount: Math.round((newGross - discountAmt) * 100) / 100,
           };
         }
         return item;
@@ -842,11 +892,26 @@ export function ProductLookupModal({
                             </span>
                           </div>
                           <h4
-                            className="text-sm font-semibold text-foreground line-clamp-2 leading-tight mb-2"
+                            className="text-sm font-semibold text-foreground line-clamp-2 leading-tight mb-1"
                             title={item.description}
                           >
                             {item.description}
                           </h4>
+                          {item.discountType && (
+                            <div className="text-[11px] text-muted-foreground font-medium mb-2">
+                              Discount: <span className="text-destructive font-semibold">
+                                {(() => {
+                                  const disc = lineDiscounts?.find(d => String(d.id) === String(item.discountType));
+                                  return disc ? `${disc.discount_type} (${parseFloat(disc.total_percent)}%)` : "Resolved";
+                                })()}
+                              </span>
+                              {item.discountAmount > 0 && (
+                                <span className="ml-1 text-[10px] text-destructive">
+                                  (-₱{item.discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })})
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {/* --- DELETE BUTTON --- */}

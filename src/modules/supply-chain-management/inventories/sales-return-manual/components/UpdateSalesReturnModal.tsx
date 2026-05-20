@@ -496,7 +496,7 @@ export function UpdateSalesReturnModal({
         const qty = Number(item.quantity) || 1;
         
         if (existingIndex >= 0) {
-          const existing = updated[existingIndex];
+          const existing = { ...updated[existingIndex] };
           existing.quantity = Number(existing.quantity || 0) + qty;
           existing.grossAmount = Math.round(existing.quantity * existing.unitPrice * 100) / 100;
           
@@ -514,6 +514,7 @@ export function UpdateSalesReturnModal({
           if (item.rfidTags) {
             existing.rfidTags = [...(existing.rfidTags || []), ...item.rfidTags];
           }
+          updated[existingIndex] = existing;
         } else {
           const price = Math.round((Number(item.unitPrice) || Number(item.price) || 0) * 100) / 100;
           const gross = Math.round(price * qty * 100) / 100;
@@ -969,22 +970,27 @@ export function UpdateSalesReturnModal({
                               {/* Discount */}
                               <TableCell className="align-middle p-2">
                                 {canEditAll ? (
-                                  <Select
-                                    value={item.discountType?.toString() || "No Discount"}
-                                    onValueChange={(val) => handleDetailChange(idx, "discountType", val)}
-                                  >
-                                    <SelectTrigger className="h-9 w-full text-xs border-border bg-background">
-                                      <SelectValue placeholder="None" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="No Discount">None</SelectItem>
-                                      {discountOptions.map((opt) => (
-                                        <SelectItem key={opt.id} value={opt.id.toString()}>
-                                          {opt.discount_type}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                  (() => {
+                                    const noDiscountOpt = discountOptions.find(o => o.discount_type === "No Discount");
+                                    const defaultVal = noDiscountOpt ? noDiscountOpt.id.toString() : "No Discount";
+                                    const currentDiscVal = item.discountType?.toString() ? (
+                                      discountOptions.some(o => o.id.toString() === item.discountType?.toString())
+                                        ? item.discountType.toString()
+                                        : defaultVal
+                                    ) : defaultVal;
+                                    return (
+                                      <LocalSearchableSelect
+                                        value={currentDiscVal}
+                                        onValueChange={(val) => handleDetailChange(idx, "discountType", val)}
+                                        options={discountOptions.map((opt) => ({
+                                          value: opt.id.toString(),
+                                          label: opt.discount_type,
+                                        }))}
+                                        placeholder="Select Discount..."
+                                        className="h-9 w-full text-xs"
+                                      />
+                                    );
+                                  })()
                                 ) : (
                                   <span className="text-xs text-muted-foreground">
                                     {discountOptions.find((d) => d.id.toString() == item.discountType)?.discount_type || "None"}
@@ -1217,31 +1223,27 @@ export function UpdateSalesReturnModal({
                             </TableCell>
                             <TableCell className="align-middle p-2">
                               {canEditAll ? (
-                                <Select
-                                  value={
-                                    item.discountType?.toString() || "No Discount"
-                                  }
-                                  onValueChange={(val) =>
-                                    handleDetailChange(idx, "discountType", val)
-                                  }
-                                >
-                                  <SelectTrigger className="h-9 w-full text-sm border-border bg-background">
-                                    <SelectValue placeholder="None" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="No Discount">
-                                      None
-                                    </SelectItem>
-                                    {discountOptions.map((opt) => (
-                                      <SelectItem
-                                        key={opt.id}
-                                        value={opt.id.toString()}
-                                      >
-                                        {opt.discount_type}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                (() => {
+                                  const noDiscountOpt = discountOptions.find(o => o.discount_type === "No Discount");
+                                  const defaultVal = noDiscountOpt ? noDiscountOpt.id.toString() : "No Discount";
+                                  const currentDiscVal = item.discountType?.toString() ? (
+                                    discountOptions.some(o => o.id.toString() === item.discountType?.toString())
+                                      ? item.discountType.toString()
+                                      : defaultVal
+                                  ) : defaultVal;
+                                  return (
+                                    <LocalSearchableSelect
+                                      value={currentDiscVal}
+                                      onValueChange={(val) => handleDetailChange(idx, "discountType", val)}
+                                      options={discountOptions.map((opt) => ({
+                                        value: opt.id.toString(),
+                                        label: opt.discount_type,
+                                      }))}
+                                      placeholder="Select Discount..."
+                                      className="h-9 w-full text-xs"
+                                    />
+                                  );
+                                })()
                               ) : (
                                 <span className="text-sm text-muted-foreground">
                                   {discountOptions.find(
@@ -1736,6 +1738,7 @@ export function UpdateSalesReturnModal({
         onConfirm={handleAddProductsToEdit}
         priceType={headerData.priceType || "A"}
         customerCode={headerData.customerCode}
+        lineDiscounts={discountOptions}
       />
 
       <Dialog
