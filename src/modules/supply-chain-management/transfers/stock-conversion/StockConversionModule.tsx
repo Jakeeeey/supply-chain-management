@@ -212,17 +212,26 @@ export default function StockConversionModule({
     }
 
     // Execution for non-rfid targets (e.g. converting to Pieces)
-    const branchId = selectedBranchId > 0 ? selectedBranchId : (userRef.current.branchId || 190);
+    const branchId = selectedBranchId > 0 ? selectedBranchId : userRef.current.branchId;
+    if (!branchId || branchId <= 0) {
+      toast.error("Branch Required", { description: "Please select a branch before converting stock." });
+      return;
+    }
+    const userId = userRef.current.id;
+    if (!userId || userId <= 0) {
+      toast.error("Authentication Required", { description: "User session is invalid. Please log in again." });
+      return;
+    }
     const payload = {
       productId: selectedProduct.productId,
-      sourceUnitId: selectedProduct.currentUnitId ?? 11,
+      sourceUnitId: selectedProduct.currentUnitId,
       targetUnitId: targetUnit.unitId,
       targetProductId: targetUnit.targetProductId ?? selectedProduct.productId,
       quantityToConvert: qtyToConvert,
       convertedQuantity,
       pricePerUnit: selectedProduct.pricePerUnit,
       branchId,
-      userId: userRef.current.id || 24,
+      userId,
       rfidTags: [] as RFIDTag[],
       sourceRfidTags: scannedSourceRfids.length > 0 ? scannedSourceRfids : undefined,
       sourceFactor: selectedProduct.conversionFactor || 1,
@@ -243,17 +252,26 @@ export default function StockConversionModule({
   const handleConfirmRFID = useCallback(async (tags: RFIDTag[]) => {
     if (!selectedProduct || !pendingConversion) return;
 
-    const branchId = selectedBranchId > 0 ? selectedBranchId : (userRef.current.branchId || 190);
+    const branchId = selectedBranchId > 0 ? selectedBranchId : userRef.current.branchId;
+    if (!branchId || branchId <= 0) {
+      toast.error("Branch Required", { description: "Please select a branch before converting stock." });
+      return;
+    }
+    const userId = userRef.current.id;
+    if (!userId || userId <= 0) {
+      toast.error("Authentication Required", { description: "User session is invalid. Please log in again." });
+      return;
+    }
     const payload = {
       productId: selectedProduct.productId,
-      sourceUnitId: selectedProduct.currentUnitId ?? 11,
+      sourceUnitId: selectedProduct.currentUnitId,
       targetUnitId: pendingConversion.targetUnitId,
       targetProductId: pendingConversion.targetProductId || selectedProduct.productId,
       quantityToConvert: pendingConversion.qtyToConvert,
       convertedQuantity: pendingConversion.convertedQuantity,
       pricePerUnit: selectedProduct.pricePerUnit,
       branchId,
-      userId: userRef.current.id || 24,
+      userId,
       rfidTags: tags,
       sourceRfidTags: scannedSourceRfids.length > 0 ? scannedSourceRfids : undefined,
       sourceFactor: selectedProduct.conversionFactor || 1,
