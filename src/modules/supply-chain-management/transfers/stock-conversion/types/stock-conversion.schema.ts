@@ -47,4 +47,6 @@ export const stockConversionPayloadSchema = z.object({
   pricePerUnit: z.number(),
   rfidTags: z.array(rfidTagSchema).default([]),
   sourceRfidTags: z.array(z.string()).optional(),
+  sourceFactor: z.number().optional(),
+  targetFactor: z.number().optional(),
 }) satisfies z.ZodType<StockConversionPayload>;
