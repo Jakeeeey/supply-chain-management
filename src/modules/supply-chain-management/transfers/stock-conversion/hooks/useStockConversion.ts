@@ -40,18 +40,6 @@ export function useStockConversion() {
     }
   }, []);
 
-  /**
-   * Check if a product has any active RFIDs in a specific branch
-   */
-  const checkProductRfids = useCallback(async (productId: number, activeBranchId: number): Promise<boolean> => {
-    try {
-      const res = await fetch(`/api/scm/transfers/stock-conversion/validate-rfid?action=check_product_rfids&branchId=${activeBranchId}&productId=${productId}`);
-      const data = await res.json();
-      return !!data.hasRfids;
-    } catch {
-      return false;
-    }
-  }, []);
 
   /**
    * Fetch inventory balances for specific products
@@ -196,7 +184,7 @@ export function useStockConversion() {
     refresh,
     loadProductsInventory,
     validateDuplicateTag,
-    checkProductRfids,
+
     setFilters: (update: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => {
       setFilters(prev => {
         const next = typeof update === 'function' ? update(prev) : update;
