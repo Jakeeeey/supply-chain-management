@@ -1,6 +1,10 @@
-import type { Branch, User, Province, City, Barangay } from "../types";
+import type { Branch, User, Province, City, Barangay, SubscriptionLimit } from "../types";
 
-export async function fetchBranches(): Promise<{ branches: Branch[]; users: User[] }> {
+export async function fetchBranches(): Promise<{ 
+    branches: Branch[]; 
+    users: User[]; 
+    subscriptionLimit?: SubscriptionLimit;
+}> {
     const res = await fetch("/api/scm/inventory-management/branch-management");
     if (!res.ok) throw new Error("Failed to fetch data");
     return res.json();
