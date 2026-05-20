@@ -138,7 +138,7 @@ export const stockConversionService = {
     const totalCount = prodJson.meta?.filter_count || 0;
     console.log(`[Perf] Step 2 - fetchProducts: ${Date.now() - t2}ms (${products.length} products)`);
 
-    if (products.length === 0) return { data: [], totalCount: 0, options: { brands: [], categories: [], suppliers: [] } };
+    if (products.length === 0) return { data: [], totalCount: 0, options: allOptions };
 
     // 4. Parallel Enrichment Fetching (only fetch what we DON'T already have)
     // allOptions already has brands, categories, units, suppliers — reuse those!
