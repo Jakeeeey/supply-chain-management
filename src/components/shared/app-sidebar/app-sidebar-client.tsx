@@ -90,11 +90,13 @@ export function AppSidebarClient({
         if (!searchTerm) return baseNav;
 
         // 2. Client-side filtering
-        function filterTree(items: NavItem[]): NavItem[] {
+        function filterTree(items: NavItem[], forceIncludeAll: boolean = false): NavItem[] {
             return items
                 .map((item) => {
-                    const titleMatch = item.title.toLowerCase().includes(lowerTerm);
-                    const filteredChildren = item.items ? filterTree(item.items) : undefined;
+                    const titleMatch = forceIncludeAll || item.title.toLowerCase().includes(lowerTerm);
+                    const filteredChildren = item.items 
+                        ? filterTree(item.items, titleMatch) 
+                        : undefined;
                     const hasChildMatch = !!filteredChildren?.length;
 
                     if (titleMatch || hasChildMatch) {
