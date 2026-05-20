@@ -51,13 +51,21 @@ export default function SKUMasterlistModule() {
   const handleSaveDescription = async (
     id: number | string,
     description: string,
+    product_class: number,
+    product_segment: number,
+    product_section: number,
   ) => {
     setIsUpdating(true);
     try {
       const res = await fetch(`/api/scm/product-management/sku/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description }),
+        body: JSON.stringify({
+          description,
+          product_class,
+          product_segment,
+          product_section,
+        }),
       });
 
       const result = await res.json();

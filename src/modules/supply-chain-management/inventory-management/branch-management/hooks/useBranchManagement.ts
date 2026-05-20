@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
-import type { Branch, User } from "../types";
+import type { Branch, User, SubscriptionLimit } from "../types";
 import { fetchBranches } from "../providers/fetchProvider";
 
 export function useBranchManagement() {
     const [branches, setBranches] = React.useState<Branch[]>([]);
     const [users, setUsers] = React.useState<User[]>([]);
+    const [subscriptionLimit, setSubscriptionLimit] = React.useState<SubscriptionLimit | null>(null);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
 
@@ -25,6 +26,7 @@ export function useBranchManagement() {
             const data = await fetchBranches();
             setBranches(data.branches || []);
             setUsers(data.users || []);
+            setSubscriptionLimit(data.subscriptionLimit || null);
         } catch (e) {
             setError(e instanceof Error ? e.message : "Failed to load data");
         } finally {
@@ -91,5 +93,6 @@ export function useBranchManagement() {
         totalPages,
         itemsPerPage,
         refresh: loadData,
+        subscriptionLimit,
     };
 }

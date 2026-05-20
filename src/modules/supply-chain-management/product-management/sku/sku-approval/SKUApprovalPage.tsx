@@ -152,6 +152,9 @@ export default function SKUApprovalPage() {
   const handleSaveDescription = async (
     id: number | string,
     description: string,
+    product_class: number,
+    product_segment: number,
+    product_section: number,
   ) => {
     setIsUpdating(true);
     try {
@@ -160,7 +163,12 @@ export default function SKUApprovalPage() {
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ description }),
+          body: JSON.stringify({
+            description,
+            product_class,
+            product_segment,
+            product_section,
+          }),
         },
       );
 
@@ -168,14 +176,14 @@ export default function SKUApprovalPage() {
       if (!res.ok)
         throw new Error(result.error || "Failed to update description");
 
-      toast.success("Description Updated", {
-        description: "The product description has been successfully saved.",
+      toast.success("Product Details Updated", {
+        description: "The product details have been successfully saved.",
       });
       refresh();
       setEditingSKU(null);
     } catch (err: unknown) {
       toast.error("Update Failed", {
-        description: err instanceof Error ? err.message : "Could not update the product description.",
+        description: err instanceof Error ? err.message : "Could not update the product details.",
       });
     } finally {
       setIsUpdating(false);

@@ -135,7 +135,12 @@ export async function PATCH(request: NextRequest) {
     // Extract userId from token
     const token = request.cookies.get("vos_access_token")?.value;
     const decoded = token ? decodeJwtPayload(token) : null;
-    const userId = decoded?.sub ? Number(decoded.sub) : undefined;
+    // Dev-mode fallback: when auth is disabled, no cookie exists so userId would be undefined
+    const userId = decoded?.sub ? Number(decoded.sub) 
+      : (process.env.NEXT_PUBLIC_AUTH_DISABLED === "true" ? 1 : undefined);
+    
+    console.log("[Stock Transfer PATCH Route] Incoming payload:", JSON.stringify(body));
+    console.log("[Stock Transfer PATCH Route] Extracted userId:", userId, "(token present:", !!token, ")");
     
     const result = await updateTransferStatus({ ...body, userId });
     return NextResponse.json(result, { status: 200 });
