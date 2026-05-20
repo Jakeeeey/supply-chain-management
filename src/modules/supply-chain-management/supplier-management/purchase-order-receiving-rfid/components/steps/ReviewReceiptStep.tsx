@@ -7,10 +7,18 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { ChevronLeft, ChevronRight, AlertTriangle, AlertCircle, XCircle } from "lucide-react";
 import { useReceivingProducts, ReceivingPOItem } from "../../providers/ReceivingProductsProvider";
 import { toast } from "sonner";
 import { ReceiptPreviewModal } from "../ReceiptPreviewModal";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -28,6 +36,14 @@ const formatPHP = (val: number) =>
         currency: "PHP",
     }).format(val || 0);
 
+const RECEIPT_TYPES = [
+    { value: "SI-CHARGE", label: "Charge Sales Invoice [SI-CHARGE]" },
+    { value: "SI-CASH", label: "Cash Sales Invoice [SI-CASH]" },
+    { value: "DR", label: "Delivery Receipt [DR]" },
+];
+
+const API_URL = "/api/scm/supplier-management/purchase-order-receiving-rfid";
+
 export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void; receiverName?: string }) {
     const {
         selectedPO,
@@ -39,6 +55,14 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         lots,
         verifiedPorIds,
         setMetaDataByPorId,
+        receiptNo,
+        setReceiptNo,
+        receiptType,
+        setReceiptType,
+        receiptDate,
+        setReceiptDate,
+        editingReceiptId,
+        clearEditingReceiptId,
     } = useReceivingProducts();
 
     const [clientSaveError, setClientSaveError] = React.useState("");
@@ -50,7 +74,45 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
     const [reviewPage, setReviewPage] = React.useState(1);
     const [showErrors, setShowErrors] = React.useState(false);
 
+    const [receiptNoDupError, setReceiptNoDupError] = React.useState<string | null>(null);
+    const [checkingDup, setCheckingDup] = React.useState(false);
+    const dupCheckTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
     const { metaDataByPorId: draftMetaData } = useReceivingProducts();
+
+    // Debounced Receipt Number duplicate check
+    const checkReceiptNoDuplicate = React.useCallback((value: string) => {
+        if (dupCheckTimer.current) clearTimeout(dupCheckTimer.current);
+        const trimmed = value.trim();
+        if (!trimmed || !selectedPO?.id) {
+            setReceiptNoDupError(null);
+            return;
+        }
+        dupCheckTimer.current = setTimeout(async () => {
+            try {
+                setCheckingDup(true);
+                const r = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "check_receipt_no", receiptNo: trimmed, poId: selectedPO.id }),
+                });
+                const j = await r.json().catch(() => ({}));
+                if (j?.data?.isDuplicate) {
+                    setReceiptNoDupError(`This receipt number is already in use on PO #${j.data.existingPoId}.`);
+                } else {
+                    setReceiptNoDupError(null);
+                }
+            } catch {
+                setReceiptNoDupError(null);
+            } finally {
+                setCheckingDup(false);
+            }
+        }, 400);
+    }, [selectedPO?.id]);
+
+    React.useEffect(() => {
+        if (editingReceiptId) setReceiptNoDupError(null);
+    }, [editingReceiptId]);
 
     // Initial Sync
     React.useEffect(() => {
@@ -111,6 +173,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
 
     const safeCounts: Record<string, number> = React.useMemo(() => scannedCountByPorId || {}, [scannedCountByPorId]);
 
+    // All active products (the ones checked/verified)
     const allItems = React.useMemo(() => {
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
         return allocs.flatMap((a) => {
@@ -121,9 +184,28 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                     porId: String(it.porId || it.id),
                     branchName: a?.branch?.name ?? "Unassigned",
                 }))
-                .filter((it) => verifiedPorIds.includes(it.porId)) as Array<ReceivingPOItem & { branchName: string }>;
+                .filter((it) => verifiedPorIds.includes(it.porId))
+                .filter((it) => (safeCounts[it.porId] || 0) > 0)
+                .filter((it) => Number(it.expectedQty || 0) > 0 || it.isExtra) as Array<ReceivingPOItem & { branchName: string }>;
         });
-    }, [selectedPO, verifiedPorIds]);
+    }, [selectedPO, verifiedPorIds, safeCounts]);
+
+    const branchesLabel = React.useMemo(() => {
+        const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
+        const names = allocs
+            .map((a) => String(a?.branch?.name || "").trim())
+            .filter(Boolean);
+        if (!names.length) return "—";
+        return Array.from(new Set(names)).join(", ");
+    }, [selectedPO]);
+
+    const progress = React.useMemo(() => {
+        const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
+        const items = allocs.flatMap((a) => (Array.isArray(a?.items) ? a.items : []));
+        const totalTagged = items.reduce((acc, it: any) => acc + (Number(it?.taggedQty) || 0), 0);
+        const totalReceived = items.reduce((acc, it: any) => acc + (Number(it?.receivedQty) || 0), 0);
+        return { totalTagged, totalReceived };
+    }, [selectedPO]);
 
     const executeSave = async () => {
         const metaData: Record<string, { lotId: string; batchNo: string; expiryDate: string }> = {};
@@ -138,6 +220,31 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         const status = (selectedPO?.status || "").toUpperCase();
         if (status === "CLOSED" || status === "RECEIVED") {
             setClientSaveError("PO is already completed.");
+            return;
+        }
+
+        // Validate Receipt details
+        const errs: string[] = [];
+        if (!receiptNo.trim()) errs.push("Receipt Number is required.");
+        if (!receiptType.trim()) errs.push("Receipt Type is required.");
+        if (!receiptDate.trim()) errs.push("Receipt Date is required.");
+
+        if (receiptDate.trim()) {
+            const parsedYear = new Date(receiptDate.trim()).getFullYear();
+            if (isNaN(parsedYear) || parsedYear < 2000 || parsedYear > 3000) {
+                errs.push("Invalid year. Must be between 2000 and 3000.");
+            }
+        }
+
+        if (receiptNoDupError) {
+            errs.push(receiptNoDupError);
+        }
+
+        if (errs.length > 0) {
+            setClientSaveError(errs.join(" "));
+            toast.error("Receipt Details Invalid", {
+                description: errs.join(" ")
+            });
             return;
         }
 
@@ -163,7 +270,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
 
         setClientSaveError("");
 
-        // ✅ Check if Incomplete
+        // Check if Incomplete
         const isPartial = allItems.some((it: ReceivingPOItem) => {
             const porId = String(it.porId || it.id);
             const scanned = safeCounts[porId] ?? 0;
@@ -182,7 +289,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         });
 
         await saveReceipt(metaData);
-    }, [saveReceipt, selectedPO?.status, allItems, safeCounts, lotIds, batchNos, expiryDates]);
+    }, [saveReceipt, selectedPO?.status, allItems, safeCounts, lotIds, batchNos, expiryDates, receiptNo, receiptType, receiptDate, receiptNoDupError]);
 
     const totalScanned = Object.values(safeCounts).reduce((a, b) => a + Number(b), 0);
     const totalExpected = allItems.reduce((a, b) => a + Number(b.expectedQty || 0), 0);
@@ -232,184 +339,313 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                     <p className="text-sm mb-4">You have successfully received items for {selectedPO?.poNumber}.</p>
                     <div className="flex gap-4">
                         <Button onClick={() => window.location.reload()} variant="outline">Start New Session</Button>
-                        <Button onClick={() => setPreviewOpen(true)} className="bg-indigo-600 hover:bg-indigo-700">Print Receipt</Button>
+                        <Button onClick={() => setPreviewOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold">Print Receipt</Button>
                     </div>
                 </Card>
             ) : (
-                <Card className="p-4">
-                    <div className="mb-4 flex justify-between items-center">
-                        <div className="text-sm font-semibold">Final Review & Details</div>
-                        <Button variant="ghost" size="sm" onClick={onBack}>← Back to Tagging</Button>
+                <div className="space-y-4 animate-in fade-in duration-300">
+                    {/* Top: Details side-by-side layout */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Receipt Form Details Card */}
+                        <Card className="p-4 border-indigo-500/20 shadow-sm">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="text-sm font-semibold">Receipt Header Details</div>
+                                {editingReceiptId && (
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-7 text-xs text-orange-700 hover:bg-orange-100 font-bold uppercase gap-1" 
+                                        onClick={clearEditingReceiptId}
+                                    >
+                                        <XCircle className="h-4 w-4" /> Cancel Edit
+                                    </Button>
+                                )}
+                            </div>
+
+                            {editingReceiptId && (
+                                <div className="mb-3 text-xs font-bold text-orange-700 bg-orange-50 border border-orange-200 rounded px-2.5 py-1 uppercase tracking-wider">
+                                    Editing reverted receipt: {editingReceiptId}
+                                </div>
+                            )}
+
+                            <div className="grid gap-3">
+                                <div className="grid gap-1">
+                                    <Label className="text-xs font-bold text-slate-600">Receipt Number *</Label>
+                                    <Input 
+                                        value={receiptNo} 
+                                        onChange={(e) => {
+                                            setReceiptNo(e.target.value);
+                                            setReceiptNoDupError(null);
+                                        }}
+                                        onBlur={() => {
+                                            if (!editingReceiptId) checkReceiptNoDuplicate(receiptNo);
+                                        }}
+                                        placeholder="Enter Receipt Number..."
+                                        className={cn(
+                                            "h-9 text-xs",
+                                            receiptNoDupError ? "border-destructive focus-visible:ring-destructive" : ""
+                                        )}
+                                    />
+                                    {receiptNoDupError && (
+                                        <div className="flex items-center gap-1 text-[10px] text-destructive mt-0.5 font-bold">
+                                            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                                            <span>{receiptNoDupError}</span>
+                                        </div>
+                                    )}
+                                    {checkingDup && (
+                                        <div className="text-[10px] text-muted-foreground mt-0.5">Checking availability...</div>
+                                    )}
+                                </div>
+
+                                <div className="grid gap-1">
+                                    <Label className="text-xs font-bold text-slate-600">Receipt Type *</Label>
+                                    <Select value={receiptType} onValueChange={setReceiptType}>
+                                        <SelectTrigger className="h-9 text-xs">
+                                            <SelectValue placeholder="Select type..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {RECEIPT_TYPES.map((t) => (
+                                                <SelectItem key={t.value} value={t.value} className="text-xs">
+                                                    {t.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="grid gap-1">
+                                    <Label className="text-xs font-bold text-slate-600">Receipt Date *</Label>
+                                    <Input
+                                        type="date"
+                                        value={receiptDate}
+                                        max="3000-12-31"
+                                        min="2000-01-01"
+                                        onChange={(e) => setReceiptDate(e.target.value)}
+                                        className="h-9 text-xs"
+                                    />
+                                </div>
+                            </div>
+                        </Card>
+
+                        {/* PO Summary Card */}
+                        <Card className="p-4 bg-slate-50/50 shadow-sm border border-slate-200">
+                            <div className="flex items-start justify-between gap-3 border-b pb-2 mb-3">
+                                <div>
+                                    <div className="text-sm font-semibold">Selected PO Details</div>
+                                    <div className="text-[10px] text-muted-foreground mt-0.5">Reference specs for receipt validation</div>
+                                </div>
+                                {selectedPO?.status && (
+                                    <Badge variant="secondary" className="bg-primary/10 text-primary border font-black uppercase text-[9px] tracking-wider">
+                                        {selectedPO.status}
+                                    </Badge>
+                                )}
+                            </div>
+
+                            <div className="space-y-2.5 text-xs">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground">PO Number:</span>
+                                    <span className="font-bold text-slate-800">{selectedPO?.poNumber ?? "—"}</span>
+                                </div>
+
+                                <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground">Supplier:</span>
+                                    <span className="font-bold text-slate-800">{selectedPO?.supplier?.name ?? "—"}</span>
+                                </div>
+
+                                <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground">Delivery Branches:</span>
+                                    <span className="font-bold text-slate-800 truncate max-w-[220px]" title={branchesLabel}>{branchesLabel}</span>
+                                </div>
+
+                                <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground">Receiving Progress:</span>
+                                    <span className="font-bold text-slate-800">
+                                        {progress.totalReceived} / {progress.totalTagged} units
+                                    </span>
+                                </div>
+                            </div>
+                        </Card>
                     </div>
 
-                    <div className="border rounded-md">
-                        <Table>
-                            <TableHeader className="bg-muted">
-                                <TableRow>
-                                    <TableHead className="text-[10px] uppercase">Product Name</TableHead>
-                                    <TableHead className="text-[10px] uppercase">Batch</TableHead>
-                                    <TableHead className="text-[10px] uppercase">Lot</TableHead>
-                                    <TableHead className="text-[10px] uppercase">Expiry</TableHead>
-                                    <TableHead className="text-[10px] uppercase text-right">Unit Price</TableHead>
-                                    <TableHead className="text-[10px] uppercase text-center">Disc. Type</TableHead>
-                                    <TableHead className="text-[10px] uppercase text-right">Disc. Amt</TableHead>
-                                    <TableHead className="text-[10px] uppercase text-right">Net Amt</TableHead>
-                                    <TableHead className="text-[10px] uppercase text-center">Expected</TableHead>
-                                    <TableHead className="text-[10px] uppercase text-center">Tagged</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {(() => {
-                                    const PAGE_SIZE = 10;
-                                    const paginatedItems = allItems.slice((reviewPage - 1) * PAGE_SIZE, reviewPage * PAGE_SIZE);
-                                    return paginatedItems.map((it: ReceivingPOItem) => {
-                                        const porId = String(it.porId || it.id);
-                                        const scanned = safeCounts[porId] ?? 0;
-                                        const expected = Number(it.expectedQty || it.taggedQty || 0);
-                                        const unitP = Number(it.unitPrice || 0);
-                                        const discA = Number(it.discountAmount || 0);
-                                        const effectivePrice = Math.max(0, unitP - discA);
-                                        const lineTotal = scanned * effectivePrice;
-                                        
-                                        return (
-                                            <TableRow key={porId}>
-                                                <TableCell>
-                                                    <div className="font-bold text-xs">{it.name}</div>
-                                                    <div className="text-[9px] text-muted-foreground font-mono">SKU: {it.barcode} | UOM: {it.uom}</div>
-                                                </TableCell>
-                                                <TableCell className="min-w-[100px]">
-                                                    <Input 
-                                                        className={cn(
-                                                            "h-8 text-[11px] font-bold",
-                                                            showErrors && scanned > 0 && !(batchNos[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
-                                                        )}
-                                                        placeholder="Batch #" 
-                                                        value={batchNos[porId] || ""} 
-                                                        onChange={(e) => setBatchNos(prev => ({ ...prev, [porId]: e.target.value }))} 
-                                                    />
-                                                </TableCell>
-                                                <TableCell className="min-w-[120px]">
-                                                    <select 
-                                                        className={cn(
-                                                            "h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]",
-                                                            showErrors && scanned > 0 && !(lotIds[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
-                                                        )}
-                                                        value={lotIds[porId] || ""} 
-                                                        onChange={(e) => setLotIds(prev => ({ ...prev, [porId]: e.target.value }))}
-                                                    >
-                                                        <option value="">Select Lot</option>
-                                                        {lots.map((l: { lot_id: string | number; lot_name: string }) => <option key={l.lot_id} value={String(l.lot_id)}>{l.lot_name}</option>)}
-                                                    </select>
-                                                </TableCell>
-                                                <TableCell className="min-w-[130px]">
-                                                    <Input 
-                                                        type="date" 
-                                                        className={cn(
-                                                            "h-8 text-[11px]",
-                                                            showErrors && scanned > 0 && !(expiryDates[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
-                                                        )}
-                                                        value={expiryDates[porId] || ""} 
-                                                        onChange={(e) => setExpiryDates(prev => ({ ...prev, [porId]: e.target.value }))} 
-                                                    />
-                                                </TableCell>
-                                                <TableCell className="text-right text-xs">{formatPHP(unitP)}</TableCell>
-                                                <TableCell className="text-center text-[10px] text-muted-foreground">{it.discountType}</TableCell>
-                                                <TableCell className="text-right text-xs text-red-600 font-medium">{(discA || 0) > 0 ? `${formatPHP(discA * scanned)}` : "—"}</TableCell>
-                                                <TableCell className="text-right font-bold text-xs">{formatPHP(lineTotal)}</TableCell>
-                                                <TableCell className="text-center font-bold text-xs">{expected}</TableCell>
-                                                <TableCell className="text-center">
-                                                    <Badge variant="default" className="h-5">{scanned}</Badge>
-                                                </TableCell>
-                                            </TableRow>
-                                        )
-                                    });
-                                })()}
-                            </TableBody>
-                            <TableFooter className="bg-muted/10">
-                                <TableRow>
-                                    <TableCell colSpan={7} className="text-right text-[10px] font-bold uppercase">Subtotal</TableCell>
-                                    <TableCell className="text-right font-black text-slate-800">{formatPHP(financials.gross)}</TableCell>
-                                    <TableCell className="text-center font-bold">{totalExpected}</TableCell>
-                                    <TableCell className="text-center font-black">{totalScanned}</TableCell>
-                                </TableRow>
-                            </TableFooter>
-                        </Table>
-                    </div>
+                    {/* Metadata items table card */}
+                    <Card className="p-4 shadow-sm border border-slate-200">
+                        <div className="mb-4 flex justify-between items-center">
+                            <div>
+                                <div className="text-sm font-semibold">Item Level Metadata Finalization</div>
+                                <div className="text-xs text-muted-foreground">Specify the Batch No, Lot selection and Expiry Date for each scanned product.</div>
+                            </div>
+                            <Button variant="ghost" size="sm" className="font-black uppercase tracking-wider text-xs" onClick={onBack}>← Back to Tagging</Button>
+                        </div>
 
-                    {/* Pagination Controls */}
-                    {allItems.length > 10 && (
-                        <div className="flex items-center justify-between px-4 py-3 border rounded-md bg-muted/10 mt-2">
-                            <span className="text-xs text-muted-foreground font-medium">
-                                Showing {(reviewPage - 1) * 10 + 1}–{Math.min(reviewPage * 10, allItems.length)} of {allItems.length} items
-                            </span>
-                            <div className="flex items-center gap-2">
-                                <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setReviewPage(p => Math.max(1, p - 1))} disabled={reviewPage === 1}>
-                                    <ChevronLeft className="h-4 w-4" />
-                                </Button>
-                                <span className="text-xs font-bold px-2">
-                                    Page {reviewPage} of {Math.ceil(allItems.length / 10)}
+                        <div className="border rounded-md overflow-hidden">
+                            <Table>
+                                <TableHeader className="bg-muted/50">
+                                    <TableRow>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700">Product Name</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 w-36">Batch</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 w-44">Lot</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 w-44">Expiry</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 text-right">Unit Price</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 text-center w-24">Disc. Type</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 text-right">Disc. Amt</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 text-right">Net Amt</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 text-center w-20">Expected</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 text-center w-20">Tagged</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {(() => {
+                                        const PAGE_SIZE = 10;
+                                        const paginatedItems = allItems.slice((reviewPage - 1) * PAGE_SIZE, reviewPage * PAGE_SIZE);
+                                        return paginatedItems.map((it: ReceivingPOItem) => {
+                                            const porId = String(it.porId || it.id);
+                                            const scanned = safeCounts[porId] ?? 0;
+                                            const expected = Number(it.expectedQty || it.taggedQty || 0);
+                                            const unitP = Number(it.unitPrice || 0);
+                                            const discA = Number(it.discountAmount || 0);
+                                            const effectivePrice = Math.max(0, unitP - discA);
+                                            const lineTotal = scanned * effectivePrice;
+                                            
+                                            return (
+                                                <TableRow key={porId}>
+                                                    <TableCell>
+                                                        <div className="font-bold text-xs">{it.name}</div>
+                                                        <div className="text-[9px] text-muted-foreground font-mono">SKU: {it.barcode} | UOM: {it.uom}</div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Input 
+                                                            className={cn(
+                                                                "h-8 text-[11px] font-bold",
+                                                                showErrors && scanned > 0 && !(batchNos[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
+                                                            )}
+                                                            placeholder="Batch #" 
+                                                            value={batchNos[porId] || ""} 
+                                                            onChange={(e) => setBatchNos(prev => ({ ...prev, [porId]: e.target.value }))} 
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <select 
+                                                            className={cn(
+                                                                "h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]",
+                                                                showErrors && scanned > 0 && !(lotIds[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
+                                                            )}
+                                                            value={lotIds[porId] || ""} 
+                                                            onChange={(e) => setLotIds(prev => ({ ...prev, [porId]: e.target.value }))}
+                                                        >
+                                                            <option value="">Select Lot</option>
+                                                            {lots.map((l: { lot_id: string | number; lot_name: string }) => <option key={l.lot_id} value={String(l.lot_id)}>{l.lot_name}</option>)}
+                                                        </select>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Input 
+                                                            type="date" 
+                                                            className={cn(
+                                                                "h-8 text-[11px]",
+                                                                showErrors && scanned > 0 && !(expiryDates[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
+                                                            )}
+                                                            value={expiryDates[porId] || ""} 
+                                                            onChange={(e) => setExpiryDates(prev => ({ ...prev, [porId]: e.target.value }))} 
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="text-right text-xs">{formatPHP(unitP)}</TableCell>
+                                                    <TableCell className="text-center text-[10px] text-muted-foreground">{it.discountType}</TableCell>
+                                                    <TableCell className="text-right text-xs text-red-600 font-medium">{(discA || 0) > 0 ? `${formatPHP(discA * scanned)}` : "—"}</TableCell>
+                                                    <TableCell className="text-right font-bold text-xs">{formatPHP(lineTotal)}</TableCell>
+                                                    <TableCell className="text-center font-bold text-xs">{expected}</TableCell>
+                                                    <TableCell className="text-center">
+                                                        <Badge variant="default" className="h-5 bg-indigo-600 hover:bg-indigo-700 font-bold">{scanned}</Badge>
+                                                    </TableCell>
+                                                </TableRow>
+                                            )
+                                        });
+                                    })()}
+                                </TableBody>
+                                <TableFooter className="bg-muted/10 border-t">
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-right text-[10px] font-bold uppercase">Subtotal</TableCell>
+                                        <TableCell className="text-right font-black text-slate-800">{formatPHP(financials.gross)}</TableCell>
+                                        <TableCell className="text-center font-bold">{totalExpected}</TableCell>
+                                        <TableCell className="text-center font-black">{totalScanned}</TableCell>
+                                    </TableRow>
+                                </TableFooter>
+                            </Table>
+                        </div>
+
+                        {/* Pagination Controls */}
+                        {allItems.length > 10 && (
+                            <div className="flex items-center justify-between px-4 py-3 border rounded-md bg-muted/10 mt-2">
+                                <span className="text-xs text-muted-foreground font-medium font-mono">
+                                    Showing {(reviewPage - 1) * 10 + 1}–{Math.min(reviewPage * 10, allItems.length)} of {allItems.length} items
                                 </span>
-                                <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setReviewPage(p => Math.min(Math.ceil(allItems.length / 10), p + 1))} disabled={reviewPage === Math.ceil(allItems.length / 10)}>
-                                    <ChevronRight className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setReviewPage(p => Math.max(1, p - 1))} disabled={reviewPage === 1}>
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </Button>
+                                    <span className="text-xs font-bold px-2">
+                                        Page {reviewPage} of {Math.ceil(allItems.length / 10)}
+                                    </span>
+                                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setReviewPage(p => Math.min(Math.ceil(allItems.length / 10), p + 1))} disabled={reviewPage === Math.ceil(allItems.length / 10)}>
+                                        <ChevronRight className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="mt-4 flex flex-col md:flex-row justify-end gap-6 border-t pt-4">
+                            <div className="flex-1 max-w-sm ml-auto space-y-2 text-xs">
+                                <div className="flex justify-between items-center text-slate-600">
+                                    <span className="font-bold uppercase tracking-wider text-[10px] text-slate-500">Gross Amount:</span>
+                                    <span className="font-bold text-slate-700">{formatPHP(financials.gross)}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-red-600">
+                                    <span className="font-bold uppercase tracking-wider text-[10px]">Discount:</span>
+                                    <span className="font-bold">{formatPHP(financials.discount)}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-slate-600 pb-2 border-b">
+                                    <span className="font-bold uppercase tracking-wider text-[10px]">Net Amount:</span>
+                                    <span className="font-bold text-slate-700">{formatPHP(financials.net)}</span>
+                                </div>
+                                {selectedPO?.isInvoice && (
+                                    <>
+                                        <div className="flex justify-between items-center text-slate-600">
+                                            <span className="font-bold uppercase tracking-wider text-[10px]">VAT Details:</span>
+                                            <span className="font-bold text-slate-700">{financials.isExclusive ? "+" : ""}{formatPHP(financials.vatAmount)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-red-600 pb-2 border-b">
+                                            <span className="font-bold uppercase tracking-wider text-[10px]">EWT:</span>
+                                            <span className="font-bold">{formatPHP(financials.whtAmount)}</span>
+                                        </div>
+                                    </>
+                                )}
+                                <div className="flex justify-between items-center pt-4">
+                                    <span className="font-black text-sm uppercase tracking-widest text-slate-900 underline decoration-indigo-500 underline-offset-4">Grand Total:</span>
+                                    <span className="font-black text-xl text-indigo-600 drop-shadow-sm">{formatPHP(financials.grandTotal)}</span>
+                                </div>
+                                {selectedPO?.isInvoice && (
+                                    <p className="text-[10px] text-muted-foreground mt-2 italic leading-tight text-right">
+                                        Note: VAT and EWT figures are for reference and have not been deducted from the total.
+                                    </p>
+                                )}
                             </div>
                         </div>
-                    )}
 
-                    <div className="mt-4 flex flex-col md:flex-row justify-end gap-6 border-t pt-4">
-                        <div className="flex-1 max-w-sm ml-auto space-y-2 text-sm">
-                            <div className="flex justify-between items-center text-slate-600">
-                                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Gross Amount:</span>
-                                <span className="font-bold text-slate-700">{formatPHP(financials.gross)}</span>
+                        {(clientSaveError || saveError) && (
+                            <div className="mt-4 p-3 bg-red-50 text-red-600 text-xs font-bold text-center border border-red-200 rounded-md">
+                                {clientSaveError || saveError}
                             </div>
-                            <div className="flex justify-between items-center text-red-600">
-                                <span className="text-[11px] font-bold uppercase tracking-wider">Discount:</span>
-                                <span className="font-bold">{formatPHP(financials.discount)}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-slate-600 pb-2 border-b">
-                                <span className="text-[11px] font-bold uppercase tracking-wider">Net Amount:</span>
-                                <span className="font-bold text-slate-700">{formatPHP(financials.net)}</span>
-                            </div>
-                            {selectedPO?.isInvoice && (
-                                <>
-                                    <div className="flex justify-between items-center text-slate-600">
-                                        <span className="text-[11px] font-bold uppercase tracking-wider">VAT Details:</span>
-                                        <span className="font-bold text-slate-700">{financials.isExclusive ? "+" : ""}{formatPHP(financials.vatAmount)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-red-600 pb-2 border-b">
-                                        <span className="text-[11px] font-bold uppercase tracking-wider">EWT:</span>
-                                        <span className="font-bold">{formatPHP(financials.whtAmount)}</span>
-                                    </div>
-                                </>
-                            )}
-                            <div className="flex justify-between items-center pt-4">
-                                <span className="font-black text-sm uppercase tracking-widest text-slate-900 underline decoration-indigo-500 underline-offset-4">Grand Total:</span>
-                                <span className="font-black text-xl text-indigo-600 drop-shadow-sm">{formatPHP(financials.grandTotal)}</span>
-                            </div>
-                            {selectedPO?.isInvoice && (
-                                <p className="text-[10px] text-muted-foreground mt-2 italic leading-tight text-right">
-                                    Note: VAT and EWT figures are for reference and have not been deducted from the total.
-                                </p>
-                            )}
+                        )}
+
+                        <div className="mt-4 flex justify-end gap-3 border-t pt-4">
+                            <Button 
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-xs tracking-wider h-11 px-8 shadow-md"
+                                onClick={handleSaveReceipt}
+                                disabled={savingReceipt}
+                            >
+                                {savingReceipt ? "Saving..." : "Save Final Receipt"}
+                            </Button>
                         </div>
-                    </div>
-
-                    {(clientSaveError || saveError) && (
-                        <div className="mt-4 p-2 bg-red-50 text-red-600 text-sm font-semibold text-center border border-red-200 rounded-md">
-                            {clientSaveError || saveError}
-                        </div>
-                    )}
-
-                    <div className="mt-4 flex justify-end gap-3">
-                        <Button 
-                            className="bg-indigo-600 hover:bg-indigo-700 h-10 px-8 text-xs font-black uppercase tracking-widest"
-                            onClick={handleSaveReceipt}
-                            disabled={savingReceipt}
-                        >
-                            {savingReceipt ? "Saving..." : "Save Final Receipt"}
-                        </Button>
-                    </div>
-                </Card>
+                    </Card>
+                </div>
             )}
 
             {receiptSaved && (
@@ -423,7 +659,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                     isInvoice={receiptSaved?.isInvoice ?? selectedPO?.isInvoice ?? false}
                 />
             )}
- 
+
             {/* ✅ Partial Receipt Confirmation Modal */}
             <AlertDialog open={isPartialModalOpen} onOpenChange={setIsPartialModalOpen}>
                 <AlertDialogContent>
@@ -436,7 +672,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={executeSave} className="bg-indigo-600 hover:bg-indigo-700">
+                        <AlertDialogAction onClick={executeSave} className="bg-indigo-600 hover:bg-indigo-700 text-white">
                             Proceed as Partial
                         </AlertDialogAction>
                     </AlertDialogFooter>
