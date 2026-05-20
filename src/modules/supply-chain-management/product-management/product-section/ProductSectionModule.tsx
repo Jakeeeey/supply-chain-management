@@ -12,36 +12,36 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { DataTable } from "./components/CategoryDataTable";
+import { DataTable } from "./components/ProductSectionDataTable";
 import ErrorPage from "@/components/shared/ErrorPage";
 
-import { CategoryApiRow } from "./types";
-import { listCategories } from "./providers/fetchProviders";
-import { CategoryDialog } from "./components/CategoryDialog";
-import { ViewCategoryDialog } from "./components/ViewCategoryDialog";
+import { ProductSectionApiRow } from "./types";
+import { listProductSections } from "./providers/fetchProviders";
+import { ProductSectionDialog } from "./components/ProductSectionDialog";
+import { ViewProductSectionDialog } from "./components/ViewProductSectionDialog";
 
 // =============================================================================
 // COLUMN DEFINITIONS
 // =============================================================================
 
 function buildColumns(
-  onView: (row: CategoryApiRow) => void,
-  onEdit: (row: CategoryApiRow) => void
-): ColumnDef<CategoryApiRow>[] {
+  onView: (row: ProductSectionApiRow) => void,
+  onEdit: (row: ProductSectionApiRow) => void
+): ColumnDef<ProductSectionApiRow>[] {
   return [
     {
-      accessorKey: "category_name",
-      header: "Category Name",
+      accessorKey: "section_name",
+      header: "Section Name",
       cell: ({ row }) => (
-        <span className="font-medium">{row.original.category_name}</span>
+        <span className="font-semibold text-foreground">{row.original.section_name}</span>
       ),
-      meta: { label: "Category Name" },
+      meta: { label: "Section Name" },
     },
     {
-      accessorKey: "sku_code",
-      header: "Category Code",
-      cell: ({ row }) => row.original.sku_code || "-",
-      meta: { label: "SKU Code" },
+      accessorKey: "description",
+      header: "Description",
+      cell: ({ row }) => row.original.description || "—",
+      meta: { label: "Description" },
     },
     {
       id: "actions",
@@ -74,28 +74,28 @@ function buildColumns(
 // MODULE
 // =============================================================================
 
-export default function CategoryModule() {
-  const [data, setData] = useState<CategoryApiRow[]>([]);
+export default function ProductSectionModule() {
+  const [data, setData] = useState<ProductSectionApiRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Dialog State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<CategoryApiRow | null>(null);
+  const [selectedProductSection, setSelectedProductSection] = useState<ProductSectionApiRow | null>(null);
 
-  // Fetch ALL data (client-side pagination)
+  // Fetch ALL data
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await listCategories(1, -1); // Fetch all
+      const res = await listProductSections(1, -1); // Fetch all
       setData(res.data);
     } catch (err: unknown) {
-      console.error("Failed to load categories", err);
-      const message = err instanceof Error ? err.message : "Failed to load categories.";
+      console.error("Failed to load product sections", err);
+      const message = err instanceof Error ? err.message : "Failed to load product sections.";
       setError(message);
-      toast.error("Failed to load categories");
+      toast.error("Failed to load product sections");
     } finally {
       setLoading(false);
     }
@@ -105,29 +105,28 @@ export default function CategoryModule() {
     fetchData();
   }, [fetchData]);
 
-  const handleView = (row: CategoryApiRow) => {
-    setSelectedCategory(row);
+  const handleView = (row: ProductSectionApiRow) => {
+    setSelectedProductSection(row);
     setIsViewDialogOpen(true);
   };
 
-  const handleEdit = (row: CategoryApiRow) => {
-    setSelectedCategory(row);
+  const handleEdit = (row: ProductSectionApiRow) => {
+    setSelectedProductSection(row);
     setIsDialogOpen(true);
   };
 
   const handleCreate = () => {
-    setSelectedCategory(null);
+    setSelectedProductSection(null);
     setIsDialogOpen(true);
   };
 
   const columns = buildColumns(handleView, handleEdit);
 
-  // Error State
   if (error && !loading) {
     return (
       <ErrorPage
         code="Connection Error"
-        title="Categories Unreachable"
+        title="Product Sections Unreachable"
         message={error}
         reset={fetchData}
       />
@@ -139,28 +138,28 @@ export default function CategoryModule() {
       <DataTable
         columns={columns}
         data={data}
-        searchKey="category_name"
+        searchKey="section_name"
         isLoading={loading}
-        emptyTitle="No categories found"
-        emptyDescription="Create your first category to get started."
+        emptyTitle="No product sections found"
+        emptyDescription="Create your first product section to get started."
         actionComponent={
           <Button onClick={handleCreate}>
-            <Plus className="mr-2 h-4 w-4" /> New Category
+            <Plus className="mr-2 h-4 w-4" /> New Product Section
           </Button>
         }
       />
 
-      <CategoryDialog
+      <ProductSectionDialog
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
-        selectedCategory={selectedCategory}
+        selectedProductSection={selectedProductSection}
         onSuccess={fetchData}
       />
 
-      <ViewCategoryDialog
+      <ViewProductSectionDialog
         open={isViewDialogOpen}
         onOpenChange={setIsViewDialogOpen}
-        selectedCategory={selectedCategory}
+        selectedProductSection={selectedProductSection}
       />
     </div>
   );
