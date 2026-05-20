@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useMemo } from "react";
 
-import { useForm, useFieldArray, useWatch, Control } from "react-hook-form";
+import { useForm, useFieldArray, useWatch, Control, Path, Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   skuSchema,
@@ -36,9 +36,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Combobox } from "../Combobox";
 
 interface FormFieldWrapperProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  control: Control<any>;
-  name: string;
+  control: Control<SKU>;
+  name: Path<SKU>;
   label: string;
   placeholder?: string;
   rowSpan?: number;
@@ -68,12 +67,17 @@ const FormFieldWrapper = ({
             <Textarea
               placeholder={placeholder}
               {...field}
-              value={field.value ?? ""}
+              value={(field.value as string) ?? ""}
               className="min-h-[100px]"
               disabled={disabled}
             />
           ) : (
-            <Input placeholder={placeholder} {...field} disabled={disabled} />
+            <Input
+              placeholder={placeholder}
+              {...field}
+              value={(field.value as string) ?? ""}
+              disabled={disabled}
+            />
           )}
         </FormControl>
         <FormMessage />
@@ -223,10 +227,17 @@ export function SKUForm({
   onSubmit,
   loading,
 }: SKUFormProps) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const form = useForm<any>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(skuSchema) as any,
+  const resolveInitialId = (val: unknown): number => {
+    if (!val) return 0;
+    if (typeof val === "object") {
+      return (val as { id?: number }).id || 0;
+    }
+    const parsed = parseInt(String(val));
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const form = useForm<SKU>({
+    resolver: zodResolver(skuSchema) as Resolver<SKU>,
     defaultValues: {
       isActive: 0,
       status: "DRAFT",
@@ -241,14 +252,17 @@ export function SKUForm({
       flavor: "",
       price_per_unit: 0,
       cost_per_unit: 0,
-      product_brand: (initialData as Record<string, unknown>)?.product_brand || 0,
-      product_category: (initialData as Record<string, unknown>)?.product_category || 0,
-      product_supplier: (initialData as Record<string, unknown>)?.product_supplier || 0,
+      product_brand: resolveInitialId(initialData?.product_brand),
+      product_category: resolveInitialId(initialData?.product_category),
+      product_class: resolveInitialId(initialData?.product_class),
+      product_segment: resolveInitialId(initialData?.product_segment),
+      product_section: resolveInitialId(initialData?.product_section),
+      product_supplier: resolveInitialId(initialData?.product_supplier),
       units: initialData?.units?.length ? initialData.units : [],
       ...initialData,
       // Priority overrides for specific IDs
       product_id: initialData?.product_id,
-      id: (initialData as Record<string, unknown>)?.id,
+      id: initialData?.id,
       description: initialData?.description ?? "",
     },
   });
@@ -301,8 +315,7 @@ export function SKUForm({
 
   return (
     <Form {...form}>
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <ScrollArea className="h-[60vh]">
           <div className="max-w-4xl mx-auto space-y-6 pb-10">
             {/* Section A: Core info */}
@@ -376,6 +389,87 @@ export function SKUForm({
                               field.onChange(v ? parseInt(v) : null)
                             }
                             placeholder="Select Category"
+                            disabled={isReadOnly}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="product_class"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">
+                          Class
+                        </FormLabel>
+                        <FormControl>
+                          <Combobox
+                            options={(masterData?.classes || []).map((c) => ({
+                              value: c.id.toString(),
+                              label: c.name,
+                            }))}
+                            value={field.value?.toString() || ""}
+                            onValueChange={(v: string) =>
+                              field.onChange(v ? parseInt(v) : null)
+                            }
+                            placeholder="Select Class"
+                            disabled={isReadOnly}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="product_segment"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">
+                          Segment
+                        </FormLabel>
+                        <FormControl>
+                          <Combobox
+                            options={(masterData?.segments || []).map((s) => ({
+                              value: s.id.toString(),
+                              label: s.name,
+                            }))}
+                            value={field.value?.toString() || ""}
+                            onValueChange={(v: string) =>
+                              field.onChange(v ? parseInt(v) : null)
+                            }
+                            placeholder="Select Segment"
+                            disabled={isReadOnly}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="product_section"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">
+                          Section
+                        </FormLabel>
+                        <FormControl>
+                          <Combobox
+                            options={(masterData?.sections || []).map((s) => ({
+                              value: s.id.toString(),
+                              label: s.name,
+                            }))}
+                            value={field.value?.toString() || ""}
+                            onValueChange={(v: string) =>
+                              field.onChange(v ? parseInt(v) : null)
+                            }
+                            placeholder="Select Section"
                             disabled={isReadOnly}
                           />
                         </FormControl>

@@ -8,10 +8,7 @@ type Params = Promise<{ id: string }>;
 export async function GET(req: NextRequest, { params }: { params: Params }) {
   try {
     const { id } = await params;
-    // For now, we fetch from drafts as that's where maintenance happens
-    // We fetch a larger limit to find the item, or ideally the service should have a fetchById
-    const response = await skuService.fetchDrafts(100, 0);
-    const item = response.data.find((d) => (d as { id: number | string }).id.toString() === id);
+    const item = await skuService.fetchDraftById(id);
     return NextResponse.json({ data: item });
   } catch (error: unknown) {
     const err = error as Error;

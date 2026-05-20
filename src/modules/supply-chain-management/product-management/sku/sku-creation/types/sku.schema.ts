@@ -37,6 +37,9 @@ export const skuSchema = z
 
     product_brand: z.number().int().min(1, "Brand is required"),
     product_category: z.number().int().min(1, "Category is required"),
+    product_class: z.number().int().nullable().optional(),
+    product_segment: z.number().int().nullable().optional(),
+    product_section: z.number().int().nullable().optional(),
     product_supplier: z.number().int().min(1, "Supplier is required"),
 
     description: z.string().min(1, "Description is required"),
@@ -44,7 +47,7 @@ export const skuSchema = z
 
     // UOM and Conversion
     base_unit: z.number().int().nullable().optional(), 
-    unit_of_measurement: z.union([z.number(), z.any()]).nullable().optional(),
+    unit_of_measurement: z.union([z.number(), z.record(z.string(), z.unknown())]).nullable().optional(),
     unit_of_measurement_count: z.number().int().nullable().optional(), 
 
     // Attributes for Variants
@@ -128,6 +131,9 @@ export interface MasterData {
   categories: { id: number; name: string; code: string }[];
   brands: { id: number; name: string; code: string }[];
   suppliers: { id: number; name: string }[];
+  classes: { id: number; name: string }[];
+  segments: { id: number; name: string }[];
+  sections: { id: number; name: string }[];
 }
 
 export interface PaginatedSKU {
