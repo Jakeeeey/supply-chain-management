@@ -119,12 +119,14 @@ export function StockConversionTable({
     });
   }, [options, data]);
 
-  const handleApplyFilters = (searchOverride?: string) => {
+  const handleApplyFilters = (searchOverride?: string, branchOverride?: number, hasStockOverride?: boolean) => {
     const filterPayload: Record<string, string> = {};
     
     // Safety check: ensure activeSearch is a string. 
     // onClick={handleApplyFilters} passes the event object, which we must ignore.
     const activeSearch = (typeof searchOverride === 'string') ? searchOverride : searchQuery;
+    const activeBranchId = branchOverride !== undefined ? branchOverride : localBranchId;
+    const activeHasStock = hasStockOverride !== undefined ? hasStockOverride : hasStockFilter;
 
     if (supplierFilter) {
       // Find by name OR shortcut to be safe
@@ -137,14 +139,14 @@ export function StockConversionTable({
     if (activeSearch && typeof activeSearch === 'string' && activeSearch.trim()) {
       filterPayload.search = activeSearch.trim();
     }
-    if (hasStockFilter) filterPayload.hasStock = "true";
+    if (activeHasStock) filterPayload.hasStock = "true";
 
     setPage(1);
     const finalPayload = { 
       ...filterPayload, 
-      branchId: localBranchId ? String(localBranchId) : "" 
+      branchId: activeBranchId ? String(activeBranchId) : "" 
     };
-    onBranchChange?.(localBranchId);
+    onBranchChange?.(activeBranchId);
     onFilterChange(finalPayload);
   };
 
@@ -190,7 +192,11 @@ export function StockConversionTable({
             label: String(b.branch_name || b.name || b.id),
           })) || []}
           value={localBranchId ? String(localBranchId) : ""}
-          onValueChange={(val: string | null) => setLocalBranchId(val ? Number(val) : undefined)}
+          onValueChange={(val: string | null) => {
+            const nextBranchId = val ? Number(val) : undefined;
+            setLocalBranchId(nextBranchId);
+            handleApplyFilters(undefined, nextBranchId);
+          }}
           placeholder="Select Branch"
           className="h-9"
         />
@@ -200,7 +206,11 @@ export function StockConversionTable({
         <Checkbox 
           id="convertible-only" 
           checked={hasStockFilter} 
-          onCheckedChange={(checked) => setHasStockFilter(!!checked)} 
+          onCheckedChange={(checked) => {
+            const nextChecked = !!checked;
+            setHasStockFilter(nextChecked);
+            handleApplyFilters(undefined, undefined, nextChecked);
+          }}
           disabled={!localBranchId}
         />
           <Label 
