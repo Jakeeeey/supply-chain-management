@@ -292,7 +292,7 @@ export default function StockConversionModule({
 
   // Track if we've successfully loaded data at least once
   const hasLoadedOnce = useRef(false);
-  if (!isLoading && data.length > 0) {
+  if (!isLoading) {
     hasLoadedOnce.current = true;
   }
 
