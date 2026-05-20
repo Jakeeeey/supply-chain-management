@@ -37,9 +37,9 @@ export const skuSchema = z
 
     product_brand: z.number().int().min(1, "Brand is required"),
     product_category: z.number().int().min(1, "Category is required"),
-    product_class: z.number().int().nullable().optional(),
-    product_segment: z.number().int().nullable().optional(),
-    product_section: z.number().int().nullable().optional(),
+    product_class: z.number().int().min(1, "Class is required"),
+    product_segment: z.number().int().min(1, "Segment is required"),
+    product_section: z.number().int().min(1, "Section is required"),
     product_supplier: z.number().int().min(1, "Supplier is required"),
 
     description: z.string().min(1, "Description is required"),

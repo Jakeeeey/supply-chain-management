@@ -403,7 +403,7 @@ export function SKUForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">
-                          Class
+                          Class *
                         </FormLabel>
                         <FormControl>
                           <Combobox
@@ -430,7 +430,7 @@ export function SKUForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">
-                          Segment
+                          Segment *
                         </FormLabel>
                         <FormControl>
                           <Combobox
@@ -457,7 +457,7 @@ export function SKUForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">
-                          Section
+                          Section *
                         </FormLabel>
                         <FormControl>
                           <Combobox
