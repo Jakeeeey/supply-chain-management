@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stockConversionService, stockConversionRepo } from "@/modules/supply-chain-management/transfers/stock-conversion/services";
+import { stockConversionPayloadSchema } from "@/modules/supply-chain-management/transfers/stock-conversion/types";
+import { AppError } from "@/modules/supply-chain-management/transfers/stock-conversion/utils/error-handler";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -39,25 +41,42 @@ export async function GET(req: NextRequest) {
       headers: { "Cache-Control": "no-store, max-age=0" }
     });
   } catch (error: unknown) {
-    const err = error as { message?: string; status?: number };
-    console.error("[API Error] Stock Conversion Route:", err);
-    return NextResponse.json(
-      { error: err.message || "Internal Server Error" },
-      { status: err.status || 500 }
-    );
+    console.error("[API Error] Stock Conversion Route:", error);
+    if (error instanceof AppError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: error.status }
+      );
+    }
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const data = await stockConversionService.executeConversion(body);
+
+    // Validate payload with Zod schema before processing
+    const parsed = stockConversionPayloadSchema.safeParse(body);
+    if (!parsed.success) {
+      const firstError = parsed.error.issues[0];
+      return NextResponse.json(
+        { error: `Validation failed: ${firstError?.path.join(".") || "unknown"} — ${firstError?.message || "invalid"}` },
+        { status: 400 }
+      );
+    }
+
+    const data = await stockConversionService.executeConversion(parsed.data);
     return NextResponse.json(data);
   } catch (error: unknown) {
-    const err = error as { message?: string; status?: number };
-    return NextResponse.json(
-      { error: err.message || "Conversion failed" },
-      { status: err.status || 500 }
-    );
+    if (error instanceof AppError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: error.status }
+      );
+    }
+    const message = error instanceof Error ? error.message : "Conversion failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

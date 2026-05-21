@@ -257,14 +257,13 @@ export default function StockTransferApprovalView() {
                       const description = product?.description || product?.barcode || 'N/A';
                       const brandName = typeof product?.product_brand === 'object' ? product?.product_brand?.brand_name : 'N/A';
                       const unitName = typeof product?.unit_of_measurement === 'object' ? product?.unit_of_measurement?.unit_name : 'unit';
-                      const originalId = product ? (product.product_id) : item.product_id;
+                      // const originalId = product ? (product.product_id) : item.product_id;
 
                       return (
                         <TableRow key={item.id} className="hover:bg-muted/5 border-b border-border/50">
                           <TableCell className="py-3">
                             <div className="flex flex-col">
                               <span className="font-semibold text-sm">{productName}</span>
-                              <span className="text-[10px] text-muted-foreground font-mono">ID: {String(originalId || 'N/A')}</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{description}</TableCell>

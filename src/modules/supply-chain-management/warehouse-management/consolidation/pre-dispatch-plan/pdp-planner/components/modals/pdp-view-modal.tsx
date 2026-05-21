@@ -79,6 +79,17 @@ export function PDPViewModal({
       })
     : "—";
 
+  const formattedCreatedAt = displayPlan.created_at
+    ? new Date(displayPlan.created_at).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      })
+    : "—";
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="w-full sm:max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-background">
@@ -116,9 +127,16 @@ export function PDPViewModal({
                     Dispatch Date
                   </span>
                 </div>
-                <p className="text-sm font-medium text-foreground truncate">
-                  {formattedDate}
-                </p>
+                <div className="flex flex-col">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {formattedDate}
+                  </p>
+                  {displayPlan.created_at && (
+                    <p className="text-[10px] text-muted-foreground font-medium truncate" title={`Created At: ${formattedCreatedAt}`}>
+                      Created: {formattedCreatedAt}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="bg-background border rounded-lg p-3">

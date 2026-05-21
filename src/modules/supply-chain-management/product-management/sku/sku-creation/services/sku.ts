@@ -21,6 +21,7 @@ export const skuService = {
   // ─── Queries ──────────────────────────────────────────────────────────────
   fetchApproved: skuQueryService.fetchApproved.bind(skuQueryService),
   fetchDrafts: skuQueryService.fetchDrafts.bind(skuQueryService),
+  fetchDraftById: skuQueryService.fetchDraftById.bind(skuQueryService),
   fetchMasterData: skuQueryService.fetchMasterData.bind(skuQueryService),
   checkDuplicateName: skuQueryService.checkDuplicateName.bind(skuQueryService),
 

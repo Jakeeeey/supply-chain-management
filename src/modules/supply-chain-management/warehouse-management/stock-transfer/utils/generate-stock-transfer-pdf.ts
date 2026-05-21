@@ -370,8 +370,38 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
     y += 4; // Gap between groups
   });
 
+  // ── Reference Info (Below table) ──────────────────────────────
+  if (y > pageH - 55) {
+    doc.addPage();
+    y = 20;
+  }
+
+  y += 6;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text('ORDER DETAILS', margin, y);
+  y += 5;
+
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(80, 80, 80);
+  doc.text('Reference No:', margin, y);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text(orderNo.toUpperCase(), margin + 25, y);
+  
+  y += 4.5;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(80, 80, 80);
+  doc.text('Encoder Name:', margin, y);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text(pickerName.toUpperCase(), margin + 25, y);
+  y += 2;
+
   // ── Signature Section ─────────────────────────────────────────
-  const sigY = Math.max(y + 10, pageH - 40);
+  const sigY = Math.max(y + 16, pageH - 40);
   const sigW = (contentW - 40) / 2;
 
   // Picker Confirmation

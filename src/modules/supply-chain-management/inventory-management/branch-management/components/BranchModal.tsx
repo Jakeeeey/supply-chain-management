@@ -37,7 +37,7 @@ import {
     ComboboxItem,
 } from "@/components/ui/combobox";
 
-import type { User, Province, City, Barangay, Branch } from "../types";
+import type { User, Province, City, Barangay, Branch, SubscriptionLimit } from "../types";
 import {
     fetchProvinces,
     fetchCities,
@@ -66,6 +66,7 @@ interface BranchModalProps {
     users: User[];
     onSuccess: () => void;
     editingBranch?: Branch | null;
+    subscriptionLimit?: SubscriptionLimit | null;
 }
 
 type FormValues = z.infer<typeof formSchema>;
@@ -89,7 +90,7 @@ const selectFocus =
     "focus:ring-2 focus:ring-ring focus:ring-offset-0 " +
     "focus:border-ring";
 
-export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }: BranchModalProps) {
+export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch, subscriptionLimit }: BranchModalProps) {
     const [provinces, setProvinces] = React.useState<Province[]>([]);
     const [cities, setCities] = React.useState<City[]>([]);
     const [barangays, setBarangays] = React.useState<Barangay[]>([]);
@@ -251,6 +252,10 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
     };
 
     async function onSubmit(values: FormValues) {
+        if (!editingBranch && subscriptionLimit?.isReached) {
+            toast.error(`Subscription Limit Reached: You have registered the maximum allowed branches (${subscriptionLimit.limitValue}) for your current subscription tier.`);
+            return;
+        }
         setIsSubmitting(true);
         try {
             const selectedUser = users.find(u =>
