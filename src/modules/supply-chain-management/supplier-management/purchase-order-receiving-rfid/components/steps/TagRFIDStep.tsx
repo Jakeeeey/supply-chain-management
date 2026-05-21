@@ -190,7 +190,7 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
                             Previous Receipts History
                         </div>
                         <div className="mt-3 space-y-2">
-                            {selectedPO.history.map((h: any) => (
+                            {selectedPO.history.map((h: { receiptNo: string; receiptDate?: string; itemsCount?: number; [key: string]: unknown }) => (
                                 <div
                                     key={h.receiptNo}
                                     className="flex items-center justify-between gap-3 text-xs border-b border-amber-500/10 pb-2 last:border-0 last:pb-0"

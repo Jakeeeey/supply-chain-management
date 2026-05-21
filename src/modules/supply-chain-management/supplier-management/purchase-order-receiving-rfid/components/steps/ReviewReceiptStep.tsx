@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { ChevronLeft, ChevronRight, AlertTriangle, AlertCircle, XCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, XCircle } from "lucide-react";
 import { useReceivingProducts, ReceivingPOItem } from "../../providers/ReceivingProductsProvider";
 import { toast } from "sonner";
 import { ReceiptPreviewModal } from "../ReceiptPreviewModal";
@@ -202,8 +202,8 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
     const progress = React.useMemo(() => {
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
         const items = allocs.flatMap((a) => (Array.isArray(a?.items) ? a.items : []));
-        const totalTagged = items.reduce((acc, it: any) => acc + (Number(it?.taggedQty) || 0), 0);
-        const totalReceived = items.reduce((acc, it: any) => acc + (Number(it?.receivedQty) || 0), 0);
+        const totalTagged = items.reduce((acc, it: ReceivingPOItem) => acc + (Number(it?.taggedQty) || 0), 0);
+        const totalReceived = items.reduce((acc, it: ReceivingPOItem) => acc + (Number(it?.receivedQty) || 0), 0);
         return { totalTagged, totalReceived };
     }, [selectedPO]);
 

@@ -26,12 +26,10 @@ import {
   Unit,
   Product,
   ProductSupplierConnection,
-  ProductCatalog,
   API_LineDiscount,
 } from "../type";
 import { SalesReturnProvider } from "../providers/fetchProviders";
 import { cn } from "@/lib/utils";
-import { resolveFinalDiscount } from "../utils/discount-resolver";
 
 interface Props {
   isOpen: boolean;
@@ -48,7 +46,6 @@ export function ProductLookupModal({
   onConfirm,
   priceType = "A", // 🟢 NEW
   customerCode,
-  lineDiscounts = [],
 }: Props) {
   // --- STATES ---
   const [searchCode, setSearchCode] = useState("");
@@ -62,7 +59,6 @@ export function ProductLookupModal({
   const [categoriesList, setCategoriesList] = useState<Category[]>([]);
   const [suppliersList, setSuppliersList] = useState<Supplier[]>([]);
   const [unitsList, setUnitsList] = useState<Unit[]>([]);
-  const [catalogData, setCatalogData] = useState<ProductCatalog | null>(null); // Keep full catalog for resolving
   const [supplierConnections, setSupplierConnections] = useState<
     ProductSupplierConnection[]
   >([]);
@@ -95,7 +91,6 @@ export function ProductLookupModal({
         setIsLoading(true);
         try {
           const catalog = await SalesReturnProvider.getFullCatalog(customerCode);
-          setCatalogData(catalog);
           setBrandsList(Array.isArray(catalog.brands) ? catalog.brands : []);
           setCategoriesList(Array.isArray(catalog.categories) ? catalog.categories : []);
           setSuppliersList(Array.isArray(catalog.suppliers) ? catalog.suppliers : []);

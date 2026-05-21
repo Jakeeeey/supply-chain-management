@@ -751,7 +751,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 }
             }
         },
-        [resetSession]
+        [resetSession, restoreServerDraft]
     );
 
     const openPOByBarcode = React.useCallback(
@@ -887,7 +887,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 }
             }
         },
-        [resetSession]
+        [resetSession, restoreServerDraft]
     );
 
     const openPO = React.useCallback(

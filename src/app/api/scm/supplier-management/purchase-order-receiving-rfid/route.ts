@@ -1245,7 +1245,7 @@ export async function POST(req: NextRequest) {
 
                 const m = meta[localKey] || meta[String(realPorId)] || {};
 
-                let pr = allPorRows.find(r => toNum(r.purchase_order_product_id) === realPorId);
+                const pr = allPorRows.find(r => toNum(r.purchase_order_product_id) === realPorId);
                 if (!pr) continue;
 
                 const uPrice = toNum(pr.unit_price || 0);
