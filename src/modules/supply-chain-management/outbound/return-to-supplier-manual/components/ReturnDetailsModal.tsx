@@ -361,8 +361,6 @@ export function ReturnDetailsModal({
     refs.units,
     refs.connections,
     refs.discountTypes,
-    refs.lineDiscounts,
-    refs.linePerDiscountType,
     addToCartInternal,
   ]);
 

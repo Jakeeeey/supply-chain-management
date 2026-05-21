@@ -355,8 +355,6 @@ export function CreateReturnModal({
       refs.units,
       refs.connections,
       refs.discountTypes,
-      refs.lineDiscounts,
-      refs.linePerDiscountType,
     ],
   );
 

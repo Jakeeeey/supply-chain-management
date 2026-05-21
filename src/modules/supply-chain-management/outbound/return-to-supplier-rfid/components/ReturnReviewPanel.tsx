@@ -60,7 +60,6 @@ export function ReturnReviewPanel({
   items,
   lineDiscounts,
   discountTypes,
-  linePerDiscountType,
   returnTypes = [],
   onUpdateItem,
   onRemoveItem,
