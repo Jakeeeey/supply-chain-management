@@ -162,20 +162,9 @@ export function ReturnReviewPanel({
     if (selectedType) {
       onUpdateItem(itemId, "discountTypeId", selectedType.id);
 
-      // Resolve percentage
-      const junctions = linePerDiscountType.filter(
-        (j) => String(j.type_id) === String(selectedType.id)
-      );
-      if (junctions.length > 0) {
-        const lineDiscount = lineDiscounts.find(
-          (ld) => String(ld.id) === String(junctions[0].line_id)
-        );
-        if (lineDiscount) {
-          onUpdateItem(itemId, "discount", Number(lineDiscount.percentage) / 100);
-        }
-      } else {
-        onUpdateItem(itemId, "discount", 0);
-      }
+      // Use total_percent directly from discount_type
+      const totalPct = parseFloat(String(selectedType.total_percent)) || 0;
+      onUpdateItem(itemId, "discount", totalPct / 100);
     }
   };
 
