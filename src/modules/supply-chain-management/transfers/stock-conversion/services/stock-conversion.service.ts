@@ -43,6 +43,12 @@ export const stockConversionService = {
     // 1. Resolve filter IDs first to avoid relational Forbidden joins
     const allOptions = await stockConversionRepo.fetchFilterOptions();
     console.log(`[Perf] Step 1 - fetchFilterOptions: ${Date.now() - t0}ms`);
+
+    // Do not show data on load if either branch or supplier is not selected
+    if (!branchId || !extraFilters?.supplierShortcut) {
+      return { data: [], totalCount: 0, options: allOptions };
+    }
+
     const finalFilters: string[] = [];
 
     let filterProductIds: number[] | null = null;
@@ -132,7 +138,7 @@ export const stockConversionService = {
     const totalCount = prodJson.meta?.filter_count || 0;
     console.log(`[Perf] Step 2 - fetchProducts: ${Date.now() - t2}ms (${products.length} products)`);
 
-    if (products.length === 0) return { data: [], totalCount: 0, options: { brands: [], categories: [], suppliers: [] } };
+    if (products.length === 0) return { data: [], totalCount: 0, options: allOptions };
 
     // 4. Parallel Enrichment Fetching (only fetch what we DON'T already have)
     // allOptions already has brands, categories, units, suppliers — reuse those!

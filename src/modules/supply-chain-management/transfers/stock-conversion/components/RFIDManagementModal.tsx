@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { StockConversionProduct, RFIDTag } from "../types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -66,7 +67,7 @@ export function RFIDManagementModal({
 
     // CROSS-CHECK: Block if this is the same tag being converted (Source)
     if (sourceRfidTags.includes(rfidInput.trim())) {
-      alert(`RFID ${rfidInput.trim()} is currently being converted from the source unit. You must use a DIFFERENT tag for the new unit.`);
+      toast.error("Source Tag Conflict", { description: `RFID ${rfidInput.trim()} is currently being converted from the source unit. You must use a DIFFERENT tag for the new unit.` });
       setRfidInput("");
       return;
     }
@@ -77,10 +78,10 @@ export function RFIDManagementModal({
       if (validateTag) {
         const result = await validateTag(rfidInput.trim());
         if (result.exists) {
-          const message = result.reason === "onhand" 
+          const description = result.reason === "onhand" 
             ? `RFID ${rfidInput.trim()} is already on-hand in the warehouse.`
             : `RFID ${rfidInput.trim()} has been used previously (found in history).`;
-          alert(`${message} Duplicates are not allowed.`);
+          toast.error("Duplicate RFID", { description });
           setRfidInput("");
           return;
         }
