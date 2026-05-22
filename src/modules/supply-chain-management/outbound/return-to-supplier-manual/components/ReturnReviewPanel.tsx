@@ -50,7 +50,6 @@ export function ReturnReviewPanel({
   items,
   lineDiscounts,
   discountTypes,
-  linePerDiscountType,
   returnTypes = [],
   onUpdateItem,
   onRemoveItem,
@@ -222,23 +221,12 @@ export function ReturnReviewPanel({
                                   selectedType.id,
                                 );
 
-                                const junctions = linePerDiscountType.filter(
-                                  (j) => String(j.type_id) === String(selectedType.id)
+                                const totalPct = parseFloat(String(selectedType.total_percent)) || 0;
+                                onUpdateItem(
+                                  item.cartId,
+                                  "discount",
+                                  totalPct / 100
                                 );
-                                if (junctions.length > 0) {
-                                  const lineDiscount = lineDiscounts.find(
-                                    (ld) => String(ld.id) === String(junctions[0].line_id)
-                                  );
-                                  if (lineDiscount) {
-                                    onUpdateItem(
-                                      item.cartId,
-                                      "discount",
-                                      Number(lineDiscount.percentage) / 100
-                                    );
-                                  }
-                                } else {
-                                   onUpdateItem(item.cartId, "discount", 0);
-                                }
                               }
                             }}
                           >
