@@ -58,9 +58,10 @@ export function AttachmentUpload({
 
       onChange([...(value || []), ...newAttachments]);
       toast.success(`${files.length} file(s) uploaded successfully`);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Could not upload file(s)";
       toast.error("Upload failed", {
-        description: error.message || "Could not upload file(s)",
+        description: errorMessage,
       });
     } finally {
       setIsUploading(false);

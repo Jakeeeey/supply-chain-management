@@ -1,10 +1,8 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, Package, Trash2, Minus, Plus } from "lucide-react";
+import { Search, Package, Minus, Plus } from "lucide-react";
 import { StockAdjustmentManualProduct, StockAdjustmentManualItem } from "../../types/stock-adjustment-manual.schema";
-import { toast } from "sonner";
 
 interface ProductSelectionModalProps {
   isOpen: boolean;
@@ -33,6 +31,7 @@ export function ProductSelectionModal({
   // Initialize cart when modal opens
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCartItems(initialSelectedItems || []);
       setCatalogSearch("");
     }

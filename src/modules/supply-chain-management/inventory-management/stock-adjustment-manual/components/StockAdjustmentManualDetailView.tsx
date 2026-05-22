@@ -133,6 +133,7 @@ export function StockAdjustmentManualDetailView({ id, onBack }: StockAdjustmentM
     doc.text(data.type || "-", 145, 36);
 
     // --- Product Table ---
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tableRows: any[] = [];
     
     const supplierName = typeof data.supplier_id === 'object' ? data.supplier_id?.supplier_name : data.supplier_id || "Unknown Supplier";
@@ -510,6 +511,7 @@ export function StockAdjustmentManualDetailView({ id, onBack }: StockAdjustmentM
             Attachments
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.stock_adjustment_attachment.map((att: any, index: number) => {
               const uuid = typeof att.attachment === 'object' ? att.attachment.id : att.attachment;
               const filename = typeof att.attachment === 'object' ? att.attachment.filename_download : `Attachment-${index + 1}`;
@@ -577,6 +579,7 @@ export function StockAdjustmentManualDetailView({ id, onBack }: StockAdjustmentM
           </DialogHeader>
           <div className="flex-1 bg-muted/30 overflow-hidden flex items-center justify-center relative bg-[url('https://transparenttextures.com/patterns/cubes.png')]">
             {previewAttachment?.type?.startsWith('image') || previewAttachment?.filename?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|svg)$/) ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
               <img 
                 src={previewAttachment.url} 
                 alt={previewAttachment.filename} 

@@ -22,7 +22,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   StockAdjustmentManualFormSchema,
   StockAdjustmentManualFormValues,
-  StockAdjustmentManualProduct,
   StockAdjustmentManualItem,
 } from "../../types/stock-adjustment-manual.schema";
 import { useStockAdjustmentManualForm } from "../../hooks/useStockAdjustmentManualForm";
@@ -265,7 +264,6 @@ export function StockAdjustmentManualForm({
   } = useStockAdjustmentManualForm();
 
   const [loading, setLoading] = useState(false);
-  const [loadingRows, setLoadingRows] = useState<Set<number>>(new Set());
   const [showPostConfirmation, setShowPostConfirmation] = useState(false);
   const [branchInputValue, setBranchInputValue] = useState("");
   const [supplierInputValue, setSupplierInputValue] = useState("");
@@ -277,17 +275,6 @@ export function StockAdjustmentManualForm({
   const [tableSearch, setTableSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-
-  // --- Memoize product options to prevent expensive re-mapping in every row ---
-  const productOptions = useMemo(() => {
-    return products.map((p) => ({
-      // Use record PK (id) for absolute uniqueness, fallback to product_id
-      value: String(p.id || p.product_id),
-      // Include unit in label to prevent CommandItem collision and help user selection
-      label: p.unit_name ? `${p.product_name} (${p.unit_name})` : p.product_name,
-      item: p
-    }));
-  }, [products]);
 
   const form = useForm<StockAdjustmentManualFormValues>({
     mode: "all",
@@ -304,7 +291,7 @@ export function StockAdjustmentManualForm({
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, remove } = useFieldArray({
     control: form.control,
     name: "items",
   });
@@ -571,79 +558,12 @@ export function StockAdjustmentManualForm({
   );
 
 
-  // ——————————————————————————————————————————————————————————————————————————————
-  const handleProductSelect = useCallback(
-    async (index: number, product: StockAdjustmentManualProduct) => {
-      if (!product) return;
-
-      const productId = product.product_id || product.id;
-
-      // ── Duplicate guard ──────────────────────────────────────────────────
-      const existingItems = form.getValues('items');
-      const isDuplicate = existingItems.some(
-        (item, i) => i !== index && Number(item.product_id) === Number(productId)
-      );
-      if (isDuplicate) {
-        toast.error('This product is already in the list.');
-        return;
-      }
-
-      form.setValue(`items.${index}.product_id`, Number(productId), { shouldValidate: true });
-      form.setValue(`items.${index}.product_name`, product.product_name);
-      form.setValue(`items.${index}.product_code`, product.product_code);
-      form.setValue(`items.${index}.cost_per_unit`, product.cost_per_unit || product.price_per_unit || 0);
-      form.setValue(`items.${index}.unit_name`, product.unit_name || "pcs");
-      form.setValue(`items.${index}.brand_name`, product.brand_name || "N/A");
-      form.setValue(`items.${index}.barcode`, product.barcode || "N/A");
-      form.setValue(`items.${index}.description`, product.description || "No description available.");
-      form.setValue(`items.${index}.unit_order`, product.unit_of_measurement?.order || 1);
-
-      const cachedStock = inventoryMap.get(Number(productId)) ?? 0;
-      form.setValue(`items.${index}.current_stock`, cachedStock);
-
-      const currentQty = form.getValues(`items.${index}.quantity`);
-      if (!currentQty || currentQty <= 0) {
-        form.setValue(`items.${index}.quantity`, 1, { shouldValidate: true });
-      }
-
-
-      (async () => {
-        try {
-          const branchId = form.getValues("branch_id");
-          const currentStock = await (cachedStock === 0
-            ? fetchInventory(productId, branchId)
-            : Promise.resolve(cachedStock));
-
-          form.setValue(`items.${index}.current_stock`, currentStock);
-
-        } catch (err) {
-          console.error("Background fetch error:", err);
-        } finally {
-          setLoadingRows((prev) => {
-            const next = new Set(prev);
-            next.delete(index);
-            return next;
-          });
-        }
-      })();
-    },
-    [fetchInventory, form, inventoryMap]
-  );
-
 
   const watchedBranchIdForSelect = useWatch({ control: form.control, name: "branch_id" });
   const watchedSupplierIdForSelect = useWatch({ control: form.control, name: "supplier_id" });
   const watchedType = useWatch({ control: form.control, name: "type" });
 
-  // Compute which product IDs are already in the cart (for catalog ✓ Added state)
   const watchedItemsList = useWatch({ control: form.control, name: "items" });
-  const addedProductIds = useMemo(() => {
-    const ids = new Set<number>();
-    (watchedItemsList || []).forEach((item) => {
-      if (item?.product_id) ids.add(Number(item.product_id));
-    });
-    return ids;
-  }, [watchedItemsList]);
 
   const filteredFields = useMemo(() => {
     return fields.map((field, index) => ({ field, index })).filter(({ index }) => {
@@ -1045,7 +965,7 @@ export function StockAdjustmentManualForm({
                     {paginatedFields.length === 0 && tableSearch ? (
                       <tr>
                         <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
-                          No products found matching "{tableSearch}".
+                          No products found matching &quot;{tableSearch}&quot;.
                         </td>
                       </tr>
                     ) : (
