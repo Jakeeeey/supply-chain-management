@@ -39,6 +39,28 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout 
   }
 }
 
+interface StockAdjustmentPayload {
+  doc_no: string;
+  product_id: number;
+  branch_id: number;
+  type: "IN" | "OUT";
+  quantity: number;
+  created_by: number;
+  remarks: string;
+}
+
+interface StockAdjustmentHeaderPayload {
+  doc_no: string;
+  type: "IN" | "OUT";
+  branch_id: number;
+  created_by: number;
+  posted_by: number;
+  amount: number;
+  remarks: string;
+  isPosted?: boolean;
+  postedAt?: string;
+}
+
 export const stockConversionRepo = {
   async fetchProducts(limit: number, offset: number, filters?: string) {
     const headers = getHeaders();
@@ -193,7 +215,7 @@ export const stockConversionRepo = {
       .map(([id]) => Number(id));
   },
 
-  async createStockAdjustment(payload: Record<string, unknown>) {
+  async createStockAdjustment(payload: StockAdjustmentPayload) {
     const headers = getHeaders();
     const res = await fetch(`${DIRECTUS_API}/items/stock_adjustment`, {
       method: "POST",
@@ -201,10 +223,10 @@ export const stockConversionRepo = {
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error("Failed to create stock adjustment");
-    return res.json();
+    return res.json() as Promise<{ data?: { id: number } }>;
   },
 
-  async createStockAdjustmentHeader(payload: Record<string, unknown>) {
+  async createStockAdjustmentHeader(payload: StockAdjustmentHeaderPayload) {
     const headers = getHeaders();
     const res = await fetch(`${DIRECTUS_API}/items/stock_adjustment_header`, {
       method: "POST",
@@ -212,9 +234,8 @@ export const stockConversionRepo = {
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error("Failed to create adjustment header");
-    return res.json();
+    return res.json() as Promise<{ data?: { id: number } }>;
   },
-
   async insertStockAdjustmentRfids(entries: { rfid_tag: string, stock_adjustment_id: number, created_by: number }[]) {
     if (entries.length === 0) return;
     const headers = getHeaders();

@@ -17,6 +17,9 @@ export const normalizeMasterData = (items: Record<string, unknown>[]) =>
         i.category_name ||
         i.unit_name ||
         i.supplier_name ||
+        i.class_name ||
+        i.segment_name ||
+        i.section_name ||
         i.name ||
         i.title ||
         `Item #${index}`,
@@ -57,6 +60,9 @@ export const prepareSKUPayload = (
     parent_id: draft.parent_id ? pMasterId : null,
     product_brand: (draft.product_brand as Record<string, unknown>)?.id ?? draft.product_brand,
     product_category: (draft.product_category as Record<string, unknown>)?.id ?? draft.product_category,
+    product_class: (draft.product_class as Record<string, unknown>)?.id ?? draft.product_class,
+    product_segment: (draft.product_segment as Record<string, unknown>)?.id ?? draft.product_segment,
+    product_section: (draft.product_section as Record<string, unknown>)?.id ?? draft.product_section,
     product_supplier: (draft.product_supplier as Record<string, unknown>)?.id ?? draft.product_supplier,
     unit_of_measurement:
       (draft.unit_of_measurement as Record<string, unknown>)?.id ?? draft.unit_of_measurement,

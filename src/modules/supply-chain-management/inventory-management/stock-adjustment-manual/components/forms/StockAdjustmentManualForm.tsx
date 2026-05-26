@@ -10,12 +10,18 @@ import {
   ArrowLeft,
   Package,
   Send,
+  Search,
+  Minus,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Paperclip,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   StockAdjustmentManualFormSchema,
   StockAdjustmentManualFormValues,
-  StockAdjustmentManualProduct,
   StockAdjustmentManualItem,
 } from "../../types/stock-adjustment-manual.schema";
 import { useStockAdjustmentManualForm } from "../../hooks/useStockAdjustmentManualForm";
@@ -44,6 +50,8 @@ import {
   ComboboxItem,
   ComboboxEmpty,
 } from "@/components/ui/combobox";
+import { ProductSelectionModal } from "../modals/ProductSelectionModal";
+import { AttachmentUpload } from "../AttachmentUpload";
 
 // ——————————————————————————————————————————————————————————————————————————————
 interface StockAdjustmentManualFormProps {
@@ -53,271 +61,122 @@ interface StockAdjustmentManualFormProps {
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
-// Memoised item row (renders only when *its own* data changes)
-interface ItemRowProps {
+// ——————————————————————————————————————————————————————————————————————————————
+// Table row for the main form
+interface ProductTableRowProps {
   index: number;
   control: Control<StockAdjustmentManualFormValues>;
-  productOptions: { value: string; label: string; item: StockAdjustmentManualProduct }[];
-  isProductsLoading: boolean;
-  isLoadingDetails: boolean;
-  onProductSelect: (index: number, product: StockAdjustmentManualProduct) => void;
   onRemove: (index: number) => void;
   setValue: UseFormSetValue<StockAdjustmentManualFormValues>;
   isReadOnly?: boolean;
 }
 
-const StockAdjustmentManualItemRow = React.memo(function StockAdjustmentManualItemRow({
+const ProductTableRow = React.memo(function ProductTableRow({
   index,
   control,
-  productOptions,
-  isProductsLoading,
-  onProductSelect,
   onRemove,
   setValue,
   isReadOnly = false,
-}: ItemRowProps) {
-  // useWatch subscribes to specific fields — only this row re-renders when its own data changes.
+}: ProductTableRowProps) {
   const product_name = useWatch({ control, name: `items.${index}.product_name` });
-  const productId = useWatch({ control, name: `items.${index}.product_id` });
-  const unitName = useWatch({ control, name: `items.${index}.unit_name` });
-  const quantity = useWatch({ control, name: `items.${index}.quantity` });
+  const product_code = useWatch({ control, name: `items.${index}.product_code` });
+  const unitName    = useWatch({ control, name: `items.${index}.unit_name` });
+  const quantity    = useWatch({ control, name: `items.${index}.quantity` });
   const costPerUnit = useWatch({ control, name: `items.${index}.cost_per_unit` });
-  const brandName = useWatch({ control, name: `items.${index}.brand_name` });
-  const barcode = useWatch({ control, name: `items.${index}.barcode` });
-  const description = useWatch({ control, name: `items.${index}.description` });
-  const dbId = useWatch({ control, name: `items.${index}.db_id` });
+  const brandName   = useWatch({ control, name: `items.${index}.brand_name` });
 
   const { errors } = useFormState({ control });
   const rowError = Array.isArray(errors.items)
     ? (errors.items[index] as FieldErrors<StockAdjustmentManualItem>)
     : undefined;
 
-  const [productSearch, setProductSearch] = useState("");
-  const [productInputValue, setProductInputValue] = useState(product_name || "");
-
-  // Synchronize input value (e.g. for Edit mode) during render if name changed
-  // This avoids the 'cascading renders' lint error from useEffect
-  const [prevProductName, setPrevProductName] = useState(product_name);
-  if (product_name !== prevProductName) {
-    setPrevProductName(product_name);
-    if (!productSearch) {
-      setProductInputValue(product_name || "");
-    }
-  }
-
-
-
   const totalCost = Number(quantity || 0) * Number(costPerUnit || 0);
 
+  const handleUpdateQuantity = (delta: number) => {
+    const currentQty = Number(quantity || 0);
+    const newQty = Math.max(1, currentQty + delta);
+    setValue(`items.${index}.quantity`, newQty, { shouldValidate: true });
+  };
+
   return (
-    <div
-      className="border-b last:border-0 p-6 space-y-4 transition-colors duration-200 relative border-border/50"
-    >
-      <div className="flex items-start gap-4">
-        {/* Product Selection */}
-        <div className="flex-[3] space-y-2">
-          <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-            Product <span className="text-red-500">*</span>
-          </Label>
-          <Combobox
-            value={String(productId || "")}
-            onValueChange={(val: string | null) => {
-              if (!val) {
-                setProductInputValue("");
-                return;
-              }
-              const product = productOptions.find(
-                (p) => String(p.value) === val
-              )?.item;
-              if (product) {
-                setProductInputValue(product.product_name);
-                onProductSelect(index, product);
-              }
-            }}
-            inputValue={productInputValue}
-            onInputValueChange={(v: string) => {
-              // base-ui fires this with the raw ID after selection — show the product name instead
-              const matched = productOptions.find(p => String(p.value) === v);
-              if (matched) {
-                setProductInputValue(matched.item.product_name);
-                setProductSearch("");
-              } else {
-                setProductInputValue(v);
-                setProductSearch(v);
-              }
-            }}
-          >
-            <ComboboxInput
-              placeholder="Select Product"
-              disabled={isProductsLoading || isReadOnly || !!dbId}
-              showClear
-              className={rowError?.product_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
-            />
-            <ComboboxContent>
-              <ComboboxList>
-                {(() => {
-                  const filtered = productOptions.filter(opt =>
-                    opt.label.toLowerCase().includes(productSearch.toLowerCase()) ||
-                    opt.item.product_code?.toLowerCase().includes(productSearch.toLowerCase())
-                  );
-                  if (filtered.length === 0) return <ComboboxEmpty>No products found.</ComboboxEmpty>;
-                  return filtered.map((option) => {
-                    const p = option.item;
-                    return (
-                      <ComboboxItem key={option.value} value={option.value}>
-                        <div className="flex items-center justify-between w-full gap-4 min-w-[300px]">
-                          <div className="flex flex-col">
-                            <span className="font-medium text-foreground line-clamp-1 text-xs">
-                              {p.product_name}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[9px] text-muted-foreground font-mono">
-                                {p.product_code}
-                              </span>
-                              {p.unit_name && (
-                                <>
-                                  <span className="text-[9px] text-muted-foreground/30">•</span>
-                                  <span className="text-[9px] font-bold text-blue-600 uppercase tracking-tight bg-blue-50 dark:bg-blue-900/20 px-1 rounded">
-                                    {p.unit_name}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </ComboboxItem>
-                    );
-                  });
-                })()}
-              </ComboboxList>
-            </ComboboxContent>
-          </Combobox>
-          {rowError?.product_id && (
-            <p className="text-[10px] text-red-500 font-bold mt-1 animate-in fade-in slide-in-from-top-1 duration-200">
-              {rowError.product_id.message}
-            </p>
-          )}
+    <tr className="border-b border-border/50 hover:bg-muted/10 transition-colors bg-card">
+      <td className="p-3 text-xs text-muted-foreground text-center font-bold w-12 border-r border-border/50">{index + 1}</td>
+      <td className="p-3">
+        <span className="text-xs font-bold text-foreground">{brandName || "—"}</span>
+      </td>
+      <td className="p-3 min-w-[250px]">
+        <div className="flex flex-col">
+          <span className="text-xs font-bold text-foreground leading-tight">{product_name || "—"}</span>
+          <span className="text-[10px] text-muted-foreground font-mono mt-0.5">{product_code}</span>
         </div>
-
-        {/* Unit */}
-        <div className="flex-1 space-y-2">
-          <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-            Unit
-          </Label>
-          <div className="h-10 w-full bg-muted/30 border border-border rounded-md flex items-center px-3 text-sm text-muted-foreground font-medium overflow-hidden">
-            <span className="truncate">{unitName || "-"}</span>
+      </td>
+      <td className="p-3">
+        <span className="text-xs font-bold text-foreground">
+          ₱{Number(costPerUnit || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </span>
+      </td>
+      <td className="p-3">
+        <span className="text-[10px] font-bold text-primary bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded uppercase shrink-0">
+          {unitName || "-"}
+        </span>
+      </td>
+      <td className="p-3 w-32">
+        {isReadOnly ? (
+          <span className="text-xs font-bold px-3 py-1 bg-muted rounded-md border border-border/50">{quantity}</span>
+        ) : (
+          <div className="flex items-center gap-0 w-min bg-background border border-border rounded-md overflow-hidden">
+             <button 
+                type="button"
+                className="w-7 h-7 flex items-center justify-center hover:bg-muted text-muted-foreground disabled:opacity-50 transition-colors"
+                onClick={() => handleUpdateQuantity(-1)}
+                disabled={Number(quantity || 0) <= 1}
+              >
+                <Minus className="h-3 w-3" />
+              </button>
+              <input
+                type="number"
+                value={quantity === 0 ? "" : quantity}
+                onChange={(e) => {
+                  let val = parseInt(e.target.value, 10);
+                  if (isNaN(val) || val < 1) val = 1;
+                  setValue(`items.${index}.quantity`, val, { shouldValidate: true });
+                }}
+                className="w-12 h-7 text-center text-xs font-bold border-x border-border focus:outline-none focus:ring-0 bg-transparent p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                min={1}
+              />
+              <button 
+                type="button"
+                className="w-7 h-7 flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors"
+                onClick={() => handleUpdateQuantity(1)}
+              >
+                <Plus className="h-3 w-3" />
+              </button>
           </div>
-        </div>
-
-        {/* Qty */}
-        <div className="flex-1 space-y-2">
-          <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-            Qty <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            type="number"
-            value={quantity ?? ""}
-            onChange={(e) =>
-              setValue(
-                `items.${index}.quantity`,
-                e.target.value === "" ? 0 : Number(e.target.value),
-                { shouldValidate: true }
-              )
-            }
-            readOnly={isReadOnly}
-            className={`h-10 border-input focus:ring-blue-500 rounded-md text-sm ${isReadOnly
-              ? "bg-muted text-muted-foreground cursor-not-allowed font-bold"
-              : ""
-              } ${rowError?.quantity ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}`}
-            min={0}
-          />
-          {rowError?.quantity && (
-            <p className="text-[10px] text-red-500 font-bold mt-1 animate-in fade-in slide-in-from-top-1 duration-200">
-              {rowError.quantity.message}
-            </p>
-          )}
-        </div>
-
-        {/* Cost/Unit */}
-        <div className="flex-1 space-y-2">
-          <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-            Cost/Unit
-          </Label>
-          <Input
-            value={`₱${Number(costPerUnit || 0).toFixed(2)}`}
-            className="h-10 border-input bg-muted/30 rounded-md text-sm"
-            readOnly
-          />
-        </div>
-
-        {/* Total Cost */}
-        <div className="flex-1 space-y-2">
-          <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-            Total Cost
-          </Label>
-          <div className="h-10 border border-blue-100/20 dark:border-blue-900/20 bg-blue-50/30 dark:bg-blue-900/10 rounded-md flex items-center px-3 font-bold text-blue-600 text-sm">
-            ₱
-            {Number(totalCost || 0).toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}
-          </div>
-        </div>
-
-        {/* Delete */}
-        <div className="pt-8">
+        )}
+        {rowError?.quantity && (
+          <p className="text-[10px] text-red-500 font-bold mt-1">{rowError.quantity.message}</p>
+        )}
+      </td>
+      <td className="p-3">
+        <span className="text-xs font-bold text-primary dark:text-primary/70">
+          ₱{Number(totalCost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </span>
+      </td>
+      <td className="p-3 text-center w-16">
+        {!isReadOnly && (
           <Button
             type="button"
             variant="ghost"
             size="icon"
             onClick={() => onRemove(index)}
-            disabled={isReadOnly}
-            className={`shrink-0 self-end mb-0.5 rounded-full transition-all ${isReadOnly ? "hidden" : "hover:bg-red-50 dark:hover:bg-red-950/30 text-red-500/50 hover:text-red-600"
-              }`}
+            className="h-7 w-7 rounded-full text-red-400/50 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all mx-auto"
             title="Remove item"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
-        </div>
-      </div>
-
-      {/* Metadata Section */}
-      {productId ? (
-        <div className="flex flex-col gap-2 pt-1">
-          <div className="flex items-center gap-6 text-[11px] text-muted-foreground font-medium">
-            <span className="flex items-center gap-1">
-              <span className="text-muted-foreground/70 font-bold uppercase tracking-tighter">
-                Brand:
-              </span>{" "}
-              {brandName || "N/A"}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="text-muted-foreground/70 font-bold uppercase tracking-tighter">
-                Barcode:
-              </span>{" "}
-              {barcode || "N/A"}
-            </span>
-          </div>
-
-
-          <p className="text-[11px] text-muted-foreground/60 italic font-medium">
-            {description || "No description available."}
-          </p>
-        </div>
-      ) : null}
-
-      {/* Remarks Section */}
-      <div className="space-y-2">
-        <Label className="text-xs font-bold text-muted-foreground">Item Remarks</Label>
-        <Input
-          placeholder="Enter remarks for this item..."
-          value={useWatch({ control, name: `items.${index}.remarks` }) || ""}
-          onChange={(e) => setValue(`items.${index}.remarks`, e.target.value)}
-          className="h-10 border-input focus:ring-blue-500 rounded-md text-sm bg-background"
-          readOnly={isReadOnly}
-        />
-      </div>
-    </div>
+        )}
+      </td>
+    </tr>
   );
 });
 
@@ -365,7 +224,7 @@ function FormSummary({
           <span className="font-bold text-muted-foreground text-sm">
             Total Amount:
           </span>
-          <span className="text-xl font-bold text-blue-600 dark:text-blue-400">
+          <span className="text-xl font-bold text-primary dark:text-primary/70">
             ₱
             {Number(totalAmount || 0).toLocaleString(undefined, {
               minimumFractionDigits: 2,
@@ -405,24 +264,17 @@ export function StockAdjustmentManualForm({
   } = useStockAdjustmentManualForm();
 
   const [loading, setLoading] = useState(false);
-  const [loadingRows, setLoadingRows] = useState<Set<number>>(new Set());
   const [showPostConfirmation, setShowPostConfirmation] = useState(false);
   const [branchInputValue, setBranchInputValue] = useState("");
   const [supplierInputValue, setSupplierInputValue] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
   const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
-
-  // --- Memoize product options to prevent expensive re-mapping in every row ---
-  const productOptions = useMemo(() => {
-    return products.map((p) => ({
-      // Use record PK (id) for absolute uniqueness, fallback to product_id
-      value: String(p.id || p.product_id),
-      // Include unit in label to prevent CommandItem collision and help user selection
-      label: p.unit_name ? `${p.product_name} (${p.unit_name})` : p.product_name,
-      item: p
-    }));
-  }, [products]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  const [tableSearch, setTableSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   const form = useForm<StockAdjustmentManualFormValues>({
     mode: "all",
@@ -435,30 +287,47 @@ export function StockAdjustmentManualForm({
       remarks: "",
       items: [],
       isPosted: false,
+      stock_adjustment_attachment: [],
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, remove } = useFieldArray({
     control: form.control,
     name: "items",
   });
 
   // ——————————————————————————————————————————————————————————————————————————————
+  // Unlock body scroll/pointer-events when save/post loading clears.
   useEffect(() => {
     const unlock = () => {
-      if (document.body.style.overflow === 'hidden') {
-        document.body.style.setProperty('overflow', 'auto', 'important');
-        document.body.style.removeProperty('pointer-events');
-      }
+      document.body.style.setProperty('overflow', 'auto', 'important');
+      document.body.style.removeProperty('pointer-events');
     };
     unlock();
-    const timer = setTimeout(unlock, 1000);
-    const timer2 = setTimeout(unlock, 3000);
+    const timer = setTimeout(unlock, 300);
+    const timer2 = setTimeout(unlock, 1000);
     return () => {
       clearTimeout(timer);
       clearTimeout(timer2);
     };
   }, [loading]);
+
+  // Unlock body scroll/pointer-events when product loading clears.
+  // @base-ui Combobox Portal can leave pointer-events:none on <body> after
+  // its popup closes, which makes branch/supplier comboboxes unresponsive.
+  useEffect(() => {
+    const unlock = () => {
+      document.body.style.setProperty('overflow', 'auto', 'important');
+      document.body.style.removeProperty('pointer-events');
+    };
+    unlock();
+    const timer = setTimeout(unlock, 300);
+    const timer2 = setTimeout(unlock, 1000);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(timer2);
+    };
+  }, [isProductsLoading]);
 
   useEffect(() => {
     if (id) {
@@ -524,6 +393,7 @@ export function StockAdjustmentManualForm({
               db_id: item.id,
             })),
             posted_by: data.posted_by,
+            stock_adjustment_attachment: data.stock_adjustment_attachment || [],
           });
         } catch (error) {
           toast.error("Failed to load adjustment details");
@@ -602,6 +472,12 @@ export function StockAdjustmentManualForm({
   // ——————————————————————————————————————————————————————————————————————————————
   const handlePost = async () => {
     if (!id) return;
+    // Validate the form before showing the confirmation dialog
+    const isValid = await form.trigger();
+    if (!isValid) {
+      toast.error("Please fill in all required fields correctly before posting.");
+      return;
+    }
     setShowPostConfirmation(true);
   };
 
@@ -610,6 +486,9 @@ export function StockAdjustmentManualForm({
     if (!id) return;
     setLoading(true);
     try {
+      // Auto-save all pending edits (products, qty, attachments) before posting
+      const currentValues = form.getValues();
+      await updateAdjustment(id, currentValues);
       await postAdjustment(id);
       toast.success("Adjustment Posted Successfully");
       onSuccess();
@@ -648,86 +527,76 @@ export function StockAdjustmentManualForm({
   );
 
   // ——————————————————————————————————————————————————————————————————————————————
-  const handleAddProduct = useCallback(() => {
-    const supplierId = form.getValues("supplier_id");
-    if (!supplierId) {
-      toast.error("Please select a supplier first");
-      return;
-    }
-
-    append({
-      product_id: 0,
-      product_name: "",
-      product_code: "",
-      quantity: 1,
-      branch_id: form.getValues("branch_id"),
-      type: form.getValues("type"),
-      cost_per_unit: 0,
-      unit_name: "-",
-      remarks: "",
-    });
-  }, [append, form]);
-
-
-  // ——————————————————————————————————————————————————————————————————————————————
-  const handleProductSelect = useCallback(
-    async (index: number, product: StockAdjustmentManualProduct) => {
-      if (!product) return;
-
-      const productId = product.product_id || product.id;
-
-      form.setValue(`items.${index}.product_id`, Number(productId), { shouldValidate: true });
-      form.setValue(`items.${index}.product_name`, product.product_name);
-      form.setValue(`items.${index}.product_code`, product.product_code);
-      form.setValue(`items.${index}.cost_per_unit`, product.cost_per_unit || product.price_per_unit || 0);
-      form.setValue(`items.${index}.unit_name`, product.unit_name || "pcs");
-      form.setValue(`items.${index}.brand_name`, product.brand_name || "N/A");
-      form.setValue(`items.${index}.barcode`, product.barcode || "N/A");
-      form.setValue(`items.${index}.description`, product.description || "No description available.");
-      form.setValue(`items.${index}.unit_order`, product.unit_of_measurement?.order || 1);
-
-      const cachedStock = inventoryMap.get(Number(productId)) ?? 0;
-      form.setValue(`items.${index}.current_stock`, cachedStock);
-
-      const currentQty = form.getValues(`items.${index}.quantity`);
-      if (!currentQty || currentQty <= 0) {
-        form.setValue(`items.${index}.quantity`, 1, { shouldValidate: true });
-      }
-
-
-      (async () => {
-        try {
-          const branchId = form.getValues("branch_id");
-          const currentStock = await (cachedStock === 0
-            ? fetchInventory(productId, branchId)
-            : Promise.resolve(cachedStock));
-
-          form.setValue(`items.${index}.current_stock`, currentStock);
-
-        } catch (err) {
-          console.error("Background fetch error:", err);
-        } finally {
-          setLoadingRows((prev) => {
-            const next = new Set(prev);
-            next.delete(index);
-            return next;
-          });
+  // handleConfirmModalItems — applies modal cart state to form
+  const handleConfirmModalItems = useCallback(
+    (newItems: StockAdjustmentManualItem[]) => {
+      const branchId = form.getValues("branch_id");
+      const currentType = form.getValues("type");
+      
+      const mapped = newItems.map((item) => ({
+        ...item,
+        branch_id: branchId,
+        type: currentType
+      }));
+      
+      form.setValue("items", mapped, { shouldValidate: true });
+      
+      // Async stock fetch
+      mapped.forEach((item, idx) => {
+        const pid = Number(item.product_id);
+        const cachedStock = inventoryMap.get(pid) ?? 0;
+        if (cachedStock === 0) {
+           fetchInventory(pid, branchId).then(stock => {
+              form.setValue(`items.${idx}.current_stock`, stock);
+           }).catch(console.error);
+        } else {
+           form.setValue(`items.${idx}.current_stock`, cachedStock);
         }
-      })();
+      });
     },
-    [fetchInventory, form, inventoryMap]
+    [form, fetchInventory, inventoryMap]
   );
+
 
 
   const watchedBranchIdForSelect = useWatch({ control: form.control, name: "branch_id" });
   const watchedSupplierIdForSelect = useWatch({ control: form.control, name: "supplier_id" });
   const watchedType = useWatch({ control: form.control, name: "type" });
 
+  const watchedItemsList = useWatch({ control: form.control, name: "items" });
+
+  const filteredFields = useMemo(() => {
+    return fields.map((field, index) => ({ field, index })).filter(({ index }) => {
+      if (!tableSearch.trim()) return true;
+      const s = tableSearch.toLowerCase();
+      const item = watchedItemsList?.[index];
+      return (
+        item?.product_name?.toLowerCase().includes(s) ||
+        item?.product_code?.toLowerCase().includes(s) ||
+        item?.barcode?.toLowerCase().includes(s) ||
+        item?.brand_name?.toLowerCase().includes(s)
+      );
+    });
+  }, [fields, tableSearch, watchedItemsList]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredFields.length / rowsPerPage));
+  const paginatedFields = useMemo(() => {
+    const startIndex = (currentPage - 1) * rowsPerPage;
+    return filteredFields.slice(startIndex, startIndex + rowsPerPage);
+  }, [filteredFields, currentPage, rowsPerPage]);
+
+  // Ensure current page is valid when filtering changes total pages
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
   return (
     <div className="flex flex-col gap-6 p-8 max-w-7xl mx-auto w-full bg-background">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-3">
-          <div className="bg-blue-600 p-2 rounded-lg shadow-sm">
+          <div className="bg-primary p-2 rounded-lg shadow-sm">
             <Package className="h-6 w-6 text-white" />
           </div>
           <div>
@@ -760,7 +629,7 @@ export function StockAdjustmentManualForm({
             <Badge
               variant="outline"
               className={`px-3 py-1 font-bold shadow-sm ${isPosted
-                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:blue-400 border-blue-200 dark:border-blue-800/50 uppercase tracking-wider'
+                ? 'bg-blue-50 dark:bg-blue-900/20 text-primary/90 dark:blue-400 border-primary/20 dark:border-blue-800/50 uppercase tracking-wider'
                 : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:amber-400 border-amber-200 dark:border-amber-800/50 uppercase tracking-wider'
                 }`}
             >
@@ -774,15 +643,15 @@ export function StockAdjustmentManualForm({
 
         {isPosted && (
           <div className="flex items-center gap-6 mt-2 animate-in fade-in slide-in-from-left-2 duration-300">
-            <div className="flex items-center gap-2 bg-blue-50/50 dark:bg-blue-900/10 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800/30">
-              <span className="text-[10px] uppercase font-black text-blue-400">Posted At:</span>
-              <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
+            <div className="flex items-center gap-2 bg-primary/5 dark:bg-blue-900/10 px-3 py-1.5 rounded-lg border border-primary/30 dark:border-blue-800/30">
+              <span className="text-[10px] uppercase font-black text-primary/70">Posted At:</span>
+              <span className="text-xs font-bold text-primary/90 dark:text-blue-300">
                 {form.getValues().postedAt ? format(new Date(form.getValues().postedAt as string), "MMMM d, yyyy, hh:mm a") : "-"}
               </span>
             </div>
-            <div className="flex items-center gap-2 bg-blue-50/50 dark:bg-blue-900/10 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800/30">
-              <span className="text-[10px] uppercase font-black text-blue-400">Posted By:</span>
-              <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
+            <div className="flex items-center gap-2 bg-primary/5 dark:bg-blue-900/10 px-3 py-1.5 rounded-lg border border-primary/30 dark:border-blue-800/30">
+              <span className="text-[10px] uppercase font-black text-primary/70">Posted By:</span>
+              <span className="text-xs font-bold text-primary/90 dark:text-blue-300">
                 {(() => {
                   const postedBy = form.getValues("posted_by");
                   if (typeof postedBy === 'object' && postedBy !== null) {
@@ -849,10 +718,10 @@ export function StockAdjustmentManualForm({
                 >
                   <ComboboxInput
                     placeholder="Select Branch"
-                    disabled={isReadOnly || !!id}
+                    disabled={isReadOnly || !!id || fields.length > 0}
                     className={form.formState.errors.branch_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
-                    showTrigger={!id}
-                    showClear={!id && !isReadOnly}
+                    showTrigger={!id && fields.length === 0}
+                    showClear={!id && !isReadOnly && fields.length === 0}
                   />
                   <ComboboxContent>
                     <ComboboxList>
@@ -916,10 +785,10 @@ export function StockAdjustmentManualForm({
                 >
                   <ComboboxInput
                     placeholder={isSuppliersLoading ? "Loading suppliers..." : "Select Supplier"}
-                    disabled={isReadOnly || !!id}
+                    disabled={isReadOnly || !!id || fields.length > 0}
                     className={form.formState.errors.supplier_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
-                    showTrigger={!id}
-                    showClear={!id && !isReadOnly}
+                    showTrigger={!id && fields.length === 0}
+                    showClear={!id && !isReadOnly && fields.length === 0}
                   />
                   <ComboboxContent>
                     <ComboboxList>
@@ -963,13 +832,13 @@ export function StockAdjustmentManualForm({
                 value={watchedType}
                 onValueChange={(v) => form.setValue("type", v as "IN" | "OUT")}
                 className="flex gap-4 pt-1"
-                disabled={isReadOnly}
+                disabled={isReadOnly || !!id}
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem
                     value="IN"
                     id="type-in"
-                    className="border-blue-500 text-blue-600 h-4 w-4"
+                    className="border-primary text-primary h-4 w-4"
                   />
                   <Label htmlFor="type-in" className="text-sm font-bold text-foreground/80">
                     Stock In
@@ -979,7 +848,7 @@ export function StockAdjustmentManualForm({
                   <RadioGroupItem
                     value="OUT"
                     id="type-out"
-                    className="border-input text-blue-600 h-4 w-4"
+                    className="border-input text-primary h-4 w-4"
                   />
                   <Label htmlFor="type-out" className="text-sm font-bold text-foreground/80">
                     Stock Out
@@ -1001,7 +870,7 @@ export function StockAdjustmentManualForm({
                 id="remarks"
                 {...form.register("remarks")}
                 placeholder="Additional information about this adjustment..."
-                className="min-h-[120px] bg-background border-input focus:ring-blue-500 rounded-xl p-4 text-sm"
+                className="min-h-[120px] bg-background border-input focus:ring-primary rounded-xl p-4 text-sm"
                 disabled={isReadOnly}
               />
             </div>
@@ -1009,84 +878,177 @@ export function StockAdjustmentManualForm({
         </Card>
 
         <Card className="border-border shadow-sm bg-card">
-          <CardHeader className="bg-card border-b border-border flex flex-row items-center justify-between py-4 px-6">
-            <CardTitle className="text-base font-bold text-foreground">
-              Product Items
-            </CardTitle>
-            <Button
-              type="button"
-              onClick={handleAddProduct}
-              disabled={!watchedSupplierIdForSelect || isReadOnly}
-              className={`${(!watchedSupplierIdForSelect || isReadOnly)
-                ? "bg-muted text-muted-foreground border-border"
-                : "bg-blue-600 hover:bg-blue-700 text-white"
-                } font-bold h-9 px-4 rounded-lg shadow-sm flex items-center gap-2 text-sm transition-all`}
-            >
-              <Plus className="h-4 w-4" />
-              Add Product
-            </Button>
+          <CardHeader className="bg-card border-b border-border py-4 px-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-base font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+                <Package className="w-5 h-5 text-primary" />
+                Product Items
+              </CardTitle>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative w-full md:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  type="text"
+                  placeholder="Search products in cart..."
+                  value={tableSearch}
+                  onChange={(e) => {
+                    setTableSearch(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="pl-9 h-9 text-sm border-input"
+                />
+              </div>
+              {!isReadOnly && (
+                <Button
+                  type="button"
+                  onClick={() => setIsModalOpen(true)}
+                  disabled={!watchedSupplierIdForSelect}
+                  className="font-bold h-9 px-4 rounded-full shadow-sm flex items-center gap-2 text-sm transition-all border-primary/20 text-primary/90 bg-primary/10 hover:bg-primary/20 dark:bg-primary/20 dark:border-primary/40 shrink-0"
+                  variant="outline"
+                >
+                  <Plus className="h-4 w-4" />
+                  ADD MORE PRODUCTS
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <div className="min-w-[1000px]">
-                {isFormLoading || (isProductsLoading && fields.length === 0) ? (
-                  <div className="p-6 space-y-6">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="flex gap-4">
-                        <Skeleton className="h-10 flex-[3]" />
-                        <Skeleton className="h-10 flex-1" />
-                        <Skeleton className="h-10 flex-1" />
-                        <Skeleton className="h-10 flex-1" />
-                        <Skeleton className="h-10 flex-1" />
-                        <Skeleton className="h-10 flex-1" />
-                        <Skeleton className="h-10 flex-1" />
-                      </div>
-                    ))}
+            {isFormLoading ? (
+              <div className="p-6 space-y-6">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex gap-4">
+                    <Skeleton className="h-10 flex-[3]" />
+                    <Skeleton className="h-10 flex-1" />
+                    <Skeleton className="h-10 flex-1" />
+                    <Skeleton className="h-10 flex-1" />
                   </div>
-                ) : fields.length === 0 ? (
-                  <div className="bg-muted/10 border-2 border-dashed border-border rounded-xl p-16 text-center">
-                    <div className="flex justify-center mb-4">
-                      <div className={`p-5 rounded-full border border-dashed ${watchedSupplierIdForSelect ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800/50" : "bg-muted border-border"
-                        }`}>
-                        <Package className={`h-10 w-10 ${watchedSupplierIdForSelect ? "text-blue-400" : "text-muted-foreground/30"
-                          }`} />
-                      </div>
-                    </div>
-                    <h3 className="text-lg font-bold text-foreground mb-1">
-                      {watchedSupplierIdForSelect ? "Ready to add products" : "Supplier required"}
-                    </h3>
-                    <p className="text-muted-foreground font-medium max-w-xs mx-auto text-sm">
-                      {watchedSupplierIdForSelect
-                        ? "Click 'Add Product' to start building your adjustment from this supplier."
-                        : "Select a supplier first to see the products linked to them."}
-                    </p>
-                    {form.formState.errors.items &&
-                      form.formState.errors.items.message && (
-                        <p className="text-sm text-red-500 font-bold mt-4">
-                          {form.formState.errors.items.message}
-                        </p>
-                      )}
+                ))}
+              </div>
+            ) : fields.length === 0 ? (
+              <div className="bg-muted/10 border-2 border-dashed border-border rounded-xl m-6 p-16 text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="p-5 rounded-full border border-dashed bg-muted border-border">
+                    <Package className="h-10 w-10 text-muted-foreground/30" />
                   </div>
-                ) : (
-                  <div className="p-0">
-                    {fields.map((field, index) => (
-                      <StockAdjustmentManualItemRow
-                        key={field.id}
-                        index={index}
-                        control={form.control}
-                        productOptions={productOptions}
-                        isProductsLoading={isProductsLoading}
-                        isLoadingDetails={loadingRows.has(index)}
-                        onProductSelect={handleProductSelect}
-                        onRemove={(idx) => setDeletingIndex(idx)}
-                        setValue={form.setValue}
-                        isReadOnly={isReadOnly}
-                      />
-                    ))}
-                  </div>
+                </div>
+                <h3 className="text-lg font-bold text-foreground mb-1">
+                  {watchedSupplierIdForSelect ? "Empty Cart" : "Supplier required"}
+                </h3>
+                <p className="text-muted-foreground font-medium max-w-xs mx-auto text-sm">
+                  {watchedSupplierIdForSelect
+                    ? "Click \"ADD MORE PRODUCTS\" to browse and add items."
+                    : "Select a supplier first to browse and add products."}
+                </p>
+                {form.formState.errors.items && form.formState.errors.items.message && (
+                  <p className="text-sm text-red-500 font-bold mt-4">
+                    {form.formState.errors.items.message}
+                  </p>
                 )}
               </div>
-            </div>
+            ) : (
+              <div className="overflow-x-auto min-h-[300px]">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-[10px] font-bold uppercase text-muted-foreground bg-muted/40 border-b border-border">
+                    <tr>
+                      <th className="p-3 text-center w-12 border-r border-border/50">#</th>
+                      <th className="p-3">Brand</th>
+                      <th className="p-3">Product Name</th>
+                      <th className="p-3">Price</th>
+                      <th className="p-3">UOM</th>
+                      <th className="p-3 w-32 text-center">Qty</th>
+                      <th className="p-3">Net Total</th>
+                      <th className="p-3 text-center w-16">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedFields.length === 0 && tableSearch ? (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                          No products found matching &quot;{tableSearch}&quot;.
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedFields.map(({ field, index }) => (
+                        <ProductTableRow
+                          key={field.id}
+                          index={index}
+                          control={form.control}
+                          onRemove={(idx) => setDeletingIndex(idx)}
+                          setValue={form.setValue}
+                          isReadOnly={isReadOnly}
+                        />
+                      ))
+                    )}
+                  </tbody>
+                </table>
+                <div className="p-4 bg-muted/10 border-t border-border/50 text-sm font-medium text-muted-foreground flex justify-between items-center">
+                  <span>{filteredFields.length} total rows</span>
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs">Rows per page</span>
+                      <select 
+                        className="h-8 border border-border rounded-md bg-card px-2 text-xs focus:outline-none"
+                        value={rowsPerPage}
+                        onChange={(e) => {
+                          setRowsPerPage(Number(e.target.value));
+                          setCurrentPage(1);
+                        }}
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
+                    <span className="text-xs font-bold text-foreground">Page {currentPage} of {totalPages}</span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground bg-card"
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(1)}
+                      >
+                        <ChevronsLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground bg-card"
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground bg-card"
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground bg-card"
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(totalPages)}
+                      >
+                        <ChevronsRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Summary Block */}
             <FormSummary
@@ -1095,6 +1057,43 @@ export function StockAdjustmentManualForm({
             />
           </CardContent>
         </Card>
+
+        {/* Attachments Card */}
+        <Card className="border border-border/50 shadow-sm bg-card">
+          <CardHeader className="bg-card border-b border-border/50 py-4 px-6">
+            <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+              <Paperclip className="h-4 w-4 text-primary" />
+              Attachments
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            <AttachmentUpload
+              value={form.watch("stock_adjustment_attachment") || []}
+              onChange={(atts) => form.setValue("stock_adjustment_attachment", atts, { shouldValidate: true })}
+              disabled={isReadOnly}
+            />
+            {form.formState.errors.stock_adjustment_attachment?.message && (
+              <p className="text-xs text-red-500 font-bold mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                {String(form.formState.errors.stock_adjustment_attachment.message)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <ProductSelectionModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          supplierName={
+            suppliers.find((s) => String(s.id) === String(watchedSupplierIdForSelect))?.supplier_name || ""
+          }
+          branchName={
+            branches?.find((b) => String(b.id) === String(watchedBranchIdForSelect))?.branch_name || ""
+          }
+          products={products}
+          isLoading={isProductsLoading}
+          initialSelectedItems={form.getValues("items")}
+          onConfirm={handleConfirmModalItems}
+        />
 
         <div className="flex items-center justify-end gap-3 pb-8">
           <Button
@@ -1109,7 +1108,7 @@ export function StockAdjustmentManualForm({
             <Button
               type="submit"
               disabled={loading}
-              className="h-10 px-8 font-bold bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm rounded-lg"
+              className="h-10 px-8 font-bold bg-primary hover:bg-primary/90 text-white gap-2 shadow-sm rounded-lg"
             >
               {loading ? (
                 <span className="animate-spin mr-2">â—Œ</span>
@@ -1144,7 +1143,7 @@ export function StockAdjustmentManualForm({
         <AlertDialogContent className="max-w-md bg-card p-6 rounded-xl shadow-2xl border-none">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
-              <Send className="h-5 w-5 text-blue-600" />
+              <Send className="h-5 w-5 text-primary" />
               Confirm Post Adjustment
             </AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground py-4">
@@ -1163,7 +1162,7 @@ export function StockAdjustmentManualForm({
             </Button>
             <Button
               onClick={confirmPost}
-              className="flex-1 h-11 font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-100 dark:shadow-none rounded-lg"
+              className="flex-1 h-11 font-bold bg-primary hover:bg-primary/90 text-white shadow-md shadow-primary/20 dark:shadow-none rounded-lg"
             >
               Confirm and Post
             </Button>

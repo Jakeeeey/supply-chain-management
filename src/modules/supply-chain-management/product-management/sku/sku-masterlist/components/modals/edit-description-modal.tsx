@@ -27,12 +27,19 @@ import {
 } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { CellHelpers } from "../../../sku-creation/utils/sku-helpers";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Combobox } from "@/modules/supply-chain-management/product-management/sku/sku-creation/components/Combobox";
 
 interface EditDescriptionModalProps {
   sku: SKU | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (id: number | string, description: string) => Promise<void>;
+  onSave: (
+    id: number | string,
+    description: string,
+    product_class: number,
+    product_segment: number,
+    product_section: number,
+  ) => Promise<void>;
   isLoading?: boolean;
   masterData: MasterData | null;
 }
@@ -69,11 +76,17 @@ export function EditDescriptionModal({
   masterData,
 }: EditDescriptionModalProps) {
   const [description, setDescription] = useState("");
+  const [productClass, setProductClass] = useState<number | undefined>(undefined);
+  const [productSegment, setProductSegment] = useState<number | undefined>(undefined);
+  const [productSection, setProductSection] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (!isOpen) {
       const timer = setTimeout(() => {
         setDescription("");
+        setProductClass(undefined);
+        setProductSegment(undefined);
+        setProductSection(undefined);
       }, 0);
       return () => clearTimeout(timer);
     }
@@ -83,6 +96,9 @@ export function EditDescriptionModal({
     if (sku && isOpen) {
       const timer = setTimeout(() => {
         setDescription(sku.description || "");
+        setProductClass(sku.product_class ?? undefined);
+        setProductSegment(sku.product_segment ?? undefined);
+        setProductSection(sku.product_section ?? undefined);
       }, 0);
       return () => clearTimeout(timer);
     }
@@ -90,10 +106,24 @@ export function EditDescriptionModal({
 
   const handleSave = async () => {
     if (!sku) return;
+    if (!productClass || !productSegment || !productSection) return;
     const id = sku.id || sku.product_id;
-    await onSave(id!, description);
+    await onSave(
+      id!,
+      description,
+      productClass,
+      productSegment,
+      productSection,
+    );
     onClose();
   };
+
+  const isSaveDisabled =
+    isLoading ||
+    !description.trim() ||
+    !productClass ||
+    !productSegment ||
+    !productSection;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -164,6 +194,63 @@ export function EditDescriptionModal({
               )}
             </div>
 
+            {/* Editable Taxonomy Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-xl bg-muted/20 border border-muted-foreground/5">
+              <div className="space-y-2">
+                <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Class *
+                </Label>
+                <Combobox
+                  options={(masterData?.classes || []).map((c) => ({
+                    value: c.id.toString(),
+                    label: c.name,
+                  }))}
+                  value={productClass?.toString() || ""}
+                  onValueChange={(v: string) =>
+                    setProductClass(v ? parseInt(v) : undefined)
+                  }
+                  placeholder="Select Class"
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Segment *
+                </Label>
+                <Combobox
+                  options={(masterData?.segments || []).map((s) => ({
+                    value: s.id.toString(),
+                    label: s.name,
+                  }))}
+                  value={productSegment?.toString() || ""}
+                  onValueChange={(v: string) =>
+                    setProductSegment(v ? parseInt(v) : undefined)
+                  }
+                  placeholder="Select Segment"
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Section *
+                </Label>
+                <Combobox
+                  options={(masterData?.sections || []).map((s) => ({
+                    value: s.id.toString(),
+                    label: s.name,
+                  }))}
+                  value={productSection?.toString() || ""}
+                  onValueChange={(v: string) =>
+                    setProductSection(v ? parseInt(v) : undefined)
+                  }
+                  placeholder="Select Section"
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label
@@ -195,8 +282,8 @@ export function EditDescriptionModal({
                   Data Integrity Guard Active:
                 </p>
                 <p className="text-[11px] text-amber-800/60 leading-relaxed">
-                  Only the <span className="font-bold">Description</span> can be
-                  modified for active master records. All primary identifier
+                  Only the <span className="font-bold">Description, Class, Segment, and Section</span> can be
+                  modified for active master records. All other primary identifier
                   fields are locked to maintain synchronization across supply
                   chain modules.
                 </p>
@@ -216,7 +303,7 @@ export function EditDescriptionModal({
           </Button>
           <Button
             onClick={handleSave}
-            disabled={isLoading}
+            disabled={isSaveDisabled}
             className="px-8 bg-primary hover:bg-primary/90 text-white font-bold"
           >
             {isLoading ? "Saving Changes..." : "Save Changes"}
