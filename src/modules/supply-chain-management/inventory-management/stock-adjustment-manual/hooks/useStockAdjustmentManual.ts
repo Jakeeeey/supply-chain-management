@@ -21,6 +21,12 @@ export function useStockAdjustmentManual() {
   const [branchId, setBranchId] = useState<number | undefined>();
   const [type, setType] = useState<string | undefined>();
   const [status, setStatus] = useState<string | undefined>();
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10); // Default to 10 as per user screenshot
 
   // Debounce search input
   useEffect(() => {
@@ -35,10 +41,9 @@ export function useStockAdjustmentManual() {
     setError(null);
     try {
       const queryParams = new URLSearchParams();
-      if (debouncedSearch) queryParams.set("search", debouncedSearch);
       if (branchId) queryParams.set("branchId", String(branchId));
       if (type) queryParams.set("type", type);
-      // NOTE: status is filtered client-side to avoid Directus boolean filter issues
+      // NOTE: search is filtered client-side to support branch/supplier name matching
 
       const response = await fetch(
         `/api/scm/inventory-management/stock-adjustment-manual?${queryParams.toString()}`
@@ -53,27 +58,82 @@ export function useStockAdjustmentManual() {
     } finally {
       setIsLoading(false);
     }
-  }, [debouncedSearch, branchId, type]);
+  }, [branchId, type]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  // Client-side status filter — avoids Directus boolean filter inconsistencies
-  const data = rawData.filter((item) => {
-    if (!status) return true;
-    // Directus may return isPosted as a Buffer, number (0/1), or boolean
-    const rawPosted = item.isPosted as unknown;
-    let posted: boolean;
-    if (rawPosted && typeof rawPosted === 'object' && 'data' in rawPosted) {
-      posted = (rawPosted as { data: number[] }).data?.[0] === 1;
-    } else {
-      posted = Number(rawPosted) === 1;
+  // Client-side filtering for status and date range
+  const filteredData = rawData.filter((item) => {
+    // 1. Status Filter
+    if (status) {
+      const rawPosted = item.isPosted as unknown;
+      let posted: boolean;
+      if (rawPosted && typeof rawPosted === 'object' && 'data' in rawPosted) {
+        posted = (rawPosted as { data: number[] }).data?.[0] === 1;
+      } else {
+        posted = Number(rawPosted) === 1;
+      }
+      if (status === "Posted" && !posted) return false;
+      if (status === "Unposted" && posted) return false;
     }
-    if (status === "Posted") return posted;
-    if (status === "Unposted") return !posted;
+
+    // 2. From Date Filter
+    if (fromDate && item.created_at) {
+      const startOfDay = new Date(fromDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      if (new Date(item.created_at) < startOfDay) return false;
+    }
+
+    // 3. To Date Filter
+    if (toDate && item.created_at) {
+      const endOfDay = new Date(toDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      if (new Date(item.created_at) > endOfDay) return false;
+    }
+
+    // 4. Client-side search check (doc_no, remarks, branch name, supplier name)
+    if (debouncedSearch) {
+      const term = debouncedSearch.toLowerCase();
+      const docNo = (item.doc_no || "").toLowerCase();
+      const remarks = (item.remarks || "").toLowerCase();
+
+      const branchName = (
+        typeof item.branch_id === "object"
+          ? item.branch_id?.branch_name
+          : item.branch_id
+      )?.toString().toLowerCase() || "";
+
+      const supplierName = (
+        typeof item.supplier_id === "object"
+          ? item.supplier_id?.supplier_name
+          : item.supplier_id
+      )?.toString().toLowerCase() || "";
+
+      if (
+        !docNo.includes(term) &&
+        !remarks.includes(term) &&
+        !branchName.includes(term) &&
+        !supplierName.includes(term)
+      ) {
+        return false;
+      }
+    }
+
     return true;
   });
+
+  // Reset pagination to first page when any filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, branchId, type, status, fromDate, toDate]);
+
+  // Calculate paginated slice of filtered adjustments
+  const totalItems = filteredData.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedData = filteredData.slice(startIndex, startIndex + pageSize);
 
   const deleteAdjustment = async (id: number) => {
     try {
@@ -91,17 +151,37 @@ export function useStockAdjustmentManual() {
     }
   };
 
+  const resetFilters = useCallback(() => {
+    setSearch("");
+    setBranchId(undefined);
+    setType(undefined);
+    setStatus(undefined);
+    setFromDate("");
+    setToDate("");
+    setCurrentPage(1);
+    setPageSize(10);
+  }, []);
+
   return {
-    data,  // already filtered by status client-side
+    data: paginatedData, // Expose the sliced dataset for active view
+    totalItems,
+    currentPage,
+    setCurrentPage,
+    totalPages,
+    pageSize,
+    setPageSize,
     isLoading,
     error,
     refresh,
     deleteAdjustment,
+    resetFilters,
     filters: {
       search, setSearch,
       branchId, setBranchId,
       type, setType,
       status, setStatus,
+      fromDate, setFromDate,
+      toDate, setToDate,
     },
   };
 }

@@ -9,7 +9,20 @@ import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 
 export default function StockAdjustmentManualModule() {
-  const { data, isLoading, error, refresh, filters } = useStockAdjustmentManual();
+  const { 
+    data, 
+    totalItems,
+    currentPage,
+    setCurrentPage,
+    totalPages,
+    pageSize,
+    setPageSize,
+    isLoading, 
+    error, 
+    refresh, 
+    resetFilters,
+    filters 
+  } = useStockAdjustmentManual();
   // Form-specific data is fetched independently inside StockAdjustmentManualForm
   // via `useStockAdjustmentManualForm` — no duplicate list fetch.
   const [view, setView] = useState<"list" | "create" | "edit" | "detail">("list");
@@ -30,24 +43,32 @@ export default function StockAdjustmentManualModule() {
     );
   }
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleCreate = () => {
     setSelectedId(null);
     setView("create");
+    scrollToTop();
   };
 
   const handleEdit = (id: number) => {
     setSelectedId(id);
     setView("edit");
+    scrollToTop();
   };
 
   const handleDetail = (id: number) => {
     setSelectedId(id);
     setView("detail");
+    scrollToTop();
   };
 
   const handleBack = () => {
     setSelectedId(null);
     setView("list");
+    scrollToTop();
   };
 
   return (
@@ -55,6 +76,13 @@ export default function StockAdjustmentManualModule() {
       {view === "list" && (
         <StockAdjustmentManualList
           data={data}
+          totalItems={totalItems}
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          setPageSize={setPageSize}
+          resetFilters={resetFilters}
           onCreate={handleCreate}
           onEdit={handleEdit}
           onDetail={handleDetail}
