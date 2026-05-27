@@ -215,15 +215,18 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
                                                 >
                                                     Reverted
                                                 </Badge>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-5 px-1.5 text-[10px] text-orange-700 hover:text-orange-900 hover:bg-orange-100 gap-1"
-                                                    onClick={() => loadReceipt(h.receiptNo)}
-                                                >
-                                                    <Pencil className="h-3 w-3" />
-                                                    Edit
-                                                </Button>
+                                                {editingReceiptId !== h.receiptNo && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-5 px-1.5 text-[10px] text-orange-700 hover:text-orange-900 hover:bg-orange-100 gap-1"
+                                                        onClick={() => loadReceipt(h.receiptNo)}
+                                                        disabled={!!editingReceiptId}
+                                                    >
+                                                        <Pencil className="h-3 w-3" />
+                                                        Edit
+                                                    </Button>
+                                                )}
                                             </>
                                         ) : (
                                             <Badge
