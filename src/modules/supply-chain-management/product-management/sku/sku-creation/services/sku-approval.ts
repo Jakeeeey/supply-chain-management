@@ -23,10 +23,14 @@ async function resolveParentMasterId(
         ? (draft.parent_id as unknown as { id: number }).id
         : draft.parent_id;
 
-    const { data: pDraft } = await request<{ data: SKU }>(
-      `${API_BASE_URL}/items/product_draft/${parentId}`,
-    );
-    parentCode = pDraft?.product_code;
+    try {
+      const { data: pDraft } = await request<{ data: SKU }>(
+        `${API_BASE_URL}/items/product_draft/${parentId}`,
+      );
+      parentCode = pDraft?.product_code;
+    } catch (err) {
+      console.warn(`[SKU Approval] Parent draft ${parentId} could not be fetched. It may have already been approved and deleted.`, err);
+    }
   }
 
   if (parentCode) {

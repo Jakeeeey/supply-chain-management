@@ -36,6 +36,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(paginated);
     }
 
+    if (type === "segment-approval") {
+      const search = searchParams.get("search") || undefined;
+      const paginated = await skuService.fetchPendingSegments(
+        limit,
+        offset,
+        search,
+        sort,
+      );
+      return NextResponse.json(paginated);
+    }
+
     if (type === "duplicate-check") {
       const name = searchParams.get("name") || "";
       const isDuplicate = await skuService.checkDuplicateName(name);
