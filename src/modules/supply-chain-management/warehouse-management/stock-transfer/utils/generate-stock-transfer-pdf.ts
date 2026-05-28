@@ -271,10 +271,18 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
 
   let y = drawCorporateHeader(doc, companyData, margin, pageW);
 
+  const safeNum = (val: unknown): number => {
+    if (val === null || val === undefined) return 0;
+    const num = Number(val);
+    return isNaN(num) ? 0 : num;
+  };
+
   // ── Pre-calculate Grand Total ──
   const grandTotal = items.reduce((sum, item) => {
-    const qty = item.allocated_quantity ?? item.ordered_quantity ?? 0;
-    const unitPrice = item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0;
+    const qty = safeNum(item.allocated_quantity ?? item.ordered_quantity);
+    const ordQty = safeNum(item.ordered_quantity);
+    const amount = safeNum(item.amount);
+    const unitPrice = ordQty > 0 ? (amount / ordQty) : 0;
     return sum + (qty * unitPrice);
   }, 0);
 
@@ -327,7 +335,9 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
     const supplierObj = product?.product_per_supplier?.[0]?.supplier_id;
     const supplier = typeof supplierObj === 'object' ? supplierObj.supplier_shortcut : (supplierObj || 'N/A');
     
-    const groupKey = `${supplier} | ${brand}`;
+    const supplierName = supplier === 'N/A' || !supplier ? 'UNASSIGNED SUPPLIER' : supplier;
+    const brandName = brand === 'No Brand' || !brand ? 'UNASSIGNED BRAND' : brand;
+    const groupKey = `${supplierName} | ${brandName}`;
     if (!groups[groupKey]) groups[groupKey] = [];
     groups[groupKey].push(item);
   });
@@ -361,7 +371,7 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
       const product = typeof item.product_id === 'object' ? (item.product_id as ProductRow) : null;
       const productName = product?.product_name || `ID: ${item.product_id}`;
       const unit = (typeof product?.unit_of_measurement === 'object' ? product.unit_of_measurement?.unit_name : 'PCS') || 'PCS';
-      const qty = item.allocated_quantity ?? item.ordered_quantity ?? 0;
+      const qty = safeNum(item.allocated_quantity ?? item.ordered_quantity);
 
       // Checkbox
       doc.setDrawColor(100, 100, 100);
@@ -385,8 +395,10 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
 
     // ── Calculate Group Subtotal ──
     const groupSubtotal = groupItems.reduce((sum, item) => {
-      const qty = item.allocated_quantity ?? item.ordered_quantity ?? 0;
-      const unitPrice = item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0;
+      const qty = safeNum(item.allocated_quantity ?? item.ordered_quantity);
+      const ordQty = safeNum(item.ordered_quantity);
+      const amount = safeNum(item.amount);
+      const unitPrice = ordQty > 0 ? (amount / ordQty) : 0;
       return sum + (qty * unitPrice);
     }, 0);
 
