@@ -177,6 +177,13 @@ export async function getRawLineDiscounts() {
 }
 
 /**
+ * Fetches all discount types.
+ */
+export async function getRawDiscountTypes() {
+  return directusGet<{ data: Record<string, unknown>[] }>("/items/discount_type?limit=-1");
+}
+
+/**
  * Fetches all product catalog data needed for ProductLookupModal.
  */
 export async function getRawProductCatalog() {

@@ -3,8 +3,6 @@
 import * as React from "react";
 import { useReceivingProducts } from "../providers/ReceivingProductsProvider";
 import { 
-    ReceiptDetailsStep, 
-    ProductChecklistStep, 
     TagRFIDStep, 
     ReviewReceiptStep 
 } from "./steps";
@@ -21,20 +19,14 @@ function StepDot({ active }: { active: boolean }) {
 }
 
 export function ReceivingWorkbench({ receiverName }: { receiverName?: string }) {
-    const { selectedPO, receiptSaved } = useReceivingProducts();
-    const [step, setStep] = React.useState(0);
+    const { selectedPO, receiptSaved, step, setStep } = useReceivingProducts();
 
-    // Reset to step 0 if PO is deselected
-    React.useEffect(() => {
-        if (!selectedPO) setStep(0);
-    }, [selectedPO]);
-
-    // If receipt is saved, stay on step 3 to show success state
+    // If receipt is saved, stay on step 2 to show success state
     React.useEffect(() => {
         if (receiptSaved) {
-            setStep(3);
+            setStep(2);
         }
-    }, [receiptSaved]);
+    }, [receiptSaved, setStep]);
 
     if (!selectedPO) {
         return (
@@ -63,22 +55,20 @@ export function ReceivingWorkbench({ receiverName }: { receiverName?: string }) 
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <StepDot active={step === 0} />
+                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mr-2">
+                        {step === 1 ? "Step 2: Tagging" : "Step 3: Finalization"}
+                    </div>
+                    <StepDot active={false} />
                     <StepDot active={step === 1} />
                     <StepDot active={step === 2} />
-                    <StepDot active={step === 3} />
                 </div>
             </div>
 
             <div className="mt-4">
-                {step === 0 ? (
-                    <ReceiptDetailsStep onContinue={() => setStep(1)} />
-                ) : step === 1 ? (
-                    <ProductChecklistStep onContinue={() => setStep(2)} />
+                {step === 1 ? (
+                    <TagRFIDStep onContinue={() => setStep(2)} />
                 ) : step === 2 ? (
-                    <TagRFIDStep onContinue={() => setStep(3)} onBack={() => setStep(1)} />
-                ) : step === 3 ? (
-                    <ReviewReceiptStep onBack={() => setStep(2)} receiverName={receiverName} />
+                    <ReviewReceiptStep onBack={() => setStep(1)} receiverName={receiverName} />
                 ) : null}
             </div>
         </Card>
