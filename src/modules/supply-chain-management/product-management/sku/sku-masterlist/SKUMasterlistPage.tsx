@@ -57,7 +57,7 @@ export default function SKUMasterlistModule() {
   ) => {
     setIsUpdating(true);
     try {
-      const res = await fetch(`/api/scm/product-management/sku/${id}`, {
+      const res = await fetch(`/api/scm/product-management/sku/${id}?type=master`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
