@@ -491,7 +491,7 @@ export default function PurchaseOrderReviewPanel(props: {
                                 </div>
                                 {lines.length ? (
                                     <div className="rounded-lg border border-border bg-background overflow-hidden">
-                                        <div className="overflow-auto max-h-[400px]">
+                                        <div className="relative overflow-auto max-h-[400px]">
                                             <table className="w-full text-left text-xs border-separate border-spacing-0">
                                                 <thead className="sticky top-0 z-10 bg-muted/90 backdrop-blur-sm shadow-sm">
                                                 <tr>

@@ -852,8 +852,6 @@ export async function POST(req: NextRequest) {
             const poDiscountName = toStr(poDType?.discount_type || poDType?.name, "");
             const poDiscountPercent = resolveDiscountPercent(poDType);
 
-            console.log("[DEBUG open_po] PO-level discount:", { poDType: JSON.stringify(poDType), poDiscountName, poDiscountPercent });
-
             const porIdsByKey = buildPorIdsByKey(porRows);
 
             const recByPor = new Map<number, number>();

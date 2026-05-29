@@ -964,12 +964,6 @@ export async function POST(req: NextRequest) {
             const fully = isFullyReceived(poId, lines, porRows);
             const supplierName = sid ? toStr(supplierMap.get(sid)) : toStr(po?.supplier_name);
 
-            // ── DEBUG: Log what productSupplierLinks contains ──
-            console.log("[DEBUG open_po] supplierId (sid):", sid);
-            console.log("[DEBUG open_po] productSupplierLinks size:", productSupplierLinks.size);
-            for (const [k, v] of Array.from(productSupplierLinks.entries())) {
-                console.log(`[DEBUG open_po] PSL entry: pid=${k}, discount_type=`, JSON.stringify(v?.discount_type));
-            }
             // Removed redundant RFID fetching (already handled above)
             
             const porPriceMap = new Map<number, number>();
@@ -979,8 +973,6 @@ export async function POST(req: NextRequest) {
             const poDType = po?.discount_type as Record<string, unknown> | null;
             const poDiscountName = toStr(poDType?.discount_type || poDType?.name, "");
             const poDiscountPercent = resolveDiscountPercent(poDType);
-
-            console.log("[DEBUG open_po] PO-level discount:", { poDType: JSON.stringify(poDType), poDiscountName, poDiscountPercent });
 
             const porIdsByKey = buildPorIdsByKey(porRows);
 
