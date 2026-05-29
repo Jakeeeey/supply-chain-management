@@ -4,6 +4,7 @@ import * as React from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Trash2, AlertTriangle, Plus, X, Pencil } from "lucide-react";
 import { useReceivingProducts, ReceivingPOItem, ActivityRow } from "../../providers/ReceivingProductsProvider";
 import { useKeyboardScanner } from "../../hooks/useKeyboardScanner";
@@ -45,6 +46,7 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
     const [activityPage, setActivityPage] = React.useState(1);
     const [isOverReceiveModalOpen, setIsOverReceiveModalOpen] = React.useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
+    const [searchQuery, setSearchQuery] = React.useState("");
     const ITEMS_PER_PAGE = 5;
 
     // Auto-scan RFID
@@ -89,8 +91,14 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
 
     // Apply Reverted Edit Boundaries: Keep all items visible to allow tag reviews/modification
     const visibleItems = React.useMemo(() => {
-        return allItems;
-    }, [allItems]);
+        const query = searchQuery.trim().toLowerCase();
+        if (!query) return allItems;
+        return allItems.filter(
+            (p) =>
+                String(p.name || "").toLowerCase().includes(query) ||
+                String(p.barcode || "").toLowerCase().includes(query)
+        );
+    }, [allItems, searchQuery]);
 
     // Derived active products (matching filtered list)
     const activeProducts = React.useMemo(() => {
@@ -211,7 +219,7 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
                                             <>
                                                 <Badge
                                                     variant="outline"
-                                                    className="text-[10px] uppercase h-4 px-1 leading-none border-orange-500/40 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
+                                                    className="text-[10px] uppercase h-4 px-1 leading-none border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-400"
                                                 >
                                                     Reverted
                                                 </Badge>
@@ -219,7 +227,7 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
-                                                        className="h-5 px-1.5 text-[10px] text-orange-700 hover:text-orange-900 hover:bg-orange-100 gap-1"
+                                                        className="h-5 px-1.5 text-[10px] text-orange-600 dark:text-orange-400 hover:bg-orange-500/10 gap-1"
                                                         onClick={() => loadReceipt(h.receiptNo)}
                                                         disabled={!!editingReceiptId}
                                                     >
@@ -232,10 +240,10 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
                                             <Badge
                                                 variant="outline"
                                                 className={cn(
-                                                    "text-[10px] uppercase h-4 px-1 leading-none border-amber-500/30 font-bold",
+                                                    "text-[10px] uppercase h-4 px-1 leading-none font-bold",
                                                     h.isPosted 
-                                                        ? "bg-amber-100 text-amber-800 border-amber-500/40" 
-                                                        : "bg-white text-muted-foreground"
+                                                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" 
+                                                        : "bg-muted text-muted-foreground border-border"
                                                 )}
                                             >
                                                 {h.isPosted ? "Posted" : "Unposted"}
@@ -248,10 +256,10 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
                     </Card>
                 )}
 
-                <Card className="p-4 border-indigo-500/30 shadow-sm bg-indigo-50/20 dark:bg-indigo-950/5">
+                <Card className="p-4 border-primary/30 shadow-sm bg-primary/5">
                     <div className="flex flex-col items-center justify-center py-4 gap-2">
                         <div className="text-center space-y-1">
-                            <div className="text-xl font-black uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+                            <div className="text-xl font-black uppercase tracking-wide text-primary">
                                 Step 2: RFID Tagging
                             </div>
                             <div className="text-sm text-foreground max-w-[500px]">
@@ -262,27 +270,37 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
                 </Card>
 
                 <Card className="p-0 border overflow-hidden shadow-sm">
-                    <div className="bg-muted/50 p-4 border-b flex items-center justify-between">
-                        <div>
-                            <div className="font-semibold text-sm">Select a Product to Tag</div>
-                            <div className="text-xs text-muted-foreground">Select an incomplete product below to begin scanning.</div>
+                    <div className="bg-muted/50 p-4 border-b space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div>
+                                <div className="font-semibold text-sm">Select a Product to Tag</div>
+                                <div className="text-xs text-muted-foreground">Select an incomplete product below to begin scanning.</div>
+                            </div>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 text-[10px] font-black uppercase tracking-widest gap-1.5 border-primary/20 hover:border-primary hover:bg-primary/5 shadow-none"
+                                onClick={() => setIsAddModalOpen(true)}
+                            >
+                                <Plus className="h-3.5 w-3.5" /> Add Extra Product
+                            </Button>
                         </div>
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-8 text-[10px] font-black uppercase tracking-widest gap-1.5 border-primary/20 hover:border-primary hover:bg-primary/5 shadow-none"
-                            onClick={() => setIsAddModalOpen(true)}
-                        >
-                            <Plus className="h-3.5 w-3.5" /> Add Extra Product
-                        </Button>
+                        <div>
+                            <Input
+                                placeholder="Search product name or SKU..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="h-9 text-xs bg-background"
+                            />
+                        </div>
                     </div>
-                    <div className="p-0">
+                    <div className="p-0 overflow-x-auto">
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-50 border-b">
+                            <thead className="bg-muted/50 border-b">
                                 <tr>
-                                    <th className="px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Product / SKU</th>
-                                    <th className="px-4 py-3 font-semibold text-slate-600 text-center text-xs uppercase tracking-wider w-36">Scanned / Required</th>
-                                    <th className="px-4 py-3 font-semibold text-slate-600 text-right text-xs uppercase tracking-wider w-32">Action</th>
+                                    <th className="px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Product / SKU</th>
+                                    <th className="px-4 py-3 font-semibold text-muted-foreground text-center text-xs uppercase tracking-wider w-36">Scanned / Required</th>
+                                    <th className="px-4 py-3 font-semibold text-muted-foreground text-right text-xs uppercase tracking-wider w-32">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -307,20 +325,20 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
                                             <tr 
                                                 key={p.porId} 
                                                 className={cn(
-                                                    "border-b last:border-0 hover:bg-slate-50/50 transition-colors",
-                                                    isOver && "bg-red-50/50"
+                                                    "border-b last:border-0 hover:bg-muted/30 transition-colors",
+                                                    isOver && "bg-destructive/10"
                                                 )}
                                             >
                                                 <td className="px-4 py-3">
-                                                    <div className="font-medium text-slate-900 flex flex-col">
+                                                    <div className="font-medium text-foreground flex flex-col">
                                                         <div className="flex items-center gap-2">
                                                             <span className="font-bold text-sm">{p.name}</span>
-                                                            {p.isExtra && <Badge variant="outline" className="text-[8px] bg-amber-50 text-amber-700 border-amber-200 uppercase font-black px-1.5 h-4">Extra</Badge>}
+                                                            {p.isExtra && <Badge variant="outline" className="text-[8px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 uppercase font-black px-1.5 h-4">Extra</Badge>}
                                                         </div>
-                                                        <span className="text-[10px] text-slate-500 font-mono mt-0.5">SKU: {p.barcode}</span>
+                                                        <span className="text-[10px] text-muted-foreground font-mono mt-0.5">SKU: {p.barcode}</span>
                                                         {isOver && (
-                                                            <span className="text-[9px] font-black text-red-600 flex items-center gap-0.5 mt-1 uppercase tracking-wider">
-                                                                <AlertTriangle className="w-3 h-3 text-red-500" /> Over Receiving
+                                                            <span className="text-[9px] font-black text-destructive flex items-center gap-0.5 mt-1 uppercase tracking-wider">
+                                                                <AlertTriangle className="w-3 h-3 text-destructive" /> Over Receiving
                                                             </span>
                                                         )}
                                                     </div>
@@ -331,8 +349,8 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
                                                         className={cn(
                                                             "font-black text-xs px-2.5 py-0.5",
                                                             isDone 
-                                                                ? (isOver ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700") 
-                                                                : "border-slate-300"
+                                                                ? (isOver ? "bg-destructive hover:bg-destructive/90" : "bg-emerald-600 hover:bg-emerald-700") 
+                                                                : "border-border"
                                                         )}
                                                     >
                                                         {scanned} / {target}
@@ -345,7 +363,7 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
                                                             variant={isDone ? "secondary" : "default"}
                                                             className={cn(
                                                                 "h-8 text-[10px] font-black uppercase tracking-widest px-4",
-                                                                !isDone ? "bg-indigo-600 hover:bg-indigo-700" : "hover:bg-slate-200 border border-slate-300"
+                                                                !isDone ? "bg-primary text-primary-foreground hover:bg-primary/90" : "hover:bg-muted border border-border"
                                                             )}
                                                             onClick={() => {
                                                                 setActiveProductId(p.productId);
@@ -387,7 +405,7 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
 
                 <div className="flex justify-end pt-4">
                     <Button 
-                        className="h-12 w-full md:w-auto px-8 bg-indigo-600 hover:bg-indigo-700 font-black uppercase tracking-wider text-xs shadow-md" 
+                        className="h-12 w-full md:w-auto px-8 bg-primary text-primary-foreground hover:bg-primary/90 font-black uppercase tracking-wider text-xs shadow-md" 
                         onClick={handleProceed}
                         disabled={!canProceed}
                     >
@@ -440,46 +458,46 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
             <Card className={cn(
                 "p-4 border-2 mb-4",
                 activeIsOver 
-                    ? "border-red-500/30 bg-red-50/20" 
-                    : "border-green-500/30 bg-green-50/30 dark:bg-green-950/10"
+                    ? "border-destructive/30 bg-destructive/10 text-destructive" 
+                    : "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
             )}>
                 <div className="flex flex-col items-center justify-center py-6 gap-4">
                     <div className="relative">
                         <div className={cn(
                             "w-16 h-16 rounded-full flex items-center justify-center",
-                            activeIsOver ? "bg-red-500/10" : "bg-green-500/10"
+                            activeIsOver ? "bg-destructive/10" : "bg-emerald-500/10"
                         )}>
                             <div className={cn(
                                 "w-10 h-10 rounded-full flex items-center justify-center",
-                                activeIsOver ? "bg-red-500/20" : "bg-green-500/20"
+                                activeIsOver ? "bg-destructive/20" : "bg-emerald-500/20"
                             )}>
                                 <div className={cn(
                                     "w-5 h-5 rounded-full shadow-lg",
                                     activeIsOver 
-                                        ? "bg-red-500 shadow-red-500/50" 
-                                        : (activeDone ? 'bg-green-500 shadow-green-500/50' : 'bg-green-500 shadow-green-500/50 animate-pulse')
+                                        ? "bg-destructive shadow-destructive/50" 
+                                        : 'bg-emerald-500 shadow-emerald-500/50'
                                 )} />
                             </div>
                         </div>
                         {!activeDone && !activeIsOver && (
-                            <div className="absolute inset-0 rounded-full border-2 border-green-500/30 animate-ping" style={{ animationDuration: "2s" }} />
+                            <div className="absolute inset-0 rounded-full border-2 border-emerald-500/30 animate-ping" style={{ animationDuration: "2s" }} />
                         )}
                     </div>
                     <div className="text-center space-y-1">
                         <div className={cn(
                             "text-lg font-black uppercase tracking-wide",
-                            activeIsOver ? "text-red-600" : "text-green-600 dark:text-green-400"
+                            activeIsOver ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"
                         )}>
                             Now Tagging: {activeItem?.name}
                         </div>
-                        <div className="text-sm font-medium text-slate-700 bg-white px-3 py-1 rounded shadow-sm inline-block border">
-                            Scanned: <span className={activeDone ? (activeIsOver ? "text-red-600 font-bold" : "text-green-600 font-bold") : "font-bold"}>{activeScanned}</span> of {activeTarget}
+                        <div className="text-sm font-medium text-foreground bg-card px-3 py-1 rounded shadow-sm inline-block border">
+                            Scanned: <span className={activeDone ? (activeIsOver ? "text-destructive font-bold" : "text-emerald-600 font-bold") : "font-bold"}>{activeScanned}</span> of {activeTarget}
                         </div>
                     </div>
                 </div>
 
                 {scanError && (
-                    <div className="text-xs text-destructive animate-in fade-in duration-200 p-3 bg-red-50 rounded-lg border border-red-200 text-center mb-4 font-bold uppercase">
+                    <div className="text-xs text-destructive animate-in fade-in duration-200 p-3 bg-destructive/15 rounded-lg border border-destructive/20 text-center mb-4 font-bold uppercase">
                         {scanError}
                     </div>
                 )}
@@ -497,16 +515,16 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
                         </Button>
                     </div>
                 </div>
-                <div className="border border-dashed bg-slate-50 rounded-lg p-3 text-xs min-h-[150px]">
+                <div className="border border-dashed bg-muted/30 rounded-lg p-3 text-xs min-h-[150px]">
                     {activityPaginated.length === 0 ? <div className="text-muted-foreground text-center mt-12">Waiting for RFID scan...</div> : 
                         activityPaginated.map((a: ActivityRow) => (
-                            <div key={a.id} className="flex justify-between items-center bg-white border shadow-sm p-2 mb-2 rounded last:mb-0">
+                            <div key={a.id} className="flex justify-between items-center bg-card border shadow-sm p-2 mb-2 rounded last:mb-0">
                                 <div className="flex flex-col">
                                     <span className="truncate font-semibold max-w-[200px]">{a.productName}</span>
                                     <span className="text-[10px] text-muted-foreground font-mono">{a.rfid}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Badge variant="outline" className={a.status === "ok" ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}>
+                                    <Badge variant="outline" className={a.status === "ok" ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/20" : "bg-amber-500/15 text-amber-600 border-amber-500/20"}>
                                         {a.status.toUpperCase()}
                                     </Badge>
                                     <Button
@@ -527,7 +545,7 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
 
             <div className="flex justify-end pt-4">
                 <Button 
-                    className="h-12 w-full md:w-auto px-8 bg-indigo-600 hover:bg-indigo-700 font-black uppercase text-xs tracking-wider" 
+                    className="h-12 w-full md:w-auto px-8 bg-primary text-primary-foreground hover:bg-primary/90 font-black uppercase text-xs tracking-wider" 
                     onClick={() => { setActiveProductId(null); setActivePorId(null); }}
                 >
                     Done Tagging This Product
