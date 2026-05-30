@@ -255,6 +255,7 @@ export interface DiscountType {
   discount_type_name?: string;
   discount_type?: string;
   name?: string;
+  total_percent?: string | number;
 }
 
 /** Junction record for discount types and line discounts. */

@@ -23,16 +23,27 @@ export async function GET() {
             }
         };
 
-        const [clustersRes, customersRes, ordersRes, salesmanRes, areaRes] = await Promise.all([
-            fetch(`${BASE_URL}/items/cluster?limit=-1`, fetchOptions),
-            fetch(`${BASE_URL}/items/customer?limit=-1`, fetchOptions),
-            fetch(`${BASE_URL}/items/sales_order?limit=-1`, fetchOptions),
-            fetch(`${BASE_URL}/items/salesman?limit=-1`, fetchOptions),
-            fetch(`${BASE_URL}/items/area_per_cluster?limit=-1`, fetchOptions)
-        ]);
+        const clustersRes = await fetch(`${BASE_URL}/items/cluster?limit=-1`, fetchOptions);
+        const salesmanRes = await fetch(`${BASE_URL}/items/salesman?limit=-1`, fetchOptions);
+        const areaRes = await fetch(`${BASE_URL}/items/area_per_cluster?limit=-1`, fetchOptions);
+        // Malalaking tables (fetching sequentially to prevent Directus overload/socket close)
+        const customersRes = await fetch(`${BASE_URL}/items/customer?limit=-1`, fetchOptions);
+        const ordersRes = await fetch(`${BASE_URL}/items/sales_order?limit=-1`, fetchOptions);
 
-        if (!clustersRes.ok || !customersRes.ok || !ordersRes.ok || !salesmanRes.ok || !areaRes.ok) {
-            throw new Error("Failed to fetch one or more upstream APIs");
+        const responses = [
+            { name: 'cluster', res: clustersRes },
+            { name: 'customer', res: customersRes },
+            { name: 'sales_order', res: ordersRes },
+            { name: 'salesman', res: salesmanRes },
+            { name: 'area_per_cluster', res: areaRes }
+        ];
+
+        for (const r of responses) {
+            if (!r.res.ok) {
+                const text = await r.res.text().catch(() => 'no text');
+                console.error(`Upstream API failed: ${r.name}, Status: ${r.res.status}, Body: ${text}`);
+                throw new Error(`Failed to fetch upstream API: ${r.name}`);
+            }
         }
 
         const clustersData: { data: ApiCluster[] } = await clustersRes.json();
