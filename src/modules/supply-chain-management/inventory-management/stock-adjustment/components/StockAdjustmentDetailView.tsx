@@ -13,7 +13,8 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   Clock,
-  UserCheck
+  UserCheck,
+  Tag
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -74,7 +75,6 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
 
   if (!data) return <div className="p-12 text-center font-bold">Record not found.</div>;
 
-  // Robust check for isPosted (handles boolean, number, string, or Directus Buffer)
   const isPosted = isPostedStatus(data.isPosted);
 
   const generatePDF = () => {
@@ -84,8 +84,8 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
     const pageWidth = doc.internal.pageSize.getWidth();
 
     // --- Header ---
-    doc.setFontSize(18); // Reduced from 22
-    doc.setTextColor(37, 99, 235); // blue-600
+    doc.setFontSize(18);
+    doc.setTextColor(37, 99, 235); // enterprise-blue
     doc.text("STOCK ADJUSTMENT SLIP", pageWidth / 2, 15, { align: "center" });
 
     doc.setDrawColor(37, 99, 235);
@@ -93,14 +93,14 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
     doc.line(pageWidth / 2 - 12, 18, pageWidth / 2 + 12, 18);
 
     // --- Metadata Section ---
-    doc.setFontSize(9); // Reduced from 10
-    doc.setTextColor(100, 116, 139); // slate-500
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
 
     // Left Column
     doc.setFont("helvetica", "bold");
     doc.text("Document No:", 20, 30);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(15, 23, 42); // slate-900
+    doc.setTextColor(15, 23, 42);
     doc.text(data.doc_no || "-", 50, 30);
 
     doc.setTextColor(100, 116, 139);
@@ -129,9 +129,12 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
     // --- Product Table ---
     const tableRows = data.items?.map((item, index) => {
       const product = (item.product_id as unknown as StockAdjustmentProduct) || {};
+      const rfidLabel = item.rfid_tags && item.rfid_tags.length > 0 
+        ? `\nRFIDs: ${item.rfid_tags.join(", ")}`
+        : "";
       return [
         index + 1,
-        `${product.product_name || "Unknown"}\n(${product.product_code || "N/A"})`,
+        `${product.product_name || "Unknown"}\n(${product.product_code || "N/A"})${rfidLabel}`,
         item.brand_name || "N/A",
         item.category_name || "N/A",
         item.unit_name || product.unit_name || "pcs",
@@ -140,7 +143,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
     }) || [];
 
     autoTable(doc, {
-      startY: 45, // Moved up
+      startY: 45,
       head: [["#", "Product Information", "Brand", "Category", "Unit", "Qty"]],
       body: tableRows,
       headStyles: { fillColor: [248, 250, 252], textColor: [71, 85, 105], fontSize: 8, fontStyle: 'bold' },
@@ -154,7 +157,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
         5: { halign: 'center', fontStyle: 'bold' }
       },
       theme: 'grid',
-      styles: { cellPadding: 1.5 } // Tightened padding
+      styles: { cellPadding: 1.5 }
     });
 
     const finalY = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 100) + 8;
@@ -177,7 +180,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
     const splitRemarks = doc.splitTextToSize(remarks.toUpperCase(), 100);
     doc.text(splitRemarks, 20, finalY + 5);
 
-    doc.setFontSize(14); // Reduced from 16
+    doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(30, 58, 138);
     const formattedAmount = Math.abs(data.amount || 0).toLocaleString(undefined, {
@@ -188,22 +191,20 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
 
     // --- Signatures Section ---
     const pageHeight = doc.internal.pageSize.getHeight();
-    let sigY = finalY + 25; // Tightened space to signatures
+    let sigY = finalY + 25;
 
-    // Check if signatures will fit on the current page
     if (sigY + 20 > pageHeight) {
       doc.addPage();
-      sigY = 30; // Reset to top of new page
+      sigY = 30;
     }
 
     doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139); // slate-500
+    doc.setTextColor(100, 116, 139);
     doc.setFont("helvetica", "normal");
-
-    // Set thin line style
+    
     doc.setLineWidth(0.2);
-    doc.setDrawColor(148, 163, 184); // slate-400
-
+    doc.setDrawColor(148, 163, 184);
+    
     // Prepared By
     doc.text("PREPARED BY:", 20, sigY);
     doc.line(20, sigY + 12, 70, sigY + 12);
@@ -224,18 +225,16 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
     doc.text("RECEIVED BY:", pageWidth - 70, sigY);
     doc.line(pageWidth - 70, sigY + 12, pageWidth - 20, sigY + 12);
 
-    // --- Save the PDF ---
     doc.save(`StockAdjustment_${data.doc_no}.pdf`);
   };
 
   return (
     <div className="flex flex-col gap-6 p-8 max-w-7xl mx-auto w-full overflow-y-auto bg-background min-h-screen relative">
-      {/* No longer using browser print styles as we switched to jsPDF */}
       <div className="print:hidden flex flex-col gap-6">
         {/* Module Header */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg shadow-sm">
+            <div className="bg-primary p-2 rounded-lg shadow-sm">
               <Package className="h-6 w-6 text-white" />
             </div>
             <div>
@@ -247,7 +246,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
             <Button
               variant="outline"
               onClick={generatePDF}
-              className="gap-2 h-10 border-border bg-background shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg"
+              className="gap-2 h-10 border-border bg-background shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg transition-all"
             >
               <Printer className="h-4 w-4" />
               Download PDF
@@ -255,23 +254,23 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
           </div>
         </div>
 
-        <div className="flex items-center gap-4 mt-2 mb-4 print:mb-8">
+        <div className="flex items-center gap-4 mt-2 mb-4">
           <Button
             variant="ghost"
             size="icon"
             onClick={onBack}
-            className="rounded-full hover:bg-muted shadow-sm border border-border h-10 w-10 print:hidden"
+            className="rounded-full hover:bg-muted shadow-sm border border-border h-10 w-10 print:hidden transition-colors"
           >
             <ChevronLeft className="h-5 w-5 text-muted-foreground" />
           </Button>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold tracking-tight text-foreground">{data.doc_no}</h1>
-              <Badge variant="outline" className={data.type === 'IN' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800/50 font-bold' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800/50 font-bold'}>
+              <Badge variant="outline" className={data.type === 'IN' ? 'bg-success-bg text-success border-success/20 font-bold uppercase' : 'bg-destructive/10 text-destructive border-destructive/20 font-bold uppercase'}>
                 Stock {data.type === 'IN' ? 'In' : 'Out'}
               </Badge>
               {isPosted && (
-                <Badge variant="outline" className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 flex items-center gap-1 font-bold">
+                <Badge variant="outline" className="bg-info-bg text-info border-info/20 flex items-center gap-1 font-bold uppercase">
                   <BadgeCheck className="h-3 w-3" />
                   Posted
                 </Badge>
@@ -281,34 +280,35 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
           </div>
         </div>
 
-        <Card className="border-none shadow-sm bg-card overflow-hidden">
+        <Card className="border-none shadow-sm bg-card overflow-hidden rounded-xl border border-border/40">
           <CardContent className="p-0">
-            <div className="bg-blue-600 dark:bg-blue-700 p-8 text-white relative overflow-hidden transition-colors duration-300">
+            {/* Vibrant Hero Section */}
+            <div className="bg-primary p-8 text-white relative overflow-hidden transition-colors duration-300">
               <div className="absolute right-[-20px] top-[-20px] opacity-10">
                 {data.type === 'IN' ? <ArrowUpCircle className="h-48 w-48" /> : <ArrowDownCircle className="h-48 w-48" />}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-8 relative z-10">
                 <div className="space-y-1">
-                  <p className="text-blue-100/70 text-[10px] uppercase font-bold tracking-widest">Branch Location</p>
+                  <p className="text-white/60 text-[10px] uppercase font-bold tracking-widest">Branch Location</p>
                   <div className="flex items-center gap-2 font-bold text-lg">
-                    <MapPin className="h-4 w-4 text-blue-200" />
+                    <MapPin className="h-4 w-4 text-white/80" />
                     {typeof data.branch_id === 'object' ? data.branch_id?.branch_name : data.branch_id || "Main Warehouse"}
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-blue-100/70 text-[10px] uppercase font-bold tracking-widest">Date Created</p>
+                  <p className="text-white/60 text-[10px] uppercase font-bold tracking-widest">Date Created</p>
                   <div className="flex items-center gap-2 font-bold text-lg">
-                    <Calendar className="h-4 w-4 text-blue-200" />
+                    <Calendar className="h-4 w-4 text-white/80" />
                     {data.created_at ? format(new Date(data.created_at), "MMM d, yyyy") : "-"}
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-blue-100/70 text-[10px] uppercase font-bold tracking-widest">Created By</p>
+                  <p className="text-white/60 text-[10px] uppercase font-bold tracking-widest">Created By</p>
                   <div className="flex items-center gap-2 font-bold text-lg">
-                    <User className="h-4 w-4 text-blue-200" />
+                    <User className="h-4 w-4 text-white/80" />
                     {(() => {
                       const createdBy = data.created_by;
                       if (typeof createdBy === 'object' && createdBy !== null) {
@@ -323,7 +323,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-blue-100/70 text-[10px] uppercase font-bold tracking-widest">Total Amount</p>
+                  <p className="text-white/60 text-[10px] uppercase font-bold tracking-widest">Total Amount</p>
                   <div className="text-3xl font-bold text-white flex items-center gap-2">
                     ₱{data.amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
@@ -334,7 +334,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-foreground">
-                  <FileText className="h-4 w-4 text-blue-500" />
+                  <FileText className="h-4 w-4 text-primary" />
                   <h3 className="font-bold">Remarks & Notes</h3>
                 </div>
                 <div className="p-4 bg-muted/30 rounded-xl border border-border text-sm text-muted-foreground min-h-[60px]">
@@ -342,7 +342,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
                 </div>
               </div>
 
-              <div className={`grid gap-4 ${isPosted ? "grid-cols-2" : "grid-cols-2"}`}>
+              <div className="grid gap-4 grid-cols-2">
                 <div className="bg-muted/30 p-4 rounded-xl border border-border">
                   <p className="text-[10px] uppercase font-bold text-muted-foreground/60 mb-1">Status</p>
                   <p className="font-bold text-foreground/80">{isPosted ? "Posted (Finalized)" : "Draft (Pending Posting)"}</p>
@@ -353,21 +353,21 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
                 </div>
                 {isPosted && (
                   <>
-                    <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/20 flex flex-col gap-1">
+                    <div className="bg-primary/5 dark:bg-blue-900/10 p-4 rounded-xl border border-primary/20 dark:border-blue-800/20 flex flex-col gap-1 animate-in fade-in slide-in-from-left-2 duration-300">
                       <div className="flex items-center gap-2">
-                        <Clock className="h-3 w-3 text-blue-500 dark:text-blue-400" />
-                        <p className="text-[10px] uppercase font-bold text-blue-400 dark:text-blue-400/70">Posted At</p>
+                        <Clock className="h-3 w-3 text-primary" />
+                        <p className="text-[10px] uppercase font-bold text-primary/70">Posted At</p>
                       </div>
-                      <p className="font-bold text-blue-700 dark:text-blue-300">
+                      <p className="font-bold text-primary/95">
                         {data.postedAt ? format(new Date(data.postedAt), "MMM d, yyyy, hh:mm a") : "-"}
                       </p>
                     </div>
-                    <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/20 flex flex-col gap-1">
+                    <div className="bg-primary/5 dark:bg-blue-900/10 p-4 rounded-xl border border-primary/20 dark:border-blue-800/20 flex flex-col gap-1 animate-in fade-in slide-in-from-left-2 duration-300">
                       <div className="flex items-center gap-2">
-                        <UserCheck className="h-3 w-3 text-blue-500 dark:text-blue-400" />
-                        <p className="text-[10px] uppercase font-bold text-blue-400 dark:text-blue-400/70">Posted By</p>
+                        <UserCheck className="h-3 w-3 text-primary" />
+                        <p className="text-[10px] uppercase font-bold text-primary/70">Posted By</p>
                       </div>
-                      <p className="font-bold text-blue-700 dark:text-blue-300">
+                      <p className="font-bold text-primary/95">
                         {(() => {
                           const postedBy = data.posted_by;
                           if (typeof postedBy === 'object' && postedBy !== null) {
@@ -388,7 +388,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
         </Card>
       </div>
 
-      {/* Product Line Items */}
+      {/* Product Line Items with Expected Stock & RFID Arrays */}
       <div className="space-y-4 print:hidden">
         <h3 className="text-lg font-bold text-foreground">Product Line Items</h3>
 
@@ -412,28 +412,49 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
                 const cost = item.cost_per_unit || product.price_per_unit || 0;
                 const total = qty * cost;
                 const current = item.current_stock || 0;
-                const newStock = data.type === 'IN' ? current + qty : current - qty;
+                
+                // Color-coded Delta quantities
+                const isIncoming = data.type === 'IN';
+                const newStock = isIncoming ? current + qty : current - qty;
 
                 return (
-                  <TableRow key={item.id} className="border-border hover:bg-muted/30 transition-colors">
-                    <TableCell className="text-center text-muted-foreground/50 font-medium">{idx + 1}</TableCell>
+                  <TableRow key={item.id} className="border-border hover:bg-muted/35 transition-colors duration-150">
+                    <TableCell className="text-center text-muted-foreground/50 font-bold">{idx + 1}</TableCell>
                     <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-bold text-foreground">{product.product_name || "Unknown Product"}</span>
+                      <div className="flex flex-col gap-1.5 py-1">
+                        <span className="font-bold text-foreground leading-tight">{product.product_name || "Unknown Product"}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-muted-foreground font-medium tracking-wider">{product.product_code || "N/A"}</span>
-                          <span className="text-[10px] text-blue-500 font-bold uppercase">{item.brand_name || "N/A"}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">{product.product_code || "N/A"}</span>
+                          <span className="text-[10px] text-primary font-bold uppercase">{item.brand_name || "N/A"}</span>
                         </div>
+                        {/* Serial Pill Arrays: RFID Tags */}
+                        {item.rfid_tags && item.rfid_tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2 animate-in fade-in duration-300">
+                            {item.rfid_tags.map((tag) => (
+                              <Badge 
+                                key={tag} 
+                                variant="secondary" 
+                                className="bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-200/50 dark:border-amber-800/30 font-mono text-[9px] py-0.5 px-2 flex items-center gap-1 rounded-md shadow-sm"
+                              >
+                                <Tag className="h-2.5 w-2.5" />
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-center font-medium text-muted-foreground">{item.unit_name || product.unit_name || "pcs"}</TableCell>
+                    <TableCell className="text-center font-bold text-muted-foreground/80">{item.unit_name || product.unit_name || "pcs"}</TableCell>
                     <TableCell className="text-center">
-                      <span className={`font-bold px-2 py-1 rounded-md ${data.type === 'IN' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'}`}>
-                        {data.type === 'OUT' ? `-${qty}` : `+${qty}`}
+                      <span className={`font-black px-2.5 py-1 rounded-full text-xs ${isIncoming ? 'bg-success-bg text-success' : 'bg-destructive/10 text-destructive'}`}>
+                        {isIncoming ? `+${qty}` : `-${qty}`}
                       </span>
                     </TableCell>
                     <TableCell className="text-right font-medium text-muted-foreground">₱{cost.toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-bold text-blue-600 dark:text-blue-400">₱{total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                    <TableCell className="text-right font-bold text-primary">
+                      ₱{total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </TableCell>
+                    {/* Live New Stock Preview */}
                     <TableCell className="text-center">
                       <span className="font-bold text-foreground">
                         {newStock}
@@ -448,14 +469,16 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
           <div className="p-8 bg-muted/30 border-t border-border flex flex-col items-end gap-3">
             <div className="flex items-center gap-12 w-full max-w-md justify-between">
               <span className="text-muted-foreground font-bold uppercase tracking-wider text-[11px]">Total Quantity:</span>
-              <span className={`font-bold text-lg ${data.type === 'IN' ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500'}`}>
+              <span className={`font-black text-lg ${data.type === 'IN' ? 'text-success' : 'text-destructive'}`}>
                 {data.type === 'OUT' ? '-' : '+'}{data.items?.reduce((acc, item) => acc + (item.quantity || 0), 0)} units
               </span>
             </div>
             <div className="h-px bg-border w-full max-w-md" />
             <div className="flex items-center gap-12 w-full max-w-md justify-between">
               <span className="text-muted-foreground font-bold uppercase tracking-wider text-[11px]">Total Adjusted Amount:</span>
-              <span className="text-2xl font-bold text-blue-700 dark:text-blue-400">₱{data.amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <span className="text-2xl font-bold text-primary">
+                ₱{data.amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
             </div>
           </div>
         </div>
