@@ -225,6 +225,7 @@ export async function fetchPlanDetails(
         allocated_quantity: number | string;
       }>("/items/sales_order_details", "order_id", requestedSoIds, {
         fields: "order_id,product_id,ordered_quantity,allocated_quantity",
+        limit: -1,
       });
 
       const productIds = [...new Set(soDetails.map((d) => Number(d.product_id)).filter(Boolean))];
@@ -235,6 +236,7 @@ export async function fetchPlanDetails(
           weight: number | string | null;
         }>("/items/products", "product_id", productIds, {
           fields: "product_id,weight",
+          limit: -1,
         });
 
         const prodWeightMap = new Map<number, number>(

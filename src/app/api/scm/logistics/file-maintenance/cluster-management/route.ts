@@ -170,6 +170,41 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { cluster_name, minimum_amount, areas } = body;
 
+    // Verify company subscription limit for cluster
+    const companyRes = await directusFetch(
+      `${DIRECTUS_URL}/items/company?filter[company_id][_eq]=1`
+    ).catch(() => ({ data: [] }));
+    const company = companyRes.data?.[0];
+
+    if (company && company.company_subscription) {
+      const subId = typeof company.company_subscription === "object" && company.company_subscription !== null
+        ? (company.company_subscription as { id: number }).id
+        : company.company_subscription;
+
+      if (subId) {
+        const limitsRes = await directusFetch(
+          `${DIRECTUS_URL}/items/subscription_limits?filter[subscription_id][_eq]=${subId}&filter[module_name][_eq]=cluster`
+        ).catch(() => ({ data: [] }));
+        const limitObj = limitsRes.data?.[0];
+
+        if (limitObj) {
+          const limitValue = parseInt(String(limitObj.limit_value));
+          if (limitValue !== -1) {
+            const existingClusters = await directusFetch(
+              `${DIRECTUS_URL}${CLUSTER_ENDPOINT}?limit=-1`
+            ).catch(() => ({ data: [] }));
+            const count = (existingClusters.data ?? []).length;
+            if (count >= limitValue) {
+              return json(
+                { error: `You have reached the maximum limit of ${limitValue} clusters for your subscription.` },
+                403
+              );
+            }
+          }
+        }
+      }
+    }
+
     // 0. Strict duplication check (case-insensitive)
     const existingCheck = await directusFetch(
       `${DIRECTUS_URL}${CLUSTER_ENDPOINT}?filter[cluster_name][_icontains]=${encodeURIComponent(cluster_name)}&limit=1`

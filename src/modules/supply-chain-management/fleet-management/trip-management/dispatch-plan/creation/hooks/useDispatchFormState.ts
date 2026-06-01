@@ -158,18 +158,29 @@ export function useDispatchFormState({
 
   // ── Auto-reload when branch/search/page changes ───────────
   const selectedBranch = form.watch("starting_point");
+  const [prevBranch, setPrevBranch] = useState(selectedBranch);
   
   useEffect(() => {
+    let currentPage = page;
+    let isLoadMore = page > 1;
+
+    if (selectedBranch !== prevBranch) {
+      setPage(1);
+      currentPage = 1;
+      isLoadMore = false;
+      setPrevBranch(selectedBranch);
+    }
+
     if (selectedBranch && selectedBranch > 0) {
       loadApprovedPlans(
         selectedBranch,
-        page,
+        currentPage,
         debouncedSearch,
-        page > 1,
+        isLoadMore,
         form.getValues("pre_dispatch_plan_ids")
       );
     }
-  }, [selectedBranch, page, debouncedSearch, loadApprovedPlans, form]);
+  }, [selectedBranch, page, debouncedSearch, loadApprovedPlans, form, prevBranch]);
 
   // ── Derived: filtered plans ───────────────────────────────
   const filteredPlans = useMemo(() => {

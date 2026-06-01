@@ -9,6 +9,7 @@ import { CellHelpers } from "../utils/sku-helpers";
 import { useApprovedSKUs } from "./useApprovedSKUs";
 import { useDraftSKUs } from "./useDraftSKUs";
 import { usePendingApprovalSKUs } from "./usePendingApprovalSKUs";
+import { useSegmentApprovalSKUs } from "./useSegmentApprovalSKUs";
 
 /**
  * Composer hook — assembles the three state slices and orchestrates all
@@ -27,6 +28,7 @@ import { usePendingApprovalSKUs } from "./usePendingApprovalSKUs";
 export function useSKUs() {
   const drafts = useDraftSKUs();
   const pending = usePendingApprovalSKUs();
+  const segment = useSegmentApprovalSKUs();
   const approved = useApprovedSKUs();
 
   const [search, setSearch] = useState("");
@@ -43,8 +45,9 @@ export function useSKUs() {
       const aSort = CellHelpers.getDirectusSort(approved.approvedSorting) || "";
       const dSort = CellHelpers.getDirectusSort(drafts.draftsSorting) || "";
       const pSort = CellHelpers.getDirectusSort(pending.pendingSorting) || "";
+      const sSort = CellHelpers.getDirectusSort(segment.segmentSorting) || "";
 
-      const [approvedRes, draftsRes, pendingRes, masterRes] = await Promise.all(
+      const [approvedRes, draftsRes, pendingRes, segmentRes, masterRes] = await Promise.all(
         [
           fetch(
             `/api/scm/product-management/sku?type=approved&limit=${approved.approvedLimit}&offset=${approved.approvedPage * approved.approvedLimit}&search=${encodeURIComponent(search)}&sort=${aSort}`,
@@ -55,6 +58,9 @@ export function useSKUs() {
           fetch(
             `/api/scm/product-management/sku?type=drafts&status=FOR_APPROVAL&limit=${pending.pendingLimit}&offset=${pending.pendingPage * pending.pendingLimit}&search=${encodeURIComponent(search)}&sort=${pSort}`,
           ).then((res) => res.json()),
+          fetch(
+            `/api/scm/product-management/sku?type=segment-approval&limit=${segment.segmentLimit}&offset=${segment.segmentPage * segment.segmentLimit}&search=${encodeURIComponent(search)}&sort=${sSort}`,
+          ).then((res) => res.json()),
           fetch("/api/scm/product-management/sku?type=master").then((res) =>
             res.json(),
           ),
@@ -64,6 +70,7 @@ export function useSKUs() {
       if (approvedRes.error) throw new Error(approvedRes.error);
       if (draftsRes.error) throw new Error(draftsRes.error);
       if (pendingRes.error) throw new Error(pendingRes.error);
+      if (segmentRes.error) throw new Error(segmentRes.error);
       if (masterRes.error) throw new Error(masterRes.error);
 
       approved.setApprovedData(approvedRes.data || []);
@@ -74,6 +81,9 @@ export function useSKUs() {
 
       pending.setPendingApprovalData(pendingRes.data || []);
       pending.setPendingTotal(pendingRes.meta?.total_count || 0);
+
+      segment.setSegmentApprovalData(segmentRes.data || []);
+      segment.setSegmentTotal(segmentRes.meta?.total_count || 0);
 
       // Apply local approvedIds cache: filter out items already approved this session
       // whose backend status hasn't updated via Directus yet
@@ -107,6 +117,36 @@ export function useSKUs() {
         }
       }
 
+      // Apply local segmentApprovedIds cache
+      if (segment.segmentApprovedIds.size > 0) {
+        const filteredSegment = (segmentRes.data || []).filter((item: SKU) => {
+          const itemId = item.id || item.product_id;
+          return !segment.segmentApprovedIds.has(String(itemId));
+        });
+        segment.setSegmentApprovalData(filteredSegment);
+        segment.setSegmentTotal(filteredSegment.length);
+
+        const segmentIds = new Set(
+          (segmentRes.data || []).map((item: SKU) =>
+            String(item.id || item.product_id),
+          ),
+        );
+        const segmentIdsToRemove: (number | string)[] = [];
+        segment.segmentApprovedIds.forEach((id) => {
+          if (!segmentIds.has(String(id))) {
+            segmentIdsToRemove.push(id);
+          }
+        });
+
+        if (segmentIdsToRemove.length > 0) {
+          segment.setSegmentApprovedIds((prev) => {
+            const newSet = new Set(prev);
+            segmentIdsToRemove.forEach((id) => newSet.delete(id));
+            return newSet;
+          });
+        }
+      }
+
       setMasterData(masterRes.data || null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
@@ -124,8 +164,12 @@ export function useSKUs() {
     pending.pendingLimit,
     pending.pendingPage,
     pending.pendingSorting,
+    segment.segmentLimit,
+    segment.segmentPage,
+    segment.segmentSorting,
     search,
     pending.approvedIds,
+    segment.segmentApprovedIds,
   ]);
 
   useEffect(() => {
@@ -275,6 +319,76 @@ export function useSKUs() {
     await refresh();
   };
 
+  // ─── Segment Approval Mutations ───────────────────────────────────────────
+
+  const approveSegment = async (
+    id: number | string,
+    product_class: number,
+    product_segment: number,
+    product_section: number,
+    skipRefresh = false,
+  ) => {
+    const response = await fetch(`/api/scm/product-management/sku/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approve-segment", product_class, product_segment, product_section }),
+    });
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+
+    segment.setSegmentApprovedIds((prev) => new Set(prev).add(String(id)));
+    segment.setSegmentApprovalData((prev) =>
+      prev.filter((item) => String(item.id || item.product_id) !== String(id))
+    );
+    segment.setSegmentTotal((prev) => Math.max(0, prev - 1));
+
+    if (!skipRefresh) await refresh();
+  };
+
+  const rejectSegment = async (id: number | string, skipRefresh = false) => {
+    const response = await fetch(`/api/scm/product-management/sku/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reject-segment" }),
+    });
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+
+    segment.setSegmentApprovedIds((prev) => new Set(prev).add(String(id)));
+    segment.setSegmentApprovalData((prev) =>
+      prev.filter((item) => String(item.id || item.product_id) !== String(id))
+    );
+    segment.setSegmentTotal((prev) => Math.max(0, prev - 1));
+
+    if (!skipRefresh) await refresh();
+  };
+
+  const bulkApproveSegments = async (skus: SKU[]) => {
+    for (const sku of skus) {
+      const id = sku.id || sku.product_id;
+      const proposed = sku as SKU & {
+        _proposed_class?: number;
+        _proposed_segment?: number;
+        _proposed_section?: number;
+      };
+      await approveSegment(
+        id!,
+        proposed._proposed_class || 1,
+        proposed._proposed_segment || 1,
+        proposed._proposed_section || 1,
+        true,
+      );
+    }
+    await refresh();
+  };
+
+  const bulkRejectSegments = async (ids: (number | string)[]) => {
+    for (const id of ids) {
+      await rejectSegment(id, true);
+    }
+    await refresh();
+  };
+
   // ─── Return (identical shape to original useSKUs) ─────────────────────────
 
   return {
@@ -308,6 +422,16 @@ export function useSKUs() {
     pendingSorting: pending.pendingSorting,
     setPendingSorting: pending.setPendingSorting,
 
+    // Segment Approval
+    segmentApprovalData: segment.segmentApprovalData,
+    segmentTotal: segment.segmentTotal,
+    segmentPage: segment.segmentPage,
+    setSegmentPage: segment.setSegmentPage,
+    segmentLimit: segment.segmentLimit,
+    setSegmentLimit: segment.setSegmentLimit,
+    segmentSorting: segment.segmentSorting,
+    setSegmentSorting: segment.setSegmentSorting,
+
     // Shared
     search,
     setSearch,
@@ -325,6 +449,10 @@ export function useSKUs() {
     bulkApproveSKUs,
     rejectSKU,
     bulkRejectSKUs,
+    approveSegment,
+    rejectSegment,
+    bulkApproveSegments,
+    bulkRejectSegments,
     deleteDraft,
     bulkDeleteDrafts,
     checkDuplicate,

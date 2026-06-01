@@ -118,6 +118,7 @@ export async function fetchApprovedPreDispatchPlans(
       allocated_quantity: number | string;
     }>("/items/sales_order_details", "order_id", soIds, {
       fields: "order_id,product_id,ordered_quantity,allocated_quantity",
+      limit: -1,
     });
 
     const productIds = [...new Set(soDetails.map((d) => Number(d.product_id)).filter(Boolean))];
@@ -129,6 +130,7 @@ export async function fetchApprovedPreDispatchPlans(
         weight: string | number;
       }>("/items/products", "product_id", productIds, {
         fields: "product_id,weight",
+        limit: -1,
       });
       products.forEach((p) =>
         prodWeightMap.set(Number(p.product_id), Number(p.weight || 0)),
@@ -178,7 +180,7 @@ export async function fetchApprovedPreDispatchPlans(
         "/items/consolidator_details",
         "consolidator_id",
         consolidatorIds,
-        { fields: "consolidator_id,picked_quantity,applied_quantity" },
+        { fields: "consolidator_id,picked_quantity,applied_quantity", limit: -1 },
       );
 
       const consolidatorPickingStatus = new Map<number, boolean>();

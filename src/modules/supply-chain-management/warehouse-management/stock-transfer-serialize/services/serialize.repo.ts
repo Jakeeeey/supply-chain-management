@@ -7,22 +7,68 @@ import type {
   OrderGroup,
 } from "../../stock-transfer/types/stock-transfer.types";
 
-/**
- * Fetches current serial availability from v_serial_onhand view.
- */
-export async function fetchSerialAvailability(serialNumber: string, branchId?: number): Promise<StockTransferSerialRow[]> {
-  const params: Record<string, string | number> = {
-    "filter[serial_number][_eq]": serialNumber,
-    limit: 1,
-  };
+const SPRING_API_BASE_URL = process.env.SPRING_API_BASE_URL;
 
-  if (branchId) {
-    params["filter[branch_id][_eq]"] = branchId;
+/**
+ * Fetches current serial availability from v_serial_onhand view (Spring Boot API).
+ */
+export async function fetchSerialAvailability(serialNumber: string, branchId?: number, token?: string): Promise<StockTransferSerialRow[]> {
+  if (!SPRING_API_BASE_URL) {
+    console.error("[Serialize Repo] SPRING_API_BASE_URL is not defined");
+    return [];
   }
 
-  // Assuming v_serial_onhand is exposed as a Directus collection/view
-  const res = await fetchItems<StockTransferSerialRow>("items/v_serial_onhand", params);
-  return res.data;
+  const url = `${SPRING_API_BASE_URL.replace(/\/$/, "")}/api/v-serial-onhand/all?serialNumber=${encodeURIComponent(serialNumber.trim().toUpperCase())}`;
+  
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Accept": "application/json",
+        ...(token ? { 
+          "Authorization": `Bearer ${token}`,
+          "Cookie": `vos_access_token=${token}`
+        } : {}),
+      },
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      console.error(`[Serialize Repo] Spring API returned ${res.status} for ${url}`);
+      throw new Error(`Spring API returned ${res.status}: ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    const items = Array.isArray(data) ? data : (data.data || data.content || []);
+    
+    // Filter by branchId if provided, as the API might return for all branches
+    interface SerialOnhandRaw {
+      serialNumber?: string;
+      serial_number?: string;
+      branch_id?: number;
+      branchId?: number;
+      productId?: number;
+      product_id?: number;
+      qty_onhand?: number;
+      [key: string]: unknown;
+    }
+
+    const filtered = items.filter((i: SerialOnhandRaw) => {
+      const matchSerial = String(i.serialNumber || i.serial_number || "").trim().toUpperCase() === serialNumber.trim().toUpperCase();
+      const matchBranch = branchId ? i.branch_id === branchId || i.branchId === branchId : true;
+      return matchSerial && matchBranch;
+    }).map((i: SerialOnhandRaw) => ({
+      ...i,
+      serial_number: i.serialNumber || i.serial_number,
+      branch_id: i.branchId || i.branch_id,
+      product_id: i.productId || i.product_id
+    }));
+
+    return filtered;
+  } catch (error) {
+    console.error("[Serialize Repo] Failed to fetch serial availability:", error);
+    return [];
+  }
 }
 
 /**

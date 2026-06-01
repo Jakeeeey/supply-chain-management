@@ -271,18 +271,42 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
 
   let y = drawCorporateHeader(doc, companyData, margin, pageW);
 
+  const safeNum = (val: unknown): number => {
+    if (val === null || val === undefined) return 0;
+    const num = Number(val);
+    return isNaN(num) ? 0 : num;
+  };
+
+  // ── Pre-calculate Grand Total ──
+  const grandTotal = items.reduce((sum, item) => {
+    const qty = safeNum(item.allocated_quantity ?? item.ordered_quantity);
+    const ordQty = safeNum(item.ordered_quantity);
+    const amount = safeNum(item.amount);
+    const unitPrice = ordQty > 0 ? (amount / ordQty) : 0;
+    return sum + (qty * unitPrice);
+  }, 0);
+
   // ── Title & Picker Info ───────────────────────────────────────
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text(orderNo.toUpperCase(), margin, y);
   
-  doc.setFontSize(9);
+  // Grand Total on Top Right
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(16, 185, 129); // Modern emerald green
+  doc.text(`GRAND TOTAL: PHP ${grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, pageW - margin, y, { align: 'right' });
+  
+  y += 5;
+  doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
-  doc.text(date, pageW - margin, y, { align: 'right' });
-  y += 6;
-
+  doc.setTextColor(120, 120, 120);
+  doc.text(`Date: ${date}`, pageW - margin, y, { align: 'right' });
+  
   doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
   doc.text(`Picker: ${pickerName.toUpperCase()}`, margin, y);
   y += 10;
 
@@ -311,7 +335,9 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
     const supplierObj = product?.product_per_supplier?.[0]?.supplier_id;
     const supplier = typeof supplierObj === 'object' ? supplierObj.supplier_shortcut : (supplierObj || 'N/A');
     
-    const groupKey = `${supplier} | ${brand}`;
+    const supplierName = supplier === 'N/A' || !supplier ? 'UNASSIGNED SUPPLIER' : supplier;
+    const brandName = brand === 'No Brand' || !brand ? 'UNASSIGNED BRAND' : brand;
+    const groupKey = `${supplierName} | ${brandName}`;
     if (!groups[groupKey]) groups[groupKey] = [];
     groups[groupKey].push(item);
   });
@@ -345,7 +371,7 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
       const product = typeof item.product_id === 'object' ? (item.product_id as ProductRow) : null;
       const productName = product?.product_name || `ID: ${item.product_id}`;
       const unit = (typeof product?.unit_of_measurement === 'object' ? product.unit_of_measurement?.unit_name : 'PCS') || 'PCS';
-      const qty = item.allocated_quantity ?? item.ordered_quantity ?? 0;
+      const qty = safeNum(item.allocated_quantity ?? item.ordered_quantity);
 
       // Checkbox
       doc.setDrawColor(100, 100, 100);
@@ -366,9 +392,58 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
       doc.line(margin + 12, y, pageW - margin, y);
       y += 6;
     });
+
+    // ── Calculate Group Subtotal ──
+    const groupSubtotal = groupItems.reduce((sum, item) => {
+      const qty = safeNum(item.allocated_quantity ?? item.ordered_quantity);
+      const ordQty = safeNum(item.ordered_quantity);
+      const amount = safeNum(item.amount);
+      const unitPrice = ordQty > 0 ? (amount / ordQty) : 0;
+      return sum + (qty * unitPrice);
+    }, 0);
+
+    if (y > pageH - 25) {
+      doc.addPage();
+      y = 20;
+    }
+
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.2);
+    doc.line(margin + 12, y - 2, pageW - margin, y - 2);
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(80, 80, 80);
+    doc.text(`SUBTOTAL FOR ${groupTitle.toUpperCase()}:`, margin + 12, y);
+    
+    doc.setTextColor(0, 0, 0);
+    doc.text(`PHP ${groupSubtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, pageW - margin, y, { align: 'right' });
+    y += 8;
     
     y += 4; // Gap between groups
   });
+
+  // ── Grand Total (Below table) ─────────────────────────────────
+  if (y > pageH - 45) {
+    doc.addPage();
+    y = 20;
+  }
+
+  y += 4;
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.4);
+  doc.roundedRect(margin, y, contentW, 12, 1, 1, 'S');
+
+  doc.setFontSize(9.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text('GRAND TOTAL AMOUNT:', margin + 5, y + 8);
+
+  doc.setFontSize(11);
+  doc.setTextColor(16, 185, 129); // Modern emerald green
+  doc.text(`PHP ${grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, pageW - margin - 5, y + 8.5, { align: 'right' });
+  doc.setTextColor(0, 0, 0); // Reset text color
+  y += 20;
 
   // ── Reference Info (Below table) ──────────────────────────────
   if (y > pageH - 55) {

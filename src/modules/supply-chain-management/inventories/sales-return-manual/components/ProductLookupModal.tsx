@@ -26,11 +26,10 @@ import {
   Unit,
   Product,
   ProductSupplierConnection,
-  ProductCatalog,
+  API_LineDiscount,
 } from "../type";
 import { SalesReturnProvider } from "../providers/fetchProviders";
 import { cn } from "@/lib/utils";
-import { resolveFinalDiscount } from "../utils/discount-resolver";
 
 interface Props {
   isOpen: boolean;
@@ -38,6 +37,7 @@ interface Props {
   onConfirm: (items: SalesReturnItem[]) => void;
   priceType: string; // 🟢 NEW
   customerCode?: string; // 🟢 NEW: Pass selected customer code
+  lineDiscounts?: API_LineDiscount[]; // 🟢 NEW
 }
 
 export function ProductLookupModal({
@@ -59,7 +59,6 @@ export function ProductLookupModal({
   const [categoriesList, setCategoriesList] = useState<Category[]>([]);
   const [suppliersList, setSuppliersList] = useState<Supplier[]>([]);
   const [unitsList, setUnitsList] = useState<Unit[]>([]);
-  const [catalogData, setCatalogData] = useState<ProductCatalog | null>(null); // Keep full catalog for resolving
   const [supplierConnections, setSupplierConnections] = useState<
     ProductSupplierConnection[]
   >([]);
@@ -92,7 +91,6 @@ export function ProductLookupModal({
         setIsLoading(true);
         try {
           const catalog = await SalesReturnProvider.getFullCatalog(customerCode);
-          setCatalogData(catalog);
           setBrandsList(Array.isArray(catalog.brands) ? catalog.brands : []);
           setCategoriesList(Array.isArray(catalog.categories) ? catalog.categories : []);
           setSuppliersList(Array.isArray(catalog.suppliers) ? catalog.suppliers : []);
@@ -278,24 +276,20 @@ export function ProductLookupModal({
         const newQuantity = currentItem.quantity + 1;
 
         // Recalculate gross for existing item
-        const newGross = newQuantity * currentItem.unitPrice;
+        const newGross = Math.round(newQuantity * currentItem.unitPrice * 100) / 100;
 
         updatedItems[existingItemIndex] = {
           ...currentItem,
           quantity: newQuantity,
-          grossAmount: newGross, // 🟢 Update Gross
-          totalAmount: newGross - (currentItem.discountAmount || 0),
+          grossAmount: newGross,
+          discountAmount: 0,
+          totalAmount: newGross,
         };
         return updatedItems;
       } else {
-        // 🟢 Resolve final discount based on hierarchy
-        const tiedDiscount = resolveFinalDiscount(
-          product,
-          customerCode,
-          catalogData || { connections: supplierConnections }
-        );
+        const totalAmount = Math.round(selectedPrice * 100) / 100;
 
-        // 🟢 FIX: Added 'grossAmount' and 'discountType'
+        // 🟢 FIX: Added 'grossAmount'
         const newItem: SalesReturnItem = {
           tempId: `added-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           productId: product.product_id,
@@ -306,9 +300,9 @@ export function ProductLookupModal({
           quantity: 1,
           unitPrice: selectedPrice,
           grossAmount: selectedPrice, // 🟢 Added (1 * price)
-          discountType: tiedDiscount, // 🟢 Automatically set tied discount
+          discountType: null, // 🟢 Removed discount inside lookup
           discountAmount: 0,
-          totalAmount: selectedPrice,
+          totalAmount: totalAmount,
           returnType: "", // 🟢 Empty default as requested
           reason: "",
           // 🟢 Store additional price info for recalculation
@@ -331,11 +325,13 @@ export function ProductLookupModal({
         if (item.tempId === tempId) {
           const newQty = item.quantity + change;
           if (newQty < 1) return item;
+          const newGross = Math.round(newQty * item.unitPrice * 100) / 100;
           return {
             ...item,
             quantity: newQty,
-            grossAmount: newQty * item.unitPrice,
-            totalAmount: newQty * item.unitPrice,
+            grossAmount: newGross,
+            discountAmount: 0,
+            totalAmount: newGross,
           };
         }
         return item;
@@ -349,11 +345,13 @@ export function ProductLookupModal({
     setSelectedItems((prev) =>
       prev.map((item) => {
         if (item.tempId === tempId) {
+          const newGross = Math.round(safeQty * item.unitPrice * 100) / 100;
           return {
             ...item,
             quantity: safeQty,
-            grossAmount: safeQty * item.unitPrice,
-            totalAmount: safeQty * item.unitPrice,
+            grossAmount: newGross,
+            discountAmount: 0,
+            totalAmount: newGross,
           };
         }
         return item;
@@ -836,7 +834,7 @@ export function ProductLookupModal({
                             </span>
                           </div>
                           <h4
-                            className="text-sm font-semibold text-foreground line-clamp-2 leading-tight mb-2"
+                            className="text-sm font-semibold text-foreground line-clamp-2 leading-tight mb-1"
                             title={item.description}
                           >
                             {item.description}
