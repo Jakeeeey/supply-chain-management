@@ -47,6 +47,12 @@ export async function POST(req: NextRequest) {
         }
 
         const decoded = decodeJwtPayload(newToken);
+        const exp = Number(decoded?.exp);
+        const now = Math.floor(Date.now() / 1000);
+        const cookieMaxAge = (Number.isFinite(exp) && exp > now + 5)
+            ? Math.max(60, exp - now)
+            : undefined;
+
         const res = NextResponse.json({
             ok: true,
             user: {
@@ -61,7 +67,7 @@ export async function POST(req: NextRequest) {
         res.cookies.set({
             name: COOKIE_NAME,
             value: newToken,
-            ...getCookieOptions(true, "/") // Default to persistent for refresh cycles
+            ...getCookieOptions(true, "/", cookieMaxAge) // Default to persistent for refresh cycles
         });
 
         // Update Refresh Token if returned in Set-Cookie header
@@ -73,7 +79,7 @@ export async function POST(req: NextRequest) {
                 res.cookies.set({
                     name: REFRESH_COOKIE_NAME,
                     value: value,
-                    ...getCookieOptions(true, REFRESH_PATH)
+                    ...getCookieOptions(true, REFRESH_PATH, cookieMaxAge)
                 });
             }
         }

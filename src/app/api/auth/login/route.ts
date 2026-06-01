@@ -336,7 +336,7 @@ export async function POST(req: NextRequest) {
     res.cookies.set({
         name: COOKIE_NAME,
         value: token,
-        ...getCookieOptions(remember, "/")
+        ...getCookieOptions(remember, "/", cookieMaxAge)
     });
 
     // --- Handle Refresh Token from Backend ---
@@ -349,7 +349,7 @@ export async function POST(req: NextRequest) {
             res.cookies.set({
                 name: REFRESH_COOKIE_NAME,
                 value: value,
-                ...getCookieOptions(remember, REFRESH_PATH)
+                ...getCookieOptions(remember, REFRESH_PATH, cookieMaxAge)
             });
         }
     }
