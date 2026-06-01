@@ -63,7 +63,7 @@ interface PDPCreateModalProps {
   masterData: DispatchPlanMasterData | null;
   availableOrders: SalesOrderOption[];
   isLoadingOrders: boolean;
-  onFilterChange: (clusterId?: number, branchId?: number) => void;
+  onFilterChange: (clusterId?: number | null, branchId?: number | null) => void;
   initialClusterId?: number | null;
   initialBranchId?: number | null;
   editPlan?: DispatchPlan | null;
@@ -390,7 +390,7 @@ export function PDPCreateModal({
   }, [effectiveAvailableOrders, manifestOrderIds]);
 
   const handleClusterChange = (value: string) => {
-    const id = Number(value);
+    const id = value ? Number(value) : null;
     if (id === clusterId) return;
     if (
       manifestOrders.length > 0 &&
@@ -401,11 +401,11 @@ export function PDPCreateModal({
       return;
     setClusterId(id);
     setManifestOrders([]);
-    onFilterChange(id, branchId || undefined);
+    onFilterChange(id ?? undefined, branchId);
   };
 
   const handleBranchChange = (value: string) => {
-    const id = Number(value);
+    const id = value ? Number(value) : null;
     if (id === branchId) return;
     if (
       manifestOrders.length > 0 &&
@@ -416,7 +416,7 @@ export function PDPCreateModal({
       return;
     setBranchId(id);
     setManifestOrders([]);
-    onFilterChange(clusterId || undefined, id);
+    onFilterChange(clusterId ?? undefined, id);
   };
 
   const handleAddOrder = (order: SalesOrderOption) => {
