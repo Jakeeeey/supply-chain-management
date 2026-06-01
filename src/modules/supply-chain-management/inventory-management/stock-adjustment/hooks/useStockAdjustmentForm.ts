@@ -248,6 +248,15 @@ export function useStockAdjustmentForm() {
     return result.data;
   }, []);
 
+  const deleteAdjustment = useCallback(async (id: number) => {
+    const response = await fetch(`/api/scm/inventory-management/stock-adjustment/${id}`, {
+      method: "DELETE",
+    });
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+    return result;
+  }, []);
+
   const postAdjustment = useCallback(async (id: number) => {
     const response = await fetch(`/api/scm/inventory-management/stock-adjustment/${id}/post`, {
       method: "POST",
@@ -288,5 +297,6 @@ export function useStockAdjustmentForm() {
     createAdjustment,
     updateAdjustment,
     postAdjustment,
+    deleteAdjustment,
   };
 }
