@@ -8,7 +8,7 @@ export const REFRESH_COOKIE_NAME = "refreshToken"; // Matches Spring Boot backen
 export const SPRING_COOKIE_NAME = "springboot_token";
 export const LAST_VISITED_PATH_COOKIE = "vos_last_visited_path";
 export const COOKIE_MAX_AGE_CAP = 60 * 60 * 24 * 7; // 7 days cap
-export const REFRESH_PATH = "/api/auth/refresh";
+export const REFRESH_PATH = "/";
 
 /**
  * Global secure cookie flag based on environment.
@@ -19,13 +19,15 @@ export const IS_SECURE_COOKIE = process.env.COOKIE_SECURE === "true" ||
 /**
  * Shared cookie options for consistency.
  */
-export const getCookieOptions = (remember: boolean, path: string = "/") => {
+export const getCookieOptions = (remember: boolean, path: string = "/", maxAgeOverride?: number) => {
+  const hasMaxAge = maxAgeOverride !== undefined || remember;
+  const maxAgeVal = maxAgeOverride !== undefined ? maxAgeOverride : COOKIE_MAX_AGE_CAP;
   return {
     httpOnly: true,
     sameSite: "lax" as const,
     secure: IS_SECURE_COOKIE,
     path,
-    ...(remember ? { maxAge: COOKIE_MAX_AGE_CAP } : {}),
+    ...(hasMaxAge ? { maxAge: maxAgeVal } : {}),
   };
 };
 
