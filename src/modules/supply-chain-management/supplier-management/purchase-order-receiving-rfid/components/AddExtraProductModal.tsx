@@ -35,7 +35,7 @@ type SupplierProduct = {
 };
 
 export function AddExtraProductModal({ isOpen, onClose }: AddExtraProductModalProps) {
-    const { getSupplierProducts, addExtraProductLocally, selectedPO, markProductAsVerified } = useReceivingProducts();
+    const { getSupplierProducts, addExtraProductLocally, selectedPO, toggleProductVerification, verifiedPorIds } = useReceivingProducts();
     
     const [searchQuery, setSearchQuery] = React.useState("");
     const [isLoading, setIsLoading] = React.useState(false);
@@ -111,8 +111,12 @@ export function AddExtraProductModal({ isOpen, onClose }: AddExtraProductModalPr
             sku: product.sku
         });
 
-        // ✅ IMPORTANT: In RFID, we also need to mark it as verified so the user can scan it immediately
-        markProductAsVerified(product.productId, `${product.productId}-${String(targetBranch.id)}`);
+        // ✅ IMPORTANT: In RFID, mark as verified but DO NOT auto-navigate to tagging. Let user decide.
+        // Use toggleProductVerification to just add the porId to verifiedPorIds without setting activeProductId.
+        const generatedPorId = `${product.productId}-${String(targetBranch.id)}`;
+        if (!verifiedPorIds.includes(generatedPorId)) {
+            toggleProductVerification(generatedPorId);
+        }
 
         toast.success(`Success! Added ${product.name} to the list as an extra item.`);
     };

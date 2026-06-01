@@ -9,6 +9,14 @@ import { skuQueryService } from "./sku-query";
  * parent→child cascade) are preserved exactly as they were in sku.ts.
  */
 export const skuLifecycleService = {
+  async updateMaster(id: number | string, data: Partial<SKU>): Promise<SKU> {
+    const res = await request<{ data: SKU }>(
+      `${API_BASE_URL}/items/products/${id}`,
+      { method: "PATCH", body: JSON.stringify(data) },
+    );
+    return res.data;
+  },
+
   async createDraft(sku: SKU): Promise<SKU> {
     const { units: rawUnits = [], ...baseData } = sku;
     const resolvedUnitId =
@@ -153,6 +161,8 @@ export const skuLifecycleService = {
           product_segment: data.product_segment,
           product_section: data.product_section,
           product_supplier: data.product_supplier,
+          description: data.description,
+          short_description: data.short_description,
           isActive: data.isActive,
           inventory_type: data.inventory_type,
           flavor: data.flavor,
@@ -171,7 +181,8 @@ export const skuLifecycleService = {
               } as SKU,
               masterData,
             );
-            return request(`${API_BASE_URL}/items/product_draft/${child.id}`, {
+            const childId = child.product_id || child.id;
+            return request(`${API_BASE_URL}/items/product_draft/${childId}`, {
               method: "PATCH",
               body: JSON.stringify({ ...fields, product_code: code }),
             });

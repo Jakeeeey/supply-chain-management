@@ -51,28 +51,16 @@ const cleanId = (id: any) => {
 };
 
 /**
- * Builds a Map<discount_type_id, total_percentage> by summing linked
- * line_discount.percentage values through the line_per_discount_type junction.
+ * Builds a Map<discount_type_id, total_percentage> by retrieving pre-calculated
+ * sequential compounded percentages from the discount_type collection.
  */
 async function buildDiscountPercentMap(): Promise<Map<number, number>> {
-  const [junctionRes, lineDiscRes] = await Promise.all([
-    repo.getRawLinePerDiscountType(),
-    repo.getRawLineDiscounts(),
-  ]);
+  const result = await repo.getRawDiscountTypes();
+  const rows = (result.data || []) as { id: number; total_percent: string | number }[];
 
-  const junctionRows = (junctionRes.data || []) as { type_id: number; line_id: number }[];
-  const lineDiscRows = (lineDiscRes.data || []) as { id: number; percentage: string | number }[];
-
-  // Build a lookup: line_discount.id → percentage
-  const linePercentMap = new Map<number, number>();
-  lineDiscRows.forEach((ld) => linePercentMap.set(ld.id, parseFloat(String(ld.percentage)) || 0));
-
-  // Aggregate: for each discount_type_id, sum all linked line_discount percentages
   const discountMap = new Map<number, number>();
-  junctionRows.forEach((row) => {
-    const existing = discountMap.get(row.type_id) || 0;
-    const linePct = linePercentMap.get(row.line_id) || 0;
-    discountMap.set(row.type_id, Math.round((existing + linePct) * 10000) / 10000);
+  rows.forEach((dt) => {
+    discountMap.set(dt.id, parseFloat(String(dt.total_percent)) || 0);
   });
 
   return discountMap;
@@ -301,7 +289,7 @@ export async function fetchReferences(): Promise<{
   const enrichedLineDiscounts: API_LineDiscount[] = rawDiscountTypes.map((dt: any) => ({
     id: dt.id,
     discount_type: dt.discount_type,
-    total_percent: String(discountPercentMap.get(dt.id) || 0),
+    total_percent: String(dt.total_percent !== undefined && dt.total_percent !== null ? dt.total_percent : (discountPercentMap.get(dt.id) || 0)),
   }));
 
   return {

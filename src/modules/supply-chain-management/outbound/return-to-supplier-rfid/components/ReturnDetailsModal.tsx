@@ -204,18 +204,8 @@ export function ReturnDetailsModal({
               discountTypeObj.discount_type ||
               discountTypeObj.name;
             
-            // Resolve to first percentage found in junction
-            const junctions = refs.linePerDiscountType.filter(
-              (lpd) => lpd.type_id === discountTypeObj.id
-            );
-            if (junctions.length > 0) {
-              const lineDiscountObj = refs.lineDiscounts.find(
-                (ld) => ld.id === junctions[0].line_id
-              );
-              if (lineDiscountObj) {
-                computedDiscount = parseFloat(lineDiscountObj.percentage);
-              }
-            }
+            // Use total_percent directly from discount_type
+            computedDiscount = parseFloat(String(discountTypeObj.total_percent)) || 0;
           }
         }
 
@@ -412,18 +402,7 @@ export function ReturnDetailsModal({
           );
           if (discountTypeObj) {
             product.discountTypeId = discountTypeObj.id;
-            const lineIds = refs.linePerDiscountType
-              .filter((lpd) => String(lpd.type_id) === String(discountTypeObj.id))
-              .map((lpd) => lpd.line_id);
-            
-            if (lineIds.length > 0) {
-              const discountObj = refs.lineDiscounts.find(
-                (d) => String(d.id) === String(lineIds[0])
-              );
-              if (discountObj) {
-                product.supplierDiscount = parseFloat(discountObj.percentage);
-              }
-            }
+            product.supplierDiscount = parseFloat(String(discountTypeObj.total_percent)) || 0;
           }
         }
 
