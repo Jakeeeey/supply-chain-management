@@ -42,11 +42,22 @@ export async function fetchSerialAvailability(serialNumber: string, branchId?: n
     const items = Array.isArray(data) ? data : (data.data || data.content || []);
     
     // Filter by branchId if provided, as the API might return for all branches
-    const filtered = items.filter((i: any) => {
+    interface SerialOnhandRaw {
+      serialNumber?: string;
+      serial_number?: string;
+      branch_id?: number;
+      branchId?: number;
+      productId?: number;
+      product_id?: number;
+      qty_onhand?: number;
+      [key: string]: unknown;
+    }
+
+    const filtered = items.filter((i: SerialOnhandRaw) => {
       const matchSerial = String(i.serialNumber || i.serial_number || "").trim().toUpperCase() === serialNumber.trim().toUpperCase();
       const matchBranch = branchId ? i.branch_id === branchId || i.branchId === branchId : true;
       return matchSerial && matchBranch;
-    }).map((i: any) => ({
+    }).map((i: SerialOnhandRaw) => ({
       ...i,
       serial_number: i.serialNumber || i.serial_number,
       branch_id: i.branchId || i.branch_id,
