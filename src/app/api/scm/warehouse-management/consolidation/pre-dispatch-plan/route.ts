@@ -2,6 +2,7 @@ import { handleApiError } from "@/modules/supply-chain-management/warehouse-mana
 import { dispatchPlanService } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/services/dispatch-plan";
 import { dispatchPlanFormSchema } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
 import { NextRequest, NextResponse } from "next/server";
+import { jwtDecode } from "jwt-decode";
 
 /**
  * GET /api/scm/warehouse-management/consolidation/pre-dispatch-plan
@@ -96,7 +97,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const data = await dispatchPlanService.createPlan(parsed.data);
+    // Extract userId from token
+    const token = req.cookies.get("vos_access_token")?.value || req.cookies.get("springboot_token")?.value || req.cookies.get("directus_session_token")?.value;
+    const decoded: Record<string, unknown> | null = token ? jwtDecode<Record<string, unknown>>(token) : null;
+    const rawId = decoded?.sub ?? decoded?.id ?? decoded?.user_id ?? decoded?.userId;
+    const userId = rawId ? Number(rawId) : undefined;
+
+    const data = await dispatchPlanService.createPlan(parsed.data, userId);
     return NextResponse.json({ data });
   } catch (error) {
     return handleApiError(error);

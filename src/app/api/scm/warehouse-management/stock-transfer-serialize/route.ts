@@ -20,9 +20,12 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "Serial number is required" }, { status: 400 });
       }
 
+      const token = req.cookies.get("springboot_token")?.value || req.cookies.get("vos_access_token")?.value;
+      const parsedBranchId = branchId ? Number(branchId) : undefined;
       const result = await service.lookupSerial(
         serial, 
-        branchId ? Number(branchId) : undefined
+        isNaN(parsedBranchId as number) ? undefined : parsedBranchId,
+        token
       );
       return NextResponse.json(result);
     }

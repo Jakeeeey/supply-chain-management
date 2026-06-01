@@ -120,7 +120,12 @@ export function useSerializeDispatch() {
       }
 
       // Validate against v_serial_onhand via API
-      const match = await serializeLifecycleService.lookupSerial(serialTrimmed, selectedGroup.sourceBranch!);
+      // sourceBranch can be a number or a Directus expanded object { id, branch_name, ... }
+      const rawBranch = selectedGroup.sourceBranch;
+      const branchIdNum = typeof rawBranch === 'object' && rawBranch !== null 
+        ? (rawBranch as Record<string, unknown>).id as number 
+        : rawBranch as number;
+      const match = await serializeLifecycleService.lookupSerial(serialTrimmed, branchIdNum || undefined);
       
       const itemInOrder = selectedGroup.items.find(i => {
         const pid = (typeof i.product_id === 'object' ? i.product_id.product_id : i.product_id) as number;
