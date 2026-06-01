@@ -113,7 +113,7 @@ export function PdpListSidebar({
                 onClick={() => onFilterChange("Partial Picking")}
                 className={cn("text-xs flex items-center justify-between cursor-pointer", readinessFilter === "Partial Picking" && "bg-accent")}
               >
-                <span>Partial Picking</span>
+                <span>Partially Applied</span>
                 <Badge variant="secondary" className="h-4 px-1 text-[10px] min-w-4 justify-center">{counts.partial}</Badge>
               </DropdownMenuItem>
 
@@ -203,8 +203,8 @@ export function PdpListSidebar({
                               {wouldExceed 
                                 ? "Limit Reached" 
                                 : isNotSelectable 
-                                  ? p.readiness_reason || "Not Ready" 
-                                  : p.status}
+                                  ? (p.readiness_reason === "Partial Picking" ? "Partially Applied" : p.readiness_reason || "Not Ready")
+                                  : (p.status === "Picked" ? "Applied" : p.status)}
                             </Badge>
                             <p className={cn(
                               "font-semibold text-xs truncate",
