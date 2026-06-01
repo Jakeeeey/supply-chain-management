@@ -2,12 +2,12 @@
 
 import * as React from "react";
 import { useReceivingProducts } from "../providers/ReceivingProductsProvider";
-import { TagRFIDStep } from "./steps";
+import { ReviewReceiptStep } from "./steps";
 
 import { Card } from "@/components/ui/card";
 
-export function ReceivingWorkbench() {
-    const { selectedPO } = useReceivingProducts();
+export function ReceiptDetailsWorkbench({ receiverName }: { receiverName?: string }) {
+    const { selectedPO, receiptSaved } = useReceivingProducts();
 
     if (!selectedPO) {
         return (
@@ -19,7 +19,7 @@ export function ReceivingWorkbench() {
                 </div>
                 <div>
                     <div className="text-lg font-semibold">No Purchase Order Selected</div>
-                    <div className="text-sm text-muted-foreground">Select a PO from the sidebar to begin tagging</div>
+                    <div className="text-sm text-muted-foreground">Select a PO from the sidebar to begin entering receipt details</div>
                 </div>
             </Card>
         );
@@ -29,21 +29,21 @@ export function ReceivingWorkbench() {
         <Card className="p-4 min-w-0">
             <div className="flex items-start justify-between gap-3">
                 <div>
-                    <div className="text-base font-semibold">RFID Tagging Workbench</div>
+                    <div className="text-base font-semibold">Receipt Details</div>
                     <div className="text-xs text-muted-foreground">
-                        Tag products with RFID for {selectedPO.poNumber}
+                        Enter receipt details for {selectedPO.poNumber}
                     </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                     <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mr-2">
-                        RFID Tagging
+                        Receipt Finalization
                     </div>
                 </div>
             </div>
 
             <div className="mt-4">
-                <TagRFIDStep />
+                <ReviewReceiptStep receiverName={receiverName} />
             </div>
         </Card>
     );

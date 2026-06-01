@@ -22,7 +22,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-export function TagRFIDStep() {
+export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
     const {
         selectedPO,
         setRfid,
@@ -128,6 +128,27 @@ export function TagRFIDStep() {
         prevOverCountRef.current = overReceivedProducts.length;
     }, [overReceivedProducts]);
 
+    // Proceed gate: every visible product in the Step 2 checklist must have at least 1 tag scanned
+    const canProceed = React.useMemo(() => {
+        if (activeProducts.length === 0) return false;
+        return activeProducts.some(p => {
+            const scanned = safeCounts[p.porId] || 0;
+            return scanned > 0;
+        });
+    }, [activeProducts, safeCounts]);
+
+    const handleProceed = () => {
+        if (hasOverReceiving) {
+            setIsOverReceiveModalOpen(true);
+            return;
+        }
+        onContinue();
+    };
+
+    const confirmOverReceive = () => {
+        setIsOverReceiveModalOpen(false);
+        onContinue();
+    };
 
     // Pagination — filtered to current product
     const filteredActivity = React.useMemo(() => {
@@ -382,6 +403,39 @@ export function TagRFIDStep() {
                     </div>
                 </Card>
 
+                <div className="flex justify-end pt-4">
+                    <Button 
+                        className="h-12 w-full md:w-auto px-8 bg-primary text-primary-foreground hover:bg-primary/90 font-black uppercase tracking-wider text-xs shadow-md" 
+                        onClick={handleProceed}
+                        disabled={!canProceed}
+                    >
+                        {canProceed ? "Proceed to Final Review" : "Scan RFID tags to proceed"}
+                    </Button>
+                </div>
+
+                {/* ✅ Over-Receiving Verification Modal */}
+                <AlertDialog open={isOverReceiveModalOpen} onOpenChange={setIsOverReceiveModalOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+                                <AlertTriangle className="h-5 w-5" />
+                                Over-Receiving Warning
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                One or more products exceed the expected ordered quantity.
+                                <br /><br />
+                                Are you sure you want to continue to the details and finalization step? 
+                                The system will allow this, but it will be logged as over-receiving.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Review Quantities</AlertDialogCancel>
+                            <AlertDialogAction onClick={confirmOverReceive} className="bg-red-600 hover:bg-red-700 focus:ring-red-600 text-white">
+                                Yes, Continue
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </div>
         );
     }
