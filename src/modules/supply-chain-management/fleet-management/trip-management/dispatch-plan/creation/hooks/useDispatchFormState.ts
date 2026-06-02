@@ -185,9 +185,9 @@ export function useDispatchFormState({
     if (page > 1 || debouncedSearch !== "") {
       loadApprovedPlans(
         selectedBranch,
-        page,
+        currentPage,
         debouncedSearch,
-        page > 1,
+        isLoadMore,
         form.getValues("pre_dispatch_plan_ids")
       );
     }

@@ -356,11 +356,13 @@ export function StockAdjustmentForm({
     fetchNextDocNo,
     postAdjustment,
     validateRFIDAvailability,
+    deleteAdjustment,
   } = useStockAdjustmentForm();
 
   const [loading, setLoading] = useState(false);
   const [showRFIDScanner, setShowRFIDScanner] = useState(false);
   const [showPostConfirmation, setShowPostConfirmation] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [scannerContext, setScannerContext] = useState<{ index: number; productName: string } | null>(null);
   const [isScannerPreparing, setIsScannerPreparing] = useState(false);
   const [branchInputValue, setBranchInputValue] = useState("");
@@ -584,6 +586,21 @@ export function StockAdjustmentForm({
       },
       onInvalid
     )();
+  };
+
+  const confirmDelete = async () => {
+    setShowDeleteConfirmation(false);
+    if (!id) return;
+    setLoading(true);
+    try {
+      await deleteAdjustment(id);
+      toast.success("Adjustment Deleted Successfully");
+      onSuccess();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete adjustment");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const onInvalid = () => {
@@ -1226,6 +1243,18 @@ export function StockAdjustmentForm({
           {id && !isReadOnly && (
             <Button
               type="button"
+              onClick={() => setShowDeleteConfirmation(true)}
+              disabled={loading}
+              className="h-10 px-8 font-bold bg-red-600 hover:bg-red-700 text-white gap-2 shadow-sm rounded-lg animate-in fade-in zoom-in-95 duration-200 transition-all duration-300 hover:scale-[1.02] text-xs"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Adjustment
+            </Button>
+          )}
+
+          {id && !isReadOnly && (
+            <Button
+              type="button"
               onClick={handlePost}
               disabled={loading}
               className="h-10 px-8 font-bold bg-green-600 hover:bg-green-700 text-white gap-2 shadow-sm rounded-lg animate-in fade-in zoom-in-95 duration-200 transition-all duration-300 hover:scale-[1.02] text-xs"
@@ -1301,6 +1330,38 @@ export function StockAdjustmentForm({
               className="flex-1 h-11 font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/10 rounded-lg text-xs"
             >
               Confirm and Post
+            </Button>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation AlertDialog Popup */}
+      <AlertDialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
+        <AlertDialogContent className="max-w-md bg-card p-6 rounded-xl shadow-2xl border-none">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-600" />
+              Confirm Delete Adjustment
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground py-4 text-xs font-semibold">
+              Are you sure you want to delete this stock adjustment transaction? This action will permanently remove it from the system.
+              <br /><br />
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex items-center gap-3 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteConfirmation(false)}
+              className="flex-1 h-11 font-bold text-muted-foreground border-border hover:bg-muted rounded-lg text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmDelete}
+              className="flex-1 h-11 font-bold bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-100 rounded-lg text-xs"
+            >
+              Confirm and Delete
             </Button>
           </div>
         </AlertDialogContent>
