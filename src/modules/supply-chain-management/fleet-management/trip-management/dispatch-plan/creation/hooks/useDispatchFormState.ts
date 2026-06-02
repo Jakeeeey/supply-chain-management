@@ -63,6 +63,12 @@ interface UseDispatchFormStateReturn {
 
   /** Maximum weight capacity of the selected vehicle. */
   vehicleCapacity: number;
+
+  /** Manually trigger load of approved plans. */
+  triggerLoadApprovedPlans: () => void;
+
+  /** Whether deliveries have been loaded at least once for the current branch. */
+  hasLoadedOnce: boolean;
 }
 
 // ─── Hook Implementation ────────────────────────────────────
@@ -85,6 +91,7 @@ export function useDispatchFormState({
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [readinessFilter, setReadinessFilter] = useState<ReadinessFilter>("all");
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   // ── Debounce search ───────────────────────────────────────
   useEffect(() => {
@@ -151,6 +158,7 @@ export function useDispatchFormState({
         toast.error("Failed to load approved pre-dispatch plans");
       } finally {
         setIsLoadingPlans(false);
+        setHasLoadedOnce(true);
       }
     },
     [],
@@ -161,26 +169,44 @@ export function useDispatchFormState({
   const [prevBranch, setPrevBranch] = useState(selectedBranch);
   
   useEffect(() => {
-    let currentPage = page;
-    let isLoadMore = page > 1;
-
     if (selectedBranch !== prevBranch) {
       setPage(1);
-      currentPage = 1;
-      isLoadMore = false;
       setPrevBranch(selectedBranch);
+      setApprovedPlans([]); // Clear plans when branch changes
+      setHasLoadedOnce(false); // Reset load state for new branch
     }
+  }, [selectedBranch, prevBranch]);
 
-    if (selectedBranch && selectedBranch > 0) {
+  // Handle pagination and search changes (only if a branch is selected)
+  useEffect(() => {
+    if (!selectedBranch || selectedBranch === 0) return;
+    
+    // Only auto-fetch if it's a page change or search change
+    if (page > 1 || debouncedSearch !== "") {
       loadApprovedPlans(
         selectedBranch,
-        currentPage,
+        page,
         debouncedSearch,
-        isLoadMore,
+        page > 1,
         form.getValues("pre_dispatch_plan_ids")
       );
     }
-  }, [selectedBranch, page, debouncedSearch, loadApprovedPlans, form, prevBranch]);
+  }, [page, debouncedSearch, loadApprovedPlans, form, selectedBranch]);
+
+  const triggerLoadApprovedPlans = useCallback(() => {
+    const branchId = form.getValues("starting_point");
+    if (branchId && branchId > 0) {
+      setPage(1);
+      setPrevBranch(branchId);
+      loadApprovedPlans(
+        branchId,
+        1,
+        debouncedSearch,
+        false,
+        form.getValues("pre_dispatch_plan_ids")
+      );
+    }
+  }, [form, debouncedSearch, loadApprovedPlans]);
 
   // ── Derived: filtered plans ───────────────────────────────
   const filteredPlans = useMemo(() => {
@@ -305,5 +331,7 @@ export function useDispatchFormState({
     setIsLoadingPlans,
     totalWeight,
     vehicleCapacity,
+    triggerLoadApprovedPlans,
+    hasLoadedOnce,
   };
 }

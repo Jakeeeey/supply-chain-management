@@ -28,7 +28,7 @@ export async function fetchApprovedPreDispatchPlans(
 ): Promise<DirectusResponse<EnrichedApprovedPlan>> {
   const params: Record<string, string | number> = {
     fields:
-      "dispatch_id,dispatch_no,driver_id,vehicle_id,cluster_id,branch_id,total_amount,status",
+      "dispatch_id,dispatch_no,driver_id,vehicle_id,cluster_id,branch_id,total_amount,status,created_at",
     limit,
     offset,
     sort: "-dispatch_id"
