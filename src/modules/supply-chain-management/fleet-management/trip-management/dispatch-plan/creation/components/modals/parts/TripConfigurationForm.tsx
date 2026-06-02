@@ -27,16 +27,12 @@ interface TripConfigurationFormProps {
   masterData: MasterData | null;
   vehicleCapacity: number;
   disabled?: boolean;
-  onLoadDeliveries?: () => void;
-  isBranchSelected?: boolean;
 }
 
 export function TripConfigurationForm({ 
   masterData,
   vehicleCapacity,
   disabled,
-  onLoadDeliveries,
-  isBranchSelected
 }: TripConfigurationFormProps) {
   const form = useFormContext<DispatchCreationFormValues>();
   const { fields: helperFields, append, remove } = useFieldArray({
@@ -84,29 +80,16 @@ export function TripConfigurationForm({
                       Source Branch
                     </FormLabel>
                     <FormControl>
-                      <div className="flex gap-2 items-center">
-                        <SearchableSelect
-                          options={masterData?.branches.map(b => ({
-                            value: String(b.id),
-                            label: b.branch_name
-                          })) || []}
-                          value={field.value ? String(field.value) : ""}
-                          onValueChange={(val) => field.onChange(Number(val))}
-                          placeholder="Select branch"
-                          disabled={disabled}
-                        />
-                        {onLoadDeliveries && (
-                          <Button 
-                            type="button" 
-                            variant="default"
-                            className="h-9 px-3 shrink-0" 
-                            disabled={disabled || !isBranchSelected}
-                            onClick={onLoadDeliveries}
-                          >
-                            Load
-                          </Button>
-                        )}
-                      </div>
+                      <SearchableSelect
+                        options={masterData?.branches.map(b => ({
+                          value: String(b.id),
+                          label: b.branch_name
+                        })) || []}
+                        value={field.value ? String(field.value) : ""}
+                        onValueChange={(val) => field.onChange(Number(val))}
+                        placeholder="Select branch"
+                        disabled={disabled}
+                      />
                     </FormControl>
                     <FormMessage className="text-[10px]" />
                   </FormItem>
@@ -114,13 +97,18 @@ export function TripConfigurationForm({
               />
 
               {/* Vehicle */}
-              <FormField
+                <FormField
                 control={form.control}
                 name="vehicle_id"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">
                       Vehicle
+                      {vehicleCapacity > 0 && (
+                        <span className="ml-1 font-normal text-muted-foreground/70 normal-case tracking-normal">
+                          (Max: {Number(vehicleCapacity).toLocaleString()} kg)
+                        </span>
+                      )}
                     </FormLabel>
                     <FormControl>
                       <SearchableSelect
@@ -134,9 +122,6 @@ export function TripConfigurationForm({
                         disabled={disabled}
                       />
                     </FormControl>
-                    <p className="text-[10px] text-muted-foreground mt-1 px-1">
-                      Max: <span className="text-foreground">{Number(vehicleCapacity || 0).toLocaleString()} kg</span>
-                    </p>
                     <FormMessage className="text-[10px]" />
                   </FormItem>
                 )}

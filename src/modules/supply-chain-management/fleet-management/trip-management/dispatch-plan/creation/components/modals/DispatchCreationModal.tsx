@@ -77,6 +77,7 @@ export function DispatchCreationModal({
     totalWeight,
     vehicleCapacity,
     triggerLoadApprovedPlans,
+    hasLoadedOnce,
   } = useDispatchFormState({
     form,
     vehicles: masterData?.vehicles,
@@ -204,14 +205,15 @@ export function DispatchCreationModal({
                   selectedBranch={selectedBranch}
                   currentTotalWeight={totalWeight}
                   vehicleCapacity={vehicleCapacity}
+                  onLoadDeliveries={triggerLoadApprovedPlans}
+                  isBranchSelected={!!selectedBranch}
+                  hasLoadedOnce={hasLoadedOnce}
                 />
 
                 <TripConfigurationForm 
                   masterData={masterData} 
                   vehicleCapacity={vehicleCapacity}
                   disabled={isLoadingPlans}
-                  onLoadDeliveries={triggerLoadApprovedPlans}
-                  isBranchSelected={!!selectedBranch}
                 />
 
                 <InvoiceItemsSidebar

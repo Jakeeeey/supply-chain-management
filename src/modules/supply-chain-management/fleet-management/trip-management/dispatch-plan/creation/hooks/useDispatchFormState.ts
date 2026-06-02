@@ -66,6 +66,9 @@ interface UseDispatchFormStateReturn {
 
   /** Manually trigger load of approved plans. */
   triggerLoadApprovedPlans: () => void;
+
+  /** Whether deliveries have been loaded at least once for the current branch. */
+  hasLoadedOnce: boolean;
 }
 
 // ─── Hook Implementation ────────────────────────────────────
@@ -88,6 +91,7 @@ export function useDispatchFormState({
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [readinessFilter, setReadinessFilter] = useState<ReadinessFilter>("all");
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   // ── Debounce search ───────────────────────────────────────
   useEffect(() => {
@@ -154,6 +158,7 @@ export function useDispatchFormState({
         toast.error("Failed to load approved pre-dispatch plans");
       } finally {
         setIsLoadingPlans(false);
+        setHasLoadedOnce(true);
       }
     },
     [],
@@ -168,6 +173,7 @@ export function useDispatchFormState({
       setPage(1);
       setPrevBranch(selectedBranch);
       setApprovedPlans([]); // Clear plans when branch changes
+      setHasLoadedOnce(false); // Reset load state for new branch
     }
   }, [selectedBranch, prevBranch]);
 
@@ -326,5 +332,6 @@ export function useDispatchFormState({
     totalWeight,
     vehicleCapacity,
     triggerLoadApprovedPlans,
+    hasLoadedOnce,
   };
 }
