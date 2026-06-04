@@ -67,6 +67,41 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
     } = useReceivingProducts();
 
     const [clientSaveError, setClientSaveError] = React.useState("");
+    const [customCounts, setCustomCounts] = React.useState<Record<string, number>>({});
+
+    const physicalCounts = React.useMemo(() => {
+        const counts: Record<string, number> = {};
+        if (selectedPO?.allocations) {
+            selectedPO.allocations.forEach(a => {
+                a.items.forEach(it => {
+                    const porId = String(it.porId || it.id);
+                    counts[porId] = Math.max(0, Number(it.taggedQty || 0) - Number(it.receivedQty || 0));
+                });
+            });
+        }
+        return counts;
+    }, [selectedPO]);
+
+    React.useEffect(() => {
+        if (editingReceiptId) {
+            if (scannedCountByPorId) {
+                setCustomCounts(scannedCountByPorId);
+            }
+        } else if (selectedPO?.allocations) {
+            if (scannedCountByPorId && Object.keys(scannedCountByPorId).length > 0) {
+                setCustomCounts(scannedCountByPorId);
+            } else {
+                const counts: Record<string, number> = {};
+                selectedPO.allocations.forEach(a => {
+                    a.items.forEach(it => {
+                        const porId = String(it.porId || it.id);
+                        counts[porId] = Math.max(0, Number(it.taggedQty || 0) - Number(it.receivedQty || 0));
+                    });
+                });
+                setCustomCounts(counts);
+            }
+        }
+    }, [selectedPO, editingReceiptId, scannedCountByPorId]);
     const [lotIds, setLotIds] = React.useState<Record<string, string>>({});
     const [batchNos, setBatchNos] = React.useState<Record<string, string>>({});
     const [expiryDates, setExpiryDates] = React.useState<Record<string, string>>({});
@@ -156,7 +191,7 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
     React.useEffect(() => {
         const metaData: Record<string, { lotId: string; batchNo: string; expiryDate: string }> = {};
         let hasData = false;
-        
+
         Object.keys(lotIds).forEach(id => {
             metaData[id] = { lotId: lotIds[id] || "", batchNo: batchNos[id] || "", expiryDate: expiryDates[id] || "" };
             hasData = true;
@@ -173,7 +208,7 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
         setClientSaveError("");
     }, [receiptSaved]);
 
-    const safeCounts: Record<string, number> = React.useMemo(() => scannedCountByPorId || {}, [scannedCountByPorId]);
+    const safeCounts = customCounts;
 
     // All active products (the ones checked/verified)
     const allItems = React.useMemo(() => {
@@ -186,11 +221,9 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                     porId: String(it.porId || it.id),
                     branchName: a?.branch?.name ?? "Unassigned",
                 }))
-                .filter((it) => verifiedPorIds.includes(it.porId))
-                .filter((it) => (safeCounts[it.porId] || 0) > 0)
-                .filter((it) => Number(it.expectedQty || 0) > 0 || it.isExtra) as Array<ReceivingPOItem & { branchName: string }>;
+                .filter((it) => Number(it.expectedQty || 0) > 0 || (physicalCounts[it.porId] || 0) > 0 || it.isExtra) as Array<ReceivingPOItem & { branchName: string }>;
         });
-    }, [selectedPO, verifiedPorIds, safeCounts]);
+    }, [selectedPO, physicalCounts]);
 
     const filteredItems = React.useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
@@ -224,7 +257,7 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
         Object.keys(lotIds).forEach(id => {
             metaData[id] = { lotId: lotIds[id] || "", batchNo: batchNos[id] || "", expiryDate: expiryDates[id] || "" };
         });
-        await saveReceipt(metaData);
+        await saveReceipt(metaData, customCounts);
         setIsPartialModalOpen(false);
     };
 
@@ -301,22 +334,23 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
             metaData[id] = { lotId: lotIds[id] || "", batchNo: batchNos[id] || "", expiryDate: expiryDates[id] || "" };
         });
 
-        await saveReceipt(metaData);
-    }, [saveReceipt, selectedPO?.status, allItems, safeCounts, lotIds, batchNos, expiryDates, receiptNo, receiptType, receiptDate, receiptNoDupError]);
+        await saveReceipt(metaData, customCounts);
+    }, [saveReceipt, selectedPO?.status, allItems, safeCounts, customCounts, lotIds, batchNos, expiryDates, receiptNo, receiptType, receiptDate, receiptNoDupError]);
 
     const totalScanned = Object.values(safeCounts).reduce((a, b) => a + Number(b), 0);
+    const totalPhysicalScanned = Object.values(physicalCounts).reduce((a, b) => a + Number(b), 0);
     const totalExpected = allItems.reduce((a, b) => a + Number(b.expectedQty || 0), 0);
 
     const financials = React.useMemo(() => {
         let gross = 0;
         let discount = 0;
-        
+
         allItems.forEach((it: ReceivingPOItem) => {
             const porId = String(it.porId ?? it.id);
             const scanned = safeCounts[porId] ?? 0;
             const price = Number(it.unitPrice || 0);
             const discAmt = Number(it.discountAmount || 0);
-            
+
             gross += (scanned * price);
             discount += (scanned * discAmt);
         });
@@ -353,7 +387,7 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                         Previous Receipts History
                     </div>
                     <div className="mt-3 space-y-2">
-                        {selectedPO.history.map((h: { receiptNo: string; receiptDate?: string; itemsCount?: number; isPosted: boolean; isReverted?: boolean; [key: string]: unknown }) => (
+                        {selectedPO.history.map((h: { receiptNo: string; receiptDate?: string; itemsCount?: number; isPosted: boolean; isReverted?: boolean;[key: string]: unknown }) => (
                             <div
                                 key={h.receiptNo}
                                 className="flex items-center justify-between gap-3 text-xs border-b border-amber-500/10 pb-2 last:border-0 last:pb-0"
@@ -396,8 +430,8 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                                             variant="outline"
                                             className={cn(
                                                 "text-[10px] uppercase h-4 px-1 leading-none font-bold",
-                                                h.isPosted 
-                                                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" 
+                                                h.isPosted
+                                                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
                                                     : "bg-muted text-muted-foreground border-border"
                                             )}
                                         >
@@ -407,6 +441,41 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </Card>
+            )}
+
+            {/* ✅ Tagged Stock Reference Card */}
+            {!receiptSaved && selectedPO && (
+                <Card className="p-4 border-indigo-500/20 bg-indigo-500/5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                        <div className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                            <svg className="h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            Physically Tagged Stock
+                        </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                        {allItems.map((it: ReceivingPOItem) => {
+                            const porId = String(it.porId || it.id);
+                            const totalTagged = physicalCounts[porId] ?? 0;
+                            return (
+                                <div key={porId} className="flex items-center justify-between gap-3 text-xs bg-background/70 border border-indigo-500/10 rounded-lg p-2.5 shadow-sm">
+                                    <div className="min-w-0">
+                                        <div className="font-bold truncate text-foreground text-xs" title={it.name}>
+                                            {it.name}
+                                        </div>
+                                        <div className="text-[9px] text-muted-foreground truncate font-mono mt-0.5">
+                                            SKU: {it.barcode}
+                                        </div>
+                                    </div>
+                                    <Badge variant="secondary" className="bg-indigo-600/10 text-indigo-700 border-indigo-600/20 px-2 font-black shrink-0 text-xs">
+                                        {totalTagged} tagged
+                                    </Badge>
+                                </div>
+                            );
+                        })}
                     </div>
                 </Card>
             )}
@@ -426,28 +495,28 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                             <div className="flex items-center justify-between mb-3">
                                 <div className="text-sm font-semibold">Receipt Header Details</div>
                                 {editingReceiptId && (
-                                    <Button 
-                                        variant="ghost" 
-                                        size="sm" 
-                                        className="h-7 text-xs text-orange-700 hover:bg-orange-100 font-bold uppercase gap-1" 
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 text-xs text-orange-700 hover:bg-orange-100 font-bold uppercase gap-1"
                                         onClick={clearEditingReceiptId}
                                     >
                                         <XCircle className="h-4 w-4" /> Cancel Edit
                                     </Button>
                                 )}
                             </div>
- 
+
                             {editingReceiptId && (
                                 <div className="mb-3 text-xs font-bold text-orange-700 bg-orange-50 border border-orange-200 rounded px-2.5 py-1 uppercase tracking-wider">
                                     Editing reverted receipt: {editingReceiptId}
                                 </div>
                             )}
- 
+
                             <div className="grid gap-3">
                                 <div className="grid gap-1">
                                     <Label className="text-xs font-bold text-muted-foreground">Receipt Number *</Label>
-                                    <Input 
-                                        value={receiptNo} 
+                                    <Input
+                                        value={receiptNo}
                                         onChange={(e) => {
                                             setReceiptNo(e.target.value);
                                             setReceiptNoDupError(null);
@@ -471,7 +540,7 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                                         <div className="text-[10px] text-muted-foreground mt-0.5">Checking availability...</div>
                                     )}
                                 </div>
- 
+
                                 <div className="grid gap-1">
                                     <Label className="text-xs font-bold text-muted-foreground">Receipt Type *</Label>
                                     <Select value={receiptType} onValueChange={setReceiptType}>
@@ -487,7 +556,7 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                                         </SelectContent>
                                     </Select>
                                 </div>
- 
+
                                 <div className="grid gap-1">
                                     <Label className="text-xs font-bold text-muted-foreground">Receipt Date *</Label>
                                     <Input
@@ -504,7 +573,7 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                                 </div>
                             </div>
                         </Card>
- 
+
                         <Card className="p-4 bg-muted/30 shadow-sm border">
                             <div className="flex items-start justify-between gap-3 border-b pb-2 mb-3">
                                 <div>
@@ -548,7 +617,7 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                     <Card className="p-4 shadow-sm border">
                         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
                             <div>
-                                <div className="text-sm font-semibold">Item Level Metadata Finalization</div>
+                                <div className="text-sm font-semibold">Products Finalization</div>
                                 <div className="text-xs text-muted-foreground">Specify the Batch No, Lot selection and Expiry Date for each scanned product.</div>
                             </div>
                             <div className="flex items-center gap-3">
@@ -574,7 +643,8 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                                         <TableHead className="text-[10px] uppercase font-bold text-muted-foreground text-right">Disc. Amt</TableHead>
                                         <TableHead className="text-[10px] uppercase font-bold text-muted-foreground text-right">Net Amt</TableHead>
                                         <TableHead className="text-[10px] uppercase font-bold text-muted-foreground text-center w-20">Expected</TableHead>
-                                        <TableHead className="text-[10px] uppercase font-bold text-muted-foreground text-center w-20">Tagged</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-muted-foreground text-center w-24">Phys. Tagged</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-muted-foreground text-center w-24">Receive Qty</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -584,12 +654,12 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                                         return paginatedItems.map((it: ReceivingPOItem) => {
                                             const porId = String(it.porId || it.id);
                                             const scanned = safeCounts[porId] ?? 0;
-                                            const expected = Number(it.expectedQty || it.taggedQty || 0);
+                                            const expected = Number(it.expectedQty || 0);
                                             const unitP = Number(it.unitPrice || 0);
                                             const discA = Number(it.discountAmount || 0);
                                             const effectivePrice = Math.max(0, unitP - discA);
                                             const lineTotal = scanned * effectivePrice;
-                                            
+
                                             return (
                                                 <TableRow key={porId}>
                                                     <TableCell>
@@ -597,23 +667,23 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                                                         <div className="text-[9px] text-muted-foreground font-mono">SKU: {it.barcode} | UOM: {it.uom}</div>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <Input 
+                                                        <Input
                                                             className={cn(
                                                                 "h-8 text-[11px] font-bold",
                                                                 showErrors && scanned > 0 && !(batchNos[porId] || "").trim() && "border-destructive ring-1 ring-destructive"
                                                             )}
-                                                            placeholder="Batch #" 
-                                                            value={batchNos[porId] || ""} 
-                                                            onChange={(e) => setBatchNos(prev => ({ ...prev, [porId]: e.target.value }))} 
+                                                            placeholder="Batch #"
+                                                            value={batchNos[porId] || ""}
+                                                            onChange={(e) => setBatchNos(prev => ({ ...prev, [porId]: e.target.value }))}
                                                         />
                                                     </TableCell>
                                                     <TableCell>
-                                                        <select 
+                                                        <select
                                                             className={cn(
                                                                 "h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]",
                                                                 showErrors && scanned > 0 && !(lotIds[porId] || "").trim() && "border-destructive ring-1 ring-destructive"
                                                             )}
-                                                            value={lotIds[porId] || ""} 
+                                                            value={lotIds[porId] || ""}
                                                             onChange={(e) => setLotIds(prev => ({ ...prev, [porId]: e.target.value }))}
                                                         >
                                                             <option value="">Select Lot</option>
@@ -621,14 +691,14 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                                                         </select>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <Input 
-                                                            type="date" 
+                                                        <Input
+                                                            type="date"
                                                             className={cn(
                                                                 "h-8 text-[11px]",
                                                                 showErrors && scanned > 0 && !(expiryDates[porId] || "").trim() && "border-destructive ring-1 ring-destructive"
                                                             )}
-                                                            value={expiryDates[porId] || ""} 
-                                                            onChange={(e) => setExpiryDates(prev => ({ ...prev, [porId]: e.target.value }))} 
+                                                            value={expiryDates[porId] || ""}
+                                                            onChange={(e) => setExpiryDates(prev => ({ ...prev, [porId]: e.target.value }))}
                                                         />
                                                     </TableCell>
                                                     <TableCell className="text-right text-xs">{formatPHP(unitP)}</TableCell>
@@ -637,7 +707,23 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                                                     <TableCell className="text-right font-bold text-xs">{formatPHP(lineTotal)}</TableCell>
                                                     <TableCell className="text-center font-bold text-xs">{expected}</TableCell>
                                                     <TableCell className="text-center">
-                                                        <Badge variant="default" className="h-5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold">{scanned}</Badge>
+                                                        <Badge variant="outline" className="h-5 border-primary/30 text-primary font-bold">
+                                                            {physicalCounts[porId] ?? 0}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        <Input
+                                                            type="number"
+                                                            min={0}
+                                                            max={physicalCounts[porId] ?? 0}
+                                                            value={customCounts[porId] ?? 0}
+                                                            onChange={(e) => {
+                                                                const limit = physicalCounts[porId] ?? 0;
+                                                                const val = Math.max(0, Math.min(limit, Number(e.target.value)));
+                                                                setCustomCounts(prev => ({ ...prev, [porId]: val }));
+                                                            }}
+                                                            className="w-16 h-7 text-center text-xs font-bold bg-background mx-auto"
+                                                        />
                                                     </TableCell>
                                                 </TableRow>
                                             )
@@ -649,6 +735,7 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                                         <TableCell colSpan={7} className="text-right text-[10px] font-bold uppercase">Subtotal</TableCell>
                                         <TableCell className="text-right font-black text-foreground">{formatPHP(financials.gross)}</TableCell>
                                         <TableCell className="text-center font-bold">{totalExpected}</TableCell>
+                                        <TableCell className="text-center font-bold">{totalPhysicalScanned}</TableCell>
                                         <TableCell className="text-center font-black">{totalScanned}</TableCell>
                                     </TableRow>
                                 </TableFooter>
@@ -720,7 +807,7 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                         )}
 
                         <div className="mt-4 flex justify-end gap-3 border-t pt-4">
-                            <Button 
+                            <Button
                                 className="bg-primary text-primary-foreground hover:bg-primary/90 font-black uppercase text-xs tracking-wider h-11 px-8 shadow-md"
                                 onClick={handleSaveReceipt}
                                 disabled={savingReceipt}

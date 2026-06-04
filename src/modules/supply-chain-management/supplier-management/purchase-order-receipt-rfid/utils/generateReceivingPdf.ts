@@ -80,6 +80,7 @@ export type ReceivingPdfData = {
     isFullyReceived: boolean;
     priceType: string;
     isInvoice?: boolean;
+    receiverName?: string;
     items: Array<{
         name: string;
         barcode: string;
@@ -334,7 +335,7 @@ export async function generateReceivingPdf(
         }
 
         // 5. Signatures
-        renderSignatures(doc, finalY + lineHeight * 5 + 25, "");
+        renderSignatures(doc, finalY + lineHeight * 5 + 25, safeStr(data.receiverName));
     });
 
     doc.save(`Receiving_${receiptNo}.pdf`);

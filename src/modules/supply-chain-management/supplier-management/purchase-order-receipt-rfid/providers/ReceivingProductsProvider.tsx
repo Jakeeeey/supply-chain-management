@@ -213,7 +213,10 @@ type Ctx = {
 
     scanRFID: (rfidOverride?: string) => Promise<void>;
     removeActivity: (id: string) => void;
-    saveReceipt: (porMetaData?: Record<string, { lotId: string; batchNo: string; expiryDate: string }>) => Promise<void>;
+    saveReceipt: (
+        porMetaData?: Record<string, { lotId: string; batchNo: string; expiryDate: string }>,
+        customCounts?: Record<string, number>
+    ) => Promise<void>;
     savingReceipt: boolean;
     saveError: string;
 
@@ -1347,7 +1350,10 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         }
     }, [selectedPO]);
 
-    const saveReceipt = React.useCallback(async (porMetaData?: Record<string, { lotId: string; batchNo: string; expiryDate: string }>) => {
+    const saveReceipt = React.useCallback(async (
+        porMetaData?: Record<string, { lotId: string; batchNo: string; expiryDate: string }>,
+        customCounts?: Record<string, number>
+    ) => {
         setSaveError("");
 
         const poId = selectedPO?.id;
@@ -1364,8 +1370,11 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
             return setSaveError(errs.join(" "));
         }
 
-        const counts = scannedCountByPorId ?? {};
-        if (!Object.keys(counts).length) return setSaveError("Scan at least 1 RFID before saving.");
+        const counts = customCounts ?? scannedCountByPorId ?? {};
+        const totalNonZeroQty = Object.values(counts).reduce((a, b) => a + Number(b), 0);
+        if (!Object.keys(counts).length || totalNonZeroQty <= 0) {
+            return setSaveError("Specify quantity for at least 1 item before saving.");
+        }
 
         setSavingReceipt(true);
         try {
@@ -1375,6 +1384,43 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 productId: t.productId,
                 porId: t.porId,
             }));
+
+            // ✅ Pre-capture items snapshot for printing before database modifications/overwrites
+            const countsMap = counts || {};
+            const preSaveAllItems = selectedPO.allocations.flatMap((a) => Array.isArray(a?.items) ? a.items : []);
+            const isFullyReceivedNow = preSaveAllItems.every((it: ReceivingPOItem) => {
+                const scannedNow = Number(countsMap[it.porId || it.id] || 0);
+                return (Number(it.receivedQty) + scannedNow) >= Number(it.expectedQty);
+            });
+
+            const savedItems: SavedItem[] = (preSaveAllItems as ReceivingPOItem[])
+                .filter((it) => Number(countsMap[String(it.porId || it.id)] || 0) > 0)
+                .map((it) => {
+                    const porId = String(it.porId || it.id);
+                    const scannedNow = Number(countsMap[porId] || 0);
+                    const itemRfids = activity
+                        .filter((a: ActivityRow) => a.status === "ok" && String(a.porId) === porId)
+                        .map((a: ActivityRow) => a.rfid);
+
+                    const meta = (porMetaData && typeof porMetaData === "object") ? porMetaData[porId] : null;
+
+                    return {
+                        productId: it.productId,
+                        name: it.name,
+                        barcode: it.barcode,
+                        expectedQty: Number(it.expectedQty),
+                        receivedQtyAtStart: Number(it.receivedQty),
+                        receivedQtyNow: scannedNow,
+                        rfids: Array.from(new Set(itemRfids)),
+                        lotId: meta?.lotId,
+                        batchNo: meta?.batchNo,
+                        expiryDate: meta?.expiryDate,
+                        unitPrice: Number(it.unitPrice) || 0,
+                        discountAmount: Number(it.discountAmount) || 0,
+                        discountType: it.discountType || "No Discount",
+                        uom: it.uom || "BOX"
+                    };
+                });
 
             const r = await fetch(API_URL, {
                 method: "POST",
@@ -1400,47 +1446,6 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 setSelectedPO(detail);
                 setPoBarcode(detail?.poNumber ?? "");
             }
-
-            // ✅ gather items for printing (All items in PO, with their current statuses)
-            const allocs = Array.isArray(detail?.allocations) ? detail.allocations : [];
-            const allItems = allocs.flatMap((a: { items: ReceivingPOItem[] }) => Array.isArray(a?.items) ? a.items : []);
-
-            // Calculate if fully received across all items
-            const countsMap = counts || {};
-            const isFullyReceivedNow = allItems.every((it: ReceivingPOItem) => {
-                const scannedNow = Number(countsMap[it.porId || it.id] || 0);
-                return (Number(it.receivedQty) + scannedNow) >= Number(it.expectedQty);
-            });
-
-            const savedItems: SavedItem[] = (allItems as ReceivingPOItem[])
-                .filter((it) => verifiedPorIds.includes(String(it.porId || it.id)))
-                .filter((it) => Number(countsMap[String(it.porId || it.id)] || 0) > 0)
-                .map((it) => {
-                    const porId = String(it.porId || it.id);
-                    const scannedNow = Number(countsMap[porId] || 0);
-                    const itemRfids = activity
-                        .filter((a: ActivityRow) => a.status === "ok" && String(a.porId) === porId)
-                        .map((a: ActivityRow) => a.rfid);
-
-                    const meta = (porMetaData && typeof porMetaData === "object") ? porMetaData[porId] : null;
-
-                    return {
-                        productId: it.productId,
-                        name: it.name,
-                        barcode: it.barcode,
-                        expectedQty: Number(it.expectedQty),
-                        receivedQtyAtStart: Number(it.receivedQty) - scannedNow, // already matched in detail
-                        receivedQtyNow: scannedNow,
-                        rfids: Array.from(new Set(itemRfids)),
-                        lotId: meta?.lotId,
-                        batchNo: meta?.batchNo,
-                        expiryDate: meta?.expiryDate,
-                        unitPrice: Number(it.unitPrice) || 0,
-                        discountAmount: Number(it.discountAmount) || 0,
-                        discountType: it.discountType || "No Discount",
-                        uom: it.uom || "BOX"
-                    };
-                });
 
             toast.success(`Receipt ${oldReceiptNo} saved successfully!`);
 

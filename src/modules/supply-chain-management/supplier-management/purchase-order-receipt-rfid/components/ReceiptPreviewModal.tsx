@@ -50,10 +50,10 @@ export function ReceiptPreviewModal({
     if (!data) return null;
 
     const handleDownload = async () => {
-        if (!companyData) return;
         await generateReceivingPdf({
             poNumber,
             supplierName,
+            receiverName: data.receiverName,
             receiptNo: data.receiptNo,
             receiptDate: data.receiptDate,
             receiptType: data.receiptType,
@@ -74,7 +74,7 @@ export function ReceiptPreviewModal({
                 expiryDate: it.expiryDate,
                 uom: it.uom,
             })),
-        }, companyData);
+        }, companyData || {} as CompanyData);
     };
 
     return (

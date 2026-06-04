@@ -1261,13 +1261,27 @@ export async function POST(req: NextRequest) {
                     if (!dtId) dtId = ensureId(dType);
                 }
 
-                // 🔥 Recalculate: Use absolute tag count if tags exist, otherwise use delta for barcode-scanned items
-                const tagCount = tagCountByPorId.get(realPorId) || 0;
-                const sessionQty = toNum(porCounts[localKey]);
-                const newQty = tagCount > 0 ? tagCount : sessionQty;
+                // 🔥 Split Gating: Use the user-specified input quantity as the final quantity for this receipt
+                const userRequestedQty = toNum(porCounts[localKey]);
+                const newQty = userRequestedQty;
 
-                // If quantity is now 0, reset or delete the item from this receipt
+                // If quantity is now 0, move ALL tags currently on this record to an open POR row (so they stay in the pool)
+                // and reset/delete the item from this receipt.
                 if (newQty <= 0) {
+                    const lineTags = receivingItems.filter(it => toNum(it.purchase_order_product_id) === realPorId);
+                    if (lineTags.length > 0) {
+                        const ensuredOpen = await ensureOpenReceivingRow({
+                            base, poId, productId: pId, branchId: toNum(pr.branch_id),
+                            unitPrice: uPrice, discountTypeId: dtId, discountPercent: linePct, isInvoice: poIsInvoice
+                        });
+                        for (const t of lineTags) {
+                            await fetchJson(`${base}/items/${POR_ITEMS_COLLECTION}/${t.receiving_item_id}`, {
+                                method: "PATCH",
+                                body: JSON.stringify({ purchase_order_product_id: ensuredOpen.porId })
+                            }).catch(() => {});
+                        }
+                    }
+
                     const isExtra = !lines.some(l => toNum(l.product_id) === pId && toNum(l.branch_id ?? 0) === toNum(pr.branch_id ?? 0));
                     if (isExtra) {
                         await fetchJson(`${base}/items/${POR_COLLECTION}/${realPorId}`, { method: "DELETE" }).catch(() => {});
@@ -1280,6 +1294,22 @@ export async function POST(req: NextRequest) {
                         await fetchJson(`${base}/items/${POR_COLLECTION}/${realPorId}`, { method: "PATCH", body: JSON.stringify(resetPatch) });
                     }
                     continue;
+                }
+
+                // If quantity is N > 0, and we have MORE tags than N, move the excess tags back to the open POR row!
+                const lineTags = receivingItems.filter(it => toNum(it.purchase_order_product_id) === realPorId);
+                if (lineTags.length > newQty) {
+                    const ensuredOpen = await ensureOpenReceivingRow({
+                        base, poId, productId: pId, branchId: toNum(pr.branch_id),
+                        unitPrice: uPrice, discountTypeId: dtId, discountPercent: linePct, isInvoice: poIsInvoice
+                    });
+                    const excessTags = lineTags.slice(newQty);
+                    for (const t of excessTags) {
+                        await fetchJson(`${base}/items/${POR_ITEMS_COLLECTION}/${t.receiving_item_id}`, {
+                            method: "PATCH",
+                            body: JSON.stringify({ purchase_order_product_id: ensuredOpen.porId })
+                        }).catch(() => {});
+                    }
                 }
 
                 const lineGross = uPrice * newQty;

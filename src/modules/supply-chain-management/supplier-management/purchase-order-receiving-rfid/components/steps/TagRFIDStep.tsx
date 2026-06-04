@@ -41,6 +41,7 @@ export function TagRFIDStep() {
         clearEditingReceiptId,
         removeExtraProductLocally,
         loadReceipt,
+        saveRFIDTagging,
     } = useReceivingProducts();
 
     const [activityPage, setActivityPage] = React.useState(1);
@@ -52,7 +53,25 @@ export function TagRFIDStep() {
     // Auto-scan RFID
     const handleAutoScan = React.useCallback((scannedValue: string) => {
         if (activeProductId) {
-            scanRFID(scannedValue);
+            const extractHexCharacters = (value: string): string => {
+                return value.toUpperCase().replace(/[^0-9A-F]/g, "");
+            };
+
+            const finalizeHexTag = (rawValue: string): string => {
+                const hex = extractHexCharacters(rawValue);
+                if (hex.length < 24) return "";
+                if (hex.length === 24) return hex;
+                return hex.slice(-24);
+            };
+
+            const normalized = finalizeHexTag(scannedValue);
+            if (!normalized || normalized.length !== 24) {
+                toast.error("Incomplete Scan", {
+                    description: `RFID value was cutoff or incomplete (${scannedValue}). Must be exactly 24 hex characters.`,
+                });
+                return;
+            }
+            scanRFID(normalized);
         }
     }, [scanRFID, activeProductId]);
 
@@ -82,7 +101,8 @@ export function TagRFIDStep() {
                     porId: String(it.porId || it.id),
                     branchName: a?.branch?.name ?? "Unassigned",
                 }))
-                .filter((it) => Number(it.expectedQty || 0) > 0 || it.isExtra);
+                .filter((it) => Number(it.expectedQty || 0) > 0 || it.isExtra)
+                .filter((it) => it.isExtra || (Number(it.taggedQty || 0) < Number(it.expectedQty)));
         });
     }, [selectedPO]);
 
@@ -381,6 +401,15 @@ export function TagRFIDStep() {
                         </table>
                     </div>
                 </Card>
+                
+                <div className="flex justify-end pt-4">
+                    <Button 
+                        className="bg-primary text-primary-foreground hover:bg-primary/90 font-black uppercase text-xs tracking-wider h-11 px-8 shadow-md"
+                        onClick={saveRFIDTagging}
+                    >
+                        Save RFID Tagging
+                    </Button>
+                </div>
 
             </div>
         );

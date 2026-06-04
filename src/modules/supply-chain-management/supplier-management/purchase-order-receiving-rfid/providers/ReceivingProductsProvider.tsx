@@ -214,6 +214,7 @@ type Ctx = {
     scanRFID: (rfidOverride?: string) => Promise<void>;
     removeActivity: (id: string) => void;
     saveReceipt: (porMetaData?: Record<string, { lotId: string; batchNo: string; expiryDate: string }>) => Promise<void>;
+    saveRFIDTagging: () => Promise<void>;
     savingReceipt: boolean;
     saveError: string;
 
@@ -1004,11 +1005,17 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 return;
             }
 
-            // ✅ 2. Database Check (Server-side)
+            // ✅ 2. Database Tag & Check (Server-side)
             const r = await fetch(API_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "scan_rfid", poId: selectedPO.id, rfid: value }),
+                body: JSON.stringify({
+                    action: "tag_and_receive",
+                    poId: selectedPO.id,
+                    productId: activeItem.productId,
+                    branchId: activeItem.branchId,
+                    rfid: value
+                }),
             });
             const j = await asJson(r);
             const data = j?.data as ScanRFIDResult | null;
@@ -1474,6 +1481,20 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         }
     }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession, localScannedRfids, activity, receiverId, verifiedPorIds, editingReceiptId]);
 
+    const saveRFIDTagging = React.useCallback(async () => {
+        const poId = selectedPO?.id;
+        if (!poId) return;
+        try {
+            await openPOById(poId, { silent: true });
+            // Clear local draft and session states
+            clearDraft(String(poId));
+            resetSession();
+            toast.success("RFID tagging saved successfully.");
+        } catch (e: unknown) {
+            toast.error("Failed to refresh tagging data.", { description: (e as Error).message });
+        }
+    }, [selectedPO?.id, openPOById, resetSession]);
+
     const value: Ctx = {
         list,
         poList: list,
@@ -1518,6 +1539,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         scanRFID,
         removeActivity,
         saveReceipt,
+        saveRFIDTagging,
         savingReceipt,
         saveError,
 
