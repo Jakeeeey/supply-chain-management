@@ -11,16 +11,7 @@ import { useKeyboardScanner } from "../../hooks/useKeyboardScanner";
 import { toast } from "sonner";
 import { AddExtraProductModal } from "../AddExtraProductModal";
 import { cn } from "@/lib/utils";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+
 
 export function TagRFIDStep() {
     const {
@@ -45,7 +36,6 @@ export function TagRFIDStep() {
     } = useReceivingProducts();
 
     const [activityPage, setActivityPage] = React.useState(1);
-    const [isOverReceiveModalOpen, setIsOverReceiveModalOpen] = React.useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState("");
     const ITEMS_PER_PAGE = 5;
@@ -135,7 +125,7 @@ export function TagRFIDStep() {
         });
     }, [allItems, safeCounts]);
 
-    const hasOverReceiving = overReceivedProducts.length > 0;
+
 
     // Notify on over-receiving
     const prevOverCountRef = React.useRef(0);

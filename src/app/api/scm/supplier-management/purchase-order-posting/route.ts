@@ -849,8 +849,6 @@ export async function POST(req: NextRequest) {
 
             // ── Resolve PO-level discount percent (Total Percent Source of Truth) ──
             const poDType = po?.discount_type as Record<string, unknown> | null;
-            const poDiscountName = toStr(poDType?.discount_type || poDType?.name, "");
-            const poDiscountPercent = resolveDiscountPercent(poDType);
 
             const porIdsByKey = buildPorIdsByKey(porRows);
 

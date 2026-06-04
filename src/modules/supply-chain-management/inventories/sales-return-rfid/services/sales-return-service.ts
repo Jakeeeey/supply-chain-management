@@ -33,16 +33,6 @@ const parseBoolean = (val: any): boolean => {
     return val.data[0] === 1;
   }
   return val === true;
-};
-
-const nowPH = (): string => {
-  const date = new Date();
-  const phOffset = 8 * 60; // 8 hours in minutes
-  const localOffset = date.getTimezoneOffset(); // in minutes
-  const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
-  return phTime.toISOString().replace("Z", "");
-};
-
 const formatDateForAPI = (dateString: string | Date | undefined | null) => {
   try {
     const date = dateString ? new Date(dateString) : new Date();

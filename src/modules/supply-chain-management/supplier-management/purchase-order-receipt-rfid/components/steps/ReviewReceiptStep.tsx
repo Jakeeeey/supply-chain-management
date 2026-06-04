@@ -53,7 +53,6 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
         saveError,
         receiptSaved,
         lots,
-        verifiedPorIds,
         setMetaDataByPorId,
         receiptNo,
         setReceiptNo,

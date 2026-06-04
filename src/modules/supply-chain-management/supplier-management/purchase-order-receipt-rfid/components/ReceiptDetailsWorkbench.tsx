@@ -7,7 +7,7 @@ import { ReviewReceiptStep } from "./steps";
 import { Card } from "@/components/ui/card";
 
 export function ReceiptDetailsWorkbench({ receiverName }: { receiverName?: string }) {
-    const { selectedPO, receiptSaved } = useReceivingProducts();
+    const { selectedPO } = useReceivingProducts();
 
     if (!selectedPO) {
         return (
