@@ -35,14 +35,36 @@ const parseBoolean = (val: any): boolean => {
   return val === true;
 };
 
-const formatDateForAPI = (dateString: string | Date) => {
+const nowPH = (): string => {
+  const date = new Date();
+  const phOffset = 8 * 60; // 8 hours in minutes
+  const localOffset = date.getTimezoneOffset(); // in minutes
+  const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
+  return phTime.toISOString().replace("Z", "");
+};
+
+const formatDateForAPI = (dateString: string | Date | undefined | null) => {
   try {
-    if (!dateString) return new Date().toISOString().split("T")[0];
-    return new Date(dateString).toISOString().split("T")[0];
+    const date = dateString ? new Date(dateString) : new Date();
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Manila",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    return formatter.format(date);
   } catch {
-    return new Date().toISOString().split("T")[0];
+    const date = new Date();
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Manila",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    return formatter.format(date);
   }
 };
+
 
 const cleanId = (id: any) => {
   if (id === null || id === undefined || id === "") return null;
@@ -87,7 +109,7 @@ export async function fetchReturns(
     customerCode: item.customer_code,
     salesmanId: item.salesman_id,
     returnDate: item.return_date
-      ? new Date(item.return_date).toLocaleDateString()
+      ? new Date(item.return_date).toLocaleDateString("en-US", { timeZone: "Asia/Manila" })
       : "N/A",
     totalAmount: parseFloat(item.total_amount) || 0,
     status: item.status || "Pending",
@@ -96,7 +118,7 @@ export async function fetchReturns(
     isThirdParty: parseBoolean(item.isThirdParty),
     priceType: item.price_type || "-",
     createdAt: item.created_at
-      ? new Date(item.created_at).toLocaleDateString()
+      ? new Date(item.created_at).toLocaleDateString("en-US", { timeZone: "Asia/Manila" })
       : "-",
   }));
 
@@ -411,7 +433,7 @@ export async function fetchStatusCard(
       returnId: data.return_id,
       isApplied: data.isApplied === 1,
       dateApplied: data.updated_at
-        ? new Date(data.updated_at).toLocaleDateString()
+        ? new Date(data.updated_at).toLocaleDateString("en-US", { timeZone: "Asia/Manila" })
         : "-",
       transactionStatus: data.status || "Closed",
       isPosted: parseBoolean(data.isPosted),

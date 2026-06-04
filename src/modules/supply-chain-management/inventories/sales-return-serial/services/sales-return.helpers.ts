@@ -18,16 +18,42 @@ export const parseBoolean = (val: any): boolean => {
 };
 
 /**
- * Safely formats a date string into YYYY-MM-DD for the API.
+ * Helper to return current PH Manila Time (UTC+8) as an ISO-like string
+ * but without the 'Z' suffix to ensure correct local interpretation.
+ */
+export const nowPH = (): string => {
+  const date = new Date();
+  const phOffset = 8 * 60; // 8 hours in minutes
+  const localOffset = date.getTimezoneOffset(); // in minutes
+  const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
+  return phTime.toISOString().replace("Z", "");
+};
+
+/**
+ * Safely formats a date string into YYYY-MM-DD for the API in Asia/Manila timezone.
  */
 export const formatDateForAPI = (dateString: string | Date | undefined | null) => {
   try {
-    if (!dateString) return new Date().toISOString().split("T")[0];
-    return new Date(dateString).toISOString().split("T")[0];
+    const date = dateString ? new Date(dateString) : new Date();
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Manila",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    return formatter.format(date);
   } catch {
-    return new Date().toISOString().split("T")[0];
+    const date = new Date();
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Manila",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    return formatter.format(date);
   }
 };
+
 
 /**
  * Cleans an ID, converting it to a number if valid, or leaving it as string/null.
