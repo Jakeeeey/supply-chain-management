@@ -38,6 +38,38 @@ export async function GET(req: NextRequest) {
 
 
 
+    if (type === "pending-edits") {
+      const idsParam = searchParams.get("ids") || "";
+      const ids = idsParam.split(",").map(Number).filter(Boolean);
+      if (ids.length === 0) {
+        return NextResponse.json({ data: [] });
+      }
+      // Find drafts with remarks matching MASTER_EDIT:<id> pattern and status FOR_APPROVAL
+      const { fetchItems } = await import(
+        "@/modules/supply-chain-management/product-management/sku/sku-creation/services/sku-api"
+      );
+      const { data: pendingDrafts } = await fetchItems<{ remarks: string }>(
+        "/items/product_draft",
+        {
+          filter: JSON.stringify({
+            _and: [
+              { status: { _eq: "FOR_APPROVAL" } },
+              { remarks: { _starts_with: "MASTER_EDIT:" } },
+            ],
+          }),
+          fields: "remarks",
+          limit: -1,
+        },
+      );
+      const pendingMasterIds = (pendingDrafts || [])
+        .map((d) => {
+          const match = d.remarks?.match(/^MASTER_EDIT:(\d+)$/);
+          return match ? parseInt(match[1]) : null;
+        })
+        .filter((id): id is number => id !== null && ids.includes(id));
+      return NextResponse.json({ data: pendingMasterIds });
+    }
+
     if (type === "duplicate-check") {
       const name = searchParams.get("name") || "";
       const isDuplicate = await skuService.checkDuplicateName(name);

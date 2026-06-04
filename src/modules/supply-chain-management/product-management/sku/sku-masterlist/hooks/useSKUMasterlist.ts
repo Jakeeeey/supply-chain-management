@@ -30,6 +30,7 @@ export function useSKUMasterlist() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingEditIds, setPendingEditIds] = useState<Set<number>>(new Set());
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -111,6 +112,24 @@ export function useSKUMasterlist() {
         setParentImages(map);
       } else {
         setParentImages({});
+      }
+
+      // Fetch pending master edit IDs for this page
+      const productIds = (approvedRes.data || [])
+        .map((s: SKU) => s.product_id || s.id)
+        .filter(Boolean);
+      if (productIds.length > 0) {
+        try {
+          const pendingRes = await fetch(
+            `/api/scm/product-management/sku?type=pending-edits&ids=${productIds.join(",")}`,
+          ).then((res) => res.json());
+          setPendingEditIds(new Set<number>(pendingRes.data || []));
+        } catch (err) {
+          console.warn("[Masterlist] Failed to fetch pending edit IDs", err);
+          setPendingEditIds(new Set());
+        }
+      } else {
+        setPendingEditIds(new Set());
       }
     } catch (e: unknown) {
       const err = e as Error;
@@ -206,6 +225,7 @@ export function useSKUMasterlist() {
     error,
     refresh,
     parentImages,
+    pendingEditIds,
     toggleStatus,
     bulkUpdateStatus,
   };

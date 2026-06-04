@@ -188,11 +188,6 @@ export const getApprovalColumns = (
                   <Eye className="h-4 w-4 mr-2" /> View Details
                 </DropdownMenuItem>
               )}
-              {onEdit && !sku.parent_id && (
-                <DropdownMenuItem onClick={() => onEdit(sku)}>
-                  <Edit className="h-4 w-4 mr-2" /> Edit
-                </DropdownMenuItem>
-              )}
               {onApprove && (
                 <DropdownMenuItem
                   onClick={() => onApprove(id as number)}

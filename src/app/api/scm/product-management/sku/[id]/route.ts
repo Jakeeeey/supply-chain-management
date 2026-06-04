@@ -23,8 +23,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
     const body = await req.json();
 
     if (isMaster) {
-      const data = await skuService.updateMaster(id, body);
-      return NextResponse.json({ data });
+      const data = await skuService.submitMasterEdit(id, body);
+      return NextResponse.json({ data, message: "Edit submitted for approval" });
     } else {
       const data = await skuService.updateDraft(id, body);
       return NextResponse.json({ data });

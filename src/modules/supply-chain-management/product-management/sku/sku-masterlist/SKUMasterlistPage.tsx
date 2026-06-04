@@ -40,6 +40,7 @@ export default function SKUMasterlistModule() {
     setSorting,
     masterData,
     parentImages,
+    pendingEditIds,
     isLoading,
     isUpdating,
     error,
@@ -77,8 +78,8 @@ export default function SKUMasterlistModule() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Failed to update record");
 
-      toast.success("Record Updated", {
-        description: "The product details have been successfully saved.",
+      toast.success("Submitted for Approval", {
+        description: "The product edits have been submitted to the approval workflow.",
       });
       refresh();
       setEditingSKU(null);
@@ -267,6 +268,7 @@ export default function SKUMasterlistModule() {
         onSortingChange={setSorting}
         masterData={masterData}
         parentImages={parentImages}
+        pendingEditIds={pendingEditIds}
         isLoading={isLoading}
         onSearch={handleSearch}
         onSelectionChange={setSelectedRows}

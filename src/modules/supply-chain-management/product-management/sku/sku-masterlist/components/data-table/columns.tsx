@@ -17,6 +17,7 @@ import {
 import { ColumnDef } from "@tanstack/react-table";
 import {
   CheckCircle,
+  Clock,
   ImageIcon,
   Images,
   MoreHorizontal,
@@ -45,6 +46,7 @@ export const getMasterlistColumns = (
   onEdit?: (sku: SKU) => void,
   onUpdateImage?: (sku: SKU) => void,
   onViewGallery?: (sku: SKU) => void,
+  pendingEditIds?: Set<number>,
 ): ColumnDef<SKU>[] => [
   {
     id: "select",
@@ -138,11 +140,24 @@ export const getMasterlistColumns = (
       <DataTableColumnHeader column={column} label="Product Name" />
     ),
     meta: { label: "Product Name" },
-    cell: ({ row }) => (
-      <span className="text-sm font-medium block truncate max-w-[400px]">
-        {row.original.product_name || "Unnamed Product"}
-      </span>
-    ),
+    cell: ({ row }) => {
+      const sku = row.original;
+      const pid = (sku.product_id || sku.id) as number;
+      const hasPendingEdit = pendingEditIds?.has(pid) ?? false;
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium block truncate max-w-[400px]">
+            {sku.product_name || "Unnamed Product"}
+          </span>
+          {hasPendingEdit && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 border-amber-300 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 shrink-0">
+              <Clock className="h-3 w-3 mr-0.5" />
+              Pending Edit
+            </Badge>
+          )}
+        </div>
+      );
+    },
   },
   {
     accessorKey: "product_category",
@@ -293,10 +308,19 @@ export const getMasterlistColumns = (
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {onEdit && (
-              <DropdownMenuItem onClick={() => onEdit(sku)}>
-                <Edit className="h-4 w-4 mr-2" />
-                Edit Product
-              </DropdownMenuItem>
+              (() => {
+                const pid = (sku.product_id || sku.id) as number;
+                const hasPendingEdit = pendingEditIds?.has(pid) ?? false;
+                return (
+                  <DropdownMenuItem
+                    onClick={() => onEdit(sku)}
+                    disabled={hasPendingEdit}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    {hasPendingEdit ? "Edit Pending Approval" : "Edit Product"}
+                  </DropdownMenuItem>
+                );
+              })()
             )}
             {isParent && onUpdateImage && (
               <DropdownMenuItem onClick={() => onUpdateImage(sku)}>

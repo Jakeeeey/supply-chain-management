@@ -28,7 +28,7 @@ export const skuService = {
   // ─── Draft Lifecycle ───────────────────────────────────────────────────────
   createDraft: skuLifecycleService.createDraft.bind(skuLifecycleService),
   updateDraft: skuLifecycleService.updateDraft.bind(skuLifecycleService),
-  updateMaster: skuLifecycleService.updateMaster.bind(skuLifecycleService),
+  submitMasterEdit: skuLifecycleService.submitMasterEdit.bind(skuLifecycleService),
   submitForApproval:
     skuLifecycleService.submitForApproval.bind(skuLifecycleService),
   rejectDraft: skuLifecycleService.rejectDraft.bind(skuLifecycleService),

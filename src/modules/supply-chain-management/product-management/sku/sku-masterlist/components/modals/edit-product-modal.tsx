@@ -17,7 +17,6 @@ import {
   SKU,
   MasterData,
 } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Combobox } from "@/modules/supply-chain-management/product-management/sku/sku-creation/components/Combobox";
 
 interface EditProductModalProps {
@@ -96,6 +95,13 @@ export function EditProductModal({
         </DialogHeader>
 
         <div className="p-6 space-y-5">
+            <div className="flex items-start gap-2 p-3 rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+              <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                Changes will be submitted for approval before being applied to the masterlist.
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
                 Product Name *
@@ -177,7 +183,7 @@ export function EditProductModal({
             disabled={isSaveDisabled}
             className="px-8 bg-primary hover:bg-primary/90 text-white font-bold"
           >
-            {isLoading ? "Saving Changes..." : "Save Changes"}
+            {isLoading ? "Submitting..." : "Submit for Approval"}
           </Button>
         </DialogFooter>
       </DialogContent>
