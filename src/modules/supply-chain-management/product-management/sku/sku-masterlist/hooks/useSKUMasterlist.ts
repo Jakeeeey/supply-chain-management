@@ -15,6 +15,13 @@ export function useSKUMasterlist() {
   const [page, setPage] = useState(0);
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState<string>("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [classFilter, setClassFilter] = useState<string>("");
+  const [segmentFilter, setSegmentFilter] = useState<string>("");
+  const [typeFilter, setTypeFilter] = useState<string>("");
+  const [brandFilter, setBrandFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [parentImages, setParentImages] = useState<Record<number, string | null>>(
@@ -29,9 +36,23 @@ export function useSKUMasterlist() {
     setError(null);
     try {
       const sort = CellHelpers.getDirectusSort(sorting) || "";
+      const filterParams = new URLSearchParams();
+      filterParams.set('type', 'approved');
+      filterParams.set('limit', limit.toString());
+      filterParams.set('offset', (page * limit).toString());
+      filterParams.set('search', search);
+      filterParams.set('sort', sort);
+      if (supplierFilter) filterParams.set('supplier', supplierFilter);
+      if (categoryFilter) filterParams.set('category', categoryFilter);
+      if (classFilter) filterParams.set('class', classFilter);
+      if (segmentFilter) filterParams.set('segment', segmentFilter);
+      if (typeFilter) filterParams.set('itemType', typeFilter);
+      if (brandFilter) filterParams.set('brand', brandFilter);
+      if (statusFilter) filterParams.set('status', statusFilter);
+
       const [approvedRes, masterRes] = await Promise.all([
         fetch(
-          `/api/scm/product-management/sku?type=approved&limit=${limit}&offset=${page * limit}&search=${encodeURIComponent(search)}&sort=${sort}`,
+          `/api/scm/product-management/sku?${filterParams.toString()}`,
         ).then((res) => res.json()),
         fetch("/api/scm/product-management/sku?type=master").then((res) =>
           res.json(),
@@ -97,7 +118,7 @@ export function useSKUMasterlist() {
     } finally {
       setIsLoading(false);
     }
-  }, [limit, page, search, sorting]);
+  }, [limit, page, search, sorting, supplierFilter, categoryFilter, classFilter, segmentFilter, typeFilter, brandFilter, statusFilter]);
 
   const toggleStatus = async (id: number | string, isActive: boolean) => {
     setIsUpdating(true);
@@ -162,6 +183,20 @@ export function useSKUMasterlist() {
     setLimit,
     search,
     setSearch,
+    supplierFilter,
+    setSupplierFilter,
+    categoryFilter,
+    setCategoryFilter,
+    classFilter,
+    setClassFilter,
+    segmentFilter,
+    setSegmentFilter,
+    typeFilter,
+    setTypeFilter,
+    brandFilter,
+    setBrandFilter,
+    statusFilter,
+    setStatusFilter,
     sorting,
     setSorting,
     masterData,

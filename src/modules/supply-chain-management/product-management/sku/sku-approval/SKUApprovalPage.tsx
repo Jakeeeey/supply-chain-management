@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
-import { EditDescriptionModal } from "@/modules/supply-chain-management/product-management/sku/sku-masterlist/components/modals/edit-description-modal";
+import { EditProductModal } from "@/modules/supply-chain-management/product-management/sku/sku-masterlist/components/modals/edit-product-modal";
 import { RejectRemarksModal } from "@/modules/supply-chain-management/product-management/sku/sku-approval/components/modals/reject-remarks-modal";
 import { SKU } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { BulkApproveModal } from "@/modules/supply-chain-management/product-management/sku/sku-approval/components/modals/bulk-approve-modal";
@@ -149,12 +149,9 @@ export default function SKUApprovalPage() {
     }
   };
 
-  const handleSaveDescription = async (
+  const handleSaveProduct = async (
     id: number | string,
-    description: string,
-    product_class: number,
-    product_segment: number,
-    product_section: number,
+    data: Partial<SKU>,
   ) => {
     setIsUpdating(true);
     try {
@@ -163,12 +160,7 @@ export default function SKUApprovalPage() {
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            description,
-            product_class,
-            product_segment,
-            product_section,
-          }),
+          body: JSON.stringify(data),
         },
       );
 
@@ -246,11 +238,11 @@ export default function SKUApprovalPage() {
         }
       />
 
-      <EditDescriptionModal
+      <EditProductModal
         sku={editingSKU}
         isOpen={!!editingSKU}
         onClose={() => setEditingSKU(null)}
-        onSave={handleSaveDescription}
+        onSave={handleSaveProduct}
         isLoading={isUpdating}
         masterData={masterData}
       />

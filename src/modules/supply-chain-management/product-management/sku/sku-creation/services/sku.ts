@@ -15,7 +15,6 @@ import { skuApprovalService } from "./sku-approval";
 import { generateSKUCode } from "./sku-generator";
 import { skuLifecycleService } from "./sku-lifecycle";
 import { skuQueryService } from "./sku-query";
-import { skuSegmentApprovalService } from "./sku-segment-approval";
 import { skuStatusService } from "./sku-status";
 
 export const skuService = {
@@ -43,11 +42,6 @@ export const skuService = {
   syncSupplierLink: skuApprovalService.syncSupplierLink,
   handleOrphanAdoption: skuApprovalService.handleOrphanAdoption,
   cleanupDraft: skuApprovalService.cleanupDraft,
-
-  // ─── Segment Approval ──────────────────────────────────────────────────────
-  fetchPendingSegments: skuSegmentApprovalService.fetchPendingSegments.bind(skuSegmentApprovalService),
-  approveSegment: skuSegmentApprovalService.approveSegment.bind(skuSegmentApprovalService),
-  rejectSegment: skuSegmentApprovalService.rejectSegment.bind(skuSegmentApprovalService),
 
   // ─── Status Toggle ─────────────────────────────────────────────────────────
   updateProductStatus:

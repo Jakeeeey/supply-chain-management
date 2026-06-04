@@ -21,6 +21,7 @@ import {
   Images,
   MoreHorizontal,
   XCircle,
+  Edit,
 } from "lucide-react";
 import Image from "next/image";
 import { CellHelpers } from "../../../sku-creation/utils/sku-helpers";
@@ -138,7 +139,7 @@ export const getMasterlistColumns = (
     ),
     meta: { label: "Product Name" },
     cell: ({ row }) => (
-      <span className="text-sm font-medium">
+      <span className="text-sm font-medium block truncate max-w-[400px]">
         {row.original.product_name || "Unnamed Product"}
       </span>
     ),
@@ -155,6 +156,54 @@ export const getMasterlistColumns = (
         {CellHelpers.renderMasterText(
           row.original.product_category,
           masterData?.categories,
+        )}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "product_class",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Class" />
+    ),
+    meta: { label: "Class" },
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground">
+        {CellHelpers.renderMasterText(
+          row.original.product_class,
+          masterData?.classes,
+        )}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "product_segment",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Segment" />
+    ),
+    meta: { label: "Segment" },
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground">
+        {CellHelpers.renderMasterText(
+          row.original.product_segment,
+          masterData?.segments,
+        )}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "product_section",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Section" />
+    ),
+    meta: { label: "Section" },
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground">
+        {CellHelpers.renderMasterText(
+          row.original.product_section,
+          masterData?.sections,
         )}
       </span>
     ),
@@ -186,6 +235,22 @@ export const getMasterlistColumns = (
         {CellHelpers.renderMasterText(
           row.original.product_brand,
           masterData?.brands,
+        )}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "product_supplier",
+    enableSorting: false,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Supplier" />
+    ),
+    meta: { label: "Supplier" },
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground">
+        {CellHelpers.renderMasterText(
+          row.original.product_supplier,
+          masterData?.suppliers,
         )}
       </span>
     ),
@@ -227,6 +292,12 @@ export const getMasterlistColumns = (
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {onEdit && (
+              <DropdownMenuItem onClick={() => onEdit(sku)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit Product
+              </DropdownMenuItem>
+            )}
             {isParent && onUpdateImage && (
               <DropdownMenuItem onClick={() => onUpdateImage(sku)}>
                 <ImageIcon className="h-4 w-4 mr-2" />

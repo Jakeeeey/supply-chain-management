@@ -8,9 +8,10 @@ import { SKU } from "../sku-creation/types/sku.schema";
 import { MasterlistTable } from "./components/data-table";
 import { useSKUMasterlist } from "./hooks/useSKUMasterlist";
 import { toast } from "sonner";
-import { EditDescriptionModal } from "./components/modals/edit-description-modal";
+import { EditProductModal } from "./components/modals/edit-product-modal";
 import { SKUImageModal } from "./components/modals/sku-image-modal";
 import { SKUGalleryModal } from "./components/modals/sku-gallery-modal";
+import { FacetFilters } from "./components/filters/FacetFilters";
 
 export default function SKUMasterlistModule() {
   const {
@@ -20,8 +21,21 @@ export default function SKUMasterlistModule() {
     setPage,
     limit,
     setLimit,
-    // search is provided by hook but only used via setSearch
     setSearch,
+    supplierFilter,
+    setSupplierFilter,
+    categoryFilter,
+    setCategoryFilter,
+    classFilter,
+    setClassFilter,
+    segmentFilter,
+    setSegmentFilter,
+    typeFilter,
+    setTypeFilter,
+    brandFilter,
+    setBrandFilter,
+    statusFilter,
+    setStatusFilter,
     sorting,
     setSorting,
     masterData,
@@ -48,24 +62,16 @@ export default function SKUMasterlistModule() {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleSaveDescription = async (
+  const handleSaveProduct = async (
     id: number | string,
-    description: string,
-    product_class: number,
-    product_segment: number,
-    product_section: number,
+    data: Partial<SKU>,
   ) => {
     setIsUpdating(true);
     try {
       const res = await fetch(`/api/scm/product-management/sku/${id}?type=master`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          description,
-          product_class,
-          product_segment,
-          product_section,
-        }),
+        body: JSON.stringify(data),
       });
 
       const result = await res.json();
@@ -171,33 +177,60 @@ export default function SKUMasterlistModule() {
     (row) => Number(row.isActive) !== 1,
   );
 
-  const bulkActionComponent =
-    selectedRows.length > 0 ? (
-      <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
-        {hasSelectedInactive && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleBulkActivate}
-            disabled={isUpdating}
-          >
-            Activate (
-            {selectedRows.filter((r) => Number(r.isActive) !== 1).length})
-          </Button>
-        )}
-        {hasSelectedActive && (
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleBulkDeactivate}
-            disabled={isUpdating}
-          >
-            Deactivate (
-            {selectedRows.filter((r) => Number(r.isActive) === 1).length})
-          </Button>
-        )}
-      </div>
-    ) : null;
+  const currentFilters = {
+    category: categoryFilter,
+    class: classFilter,
+    segment: segmentFilter,
+    type: typeFilter,
+    brand: brandFilter,
+    supplier: supplierFilter,
+    status: statusFilter,
+  };
+
+  const handleApplyFilters = (values: {
+    category: string;
+    class: string;
+    segment: string;
+    type: string;
+    brand: string;
+    supplier: string;
+    status: string;
+  }) => {
+    setCategoryFilter(values.category);
+    setClassFilter(values.class);
+    setSegmentFilter(values.segment);
+    setTypeFilter(values.type);
+    setBrandFilter(values.brand);
+    setSupplierFilter(values.supplier);
+    setStatusFilter(values.status);
+    setPage(0);
+  };
+
+  const handleClearFilters = () => {
+    setCategoryFilter("");
+    setClassFilter("");
+    setSegmentFilter("");
+    setTypeFilter("");
+    setBrandFilter("");
+    setSupplierFilter("");
+    setStatusFilter("");
+    setPage(0);
+  };
+
+  const bulkActionComponent = selectedRows.length > 0 ? (
+    <div className="flex items-center gap-2">
+      {hasSelectedInactive && (
+        <Button size="sm" variant="default" onClick={handleBulkActivate} disabled={isUpdating}>
+          Activate ({selectedRows.filter((r) => Number(r.isActive) !== 1).length})
+        </Button>
+      )}
+      {hasSelectedActive && (
+        <Button size="sm" variant="destructive" onClick={handleBulkDeactivate} disabled={isUpdating}>
+          Deactivate ({selectedRows.filter((r) => Number(r.isActive) === 1).length})
+        </Button>
+      )}
+    </div>
+  ) : null;
 
   if (!mounted) {
     return <ModuleSkeleton hasActions={false} rowCount={8} />;
@@ -216,6 +249,13 @@ export default function SKUMasterlistModule() {
 
   return (
     <div className="space-y-4">
+      <FacetFilters
+        masterData={masterData}
+        filters={currentFilters}
+        onApply={handleApplyFilters}
+        onClear={handleClearFilters}
+        isLoading={isLoading}
+      />
       <MasterlistTable
         title="Active Product Master Records"
         data={data}
@@ -237,11 +277,11 @@ export default function SKUMasterlistModule() {
         actionComponent={bulkActionComponent}
       />
 
-      <EditDescriptionModal
+      <EditProductModal
         sku={editingSKU}
         isOpen={!!editingSKU}
         onClose={() => setEditingSKU(null)}
-        onSave={handleSaveDescription}
+        onSave={handleSaveProduct}
         isLoading={isUpdating}
         masterData={masterData}
       />

@@ -69,16 +69,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       return NextResponse.json({ success: true });
     }
 
-    if (action === "approve-segment") {
-      const { product_class, product_segment, product_section } = body;
-      await skuService.approveSegment(id, product_class, product_segment, product_section);
-      return NextResponse.json({ success: true });
-    }
 
-    if (action === "reject-segment") {
-      await skuService.rejectSegment(id);
-      return NextResponse.json({ success: true });
-    }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error: unknown) {

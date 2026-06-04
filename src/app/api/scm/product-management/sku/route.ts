@@ -36,16 +36,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(paginated);
     }
 
-    if (type === "segment-approval") {
-      const search = searchParams.get("search") || undefined;
-      const paginated = await skuService.fetchPendingSegments(
-        limit,
-        offset,
-        search,
-        sort,
-      );
-      return NextResponse.json(paginated);
-    }
+
 
     if (type === "duplicate-check") {
       const name = searchParams.get("name") || "";
@@ -54,11 +45,22 @@ export async function GET(req: NextRequest) {
     }
 
     const search = searchParams.get("search") || undefined;
+    const supplierIdParam = searchParams.get("supplier");
+    const supplierId = supplierIdParam ? parseInt(supplierIdParam) : undefined;
+    const categoryId = searchParams.get("category") ? parseInt(searchParams.get("category")!) : undefined;
+    const classId = searchParams.get("class") ? parseInt(searchParams.get("class")!) : undefined;
+    const segmentId = searchParams.get("segment") ? parseInt(searchParams.get("segment")!) : undefined;
+    const itemType = searchParams.get("itemType") || undefined;
+    const brandId = searchParams.get("brand") ? parseInt(searchParams.get("brand")!) : undefined;
+    const statusParam = searchParams.get("status") || undefined;
+    
     const paginated = await skuService.fetchApproved(
       limit,
       offset,
       search,
       sort,
+      supplierId,
+      { categoryId, classId, segmentId, itemType, brandId, status: statusParam },
     );
     console.log(
       `API Route [approved]: Returning ${paginated.data.length} items, total: ${paginated.meta.total_count}`,
