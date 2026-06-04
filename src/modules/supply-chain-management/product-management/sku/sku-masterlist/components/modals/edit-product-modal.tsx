@@ -70,7 +70,14 @@ export function EditProductModal({
     onClose();
   };
 
-  const isSaveDisabled = isLoading || !formData.product_name || !formData.description;
+  const isSaveDisabled =
+    isLoading ||
+    !formData.product_name ||
+    !formData.product_supplier ||
+    !formData.description ||
+    !formData.product_class ||
+    !formData.product_segment ||
+    !formData.product_section;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -141,7 +148,7 @@ export function EditProductModal({
 
             <div className="space-y-3">
               <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                Taxonomy
+                Taxonomy *
               </Label>
               <div className="grid grid-cols-3 gap-3">
                 <Combobox

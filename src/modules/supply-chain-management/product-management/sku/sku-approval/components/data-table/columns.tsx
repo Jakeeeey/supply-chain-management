@@ -16,7 +16,7 @@ import {
   SKU,
 } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { ColumnDef } from "@tanstack/react-table";
-import { CheckCircle, Edit, Eye, MoreHorizontal, XCircle } from "lucide-react";
+import { CheckCircle, Eye, MoreHorizontal, XCircle } from "lucide-react";
 import {
   CellHelpers,
   statusVariants,
@@ -28,7 +28,6 @@ export const getApprovalColumns = (
   onView?: (sku: SKU) => void,
   onApprove?: (id: number) => void,
   onReject?: (sku: SKU) => void,
-  onEdit?: (sku: SKU) => void,
 ): ColumnDef<SKU>[] => [
   {
     id: "select",
@@ -86,8 +85,8 @@ export const getApprovalColumns = (
       <DataTableColumnHeader column={column} label="Product Name" />
     ),
     meta: { label: "Product Name" },
-    cell: ({ row }) => (
-      <span className="font-medium">
+    cell: ({ row }) => ( 
+      <span className="font-medium block truncate max-w-[400px]">
         {row.original.product_name || "Unnamed Product"}
       </span>
     ),

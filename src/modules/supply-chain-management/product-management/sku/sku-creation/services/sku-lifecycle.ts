@@ -18,7 +18,9 @@ export const skuLifecycleService = {
 
     // 2. Strip metadata fields that shouldn't be copied to draft
     const {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       id: _id,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       product_id: _pid,
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       created_at, updated_at, user_created, user_updated,

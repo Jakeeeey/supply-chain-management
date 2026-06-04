@@ -50,12 +50,12 @@ export const FacetFilters: React.FC<FacetFiltersProps> = ({
 
   return (
     <div className="flex flex-wrap gap-2 mb-4 items-end">
+      <div className="w-[160px]"><Combobox options={makeOptions(masterData?.suppliers)} value={pending.supplier} onValueChange={(v) => handleChange('supplier', v)} placeholder="Supplier" disabled={isLoading} /></div>
+      <div className="w-[160px]"><Combobox options={makeOptions(masterData?.brands)} value={pending.brand} onValueChange={(v) => handleChange('brand', v)} placeholder="Brand" disabled={isLoading} /></div>
       <div className="w-[160px]"><Combobox options={makeOptions(masterData?.categories)} value={pending.category} onValueChange={(v) => handleChange('category', v)} placeholder="Category" disabled={isLoading} /></div>
       <div className="w-[160px]"><Combobox options={makeOptions(masterData?.classes)} value={pending.class} onValueChange={(v) => handleChange('class', v)} placeholder="Class" disabled={isLoading} /></div>
       <div className="w-[160px]"><Combobox options={makeOptions(masterData?.segments)} value={pending.segment} onValueChange={(v) => handleChange('segment', v)} placeholder="Segment" disabled={isLoading} /></div>
       <div className="w-[140px]"><Combobox options={[{ value: "Regular", label: "Regular" }, { value: "Variant", label: "Variant" }]} value={pending.type} onValueChange={(v) => handleChange('type', v)} placeholder="Type" disabled={isLoading} /></div>
-      <div className="w-[160px]"><Combobox options={makeOptions(masterData?.brands)} value={pending.brand} onValueChange={(v) => handleChange('brand', v)} placeholder="Brand" disabled={isLoading} /></div>
-      <div className="w-[160px]"><Combobox options={makeOptions(masterData?.suppliers)} value={pending.supplier} onValueChange={(v) => handleChange('supplier', v)} placeholder="Supplier" disabled={isLoading} /></div>
       <div className="w-[130px]"><Combobox options={[{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }]} value={pending.status} onValueChange={(v) => handleChange('status', v)} placeholder="Status" disabled={isLoading} /></div>
       <Button variant="default" size="sm" onClick={() => onApply(pending)} disabled={!hasChanges || isLoading} className="h-8">Apply</Button>
       <Button variant="outline" size="sm" onClick={onClear} disabled={isClearDisabled || isLoading} className="h-8">Clear</Button>

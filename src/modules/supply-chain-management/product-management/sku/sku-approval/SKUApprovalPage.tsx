@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
-import { EditProductModal } from "@/modules/supply-chain-management/product-management/sku/sku-masterlist/components/modals/edit-product-modal";
 import { RejectRemarksModal } from "@/modules/supply-chain-management/product-management/sku/sku-approval/components/modals/reject-remarks-modal";
 import { SKU } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { BulkApproveModal } from "@/modules/supply-chain-management/product-management/sku/sku-approval/components/modals/bulk-approve-modal";
@@ -36,7 +35,6 @@ export default function SKUApprovalPage() {
   } = useSKUs();
 
   const [mounted, setMounted] = useState(false);
-  const [editingSKU, setEditingSKU] = useState<SKU | null>(null);
   const [rejectingSKU, setRejectingSKU] = useState<SKU | null>(null);
   const [selectedSKUs, setSelectedSKUs] = useState<SKU[]>([]);
   const [isBulkApproveOpen, setIsBulkApproveOpen] = useState(false);
@@ -149,38 +147,6 @@ export default function SKUApprovalPage() {
     }
   };
 
-  const handleSaveProduct = async (
-    id: number | string,
-    data: Partial<SKU>,
-  ) => {
-    setIsUpdating(true);
-    try {
-      const res = await fetch(
-        `/api/scm/product-management/sku/${id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        },
-      );
-
-      const result = await res.json();
-      if (!res.ok)
-        throw new Error(result.error || "Failed to update description");
-
-      toast.success("Product Details Updated", {
-        description: "The product details have been successfully saved.",
-      });
-      refresh();
-      setEditingSKU(null);
-    } catch (err: unknown) {
-      toast.error("Update Failed", {
-        description: err instanceof Error ? err.message : "Could not update the product details.",
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
 
   if (!mounted) {
     return <ModuleSkeleton hasActions={false} rowCount={5} />;
@@ -213,7 +179,6 @@ export default function SKUApprovalPage() {
         isLoading={isLoading}
         onApprove={(id: number | string) => handleApproveAndActivate(id)}
         onReject={(sku: SKU) => handleReject(sku)}
-        onEdit={setEditingSKU}
         onSelectionChange={setSelectedSKUs}
         actionComponent={
           selectedSKUs.length > 0 && (
@@ -238,14 +203,6 @@ export default function SKUApprovalPage() {
         }
       />
 
-      <EditProductModal
-        sku={editingSKU}
-        isOpen={!!editingSKU}
-        onClose={() => setEditingSKU(null)}
-        onSave={handleSaveProduct}
-        isLoading={isUpdating}
-        masterData={masterData}
-      />
 
       <RejectRemarksModal
         sku={rejectingSKU}

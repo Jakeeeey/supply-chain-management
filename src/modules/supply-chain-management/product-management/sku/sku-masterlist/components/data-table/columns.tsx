@@ -160,6 +160,38 @@ export const getMasterlistColumns = (
     },
   },
   {
+    accessorKey: "product_supplier",
+    enableSorting: false,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Supplier" />
+    ),
+    meta: { label: "Supplier" },
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground">
+        {CellHelpers.renderMasterText(
+          row.original.product_supplier,
+          masterData?.suppliers,
+        )}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "product_brand",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Brand" />
+    ),
+    meta: { label: "Brand" },
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground">
+        {CellHelpers.renderMasterText(
+          row.original.product_brand,
+          masterData?.brands,
+        )}
+      </span>
+    ),
+  },
+  {
     accessorKey: "product_category",
     enableSorting: true,
     header: ({ column }) => (
@@ -237,38 +269,6 @@ export const getMasterlistColumns = (
         </Badge>
       );
     },
-  },
-  {
-    accessorKey: "product_brand",
-    enableSorting: true,
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} label="Brand" />
-    ),
-    meta: { label: "Brand" },
-    cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground">
-        {CellHelpers.renderMasterText(
-          row.original.product_brand,
-          masterData?.brands,
-        )}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "product_supplier",
-    enableSorting: false,
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} label="Supplier" />
-    ),
-    meta: { label: "Supplier" },
-    cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground">
-        {CellHelpers.renderMasterText(
-          row.original.product_supplier,
-          masterData?.suppliers,
-        )}
-      </span>
-    ),
   },
   {
     accessorKey: "isActive",
