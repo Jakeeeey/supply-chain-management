@@ -44,7 +44,7 @@ const RECEIPT_TYPES = [
 
 const API_URL = "/api/scm/supplier-management/purchase-order-receiving-rfid";
 
-export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
+export function ReviewReceiptStep({ receiverName, onBack }: { receiverName?: string; onBack?: () => void }) {
     const {
         selectedPO,
         scannedCountByPorId,
@@ -806,6 +806,17 @@ export function ReviewReceiptStep({ receiverName }: { receiverName?: string }) {
                         )}
 
                         <div className="mt-4 flex justify-end gap-3 border-t pt-4">
+                            {onBack && (
+                                <Button
+                                    variant="outline"
+                                    className="border-primary/20 hover:border-primary hover:bg-primary/5 font-black uppercase text-xs tracking-wider h-11 px-8"
+                                    onClick={onBack}
+                                    type="button"
+                                    disabled={savingReceipt}
+                                >
+                                    Back
+                                </Button>
+                            )}
                             <Button
                                 className="bg-primary text-primary-foreground hover:bg-primary/90 font-black uppercase text-xs tracking-wider h-11 px-8 shadow-md"
                                 onClick={handleSaveReceipt}

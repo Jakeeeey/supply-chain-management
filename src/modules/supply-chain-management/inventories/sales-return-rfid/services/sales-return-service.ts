@@ -33,6 +33,7 @@ const parseBoolean = (val: any): boolean => {
     return val.data[0] === 1;
   }
   return val === true;
+};
 const formatDateForAPI = (dateString: string | Date | undefined | null) => {
   try {
     const date = dateString ? new Date(dateString) : new Date();
