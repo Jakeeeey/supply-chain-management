@@ -670,7 +670,6 @@ export const dispatchPlanQueryService = {
         sales_order_id: number;
       }>("/items/dispatch_plan_details", "sales_order_id", allOrderIds, {
         "filter[dispatch_id][status][_nin]": "Dispatched,Cancelled,Delivered,Rejected",
-        "filter[sales_order_id][order_status][_neq]": "Not Fulfilled",
         fields: "sales_order_id",
         limit: -1,
       });

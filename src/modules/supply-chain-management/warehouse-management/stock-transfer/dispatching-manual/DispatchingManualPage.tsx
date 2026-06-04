@@ -193,8 +193,8 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
                           <TableCell className="print:hidden text-center">
                             <QuantityStepper 
                               value={currentQty}
-                              max={Math.min(targetQty, Math.max(0, item.qtyAvailable ?? 0))}
-                              onChange={(val) => updateScannedQty(item.id, val, Math.min(targetQty, Math.max(0, item.qtyAvailable ?? 0)))}
+                              max={targetQty}
+                              onChange={(val) => updateScannedQty(item.id, val, targetQty)}
                               disabled={selectedGroup?.status !== 'For Picking'}
                               className="h-8 w-fit mx-auto"
                               size="sm"

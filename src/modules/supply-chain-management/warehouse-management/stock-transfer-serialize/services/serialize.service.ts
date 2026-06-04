@@ -11,8 +11,8 @@ import type { UpdateSerializeTransferValues } from "../types/serialize.schema";
 /**
  * Validates a serial number against the on-hand inventory view.
  */
-export async function lookupSerial(serialNumber: string, branchId?: number): Promise<SerialLookupResponse> {
-  const matches = await repo.fetchSerialAvailability(serialNumber, branchId);
+export async function lookupSerial(serialNumber: string, branchId?: number, token?: string): Promise<SerialLookupResponse> {
+  const matches = await repo.fetchSerialAvailability(serialNumber, branchId, token);
   
   if (matches.length === 0) {
     throw new Error(`Serial number ${serialNumber} not found in inventory.`);
