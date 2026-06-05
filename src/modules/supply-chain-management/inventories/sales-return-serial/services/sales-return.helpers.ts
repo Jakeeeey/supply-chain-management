@@ -17,15 +17,40 @@ export const parseBoolean = (val: any): boolean => {
   return val === true;
 };
 
+export const nowPH = (): string => {
+  // Add 8 hours (UTC+8) to UTC time to get Manila time.
+  // Uses getUTC* methods to avoid any server local-timezone influence.
+  const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
+  const d = new Date(manilaMs);
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const hour = String(d.getUTCHours()).padStart(2, "0");
+  const minute = String(d.getUTCMinutes()).padStart(2, "0");
+  const second = String(d.getUTCSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+};
+
 /**
  * Safely formats a date string into YYYY-MM-DD for the API.
  */
 export const formatDateForAPI = (dateString: string | Date | undefined | null) => {
   try {
-    if (!dateString) return new Date().toISOString().split("T")[0];
-    return new Date(dateString).toISOString().split("T")[0];
+    if (!dateString) {
+      return nowPH().split("T")[0];
+    }
+    if (typeof dateString === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      return dateString;
+    }
+    const date = typeof dateString === "string" ? new Date(dateString) : dateString;
+    const manilaMs = date.getTime() + 8 * 60 * 60 * 1000;
+    const d = new Date(manilaMs);
+    const year = d.getUTCFullYear();
+    const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   } catch {
-    return new Date().toISOString().split("T")[0];
+    return nowPH().split("T")[0];
   }
 };
 
