@@ -154,6 +154,21 @@ async function syncSupplierLink(
         console.log(
           `[SKU Approval] Linked Product ${resolvedMasterId} to Supplier ${sId}`,
         );
+      } else {
+        // Update existing link if supplier changed
+        const existingRecord = existingLink[0] as { id?: number; supplier_id?: number };
+        if (existingRecord.id && existingRecord.supplier_id !== sId) {
+          await request<unknown>(
+            `${API_BASE_URL}/items/product_per_supplier/${existingRecord.id}`,
+            {
+              method: "PATCH",
+              body: JSON.stringify({ supplier_id: sId }),
+            },
+          );
+          console.log(
+            `[SKU Approval] Updated supplier link for Product ${resolvedMasterId}: ${existingRecord.supplier_id} → ${sId}`,
+          );
+        }
       }
     } catch (linkErr: unknown) {
       console.error("[SKU Approval] Linkage error:", linkErr instanceof Error ? linkErr.message : linkErr);

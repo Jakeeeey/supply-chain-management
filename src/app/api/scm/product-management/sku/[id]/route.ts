@@ -23,8 +23,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
     const body = await req.json();
 
     if (isMaster) {
-      const data = await skuService.updateMaster(id, body);
-      return NextResponse.json({ data });
+      const data = await skuService.submitMasterEdit(id, body);
+      return NextResponse.json({ data, message: "Edit submitted for approval" });
     } else {
       const data = await skuService.updateDraft(id, body);
       return NextResponse.json({ data });
@@ -69,16 +69,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       return NextResponse.json({ success: true });
     }
 
-    if (action === "approve-segment") {
-      const { product_class, product_segment, product_section } = body;
-      await skuService.approveSegment(id, product_class, product_segment, product_section);
-      return NextResponse.json({ success: true });
-    }
 
-    if (action === "reject-segment") {
-      await skuService.rejectSegment(id);
-      return NextResponse.json({ success: true });
-    }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error: unknown) {

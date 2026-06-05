@@ -9,12 +9,58 @@ import { skuQueryService } from "./sku-query";
  * parent→child cascade) are preserved exactly as they were in sku.ts.
  */
 export const skuLifecycleService = {
-  async updateMaster(id: number | string, data: Partial<SKU>): Promise<SKU> {
-    const res = await request<{ data: SKU }>(
-      `${API_BASE_URL}/items/products/${id}`,
-      { method: "PATCH", body: JSON.stringify(data) },
+  async submitMasterEdit(id: number | string, editedFields: Partial<SKU>): Promise<SKU> {
+    // 1. Fetch the current master product to get all existing fields
+    const { data: master } = await request<{ data: SKU }>(
+      `${API_BASE_URL}/items/products/${id}?fields=*`,
     );
-    return res.data;
+    if (!master) throw new Error("Master product not found");
+
+    // 2. Strip metadata fields that shouldn't be copied to draft
+    const {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      id: _id,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      product_id: _pid,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      created_at, updated_at, user_created, user_updated,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      date_created, date_updated,
+      ...baseFields
+    } = master as SKU & Record<string, unknown>;
+
+    // 3. Merge with edited fields and tag as a masterlist edit
+    const draftPayload = {
+      ...baseFields,
+      ...editedFields,
+      status: "FOR_APPROVAL" as const,
+      remarks: `MASTER_EDIT:${id}`,
+    };
+
+    // 4. Create the draft record
+    const { data: draft } = await request<{ data: SKU }>(
+      `${API_BASE_URL}/items/product_draft`,
+      { method: "POST", body: JSON.stringify(draftPayload) },
+    );
+
+    // 5. Sync supplier into product_draft_per_supplier junction
+    const supplierId = editedFields.product_supplier ?? master.product_supplier;
+    const draftId = draft.id || draft.product_id;
+    if (draftId && supplierId) {
+      try {
+        await request(`${API_BASE_URL}/items/product_draft_per_supplier`, {
+          method: "POST",
+          body: JSON.stringify({ product_draft_id: draftId, supplier_id: supplierId }),
+        });
+      } catch (err: unknown) {
+        console.error(
+          `[SKU Lifecycle] Failed to save supplier for master edit draft ${draftId}:`,
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+
+    return draft;
   },
 
   async createDraft(sku: SKU): Promise<SKU> {
