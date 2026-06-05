@@ -7,7 +7,7 @@ import {
   type UpdateSalesReturnPayload
 } from "../types/sales-return.schema";
 import type { API_SalesReturnType } from "../types/sales-return.types";
-import { formatDateForAPI, cleanId } from "./sales-return.helpers";
+import { formatDateForAPI, cleanId, nowPH } from "./sales-return.helpers";
 import * as transactionRepo from "./sales-return-transaction.repo";
 import * as lookupRepo from "./sales-return-lookup.repo";
 import { fetchReturnDetails } from "./sales-return-query.service";
@@ -92,6 +92,8 @@ export async function submitReturn(rawPayload: any, userId: number): Promise<any
     order_id: payload.orderNo || "",
     isThirdParty: rawPayload.isThirdParty ? 1 : 0, // Fallback if isThirdParty not in schema
     received_at: null,
+    created_at: nowPH(),
+    updated_at: nowPH(),
   };
 
   const headerResult = await transactionRepo.createReturnHeader(headerPayload);
@@ -138,6 +140,7 @@ export async function submitReturn(rawPayload: any, userId: number): Promise<any
       sales_return_type_id: typeId,
       discount_type: discId,
       reason: item.reason || null,
+      created_at: nowPH(),
     };
 
     const detailResult = await transactionRepo.createReturnDetail(detailPayload);
@@ -211,6 +214,7 @@ export async function updateReturn(
     invoice_no: payload.invoiceNo ?? "",
     order_id: payload.orderNo ?? "",
     isThirdParty: rawPayload.isThirdParty ? 1 : 0,
+    updated_at: nowPH(),
   };
 
   await transactionRepo.updateReturnHeader(payload.id as number, headerPayload);
@@ -275,6 +279,7 @@ export async function updateReturn(
       sales_return_type_id: typeId,
       discount_type: discId,
       reason: item.reason || null,
+      updated_at: nowPH(),
     };
 
     if (typeof item.id === "string" && item.id.startsWith("added-")) {
@@ -282,6 +287,7 @@ export async function updateReturn(
         ...detailPayload,
         return_no: payload.returnNo,
         product_id: Number(item.productId || item.product_id),
+        created_at: nowPH(),
       });
 
       const detailId = (detailResult.data as any)?.detail_id || (detailResult.data as any)?.id;
