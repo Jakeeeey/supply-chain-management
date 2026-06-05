@@ -52,20 +52,28 @@ const nowPH = (): string => {
 const formatDateForAPI = (dateString: string | Date) => {
   try {
     if (!dateString) {
-      return nowPH().split("T")[0];
+      return nowPH();
     }
+    let dateStr = "";
     if (typeof dateString === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-      return dateString;
+      dateStr = dateString;
+    } else {
+      const date = typeof dateString === "string" ? new Date(dateString) : dateString;
+      const manilaMs = date.getTime() + 8 * 60 * 60 * 1000;
+      const d = new Date(manilaMs);
+      const year = d.getUTCFullYear();
+      const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(d.getUTCDate()).padStart(2, "0");
+      dateStr = `${year}-${month}-${day}`;
     }
-    const date = typeof dateString === "string" ? new Date(dateString) : dateString;
-    const manilaMs = date.getTime() + 8 * 60 * 60 * 1000;
-    const d = new Date(manilaMs);
-    const year = d.getUTCFullYear();
-    const month = String(d.getUTCMonth() + 1).padStart(2, "0");
-    const day = String(d.getUTCDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+
+    const nowD = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const hour = String(nowD.getUTCHours()).padStart(2, "0");
+    const minute = String(nowD.getUTCMinutes()).padStart(2, "0");
+    const second = String(nowD.getUTCSeconds()).padStart(2, "0");
+    return `${dateStr}T${hour}:${minute}:${second}`;
   } catch {
-    return nowPH().split("T")[0];
+    return nowPH();
   }
 };
 
