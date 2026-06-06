@@ -645,7 +645,9 @@ export function UpdateSalesReturnModal({
       };
       await SalesReturnProvider.updateReturn(savePayload);
       // Then update status with extra fields
-      const now = new Date().toISOString();
+      const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
+      const d = new Date(manilaMs);
+      const now = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}T${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:${String(d.getUTCSeconds()).padStart(2, "0")}`;
       await SalesReturnProvider.updateStatus(headerData.id, "Received", true, now);
       setHeaderData({ ...headerData, status: "Received", isReceived: true, receivedAt: now });
       setStatusCardData((prev) =>

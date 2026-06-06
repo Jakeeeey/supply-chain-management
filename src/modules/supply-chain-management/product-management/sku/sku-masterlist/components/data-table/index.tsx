@@ -33,6 +33,7 @@ interface MasterlistTableProps {
   onUpdateImage?: (sku: SKU) => void;
   onViewGallery?: (sku: SKU) => void;
   actionComponent?: React.ReactNode;
+  pendingEditIds?: Set<number>;
   emptyTitle?: string;
   emptyDescription?: string;
 }
@@ -58,6 +59,7 @@ export function MasterlistTable({
   onUpdateImage,
   onViewGallery,
   actionComponent,
+  pendingEditIds,
   emptyTitle,
   emptyDescription,
 }: MasterlistTableProps) {
@@ -70,6 +72,7 @@ export function MasterlistTable({
         onEdit,
         onUpdateImage,
         onViewGallery,
+        pendingEditIds,
       ),
     [
       masterData,
@@ -78,6 +81,7 @@ export function MasterlistTable({
       onEdit,
       onUpdateImage,
       onViewGallery,
+      pendingEditIds,
     ],
   );
 

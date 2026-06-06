@@ -118,23 +118,16 @@ const TruncatedCell = ({ children, maxWidth = "150px", className = "" }: Truncat
   );
 };
 
-// 🟢 HELPER: Format Date to MM-DD-YYYY in Asia/Manila timezone
+// 🟢 HELPER: Format Date to MM/DD/YYYY in Asia/Manila timezone
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return "-";
-  try {
-    const d = new Date(dateStr);
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Manila",
-      month: "2-digit",
-      day: "2-digit",
-      year: "numeric",
-    });
-    return formatter.format(d).replace(/\//g, "-");
-  } catch {
-    return "-";
-  }
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(dateStr));
 };
-
 import { SummaryReturnHeader, SummaryReturnItem } from "../type";
 
 import { SummaryCustomerOption, SummarySalesmanOption, SummarySupplierOption, API_SalesReturnType } from "../type";

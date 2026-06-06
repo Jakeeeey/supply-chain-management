@@ -34,28 +34,48 @@ const parseBoolean = (val: any): boolean => {
   }
   return val === true;
 };
-const formatDateForAPI = (dateString: string | Date | undefined | null) => {
-  try {
-    const date = dateString ? new Date(dateString) : new Date();
-    const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Manila",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    return formatter.format(date);
-  } catch {
-    const date = new Date();
-    const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Manila",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    return formatter.format(date);
-  }
+
+const nowPH = (): string => {
+  // Add 8 hours (UTC+8) to UTC time to get Manila time.
+  // Uses getUTC* methods to avoid any server local-timezone influence.
+  const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
+  const d = new Date(manilaMs);
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const hour = String(d.getUTCHours()).padStart(2, "0");
+  const minute = String(d.getUTCMinutes()).padStart(2, "0");
+  const second = String(d.getUTCSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
 };
 
+const formatDateForAPI = (dateString: string | Date) => {
+  try {
+    if (!dateString) {
+      return nowPH();
+    }
+    let dateStr = "";
+    if (typeof dateString === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      dateStr = dateString;
+    } else {
+      const date = typeof dateString === "string" ? new Date(dateString) : dateString;
+      const manilaMs = date.getTime() + 8 * 60 * 60 * 1000;
+      const d = new Date(manilaMs);
+      const year = d.getUTCFullYear();
+      const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(d.getUTCDate()).padStart(2, "0");
+      dateStr = `${year}-${month}-${day}`;
+    }
+
+    const nowD = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const hour = String(nowD.getUTCHours()).padStart(2, "0");
+    const minute = String(nowD.getUTCMinutes()).padStart(2, "0");
+    const second = String(nowD.getUTCSeconds()).padStart(2, "0");
+    return `${dateStr}T${hour}:${minute}:${second}`;
+  } catch {
+    return nowPH();
+  }
+};
 
 const cleanId = (id: any) => {
   if (id === null || id === undefined || id === "") return null;
@@ -100,7 +120,7 @@ export async function fetchReturns(
     customerCode: item.customer_code,
     salesmanId: item.salesman_id,
     returnDate: item.return_date
-      ? new Date(item.return_date).toLocaleDateString("en-US", { timeZone: "Asia/Manila" })
+      ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.return_date))
       : "N/A",
     totalAmount: parseFloat(item.total_amount) || 0,
     status: item.status || "Pending",
@@ -109,7 +129,7 @@ export async function fetchReturns(
     isThirdParty: parseBoolean(item.isThirdParty),
     priceType: item.price_type || "-",
     createdAt: item.created_at
-      ? new Date(item.created_at).toLocaleDateString("en-US", { timeZone: "Asia/Manila" })
+      ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.created_at))
       : "-",
   }));
 
@@ -424,7 +444,7 @@ export async function fetchStatusCard(
       returnId: data.return_id,
       isApplied: data.isApplied === 1,
       dateApplied: data.updated_at
-        ? new Date(data.updated_at).toLocaleDateString("en-US", { timeZone: "Asia/Manila" })
+        ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(data.updated_at))
         : "-",
       transactionStatus: data.status || "Closed",
       isPosted: parseBoolean(data.isPosted),
@@ -484,6 +504,8 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
     remarks: payload.remarks || "Created via Web App",
     order_id: payload.orderNo || "",
     isThirdParty: payload.isThirdParty ? 1 : 0,
+    created_at: nowPH(),
+    updated_at: nowPH(),
   };
 
   const headerResult = await repo.createReturnHeader(headerPayload);
@@ -531,6 +553,7 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
       sales_return_type_id: typeId,
       discount_type: discId,
       reason: item.reason || null,
+      created_at: nowPH(),
     };
 
     const detailResult = await repo.createReturnDetail(detailPayload);
@@ -609,6 +632,7 @@ export async function updateReturn(
     invoice_no: payload.invoiceNo ?? "",
     order_id: payload.orderNo ?? "",
     isThirdParty: payload.isThirdParty ? 1 : 0,
+    updated_at: nowPH(),
   };
 
   await repo.updateReturnHeader(payload.returnId, headerPayload);
@@ -689,6 +713,7 @@ export async function updateReturn(
       sales_return_type_id: typeId,
       discount_type: discId,
       reason: item.reason || null,
+      updated_at: nowPH(),
     };
 
     if (typeof item.id === "string" && item.id.startsWith("added-")) {
@@ -696,6 +721,7 @@ export async function updateReturn(
         ...detailPayload,
         return_no: payload.returnNo,
         product_id: Number(item.productId || item.product_id),
+        created_at: nowPH(),
       });
 
       // Save RFID tags for newly added items

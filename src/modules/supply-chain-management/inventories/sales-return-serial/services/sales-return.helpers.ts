@@ -17,43 +17,50 @@ export const parseBoolean = (val: any): boolean => {
   return val === true;
 };
 
-/**
- * Helper to return current PH Manila Time (UTC+8) as an ISO-like string
- * but without the 'Z' suffix to ensure correct local interpretation.
- */
 export const nowPH = (): string => {
-  const date = new Date();
-  const phOffset = 8 * 60; // 8 hours in minutes
-  const localOffset = date.getTimezoneOffset(); // in minutes
-  const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
-  return phTime.toISOString().replace("Z", "");
+  // Add 8 hours (UTC+8) to UTC time to get Manila time.
+  // Uses getUTC* methods to avoid any server local-timezone influence.
+  const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
+  const d = new Date(manilaMs);
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const hour = String(d.getUTCHours()).padStart(2, "0");
+  const minute = String(d.getUTCMinutes()).padStart(2, "0");
+  const second = String(d.getUTCSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
 };
 
 /**
- * Safely formats a date string into YYYY-MM-DD for the API in Asia/Manila timezone.
+ * Safely formats a date string into YYYY-MM-DD for the API.
  */
 export const formatDateForAPI = (dateString: string | Date | undefined | null) => {
   try {
-    const date = dateString ? new Date(dateString) : new Date();
-    const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Manila",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    return formatter.format(date);
+    if (!dateString) {
+      return nowPH();
+    }
+    let dateStr = "";
+    if (typeof dateString === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      dateStr = dateString;
+    } else {
+      const date = typeof dateString === "string" ? new Date(dateString) : dateString;
+      const manilaMs = date.getTime() + 8 * 60 * 60 * 1000;
+      const d = new Date(manilaMs);
+      const year = d.getUTCFullYear();
+      const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(d.getUTCDate()).padStart(2, "0");
+      dateStr = `${year}-${month}-${day}`;
+    }
+
+    const nowD = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const hour = String(nowD.getUTCHours()).padStart(2, "0");
+    const minute = String(nowD.getUTCMinutes()).padStart(2, "0");
+    const second = String(nowD.getUTCSeconds()).padStart(2, "0");
+    return `${dateStr}T${hour}:${minute}:${second}`;
   } catch {
-    const date = new Date();
-    const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Manila",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    return formatter.format(date);
+    return nowPH();
   }
 };
-
 
 /**
  * Cleans an ID, converting it to a number if valid, or leaving it as string/null.

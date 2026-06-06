@@ -527,7 +527,9 @@ export function UpdateSalesReturnModal({
         appliedInvoiceId: appliedInvoiceId,
         isThirdParty: headerData.isThirdParty,
       });
-      const now = new Date().toISOString();
+      const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
+      const d = new Date(manilaMs);
+      const now = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}T${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:${String(d.getUTCSeconds()).padStart(2, "0")}`;
       await SalesReturnProvider.updateStatus(headerData.id, "Received", true, now);
       toast.success("Return Received", { description: "Sales return has been successfully received and posted to inventory." });
       onSuccess();

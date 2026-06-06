@@ -51,7 +51,7 @@ export async function fetchReturns(
     customerCode: item.customer_code,
     salesmanId: item.salesman_id,
     returnDate: item.return_date
-      ? new Date(item.return_date).toLocaleDateString("en-US", { timeZone: "Asia/Manila" })
+      ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.return_date))
       : "N/A",
     totalAmount: parseFloat(item.total_amount) || 0,
     status: item.status || "Pending",
@@ -60,10 +60,10 @@ export async function fetchReturns(
     isThirdParty: parseBoolean(item.isThirdParty),
     priceType: item.price_type || "-",
     createdAt: item.created_at
-      ? new Date(item.created_at).toLocaleDateString("en-US", { timeZone: "Asia/Manila" })
+      ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.created_at))
       : "-",
     receivedAt: item.received_at
-      ? new Date(item.received_at).toLocaleDateString("en-US", { timeZone: "Asia/Manila" })
+      ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.received_at))
       : "-",
   }));
 
@@ -210,7 +210,7 @@ export async function fetchStatusCard(
       returnId: data.return_id,
       isApplied: data.isApplied === 1,
       dateApplied: data.updated_at
-        ? new Date(data.updated_at).toLocaleDateString("en-US", { timeZone: "Asia/Manila" })
+        ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(data.updated_at))
         : "-",
       transactionStatus: data.status || "Closed",
       isPosted: parseBoolean(data.isPosted),
