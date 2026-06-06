@@ -138,9 +138,14 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const searchParams = useSearchParams();
   const fromClearance = searchParams.get("fromClearance");
   // --- 1. FORM STATE ---
-  const [returnDate, setReturnDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
+  const [returnDate, setReturnDate] = useState(() => {
+    const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
+    const d = new Date(manilaMs);
+    const year = d.getUTCFullYear();
+    const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  });
 
   const [selectedSalesmanId, setSelectedSalesmanId] = useState("");
   const [salesmanCode, setSalesmanCode] = useState("");
@@ -575,7 +580,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
   const resetForm = () => {
     setItems([]);
-    setReturnDate(new Date().toISOString().split("T")[0]);
+    const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
+    const d = new Date(manilaMs);
+    const year = d.getUTCFullYear();
+    const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    setReturnDate(`${year}-${month}-${day}`);
     setSelectedSalesmanId("");
     setSalesmanSearch("");
     setSalesmanCode("");
