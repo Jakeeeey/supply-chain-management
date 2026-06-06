@@ -62,9 +62,8 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
     currentPage * itemsPerPage
   ) || [];
 
-  const isAllScanned = selectedGroup?.items.every((i: OrderGroupItem) => {
-    const targetQty = Math.max(0, i.allocated_quantity ?? 0);
-    return (scannedQtys[i.id] ?? 0) >= targetQty;
+  const hasScannedAny = selectedGroup?.items.some((i: OrderGroupItem) => {
+    return (scannedQtys[i.id] ?? 0) > 0;
   }) ?? false;
 
   return (
@@ -124,7 +123,7 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
                   <Button 
                     className="bg-amber-600 hover:bg-amber-700 gap-2 shadow-none font-bold text-xs"
                     onClick={() => markAsPicked(selectedGroup.orderNo)}
-                    disabled={processing || selectedGroup.status !== 'For Picking' || !isAllScanned}
+                    disabled={processing || selectedGroup.status !== 'For Picking' || !hasScannedAny}
                   >
                     {processing ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <CheckCircle2 className="w-4 h-4 text-white" />}
                     Mark as Done Picking
@@ -201,7 +200,7 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
                             />
                           </TableCell>
                           <TableCell className="text-right text-xs font-semibold font-mono text-foreground">
-                            ₱{((currentQty || 0) * (item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                            ₱{((currentQty || 0) * Number(product?.cost_per_unit || 0)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                           </TableCell>
                         </TableRow>
                       );
@@ -213,7 +212,8 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
                       <TableCell className="text-right text-sm font-bold text-foreground font-mono">
                         ₱{selectedGroup.items.reduce((sum: number, item: OrderGroupItem) => {
                           const sqty = scannedQtys[item.id] ?? 0;
-                          const unitPrice = item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0;
+                          const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
+                          const unitPrice = Number(product?.cost_per_unit || 0);
                           return sum + (sqty * unitPrice);
                         }, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                       </TableCell>
