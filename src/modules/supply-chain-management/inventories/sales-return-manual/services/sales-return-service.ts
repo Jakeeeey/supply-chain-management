@@ -383,6 +383,7 @@ export async function fetchInvoices(
         customerCode: item.customer_code || "",
         salesman_id: item.salesman_id || 0,
         amount: item.total_amount ? parseFloat(item.total_amount) : 0,
+        isPosted: parseBoolean(item.isPosted),
       });
     }
   });
@@ -403,6 +404,7 @@ export async function fetchStatusCard(
     // Fetch linked invoice
     let appliedToText = "-";
     let appliedInvoiceId: number | null = null;
+    let isInvoicePosted = false;
     try {
       const linkRes = await repo.getRawLinkedInvoice(returnId);
       const linkData = (linkRes.data || []) as any[];
@@ -414,6 +416,9 @@ export async function fetchStatusCard(
           }
           if (linkedRec.invoice_no.invoice_id) {
             appliedInvoiceId = Number(linkedRec.invoice_no.invoice_id);
+          }
+          if (linkedRec.invoice_no.isPosted !== undefined) {
+            isInvoicePosted = parseBoolean(linkedRec.invoice_no.isPosted);
           }
         }
       }
@@ -432,6 +437,7 @@ export async function fetchStatusCard(
       isReceived: parseBoolean(data.isReceived),
       appliedTo: appliedToText,
       appliedInvoiceId: appliedInvoiceId,
+      isInvoicePosted: isInvoicePosted,
     };
   } catch {
     return null;
@@ -502,6 +508,9 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
         return_no: returnId,
         invoice_no: payload.appliedInvoiceId,
         linked_by: userId,
+        amount: Math.round(Number(payload.totalAmount) * 100) / 100,
+        created_at: nowPH(),
+        updated_at: nowPH(),
       });
     } catch (e) {
       console.error("Failed to create junction link during submission", e);
@@ -618,12 +627,17 @@ export async function updateReturn(
           await repo.updateJunctionLink(linkId, {
             invoice_no: payload.appliedInvoiceId,
             linked_by: userId,
+            amount: totalNet,
+            updated_at: nowPH(),
           });
         } else {
           await repo.createJunctionLink({
             return_no: payload.returnId,
             invoice_no: payload.appliedInvoiceId,
             linked_by: userId,
+            amount: totalNet,
+            created_at: nowPH(),
+            updated_at: nowPH(),
           });
         }
       } else if (payload.appliedInvoiceId === null && existingLinks.length > 0) {

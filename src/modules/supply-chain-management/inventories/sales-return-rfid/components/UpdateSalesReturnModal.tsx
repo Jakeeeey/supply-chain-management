@@ -261,6 +261,7 @@ export function UpdateSalesReturnModal({
 
   // 🟢 Track the ID for the junction table link
   const [appliedInvoiceId, setAppliedInvoiceId] = useState<number | null>(null);
+  const [isInvoicePosted, setIsInvoicePosted] = useState<boolean>(false);
 
   const [discountOptions, setDiscountOptions] = useState<API_LineDiscount[]>(
     [],
@@ -335,6 +336,9 @@ export function UpdateSalesReturnModal({
         setStatusCardData(statusData);
         if (statusData?.appliedInvoiceId) {
           setAppliedInvoiceId(statusData.appliedInvoiceId);
+        }
+        if (statusData?.isInvoicePosted) {
+          setIsInvoicePosted(statusData.isInvoicePosted);
         }
         setDiscountOptions(discounts);
         setReturnTypeOptions(retTypes);
@@ -833,14 +837,14 @@ export function UpdateSalesReturnModal({
     0,
   ) * 100) / 100;
   const filteredInvoices = invoiceOptions.filter((inv) =>
-    inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
+    !inv.isPosted && inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
   );
 
   const filteredOrderDropdown = invoiceOptions.filter((inv) =>
-    inv.order_id.toLowerCase().includes(orderSearch.toLowerCase()),
+    !inv.isPosted && inv.order_id.toLowerCase().includes(orderSearch.toLowerCase()),
   );
   const filteredInvoiceDropdown = invoiceOptions.filter((inv) =>
-    inv.invoice_no.toLowerCase().includes(invoiceDropdownSearch.toLowerCase()),
+    !inv.isPosted && inv.invoice_no.toLowerCase().includes(invoiceDropdownSearch.toLowerCase()),
   );
 
   return (
@@ -1460,7 +1464,7 @@ export function UpdateSalesReturnModal({
                     {/* 🟢 REVISED: Editable if Pending or Received (canEditLimited) */}
                     {loading && !statusCardData ? (
                       <Skeleton className="h-6 w-28" />
-                    ) : canEditLimited ? (
+                    ) : (canEditLimited && !isInvoicePosted) ? (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1538,6 +1542,7 @@ export function UpdateSalesReturnModal({
                     appliedTo: "",
                   }));
                   setAppliedInvoiceId(null);
+                  setIsInvoicePosted(false);
                   setIsInvoiceLookupOpen(false);
                 }}
               >
@@ -1562,6 +1567,7 @@ export function UpdateSalesReturnModal({
                         appliedTo: inv.invoice_no,
                       }));
                       setAppliedInvoiceId(Number(inv.id));
+                      setIsInvoicePosted(false);
                       setIsInvoiceLookupOpen(false);
                     }}
                   >
