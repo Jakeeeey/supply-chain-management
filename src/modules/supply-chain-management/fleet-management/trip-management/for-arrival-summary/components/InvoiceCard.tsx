@@ -10,14 +10,14 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import type { ForDispatchInvoice } from "../types/for-dispatch-summary.types";
+import type { ForArrivalInvoice } from "../types/for-arrival-summary.types";
 import {
   formatCurrency,
   buildAddress,
-} from "../services/for-dispatch-summary.helpers";
+} from "../services/for-arrival-summary.helpers";
 
 interface InvoiceCardProps {
-  invoice: ForDispatchInvoice;
+  invoice: ForArrivalInvoice;
 }
 
 function getInvoiceStatusVariant(
