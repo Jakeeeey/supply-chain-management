@@ -336,6 +336,9 @@ export function UpdateSalesReturnModal({
 
         setDetails(items);
         setStatusCardData(statusData);
+        if (statusData?.appliedInvoiceId) {
+          setAppliedInvoiceId(statusData.appliedInvoiceId);
+        }
         setDiscountOptions(discounts);
         setReturnTypeOptions(retTypes);
         setSalesmenOptions(salesmen);
@@ -614,7 +617,7 @@ export function UpdateSalesReturnModal({
         remarks: headerData.remarks || "",
         invoiceNo: headerData.invoiceNo,
         orderNo: headerData.orderNo,
-        appliedInvoiceId: appliedInvoiceId ?? undefined,
+        appliedInvoiceId: appliedInvoiceId,
         isThirdParty: headerData.isThirdParty,
       };
 
@@ -640,7 +643,7 @@ export function UpdateSalesReturnModal({
         remarks: headerData.remarks || "",
         invoiceNo: headerData.invoiceNo,
         orderNo: headerData.orderNo,
-        appliedInvoiceId: appliedInvoiceId ?? undefined,
+        appliedInvoiceId: appliedInvoiceId,
         isThirdParty: headerData.isThirdParty,
       };
       await SalesReturnProvider.updateReturn(savePayload);

@@ -402,13 +402,19 @@ export async function fetchStatusCard(
 
     // Fetch linked invoice
     let appliedToText = "-";
+    let appliedInvoiceId: number | null = null;
     try {
       const linkRes = await repo.getRawLinkedInvoice(returnId);
       const linkData = (linkRes.data || []) as any[];
       if (linkData.length > 0) {
         const linkedRec = linkData[0];
-        if (linkedRec.invoice_no && linkedRec.invoice_no.invoice_no) {
-          appliedToText = linkedRec.invoice_no.invoice_no;
+        if (linkedRec.invoice_no) {
+          if (linkedRec.invoice_no.invoice_no) {
+            appliedToText = linkedRec.invoice_no.invoice_no;
+          }
+          if (linkedRec.invoice_no.invoice_id) {
+            appliedInvoiceId = Number(linkedRec.invoice_no.invoice_id);
+          }
         }
       }
     } catch {
@@ -425,6 +431,7 @@ export async function fetchStatusCard(
       isPosted: parseBoolean(data.isPosted),
       isReceived: parseBoolean(data.isReceived),
       appliedTo: appliedToText,
+      appliedInvoiceId: appliedInvoiceId,
     };
   } catch {
     return null;

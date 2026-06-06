@@ -197,6 +197,7 @@ export interface SalesReturnStatusCard {
   isPosted: boolean;
   isReceived: boolean;
   appliedTo: string;
+  appliedInvoiceId?: number | null;
 }
 
 // Invoice Dropdown option (from sales_invoice table)

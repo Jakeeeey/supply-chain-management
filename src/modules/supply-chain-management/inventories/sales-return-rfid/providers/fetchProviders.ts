@@ -174,7 +174,7 @@ export const SalesReturnProvider = {
     remarks: string;
     invoiceNo?: string;
     orderNo?: string;
-    appliedInvoiceId?: number;
+    appliedInvoiceId?: number | null;
     isThirdParty?: boolean;
   }): Promise<any> {
     const res = await fetch(API_BASE, {

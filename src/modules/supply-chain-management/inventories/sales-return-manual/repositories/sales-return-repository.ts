@@ -131,7 +131,7 @@ export async function getRawReturnById(returnId: number) {
  */
 export async function getRawLinkedInvoice(returnId: number) {
   return directusGet<{ data: Record<string, unknown>[] }>(
-    `/items/sales_invoice_sales_return?filter[return_no][_eq]=${returnId}&fields=invoice_no.invoice_no`,
+    `/items/sales_invoice_sales_return?filter[return_no][_eq]=${returnId}&fields=invoice_no.invoice_no,invoice_no.invoice_id`,
   );
 }
 
