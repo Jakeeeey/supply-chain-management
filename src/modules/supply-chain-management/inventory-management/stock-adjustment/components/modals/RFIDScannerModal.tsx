@@ -145,7 +145,7 @@ export function RFIDScannerModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] sm:max-w-[500px] border-none shadow-2xl overflow-hidden p-0 bg-card max-h-[95vh] sm:max-h-[90vh] flex flex-col">
-        <div className="bg-blue-600 dark:bg-blue-700 p-4 sm:p-6 text-white shadow-inner shrink-0">
+        <div className="bg-primary p-4 sm:p-6 text-primary-foreground shadow-inner shrink-0">
           <DialogHeader>
             <div className="flex items-center gap-3 mb-2">
               <div className="bg-white/20 dark:bg-black/20 p-2 rounded-lg backdrop-blur-md">
@@ -177,12 +177,12 @@ export function RFIDScannerModal({
           <div className={`flex flex-col items-center justify-center py-6 sm:py-10 px-4 border-2 border-dashed rounded-3xl transition-all duration-300 space-y-4 animate-in fade-in zoom-in duration-500 shadow-sm ${
             isSuccess 
               ? "border-green-500/50 bg-green-500/5 dark:bg-green-500/10 scale-[1.02]" 
-              : "border-blue-500/20 bg-blue-500/5 dark:bg-blue-500/5"
+              : "border-primary/20 bg-primary/5 dark:bg-primary/5"
           }`}>
             <div className="relative">
-              <div className={`absolute inset-0 rounded-full animate-ping scale-150 duration-2000 ${isSuccess ? "bg-green-500/20" : "bg-blue-500/20"}`} />
+              <div className={`absolute inset-0 rounded-full animate-ping scale-150 duration-2000 ${isSuccess ? "bg-green-500/20" : "bg-primary/20"}`} />
               <div className={`relative p-4 sm:p-6 rounded-full shadow-xl transition-all duration-300 ${
-                isSuccess ? "bg-green-500 shadow-green-500/20" : "bg-blue-500 shadow-blue-500/20"
+                isSuccess ? "bg-green-500 shadow-green-500/20" : "bg-primary shadow-primary/20"
               }`}>
                 {isSuccess ? (
                   <Tag className="h-8 w-8 sm:h-12 sm:w-12 text-white animate-bounce" />
@@ -193,26 +193,26 @@ export function RFIDScannerModal({
             </div>
             <div className="text-center space-y-1">
               <h3 className={`text-lg sm:text-2xl font-black tracking-tight transition-colors duration-300 ${
-                isSuccess ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"
+                isSuccess ? "text-green-600 dark:text-green-400" : "text-primary dark:text-primary/70"
               }`}>
                 {isSuccess ? "Captured!" : "Ready to Scan"}
               </h3>
               <p className={`text-sm font-bold transition-colors duration-300 ${
-                isSuccess ? "text-green-600/80 dark:text-green-400/80" : "text-blue-600/70 dark:text-blue-400/70"
+                isSuccess ? "text-green-600/80 dark:text-green-400/80" : "text-primary/70 dark:text-primary/60"
               }`}>
                 {isSuccess ? `Tag ${lastScanned?.substring(0, 8)}... added` : "Position your physical RFID scanner and start scanning"}
               </p>
             </div>
             <div className={`flex items-center gap-3 px-4 py-2 rounded-full border transition-all duration-300 shadow-sm ${
-              isSuccess ? "bg-green-500 border-green-400 dark:border-green-600" : "bg-background border-blue-500/20"
+              isSuccess ? "bg-green-500 border-green-400 dark:border-green-600" : "bg-background border-primary/20"
             }`}>
                 {isSuccess ? (
                   <ScanLine className="h-4 w-4 text-white animate-pulse" />
                 ) : (
-                  <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+                  <Loader2 className="h-4 w-4 text-primary animate-spin" />
                 )}
                 <span className={`text-xs font-black uppercase tracking-widest ${
-                  isSuccess ? "text-white" : "text-blue-500"
+                  isSuccess ? "text-white" : "text-primary"
                 }`}>
                   {isSuccess ? "Processing Scan..." : "Waiting for RFID scan..."}
                 </span>
@@ -224,7 +224,7 @@ export function RFIDScannerModal({
               <h3 className="text-xs font-black text-muted-foreground/60 uppercase tracking-[0.2em]">
                 Scan History
               </h3>
-              <Badge variant="outline" className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/30 px-3 py-1 font-black rounded-lg">
+              <Badge variant="outline" className="bg-primary/5 dark:bg-primary/10 text-primary dark:text-primary/70 border-primary/20 dark:border-primary/30 px-3 py-1 font-black rounded-lg">
                 {tags.length} TAGS CAPTURED
               </Badge>
             </div>
@@ -279,7 +279,7 @@ export function RFIDScannerModal({
             type="button"
             onClick={handleSave}
             disabled={tags.length === 0}
-            className="flex-1 h-11 font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/10 rounded-xl transition-all"
+            className="flex-1 h-11 font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/10 rounded-xl transition-all"
           >
             Confirm {tags.length} Tags
           </Button>

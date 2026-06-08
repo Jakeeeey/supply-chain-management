@@ -297,6 +297,13 @@ export async function middleware(req: NextRequest) {
     const currentToken = req.cookies.get(COOKIE_NAME)?.value;
     if (token && token !== currentToken) {
         // This is a refreshed token
+        const payload = decodeJwtPayload(token);
+        const exp = Number(payload?.exp);
+        const now = Math.floor(Date.now() / 1000);
+        const cookieMaxAge = (Number.isFinite(exp) && exp > now + 5)
+            ? Math.max(60, exp - now)
+            : 60 * 60 * 24 * 7;
+
         response.cookies.set({
             name: COOKIE_NAME,
             value: token,
@@ -304,7 +311,7 @@ export async function middleware(req: NextRequest) {
             sameSite: "lax",
             secure: IS_SECURE_COOKIE,
             path: "/",
-            maxAge: 60 * 60 * 24 * 7, // 7 days (since it's a persistent session)
+            maxAge: cookieMaxAge,
         });
     }
 

@@ -62,7 +62,10 @@ export const stockAdjustmentManualService = {
   async fetchAllHeaders(params?: { search?: string; branchId?: number; type?: string; status?: string }) {
     let query = `fields=*,branch_id.branch_name,branch_id.id,created_by.user_fname,created_by.user_lname,created_by.user_id,posted_by.user_fname,posted_by.user_lname,items.id,stock_adjustment.id&sort=-created_at`;
 
-    const filters: Record<string, unknown> = {};
+    const filters: Record<string, unknown> = {
+      is_delete: { _neq: true },
+      doc_no: { _nstarts_with: "CONV" }
+    };
 
     if (params?.branchId) filters.branch_id = { _eq: params.branchId };
     if (params?.type) filters.type = { _eq: params.type };
@@ -725,7 +728,7 @@ export const stockAdjustmentManualService = {
    * Fetch all branches for the dropdown
    */
   async fetchBranches() {
-    const res = await directusFetch<{ data: { id: number; branch_name: string; branch_code: string }[] }>(`${DIRECTUS_URL}/items/branches?fields=id,branch_name,branch_code&sort=branch_name`);
+    const res = await directusFetch<{ data: { id: number; branch_name: string; branch_code: string }[] }>(`${DIRECTUS_URL}/items/branches?fields=id,branch_name,branch_code&sort=branch_name&limit=-1`);
     return res.data;
   },
 

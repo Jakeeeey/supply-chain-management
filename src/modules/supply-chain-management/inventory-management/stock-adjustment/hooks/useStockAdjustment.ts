@@ -21,6 +21,8 @@ export function useStockAdjustment() {
   const [branchId, setBranchId] = useState<number | undefined>();
   const [type, setType] = useState<string | undefined>();
   const [status, setStatus] = useState<string | undefined>();
+  const [fromDate, setFromDate] = useState<string | undefined>();
+  const [toDate, setToDate] = useState<string | undefined>();
 
   // Debounce search input
   useEffect(() => {
@@ -59,19 +61,37 @@ export function useStockAdjustment() {
     refresh();
   }, [refresh]);
 
-  // Client-side status filter — avoids Directus boolean filter inconsistencies
+  // Client-side status and date range filter — avoids Directus boolean/date inconsistencies
   const data = rawData.filter((item) => {
-    if (!status) return true;
-    // Directus may return isPosted as a Buffer, number (0/1), or boolean
-    const rawPosted = item.isPosted as unknown;
-    let posted: boolean;
-    if (rawPosted && typeof rawPosted === 'object' && 'data' in rawPosted) {
-      posted = (rawPosted as { data: number[] }).data?.[0] === 1;
-    } else {
-      posted = Number(rawPosted) === 1;
+    // 1. Status Filter
+    if (status) {
+      const rawPosted = item.isPosted as unknown;
+      let posted: boolean;
+      if (rawPosted && typeof rawPosted === 'object' && 'data' in rawPosted) {
+        posted = (rawPosted as { data: number[] }).data?.[0] === 1;
+      } else {
+        posted = Number(rawPosted) === 1;
+      }
+      if (status === "Posted" && !posted) return false;
+      if (status === "Unposted" && posted) return false;
     }
-    if (status === "Posted") return posted;
-    if (status === "Unposted") return !posted;
+
+    // 2. From Date Filter (Inclusive)
+    if (fromDate && item.created_at) {
+      const itemDate = new Date(item.created_at);
+      const filterFrom = new Date(fromDate);
+      filterFrom.setHours(0, 0, 0, 0);
+      if (itemDate < filterFrom) return false;
+    }
+
+    // 3. To Date Filter (Inclusive)
+    if (toDate && item.created_at) {
+      const itemDate = new Date(item.created_at);
+      const filterTo = new Date(toDate);
+      filterTo.setHours(23, 59, 59, 999);
+      if (itemDate > filterTo) return false;
+    }
+
     return true;
   });
 
@@ -102,6 +122,8 @@ export function useStockAdjustment() {
       branchId, setBranchId,
       type, setType,
       status, setStatus,
+      fromDate, setFromDate,
+      toDate, setToDate,
     },
   };
 }

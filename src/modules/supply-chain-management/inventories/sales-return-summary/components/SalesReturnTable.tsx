@@ -118,14 +118,15 @@ const TruncatedCell = ({ children, maxWidth = "150px", className = "" }: Truncat
   );
 };
 
-// 🟢 HELPER: Format Date to MM-DD-YYYY
+// 🟢 HELPER: Format Date to MM/DD/YYYY in Asia/Manila timezone
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return "-";
-  const d = new Date(dateStr);
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const year = d.getFullYear();
-  return `${month}-${day}-${year}`;
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(dateStr));
 };
 import { SummaryReturnHeader, SummaryReturnItem } from "../type";
 

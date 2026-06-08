@@ -34,7 +34,7 @@ export function BulkDraftActionsModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[450px]">
+      <DialogContent className="sm:max-w-[1050px]">
         <DialogHeader>
           <div className="flex items-center gap-2 mb-2">
             {isSubmit ? (
@@ -59,10 +59,10 @@ export function BulkDraftActionsModal({
               {selectedSKUs.map((sku) => (
                 <li
                   key={sku.id || sku.product_id}
-                  className="text-sm flex items-center justify-between"
+                  className="text-sm flex items-center justify-between gap-2"
                 >
-                  <span className="truncate pr-4">{sku.product_name}</span>
-                  <code className="text-[10px] bg-background px-1.5 py-0.5 rounded border">
+                  <span className="truncate pr-4 min-w-0">{sku.product_name}</span>
+                  <code className="text-[10px] bg-background px-1.5 py-0.5 rounded border shrink-0">
                     {sku.product_code || "DRAFT"}
                   </code>
                 </li>

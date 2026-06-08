@@ -68,7 +68,10 @@ export const stockAdjustmentService = {
   async fetchAllHeaders(params?: { search?: string; branchId?: number; type?: string; status?: string }) {
     let query = `fields=*,branch_id.branch_name,branch_id.id,supplier_id.id,supplier_id.supplier_name,created_by.user_fname,created_by.user_lname,created_by.user_id,posted_by.user_fname,posted_by.user_lname,items.id,stock_adjustment.id&sort=-created_at`;
 
-    const filters: Record<string, unknown> = {};
+    const filters: Record<string, unknown> = {
+      is_delete: { _neq: true },
+      doc_no: { _nstarts_with: "CONV" }
+    };
 
     if (params?.branchId) filters.branch_id = { _eq: params.branchId };
     if (params?.type) filters.type = { _eq: params.type };
@@ -97,9 +100,25 @@ export const stockAdjustmentService = {
 
     if (headers.length === 0) return [];
 
-    const docNos = headers.map(h => h.doc_no);
+    // Pre-parse remarks metadata for each header to resolve exact supplier
+    const parsedHeaders = headers.map(header => {
+      let supplierId: number | null = null;
+      let cleanedRemarks = String(header.remarks || "").trim();
+      const match = cleanedRemarks.match(/\[SUPPLIER_ID:\s*(\d+)\]/);
+      if (match) {
+        supplierId = Number(match[1]);
+        cleanedRemarks = cleanedRemarks.replace(/\s*\[SUPPLIER_ID:\s*(\d+)\]/g, "").trim();
+      }
+      return {
+        ...header,
+        remarks: cleanedRemarks,
+        parsed_supplier_id: supplierId
+      };
+    });
+
+    const docNos = parsedHeaders.map(h => h.doc_no);
     const itemsRes = await directusFetch<{ data: RawItem[] }>(
-      `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_in":${JSON.stringify(docNos)}}}&fields=doc_no,quantity,product_id.price_per_unit,product_id.cost_per_unit,unit_id.unit_name&limit=-1`
+      `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_in":${JSON.stringify(docNos)}}}&fields=doc_no,quantity,product_id.product_id,product_id.price_per_unit,product_id.cost_per_unit,unit_id.unit_name&limit=-1`
     );
     const allItems = itemsRes.data || [];
 
@@ -109,17 +128,91 @@ export const stockAdjustmentService = {
       itemsMap.get(item.doc_no)!.push(item);
     });
 
-    return headers.map(header => {
+    const productIds = allItems
+      .map((item: RawItem) => {
+        const p = item.product_id;
+        if (typeof p === 'object' && p !== null) return p.product_id || p.id;
+        return p;
+      })
+      .filter((pid): pid is number => typeof pid === 'number' || (typeof pid === 'string' && !isNaN(Number(pid))));
+
+    const productToSupplierMap = new Map<number, number>();
+    const supplierMap = new Map<number, string>();
+
+    if (productIds.length > 0) {
+      try {
+        const ppsRes = await directusFetch<{ data: PPSData[] }>(
+          `${DIRECTUS_URL}/items/product_per_supplier?filter={"product_id":{"_in":${JSON.stringify(productIds)}}}&fields=product_id,supplier_id&limit=-1`
+        );
+        const ppsData: PPSData[] = ppsRes.data || [];
+        ppsData.forEach((pps: PPSData) => {
+          const pId = typeof pps.product_id === 'object' ? pps.product_id.id : pps.product_id;
+          const sId = typeof pps.supplier_id === 'object' ? pps.supplier_id.id : pps.supplier_id;
+          if (pId && sId && !productToSupplierMap.has(Number(pId))) {
+            productToSupplierMap.set(Number(pId), Number(sId));
+          }
+        });
+      } catch (err) {
+        console.error("Error inferring suppliers in fetchAllHeaders:", err);
+      }
+    }
+
+    // Collect all parsed supplier IDs along with any inferred ones
+    const supplierIds = Array.from(new Set([
+      ...parsedHeaders.map(h => h.parsed_supplier_id).filter((id): id is number => id !== null),
+      ...Array.from(productToSupplierMap.values())
+    ]));
+
+    if (supplierIds.length > 0) {
+      try {
+        const suppliersRes = await directusFetch<{ data: Array<{ id: number; supplier_name: string }> }>(
+          `${DIRECTUS_URL}/items/suppliers?filter={"id":{"_in":${JSON.stringify(supplierIds)}}}&fields=id,supplier_name&limit=-1`
+        );
+        const suppliersData = suppliersRes.data || [];
+        suppliersData.forEach((s) => {
+          supplierMap.set(Number(s.id), s.supplier_name);
+        });
+      } catch (err) {
+        console.error("Error fetching suppliers in fetchAllHeaders:", err);
+      }
+    }
+
+    return parsedHeaders.map(header => {
       const headerItems = itemsMap.get(header.doc_no) || [];
       const totalAmount = headerItems.reduce((sum: number, item: RawItem) => {
         const cost = item.product_id?.cost_per_unit || item.product_id?.price_per_unit || 0;
         return sum + ((item.quantity || 0) * cost);
       }, 0);
 
+      // Resolve supplier from remarks metadata first
+      let resolvedSupplier: { id: number; supplier_name: string } | null = null;
+      if (header.parsed_supplier_id) {
+        const sName = supplierMap.get(header.parsed_supplier_id);
+        if (sName) {
+          resolvedSupplier = { id: header.parsed_supplier_id, supplier_name: sName };
+        }
+      }
+
+      // Fallback to legacy inference
+      if (!resolvedSupplier && headerItems.length > 0) {
+        for (const item of headerItems) {
+          const pId = Number(typeof item.product_id === 'object' ? (item.product_id?.product_id || item.product_id?.id) : item.product_id);
+          const sId = productToSupplierMap.get(pId);
+          if (sId) {
+            const sName = supplierMap.get(sId);
+            if (sName) {
+              resolvedSupplier = { id: sId, supplier_name: sName };
+              break;
+            }
+          }
+        }
+      }
+
       return {
         ...header,
         items: headerItems,
-        amount: totalAmount > 0 ? totalAmount : (Number(header.amount) || 0)
+        amount: totalAmount > 0 ? totalAmount : (Number(header.amount) || 0),
+        supplier_id: resolvedSupplier as unknown
       };
     });
   },
@@ -187,6 +280,46 @@ export const stockAdjustmentService = {
       return sum + ((item.quantity || 0) * (item.cost_per_unit || 0));
     }, 0);
 
+    // Resolve supplier from remarks metadata
+    let supplierId: number | null = null;
+    let cleanedRemarks = String(header.remarks || "").trim();
+    const match = cleanedRemarks.match(/\[SUPPLIER_ID:\s*(\d+)\]/);
+    if (match) {
+      supplierId = Number(match[1]);
+      cleanedRemarks = cleanedRemarks.replace(/\s*\[SUPPLIER_ID:\s*(\d+)\]/g, "").trim();
+    }
+
+    let resolvedSupplier: { id: number; supplier_name: string } | null = null;
+    if (supplierId) {
+      try {
+        const sRes = await directusFetch<{ data: { id: number; supplier_name: string } }>(
+          `${DIRECTUS_URL}/items/suppliers/${supplierId}?fields=id,supplier_name`
+        );
+        if (sRes.data) {
+          resolvedSupplier = { id: Number(sRes.data.id), supplier_name: sRes.data.supplier_name };
+        }
+      } catch (err) {
+        console.error("Failed to fetch resolved supplier in fetchById:", err);
+      }
+    }
+
+    if (!resolvedSupplier && items.length > 0) {
+      // Fallback: try legacy inference
+      const firstWithInferred = items.find(item => item.inferred_supplier_id);
+      if (firstWithInferred && firstWithInferred.inferred_supplier_id) {
+        try {
+          const sRes = await directusFetch<{ data: { id: number; supplier_name: string } }>(
+            `${DIRECTUS_URL}/items/suppliers/${firstWithInferred.inferred_supplier_id}?fields=id,supplier_name`
+          );
+          if (sRes.data) {
+            resolvedSupplier = { id: Number(sRes.data.id), supplier_name: sRes.data.supplier_name };
+          }
+        } catch (err) {
+          console.error("Failed to fetch legacy inferred supplier in fetchById:", err);
+        }
+      }
+    }
+
     const itemIds = items.map((i: RawItem) => i.id).filter(Boolean) as number[];
     let allRfidTags: RfidTag[] = [];
     if (itemIds.length > 0) {
@@ -213,8 +346,10 @@ export const stockAdjustmentService = {
 
     return {
       ...header,
+      remarks: cleanedRemarks,
       items: itemsWithTags,
       amount: totalAmount > 0 ? totalAmount : (Number(header.amount) || 0),
+      supplier_id: resolvedSupplier as unknown,
     } as unknown as StockAdjustmentDetail;
   },
 
@@ -358,6 +493,13 @@ export const stockAdjustmentService = {
   async create(payload: { header: Record<string, unknown>; items: StockAdjustmentItem[]; userId?: number }) {
     const { header, items } = payload;
 
+    let finalRemarks = String(header.remarks || "").trim();
+    // Clean any existing supplier tags to be safe
+    finalRemarks = finalRemarks.replace(/\s*\[SUPPLIER_ID:\s*(\d+)\]/g, "").trim();
+    if (header.supplier_id) {
+      finalRemarks = `${finalRemarks}\n[SUPPLIER_ID: ${header.supplier_id}]`.trim();
+    }
+
     const headerRes = await directusFetch<{ data: { id: number } }>(`${DIRECTUS_URL}/items/stock_adjustment_header`, {
       method: "POST",
       body: JSON.stringify({
@@ -365,7 +507,7 @@ export const stockAdjustmentService = {
         branch_id: header.branch_id,
         supplier_id: header.supplier_id,
         type: header.type,
-        remarks: header.remarks,
+        remarks: finalRemarks,
         amount: header.amount || items.reduce((acc: number, item: StockAdjustmentItem) => acc + (item.quantity * (item.cost_per_unit || 0)), 0),
         isPosted: 0,
         created_by: payload.userId,
@@ -419,11 +561,17 @@ export const stockAdjustmentService = {
    * Update an existing Stock Adjustment
    */
   async update(id: number, payload: { header: Record<string, unknown>; items: StockAdjustmentItem[]; userId?: number }) {
+    let finalRemarks = String(payload.header.remarks || "").trim();
+    finalRemarks = finalRemarks.replace(/\s*\[SUPPLIER_ID:\s*(\d+)\]/g, "").trim();
+    if (payload.header.supplier_id) {
+      finalRemarks = `${finalRemarks}\n[SUPPLIER_ID: ${payload.header.supplier_id}]`.trim();
+    }
+
     const headerPayload = {
       doc_no: payload.header.doc_no,
       type: payload.header.type,
       branch_id: Number(payload.header.branch_id),
-      remarks: payload.header.remarks,
+      remarks: finalRemarks,
       supplier_id: payload.header.supplier_id ? Number(payload.header.supplier_id) : null,
       amount: Number(payload.header.amount),
     };
@@ -540,7 +688,7 @@ export const stockAdjustmentService = {
    * Fetch all branches for the dropdown
    */
   async fetchBranches() {
-    const res = await directusFetch<{ data: { id: number; branch_name: string; branch_code: string }[] }>(`${DIRECTUS_URL}/items/branches?fields=id,branch_name,branch_code&sort=branch_name`);
+    const res = await directusFetch<{ data: { id: number; branch_name: string; branch_code: string }[] }>(`${DIRECTUS_URL}/items/branches?fields=id,branch_name,branch_code&sort=branch_name&limit=-1`);
     return res.data;
   },
 

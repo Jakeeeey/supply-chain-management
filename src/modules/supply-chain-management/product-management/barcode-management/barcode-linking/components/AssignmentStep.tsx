@@ -31,6 +31,7 @@ import {
     Ruler,
 } from "lucide-react";
 import { Product, Category, RefData } from "../types";
+import { validateEAN13 } from "../utils/barcodeUtils";
 
 interface DimensionState {
     length: string;
@@ -230,13 +231,19 @@ export function AssignmentStep({
                                 </div>
                                 {barcode && (
                                     <div className="flex flex-col items-center justify-center p-4 border border-dashed rounded-lg bg-muted/20 min-h-[80px] animate-in fade-in zoom-in duration-300">
-                                        <Barcode
-                                            value={barcode}
-                                            format={getSelectedBarcodeTypeName().includes("EAN") ? "EAN13" : "CODE128"}
-                                            width={1.5}
-                                            height={50}
-                                            fontSize={14}
-                                        />
+                                        {getSelectedBarcodeTypeName().includes("EAN") && !validateEAN13(barcode).isValid ? (
+                                            <span className="text-xs text-destructive font-medium px-2 text-center">
+                                                {validateEAN13(barcode).error || "Invalid EAN-13 barcode format"}
+                                            </span>
+                                        ) : (
+                                            <Barcode
+                                                value={barcode}
+                                                format={getSelectedBarcodeTypeName().includes("EAN") ? "EAN13" : "CODE128"}
+                                                width={1.5}
+                                                height={50}
+                                                fontSize={14}
+                                            />
+                                        )}
                                     </div>
                                 )}
                             </TabsContent>
@@ -312,13 +319,19 @@ export function AssignmentStep({
 
                                 {barcode && (
                                     <div className="w-full flex flex-col items-center justify-center p-4 border border-dashed rounded-lg bg-muted/20 min-h-[80px] animate-in fade-in zoom-in duration-300">
-                                        <Barcode
-                                            value={barcode}
-                                            format={getSelectedBarcodeTypeName().includes("EAN") ? "EAN13" : "CODE128"}
-                                            width={1.5}
-                                            height={50}
-                                            fontSize={14}
-                                        />
+                                        {getSelectedBarcodeTypeName().includes("EAN") && !validateEAN13(barcode).isValid ? (
+                                            <span className="text-xs text-destructive font-medium px-2 text-center">
+                                                {validateEAN13(barcode).error || "Invalid EAN-13 barcode format"}
+                                            </span>
+                                        ) : (
+                                            <Barcode
+                                                value={barcode}
+                                                format={getSelectedBarcodeTypeName().includes("EAN") ? "EAN13" : "CODE128"}
+                                                width={1.5}
+                                                height={50}
+                                                fontSize={14}
+                                            />
+                                        )}
                                     </div>
                                 )}
                             </TabsContent>
@@ -330,13 +343,19 @@ export function AssignmentStep({
                                 </Button>
                                 <div className="flex flex-col items-center justify-center p-4 border border-dashed rounded-lg bg-muted/20 min-h-[80px]">
                                     {barcode ? (
-                                        <Barcode
-                                            value={barcode}
-                                            format={getSelectedBarcodeTypeName().includes("EAN") ? "EAN13" : "CODE128"}
-                                            width={1.5}
-                                            height={50}
-                                            fontSize={14}
-                                        />
+                                        getSelectedBarcodeTypeName().includes("EAN") && !validateEAN13(barcode).isValid ? (
+                                            <span className="text-xs text-destructive font-medium px-2 text-center">
+                                                {validateEAN13(barcode).error || "Invalid EAN-13 barcode format"}
+                                            </span>
+                                        ) : (
+                                            <Barcode
+                                                value={barcode}
+                                                format={getSelectedBarcodeTypeName().includes("EAN") ? "EAN13" : "CODE128"}
+                                                width={1.5}
+                                                height={50}
+                                                fontSize={14}
+                                            />
+                                        )
                                     ) : (
                                         <span className="text-xs text-muted-foreground">
                                             Click Generate to create a code
