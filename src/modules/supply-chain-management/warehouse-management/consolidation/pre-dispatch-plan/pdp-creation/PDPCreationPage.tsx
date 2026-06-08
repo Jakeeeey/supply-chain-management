@@ -84,7 +84,7 @@ export default function PDPCreationPage() {
   };
 
   const handleFilterChange = useCallback(
-    (clusterId?: number, branchId?: number) => {
+    (clusterId?: number | null, branchId?: number | null) => {
       fetchAvailableOrders(clusterId, undefined, branchId);
     },
     [fetchAvailableOrders],

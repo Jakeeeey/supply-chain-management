@@ -17,10 +17,12 @@ import {
 import { ColumnDef } from "@tanstack/react-table";
 import {
   CheckCircle,
+  Clock,
   ImageIcon,
   Images,
   MoreHorizontal,
   XCircle,
+  Edit,
 } from "lucide-react";
 import Image from "next/image";
 import { CellHelpers } from "../../../sku-creation/utils/sku-helpers";
@@ -44,6 +46,7 @@ export const getMasterlistColumns = (
   onEdit?: (sku: SKU) => void,
   onUpdateImage?: (sku: SKU) => void,
   onViewGallery?: (sku: SKU) => void,
+  pendingEditIds?: Set<number>,
 ): ColumnDef<SKU>[] => [
   {
     id: "select",
@@ -137,9 +140,54 @@ export const getMasterlistColumns = (
       <DataTableColumnHeader column={column} label="Product Name" />
     ),
     meta: { label: "Product Name" },
+    cell: ({ row }) => {
+      const sku = row.original;
+      const pid = (sku.product_id || sku.id) as number;
+      const hasPendingEdit = pendingEditIds?.has(pid) ?? false;
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium block truncate max-w-[400px]">
+            {sku.product_name || "Unnamed Product"}
+          </span>
+          {hasPendingEdit && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 border-amber-300 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 shrink-0">
+              <Clock className="h-3 w-3 mr-0.5" />
+              Pending Edit
+            </Badge>
+          )}
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "product_supplier",
+    enableSorting: false,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Supplier" />
+    ),
+    meta: { label: "Supplier" },
     cell: ({ row }) => (
-      <span className="text-sm font-medium">
-        {row.original.product_name || "Unnamed Product"}
+      <span className="text-sm text-muted-foreground">
+        {CellHelpers.renderMasterText(
+          row.original.product_supplier,
+          masterData?.suppliers,
+        )}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "product_brand",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Brand" />
+    ),
+    meta: { label: "Brand" },
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground">
+        {CellHelpers.renderMasterText(
+          row.original.product_brand,
+          masterData?.brands,
+        )}
       </span>
     ),
   },
@@ -160,6 +208,54 @@ export const getMasterlistColumns = (
     ),
   },
   {
+    accessorKey: "product_class",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Class" />
+    ),
+    meta: { label: "Class" },
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground">
+        {CellHelpers.renderMasterText(
+          row.original.product_class,
+          masterData?.classes,
+        )}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "product_segment",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Segment" />
+    ),
+    meta: { label: "Segment" },
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground">
+        {CellHelpers.renderMasterText(
+          row.original.product_segment,
+          masterData?.segments,
+        )}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "product_section",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Section" />
+    ),
+    meta: { label: "Section" },
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground">
+        {CellHelpers.renderMasterText(
+          row.original.product_section,
+          masterData?.sections,
+        )}
+      </span>
+    ),
+  },
+  {
     accessorKey: "inventory_type",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} label="Type" />
@@ -173,22 +269,6 @@ export const getMasterlistColumns = (
         </Badge>
       );
     },
-  },
-  {
-    accessorKey: "product_brand",
-    enableSorting: true,
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} label="Brand" />
-    ),
-    meta: { label: "Brand" },
-    cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground">
-        {CellHelpers.renderMasterText(
-          row.original.product_brand,
-          masterData?.brands,
-        )}
-      </span>
-    ),
   },
   {
     accessorKey: "isActive",
@@ -227,6 +307,21 @@ export const getMasterlistColumns = (
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {onEdit && (
+              (() => {
+                const pid = (sku.product_id || sku.id) as number;
+                const hasPendingEdit = pendingEditIds?.has(pid) ?? false;
+                return (
+                  <DropdownMenuItem
+                    onClick={() => onEdit(sku)}
+                    disabled={hasPendingEdit}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    {hasPendingEdit ? "Edit Pending Approval" : "Edit Product"}
+                  </DropdownMenuItem>
+                );
+              })()
+            )}
             {isParent && onUpdateImage && (
               <DropdownMenuItem onClick={() => onUpdateImage(sku)}>
                 <ImageIcon className="h-4 w-4 mr-2" />

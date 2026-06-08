@@ -35,12 +35,45 @@ const parseBoolean = (val: any): boolean => {
   return val === true;
 };
 
+const nowPH = (): string => {
+  // Add 8 hours (UTC+8) to UTC time to get Manila time.
+  // Uses getUTC* methods to avoid any server local-timezone influence.
+  const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
+  const d = new Date(manilaMs);
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const hour = String(d.getUTCHours()).padStart(2, "0");
+  const minute = String(d.getUTCMinutes()).padStart(2, "0");
+  const second = String(d.getUTCSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+};
+
 const formatDateForAPI = (dateString: string | Date) => {
   try {
-    if (!dateString) return new Date().toISOString().split("T")[0];
-    return new Date(dateString).toISOString().split("T")[0];
+    if (!dateString) {
+      return nowPH();
+    }
+    let dateStr = "";
+    if (typeof dateString === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      dateStr = dateString;
+    } else {
+      const date = typeof dateString === "string" ? new Date(dateString) : dateString;
+      const manilaMs = date.getTime() + 8 * 60 * 60 * 1000;
+      const d = new Date(manilaMs);
+      const year = d.getUTCFullYear();
+      const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(d.getUTCDate()).padStart(2, "0");
+      dateStr = `${year}-${month}-${day}`;
+    }
+
+    const nowD = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const hour = String(nowD.getUTCHours()).padStart(2, "0");
+    const minute = String(nowD.getUTCMinutes()).padStart(2, "0");
+    const second = String(nowD.getUTCSeconds()).padStart(2, "0");
+    return `${dateStr}T${hour}:${minute}:${second}`;
   } catch {
-    return new Date().toISOString().split("T")[0];
+    return nowPH();
   }
 };
 
@@ -51,28 +84,16 @@ const cleanId = (id: any) => {
 };
 
 /**
- * Builds a Map<discount_type_id, total_percentage> by summing linked
- * line_discount.percentage values through the line_per_discount_type junction.
+ * Builds a Map<discount_type_id, total_percentage> by retrieving pre-calculated
+ * sequential compounded percentages from the discount_type collection.
  */
 async function buildDiscountPercentMap(): Promise<Map<number, number>> {
-  const [junctionRes, lineDiscRes] = await Promise.all([
-    repo.getRawLinePerDiscountType(),
-    repo.getRawLineDiscounts(),
-  ]);
+  const result = await repo.getRawDiscountTypes();
+  const rows = (result.data || []) as { id: number; total_percent: string | number }[];
 
-  const junctionRows = (junctionRes.data || []) as { type_id: number; line_id: number }[];
-  const lineDiscRows = (lineDiscRes.data || []) as { id: number; percentage: string | number }[];
-
-  // Build a lookup: line_discount.id → percentage
-  const linePercentMap = new Map<number, number>();
-  lineDiscRows.forEach((ld) => linePercentMap.set(ld.id, parseFloat(String(ld.percentage)) || 0));
-
-  // Aggregate: for each discount_type_id, sum all linked line_discount percentages
   const discountMap = new Map<number, number>();
-  junctionRows.forEach((row) => {
-    const existing = discountMap.get(row.type_id) || 0;
-    const linePct = linePercentMap.get(row.line_id) || 0;
-    discountMap.set(row.type_id, Math.round((existing + linePct) * 10000) / 10000);
+  rows.forEach((dt) => {
+    discountMap.set(dt.id, parseFloat(String(dt.total_percent)) || 0);
   });
 
   return discountMap;
@@ -99,7 +120,7 @@ export async function fetchReturns(
     customerCode: item.customer_code,
     salesmanId: item.salesman_id,
     returnDate: item.return_date
-      ? new Date(item.return_date).toLocaleDateString()
+      ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.return_date))
       : "N/A",
     totalAmount: parseFloat(item.total_amount) || 0,
     status: item.status || "Pending",
@@ -108,7 +129,7 @@ export async function fetchReturns(
     isThirdParty: parseBoolean(item.isThirdParty),
     priceType: item.price_type || "-",
     createdAt: item.created_at
-      ? new Date(item.created_at).toLocaleDateString()
+      ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.created_at))
       : "-",
   }));
 
@@ -275,7 +296,7 @@ export async function fetchReferences(): Promise<{
   const enrichedLineDiscounts: API_LineDiscount[] = rawDiscountTypes.map((dt: any) => ({
     id: dt.id,
     discount_type: dt.discount_type,
-    total_percent: String(discountPercentMap.get(dt.id) || 0),
+    total_percent: String(dt.total_percent !== undefined && dt.total_percent !== null ? dt.total_percent : (discountPercentMap.get(dt.id) || 0)),
   }));
 
   return {
@@ -398,7 +419,7 @@ export async function fetchStatusCard(
       returnId: data.return_id,
       isApplied: data.isApplied === 1,
       dateApplied: data.updated_at
-        ? new Date(data.updated_at).toLocaleDateString()
+        ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(data.updated_at))
         : "-",
       transactionStatus: data.status || "Closed",
       isPosted: parseBoolean(data.isPosted),
@@ -458,6 +479,8 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
     remarks: payload.remarks || "Created via Web App",
     order_id: payload.orderNo || "",
     isThirdParty: payload.isThirdParty ? 1 : 0,
+    created_at: nowPH(),
+    updated_at: nowPH(),
   };
 
   const headerResult = await repo.createReturnHeader(headerPayload);
@@ -505,6 +528,7 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
       sales_return_type_id: typeId,
       discount_type: discId,
       reason: item.reason || null,
+      created_at: nowPH(),
     };
 
     await repo.createReturnDetail(detailPayload);
@@ -569,6 +593,7 @@ export async function updateReturn(
     invoice_no: payload.invoiceNo ?? "",
     order_id: payload.orderNo ?? "",
     isThirdParty: payload.isThirdParty ? 1 : 0,
+    updated_at: nowPH(),
   };
 
   await repo.updateReturnHeader(payload.returnId, headerPayload);
@@ -649,6 +674,7 @@ export async function updateReturn(
       sales_return_type_id: typeId,
       discount_type: discId,
       reason: item.reason || null,
+      updated_at: nowPH(),
     };
 
     if (typeof item.id === "string" && item.id.startsWith("added-")) {
@@ -656,6 +682,7 @@ export async function updateReturn(
         ...detailPayload,
         return_no: payload.returnNo,
         product_id: Number(item.productId || item.product_id),
+        created_at: nowPH(),
       });
     } else {
       await repo.updateReturnDetail(item.id, detailPayload);

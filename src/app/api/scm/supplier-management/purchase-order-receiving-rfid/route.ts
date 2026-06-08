@@ -119,6 +119,20 @@ function calculateDiscountFromLines(lines: DiscountLine[]): number {
     return Number(((1 - factor) * 100).toFixed(4));
 }
 
+async function fetchReceiptTypesMap(base: string): Promise<Map<number, string>> {
+    const map = new Map<number, string>();
+    try {
+        const url = `${base}/items/sales_invoice_type?limit=-1&fields=id,shortcut`;
+        const j = await fetchJson<{ data: Array<{ id: number; shortcut: string }> }>(url);
+        for (const t of (j?.data || [])) {
+            if (t.id) map.set(t.id, String(t.shortcut || "").trim());
+        }
+    } catch (e) {
+        console.error("Failed to fetch receipt types map:", e);
+    }
+    return map;
+}
+
 const RFID_LEN = 24;
 function normalizeRfid(raw: string): string {
     const up = toStr(raw).toUpperCase();
@@ -211,7 +225,7 @@ async function fetchApprovedNotReceivedPOs(base: string): Promise<POHeaderRow[]>
         "fields=purchase_order_id,purchase_order_no,date,date_encoded,approver_id,date_approved,payment_status,inventory_status,date_received,supplier_name,total_amount,price_type",
         "filter[_or][0][inventory_status][_eq]=3", "filter[_or][1][inventory_status][_eq]=9",
         "filter[_or][2][inventory_status][_eq]=11", "filter[_or][3][inventory_status][_eq]=12",
-        "filter[inventory_status][_neq]=13",
+        "filter[_or][4][inventory_status][_eq]=13",
     ].join("&");
     const url = `${base}/items/${PO_COLLECTION}?${qs}`;
     const j = await fetchJson<{ data: POHeaderRow[] }>(url);
@@ -228,6 +242,7 @@ interface PORow {
     receipt_date?: string | null;
     received_date?: string | null;
     isPosted?: string | number;
+    is_reverted?: string | number | null;
     lot_id?: string | number;
     batch_no?: string;
     expiry_date?: string;
@@ -237,6 +252,7 @@ interface PORow {
     vat_amount?: string | number;
     withholding_amount?: string | number;
     total_amount?: string | number;
+    receipt_type?: string | null;
 }
 
 interface POProductRow {
@@ -250,7 +266,7 @@ interface POProductRow {
     discount_type?: string | number | null;
 }
 
-const POR_SAFE_FIELDS = "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,lot_id,batch_no,expiry_date,discount_type,unit_price";
+const POR_SAFE_FIELDS = "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,receipt_type,received_date,isPosted,is_reverted,lot_id,batch_no,expiry_date,discount_type,unit_price,discounted_amount";
 
 
 async function fetchReceivingItemsByLinkIds(base: string, linkIds: number[]) {
@@ -421,7 +437,8 @@ function productDisplayCode(p: ProductRow | undefined, productId: number) {
     return pc || bc || String(productId);
 }
 
-function effectiveReceivedQty(por: PORow) {
+function effectiveReceivedQty(por: PORow | null | undefined) {
+    if (toNum(por?.is_reverted) === 1) return 0;
     const posted = toNum(por?.isPosted) === 1;
     if (posted) return Math.max(0, toNum(por?.received_quantity ?? 0));
     const evidence = Boolean(toStr(por?.receipt_no) || toStr(por?.receipt_date) || toStr(por?.received_date));
@@ -472,7 +489,12 @@ function isFullyReceived(poId: number, lines: POProductRow[], porRows: PORow[]) 
 
 function receivingStatusFrom(poId: number, lines: POProductRow[], porRows: PORow[]): POStatus {
     const fully = isFullyReceived(poId, lines, porRows);
-    if (fully) return "CLOSED";
+    if (fully) {
+        // Even if quantities are fully received, if there are unposted/reverted receipts, it's not truly closed
+        const hasUnposted = porRows.some(r => toNum(r.isPosted) === 0 && (toStr(r.receipt_no) || toNum(r.received_quantity) > 0 || toNum(r.is_reverted) === 1));
+        if (hasUnposted) return "PARTIAL";
+        return "CLOSED";
+    }
     const hasAnyPosted = porRows.some(r => toNum(r.isPosted) === 1);
     const hasAnyReceipt = porRows.some(r => effectiveReceivedQty(r) > 0 || toStr(r.receipt_no));
     if (hasAnyPosted || hasAnyReceipt) return "PARTIAL";
@@ -584,13 +606,15 @@ export async function GET() {
             const lines = poLinesAll.filter((l) => toNum(l.purchase_order_id) === poId);
             const porRows = porRowsAll.filter((r) => toNum(r.purchase_order_id) === poId);
 
-            // ✅ Smarter check: If all items are received (or exceed) expected, it's done.
             const hasPending = lines.some(ln => {
                 const received = porRows.filter(r => toNum(r.product_id) === toNum(ln.product_id) && toNum(r.branch_id) === toNum(ln.branch_id));
                 const totalReceived = received.reduce((sum, r) => sum + effectiveReceivedQty(r), 0);
                 return totalReceived < toNum(ln.ordered_quantity);
             });
-            if (!hasPending && lines.length > 0) return null;
+
+            const hasUnposted = porRows.some(r => toNum(r.isPosted) === 0 && (toStr(r.receipt_no) || toNum(r.received_quantity) > 0 || toNum(r.is_reverted) === 1));
+
+            if (!hasPending && !hasUnposted && lines.length > 0) return null;
 
             return {
                 id: String(poId),
@@ -615,7 +639,7 @@ export async function POST(req: NextRequest) {
 
         if (action === "load_receipt") {
             const { poId, receiptNo } = body;
-            const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=purchase_order_product_id,product_id,branch_id,received_quantity,lot_id,batch_no,expiry_date`;
+            const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=purchase_order_product_id,product_id,branch_id,received_quantity,lot_id,batch_no,expiry_date,receipt_type`;
             const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
             
             const porIds = (j?.data || []).map(r => toNum(r.purchase_order_product_id)).filter(id => id > 0);
@@ -625,8 +649,19 @@ export async function POST(req: NextRequest) {
                 const rfidJ = await fetchJson<{ data: Record<string, unknown>[] }>(rfidUrl);
                 rfids = rfidJ?.data || [];
             }
+
+            // Resolve receipt type ID back to string shortcut for frontend compatibility
+            const dbReceiptType = toNum((j?.data || [])[0]?.receipt_type);
+            let receiptType = "";
+            if (dbReceiptType > 0) {
+                const rtMap = await fetchReceiptTypesMap(base);
+                receiptType = rtMap.get(dbReceiptType) || "";
+            }
+            if (!receiptType) {
+                receiptType = toStr((j?.data || [])[0]?.receipt_type);
+            }
             
-            return ok({ items: j?.data || [], rfids });
+            return ok({ items: j?.data || [], rfids, receiptType });
         }
 
         // ✅ Real-time receipt number duplicate check (lightweight — used by frontend onBlur)
@@ -693,10 +728,13 @@ export async function POST(req: NextRequest) {
                     headerDiscountType: dType
                 });
 
-                const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && !toStr(r.receipt_no));
+                const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1));
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
 
                 const orderedQty = toNum(ln.ordered_quantity);
+                const otherRows = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).filter(r => r && r.purchase_order_product_id !== openRow?.purchase_order_product_id);
+                const previousReceivedQty = otherRows.reduce((sum, r) => sum + effectiveReceivedQty(r), 0);
+                const remainingQty = Math.max(0, orderedQty - previousReceivedQty);
 
                 const item: POItem = {
                     id: porIdStr,
@@ -706,7 +744,7 @@ export async function POST(req: NextRequest) {
                     barcode: productDisplayCode(p, pid),
                     uom: String(p?.unit_of_measurement?.unit_shortcut ?? p?.unit_of_measurement?.unit_name ?? "BOX").toUpperCase(),
                     uomCount: Number(p?.unit_of_measurement_count) || 1,
-                    expectedQty: orderedQty,
+                    expectedQty: remainingQty,
                     receivedQty,
                     requiresRfid: true,
                     taggedQty: taggedCountByKey.get(k) || 0,
@@ -736,7 +774,7 @@ export async function POST(req: NextRequest) {
                 const p = productsMap.get(pid);
                 const pors = porIdsByKey.get(k) || [];
                 const receivedQty = pors.reduce((sum, id) => sum + effectiveReceivedQty(porRows.find(r => toNum(r.purchase_order_product_id) === id)!), 0);
-                const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && !toStr(r.receipt_no));
+                const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1));
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
 
                 const { lineDiscountTypeStr, dAmount } = resolveLineDiscount({
@@ -774,11 +812,43 @@ export async function POST(req: NextRequest) {
                 arr.push(item);
                 allocationsMap.set(bid, arr);
             }
+            const rtMap = await fetchReceiptTypesMap(base);
             const uniqueReceipts = Array.from(new Set(porRows.map(r => r.receipt_no).filter(Boolean)));
             const history = uniqueReceipts.map(rno => {
                 const rowsForReceipt = porRows.filter(r => r.receipt_no === rno);
-                return { receiptNo: rno, receiptDate: rowsForReceipt[0]?.receipt_date || rowsForReceipt[0]?.received_date || "", isPosted: rowsForReceipt.every(r => toNum(r.isPosted) === 1), itemsCount: rowsForReceipt.length };
+                const isReverted = rowsForReceipt.some(r => toNum(r.is_reverted) === 1);
+                const dbReceiptType = toNum(rowsForReceipt[0]?.receipt_type);
+                const receiptType = (dbReceiptType > 0 ? rtMap.get(dbReceiptType) : null) || toStr(rowsForReceipt[0]?.receipt_type);
+                return { receiptNo: rno, receiptDate: rowsForReceipt[0]?.receipt_date || rowsForReceipt[0]?.received_date || "", receiptType, isPosted: rowsForReceipt.every(r => toNum(r.isPosted) === 1), isReverted, itemsCount: rowsForReceipt.length };
             }).sort((a, b) => b.receiptNo!.localeCompare(a.receiptNo!));
+
+            // ✅ Build draftData: POR rows where receipt_no is null OR is_reverted is 1, and received_quantity > 0
+            const draftRows = porRows.filter(r => (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1) && toNum(r.received_quantity) > 0);
+            const draftData = draftRows.map(r => {
+                const dbReceiptType = toNum(r.receipt_type);
+                const receiptTypeStr = (dbReceiptType > 0 ? rtMap.get(dbReceiptType) : null) || toStr(r.receipt_type);
+                return {
+                    porId: toNum(r.purchase_order_product_id),
+                    productId: toNum(r.product_id),
+                    branchId: toNum(r.branch_id),
+                    receivedQuantity: toNum(r.received_quantity),
+                    batchNo: toStr(r.batch_no) || null,
+                    expiryDate: toStr(r.expiry_date) || null,
+                    lotId: r.lot_id ? toNum(r.lot_id) : null,
+                    receiptNo: toStr(r.receipt_no) || null,
+                    receiptDate: toStr(r.receipt_date) || null,
+                    receiptType: receiptTypeStr || null,
+                };
+            });
+
+            const draftPorIds = draftRows.map(r => toNum(r.purchase_order_product_id)).filter(id => id > 0);
+            let draftRfids: Record<string, unknown>[] = [];
+            if (draftPorIds.length > 0) {
+                const rfidUrl = `${base}/items/${POR_ITEMS_COLLECTION}?limit=-1&filter[purchase_order_product_id][_in]=${draftPorIds.join(",")}&fields=rfid_code,product_id,purchase_order_product_id,created_at`;
+                const rfidJ = await fetchJson<{ data: Record<string, unknown>[] }>(rfidUrl).catch(() => ({ data: [] }));
+                draftRfids = rfidJ?.data || [];
+            }
+
             return ok({
                 id: String(poId),
                 poNumber: toStr(po.purchase_order_no),
@@ -788,7 +858,9 @@ export async function POST(req: NextRequest) {
                 priceType: toStr(po.price_type, "Cost Per Unit"),
                 isInvoice: (toNum((po as unknown as Record<string, unknown>)?.vat_amount) > 0) || (toNum((po as unknown as Record<string, unknown>)?.withholding_tax_amount) > 0),
                 createdAt: po.date_encoded ? new Date(po.date_encoded).toISOString() : new Date().toISOString(),
-                history
+                history,
+                draftData: draftData.length > 0 ? draftData : undefined,
+                draftRfids: draftRfids.length > 0 ? draftRfids : undefined,
             });
         }
         if (action === "scan_rfid") {
@@ -845,15 +917,24 @@ export async function POST(req: NextRequest) {
             const p = j?.data?.[0];
             if (!p) return bad("Product not found", 404);
             const uomId = Number(p.unit_of_measurement?.unit_id ?? p.unit_of_measurement);
-            if (uomId !== 11) {
-                return bad("Only products with 'Box' UOM are allowed.", 400);
+            if (uomId !== 11 && uomId !== 1) {
+                return bad("Only 'Box' or 'Piece' UOM allowed.", 400);
+            }
+
+            if (uomId === 1) {
+                // Check if a Box variant exists for this product name
+                const boxUrl = `${base}/items/${PRODUCTS_COLLECTION}?limit=1&filter[product_name][_eq]=${encodeURIComponent(String(p.product_name))}&filter[unit_of_measurement][_eq]=11&fields=product_id`;
+                const boxJ = await fetchJson<{ data: Record<string, unknown>[] }>(boxUrl).catch(() => null);
+                if (boxJ && Array.isArray(boxJ.data) && boxJ.data.length > 0) {
+                    return bad("A Box variant exists for this product. Please use the Box variant.", 400);
+                }
             }
 
             return ok({
                 productId: String(p.product_id),
                 name: String(p.product_name),
                 barcode: String(p.barcode || p.product_code),
-                unitPrice: toNum(p.cost_per_unit) // Used for extra products
+                unitPrice: toNum(p.cost_per_unit)
             });
         }
 
@@ -974,11 +1055,38 @@ export async function POST(req: NextRequest) {
             const poId = toNum(body.poId);
             const receiptNo = toStr(body.receiptNo);
             const receiptDate = toStr(body.receiptDate);
+            const receiptType = toStr(body.receiptType);
+
+            // Resolve receipt type to integer ID from database (sales_invoice_type)
+            let resolvedReceiptTypeId: number | null = null;
+            if (receiptType) {
+                const num = Number(receiptType);
+                if (Number.isInteger(num) && num > 0) {
+                    resolvedReceiptTypeId = num;
+                } else {
+                    try {
+                        const typesUrl = `${base}/items/sales_invoice_type?limit=-1&fields=id,type,shortcut`;
+                        const resTypes = await fetchJson<{ data: Array<{ id: number; type: string; shortcut: string }> }>(typesUrl).catch(() => ({ data: [] }));
+                        const found = (resTypes?.data || []).find(t => 
+                            String(t.shortcut).trim().toUpperCase() === receiptType.trim().toUpperCase() ||
+                            String(t.type).trim().toUpperCase() === receiptType.trim().toUpperCase() ||
+                            String(t.id) === receiptType
+                        );
+                        if (found) {
+                            resolvedReceiptTypeId = found.id;
+                        }
+                    } catch (e) {
+                        console.error("Failed to resolve receipt type:", e);
+                    }
+                }
+            }
+
             const porCounts = body.porCounts as Record<string, number>;
             const porMetaData = body.porMetaData as Record<string, Record<string, unknown>>;
             const receiverId = body.receiverId;
             const newTags = body.newTags as Array<{ rfid: string; productId: string; porId?: string }>;
             const isEdit = !!body.isEdit;
+            const editReceiptNo = body.editingReceiptNo || receiptNo;
 
             if (!poId) return bad("Missing poId.");
             if (!receiptNo) return bad("Missing receipt number.");
@@ -1068,7 +1176,7 @@ export async function POST(req: NextRequest) {
 
             // ✅ Handle Edit Mode: Remove tags that were deleted from the UI
             if (isEdit) {
-                const existingRows = porRows.filter(r => toStr(r.receipt_no) === receiptNo);
+                const existingRows = porRows.filter(r => toStr(r.receipt_no) === editReceiptNo);
                 const existingPorIds = existingRows.map(r => toNum(r.purchase_order_product_id)).filter(id => id > 0);
                 
                 if (existingPorIds.length > 0) {
@@ -1122,10 +1230,11 @@ export async function POST(req: NextRequest) {
 
             // 🔥 Collect all unique POR IDs that should be in this receipt:
             // 1. Items scanned in THIS session (in porCounts)
-            // 2. Items that have RFID tags but no receipt_no yet
+            // 2. If editing/reverting, items currently saved under this receipt number
             const involvedPorIds = new Set<number>();
             realPorIdsByLocalKey.forEach(id => involvedPorIds.add(id));
-            tagCountByPorId.forEach((count, id) => { if (count > 0) involvedPorIds.add(id); });
+            const existingRows = porRows.filter(r => toStr(r.receipt_no) === editReceiptNo);
+            existingRows.forEach(r => involvedPorIds.add(toNum(r.purchase_order_product_id)));
 
             for (const realPorId of Array.from(involvedPorIds)) {
                 // Find localKey if it exists, otherwise use realPorId
@@ -1136,20 +1245,7 @@ export async function POST(req: NextRequest) {
 
                 const m = meta[localKey] || meta[String(realPorId)] || {};
 
-                let pr = allPorRows.find(r => toNum(r.purchase_order_product_id) === realPorId);
-                if (!pr || !toStr(pr.receipt_no)) {
-                    // Fetch fresh or if we need to check receipt_no
-                    try {
-                        const res = await fetchJson<{ data: PORow }>(`${base}/items/${POR_COLLECTION}/${realPorId}?fields=${encodeURIComponent(POR_SAFE_FIELDS)}`);
-                        if (res?.data) {
-                            pr = res.data;
-                            // If it ALREADY has a receipt_no and wasn't part of this session's count, skip it
-                            if (toStr(pr.receipt_no) && !realPorIdsByLocalKey.has(localKey)) continue;
-                        }
-                    } catch (e) {
-                        console.error(`Failed to fetch POR line ${realPorId}:`, e);
-                    }
-                }
+                const pr = allPorRows.find(r => toNum(r.purchase_order_product_id) === realPorId);
                 if (!pr) continue;
 
                 const uPrice = toNum(pr.unit_price || 0);
@@ -1168,9 +1264,23 @@ export async function POST(req: NextRequest) {
                 // 🔥 Recalculate: Use absolute tag count if tags exist, otherwise use delta for barcode-scanned items
                 const tagCount = tagCountByPorId.get(realPorId) || 0;
                 const sessionQty = toNum(porCounts[localKey]);
-                const newQty = tagCount > 0 ? tagCount : (toNum(pr?.received_quantity || 0) + sessionQty);
+                const newQty = tagCount > 0 ? tagCount : sessionQty;
 
-                if (newQty <= 0 && sessionQty <= 0) continue; // Skip if no tags and no manual count
+                // If quantity is now 0, reset or delete the item from this receipt
+                if (newQty <= 0) {
+                    const isExtra = !lines.some(l => toNum(l.product_id) === pId && toNum(l.branch_id ?? 0) === toNum(pr.branch_id ?? 0));
+                    if (isExtra) {
+                        await fetchJson(`${base}/items/${POR_COLLECTION}/${realPorId}`, { method: "DELETE" }).catch(() => {});
+                    } else {
+                        const resetPatch = {
+                            receipt_no: null, receipt_date: null, receipt_type: null, received_quantity: 0, received_date: null, isPosted: 0, is_reverted: 0,
+                            discounted_amount: 0, vat_amount: 0, withholding_amount: 0, total_amount: 0,
+                            lot_id: null, batch_no: null, expiry_date: null
+                        };
+                        await fetchJson(`${base}/items/${POR_COLLECTION}/${realPorId}`, { method: "PATCH", body: JSON.stringify(resetPatch) });
+                    }
+                    continue;
+                }
 
                 const lineGross = uPrice * newQty;
                 const lineDisc = Number((lineGross * (linePct / 100)).toFixed(2));
@@ -1180,7 +1290,7 @@ export async function POST(req: NextRequest) {
                 const ewtAmtTotal = poIsInvoice ? Number((vatExclTotal * 0.01).toFixed(2)) : 0;
 
                 const patch: Record<string, unknown> = {
-                    receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: newQty, received_date: nowISO(), isPosted: 0,
+                    receipt_no: receiptNo, receipt_date: receiptDate, receipt_type: resolvedReceiptTypeId || null, received_quantity: newQty, received_date: nowISO(), isPosted: 0, is_reverted: 0,
                     discount_type: dtId || null, discounted_amount: lineDisc,
                     vat_amount: vatAmtTotal, withholding_amount: ewtAmtTotal,
                     total_amount: Number(lineGross.toFixed(2))
@@ -1340,14 +1450,16 @@ export async function POST(req: NextRequest) {
             const pids = links.map(r => toNum(r.product_id)).filter(id => id > 0);
             if (!pids.length) return ok([]);
 
-            // Then get the full product details (only BOX items)
+            // Then get the full product details (Box and Piece items)
             const map = await fetchProductsMap(base, pids);
 
-            const results = links.map(link => {
+            const rawResults = links.map(link => {
                 const pid = toNum(link.product_id);
                 const p = map.get(pid);
                 if (!p) return null;
-                if (Number(p.unit_of_measurement?.unit_id ?? p.unit_of_measurement) !== 11) return null;
+
+                const uomId = Number(p.unit_of_measurement?.unit_id ?? p.unit_of_measurement);
+                if (uomId !== 11 && uomId !== 1) return null;
 
                 const dt = link.discount_type as Record<string, unknown> | null | undefined;
                 let discTypeStr = "No Discount";
@@ -1366,13 +1478,54 @@ export async function POST(req: NextRequest) {
                     sku: String(p.barcode || p.product_code),
                     barcode: String(p.barcode || p.product_code),
                     unitPrice: toNum(p.cost_per_unit),
-                    uom: "BOX",
+                    uomId: uomId,
+                    uom: String(p.unit_of_measurement?.unit_shortcut ?? (uomId === 11 ? "BOX" : "PCS")).toUpperCase(),
                     discountType: discTypeStr,
                     discountPercent: discPct
                 };
-            }).filter(Boolean);
+            }).filter(Boolean) as Array<{
+                productId: string;
+                name: string;
+                sku: string;
+                barcode: string;
+                unitPrice: number;
+                uomId: number;
+                uom: string;
+                discountType: string;
+                discountPercent: number;
+            }>;
 
-            return ok(results);
+            // Box Priority Logic: group by name, keep Box if exists, else Piece
+            const groupedByName = new Map<string, typeof rawResults>();
+            for (const item of rawResults) {
+                const arr = groupedByName.get(item.name) || [];
+                arr.push(item);
+                groupedByName.set(item.name, arr);
+            }
+
+            const results: typeof rawResults = [];
+            groupedByName.forEach((items) => {
+                const boxItem = items.find(i => i.uomId === 11);
+                if (boxItem) {
+                    results.push(boxItem);
+                } else {
+                    const pieceItem = items.find(i => i.uomId === 1);
+                    if (pieceItem) {
+                        results.push(pieceItem);
+                    }
+                }
+            });
+
+            return ok(results.map(r => ({
+                productId: r.productId,
+                name: r.name,
+                sku: r.sku,
+                barcode: r.barcode,
+                unitPrice: r.unitPrice,
+                uom: r.uom,
+                discountType: r.discountType,
+                discountPercent: r.discountPercent
+            })));
         }
 
         if (action === "get_lots") {
