@@ -641,7 +641,7 @@ export async function POST(req: NextRequest) {
             const { poId, receiptNo } = body;
             const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=purchase_order_product_id,product_id,branch_id,received_quantity,lot_id,batch_no,expiry_date,receipt_type`;
             const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
-            
+
             const porIds = (j?.data || []).map(r => toNum(r.purchase_order_product_id)).filter(id => id > 0);
             let rfids: Record<string, unknown>[] = [];
             if (porIds.length > 0) {
@@ -660,7 +660,7 @@ export async function POST(req: NextRequest) {
             if (!receiptType) {
                 receiptType = toStr((j?.data || [])[0]?.receipt_type);
             }
-            
+
             return ok({ items: j?.data || [], rfids, receiptType });
         }
 
@@ -976,7 +976,7 @@ export async function POST(req: NextRequest) {
             }
 
             // Resolve discount from PO header
-            const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=discount_type.*,discount_type.line_per_discount_type.line_id.*,discount_percentage,vat_amount,withholding_tax_amount`;
+            const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=discount_type.*,discount_type.line_per_discount_type.line_id.*,vat_amount,withholding_tax_amount`;
             const pj = await fetchJson<{ data: POHeaderRow }>(poUrl);
             const po = pj?.data;
 
@@ -1067,7 +1067,7 @@ export async function POST(req: NextRequest) {
                     try {
                         const typesUrl = `${base}/items/sales_invoice_type?limit=-1&fields=id,type,shortcut`;
                         const resTypes = await fetchJson<{ data: Array<{ id: number; type: string; shortcut: string }> }>(typesUrl).catch(() => ({ data: [] }));
-                        const found = (resTypes?.data || []).find(t => 
+                        const found = (resTypes?.data || []).find(t =>
                             String(t.shortcut).trim().toUpperCase() === receiptType.trim().toUpperCase() ||
                             String(t.type).trim().toUpperCase() === receiptType.trim().toUpperCase() ||
                             String(t.id) === receiptType
@@ -1178,17 +1178,17 @@ export async function POST(req: NextRequest) {
             if (isEdit) {
                 const existingRows = porRows.filter(r => toStr(r.receipt_no) === editReceiptNo);
                 const existingPorIds = existingRows.map(r => toNum(r.purchase_order_product_id)).filter(id => id > 0);
-                
+
                 if (existingPorIds.length > 0) {
                     const rfidUrl = `${base}/items/${POR_ITEMS_COLLECTION}?limit=-1&filter[purchase_order_product_id][_in]=${existingPorIds.join(",")}&fields=receiving_item_id,rfid_code`;
                     const existingRfidsRes = await fetchJson<{ data: Array<{ receiving_item_id: number, rfid_code: string }> }>(rfidUrl).catch(() => null);
                     const existingRfids = existingRfidsRes?.data || [];
-                    
+
                     const newRfidCodes = new Set(Array.isArray(newTags) ? newTags.map(t => t.rfid) : []);
                     const toDelete = existingRfids.filter(r => !newRfidCodes.has(r.rfid_code));
-                    
+
                     for (const r of toDelete) {
-                        await fetchJson(`${base}/items/${POR_ITEMS_COLLECTION}/${r.receiving_item_id}`, { method: "DELETE" }).catch(() => {});
+                        await fetchJson(`${base}/items/${POR_ITEMS_COLLECTION}/${r.receiving_item_id}`, { method: "DELETE" }).catch(() => { });
                     }
                 }
             }
@@ -1278,13 +1278,13 @@ export async function POST(req: NextRequest) {
                             await fetchJson(`${base}/items/${POR_ITEMS_COLLECTION}/${t.receiving_item_id}`, {
                                 method: "PATCH",
                                 body: JSON.stringify({ purchase_order_product_id: ensuredOpen.porId })
-                            }).catch(() => {});
+                            }).catch(() => { });
                         }
                     }
 
                     const isExtra = !lines.some(l => toNum(l.product_id) === pId && toNum(l.branch_id ?? 0) === toNum(pr.branch_id ?? 0));
                     if (isExtra) {
-                        await fetchJson(`${base}/items/${POR_COLLECTION}/${realPorId}`, { method: "DELETE" }).catch(() => {});
+                        await fetchJson(`${base}/items/${POR_COLLECTION}/${realPorId}`, { method: "DELETE" }).catch(() => { });
                     } else {
                         const resetPatch = {
                             receipt_no: null, receipt_date: null, receipt_type: null, received_quantity: 0, received_date: null, isPosted: 0, is_reverted: 0,
@@ -1308,7 +1308,7 @@ export async function POST(req: NextRequest) {
                         await fetchJson(`${base}/items/${POR_ITEMS_COLLECTION}/${t.receiving_item_id}`, {
                             method: "PATCH",
                             body: JSON.stringify({ purchase_order_product_id: ensuredOpen.porId })
-                        }).catch(() => {});
+                        }).catch(() => { });
                     }
                 }
 
