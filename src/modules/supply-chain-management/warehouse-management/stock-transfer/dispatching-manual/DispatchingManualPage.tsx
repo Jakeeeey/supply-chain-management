@@ -62,9 +62,8 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
     currentPage * itemsPerPage
   ) || [];
 
-  const isAllScanned = selectedGroup?.items.every((i: OrderGroupItem) => {
-    const targetQty = Math.max(0, i.allocated_quantity ?? 0);
-    return (scannedQtys[i.id] ?? 0) >= targetQty;
+  const hasScannedAny = selectedGroup?.items.some((i: OrderGroupItem) => {
+    return (scannedQtys[i.id] ?? 0) > 0;
   }) ?? false;
 
   return (
@@ -124,7 +123,7 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
                   <Button 
                     className="bg-amber-600 hover:bg-amber-700 gap-2 shadow-none font-bold text-xs"
                     onClick={() => markAsPicked(selectedGroup.orderNo)}
-                    disabled={processing || selectedGroup.status !== 'For Picking' || !isAllScanned}
+                    disabled={processing || selectedGroup.status !== 'For Picking' || !hasScannedAny}
                   >
                     {processing ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <CheckCircle2 className="w-4 h-4 text-white" />}
                     Mark as Done Picking
@@ -147,8 +146,8 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
                     <p className="font-medium text-sm">{getBranchName(selectedGroup.targetBranch)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider font-mono">{selectedGroup.orderNo}</p>
-                    <p className="font-medium text-sm">Active Reference</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider font-mono">Reference</p>
+                    <p className="font-medium text-sm">{selectedGroup.orderNo}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Requested On</p>
@@ -171,6 +170,8 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
                   <TableBody>
                     {paginatedItems.map((item: OrderGroupItem) => {
                       const targetQty = Math.max(0, item.allocated_quantity ?? 0);
+                      const availableQty = Math.max(0, item.qtyAvailable ?? 0);
+                      const maxAllowedQty = Math.min(targetQty, availableQty);
                       const currentQty = scannedQtys[item.id] ?? 0;
                       const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
                       const productName = product?.product_name || `PRD-${item.product_id}`;
@@ -187,21 +188,21 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
                             {fetchingAvailable ? (
                               <Loader2 className="w-3 h-3 animate-spin mx-auto text-primary" />
                             ) : (
-                              Math.max(0, item.qtyAvailable ?? 0)
+                              availableQty
                             )}
                           </TableCell>
                           <TableCell className="print:hidden text-center">
                             <QuantityStepper 
                               value={currentQty}
-                              max={targetQty}
-                              onChange={(val) => updateScannedQty(item.id, val, targetQty)}
+                              max={maxAllowedQty}
+                              onChange={(val) => updateScannedQty(item.id, val, maxAllowedQty)}
                               disabled={selectedGroup?.status !== 'For Picking'}
                               className="h-8 w-fit mx-auto"
                               size="sm"
                             />
                           </TableCell>
                           <TableCell className="text-right text-xs font-semibold font-mono text-foreground">
-                            ₱{((currentQty || 0) * (item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                            ₱{((currentQty || 0) * Number(product?.cost_per_unit || 0)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                           </TableCell>
                         </TableRow>
                       );
@@ -213,7 +214,8 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
                       <TableCell className="text-right text-sm font-bold text-foreground font-mono">
                         ₱{selectedGroup.items.reduce((sum: number, item: OrderGroupItem) => {
                           const sqty = scannedQtys[item.id] ?? 0;
-                          const unitPrice = item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0;
+                          const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
+                          const unitPrice = Number(product?.cost_per_unit || 0);
                           return sum + (sqty * unitPrice);
                         }, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                       </TableCell>
