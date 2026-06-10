@@ -25,6 +25,7 @@ interface SummaryPrintPreviewProps {
   getBranchName: (id: number | null) => string;
   getUserName: (id: number | null | undefined) => string;
   getUnitName: (id: unknown) => string;
+  salesmanName?: string;
 }
 
 export function SummaryPrintPreview({
@@ -34,6 +35,7 @@ export function SummaryPrintPreview({
   getBranchName,
   getUserName,
   getUnitName,
+  salesmanName,
 }: SummaryPrintPreviewProps) {
   const [generating, setGenerating] = useState(false);
   const [companyData, setCompanyData] = useState<CompanyData | null>(null);
@@ -141,6 +143,7 @@ export function SummaryPrintPreview({
                     getBranchName={getBranchName}
                     getUserName={getUserName}
                     getUnitName={getUnitName}
+                    salesmanName={salesmanName}
                   />
                 )}
               </div>

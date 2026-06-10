@@ -296,6 +296,7 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
           orderNo={selectedGroup.orderNo}
           pickerName={currentUser.name}
           items={selectedGroup.items}
+          salesmanName={currentUser.name}
         />
       )}
     </div>
