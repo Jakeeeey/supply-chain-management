@@ -967,13 +967,7 @@ export async function POST(req: NextRequest) {
 
             const matchingLine = lines.find((ln: POProductRow) => toNum(ln.product_id) === productId && toNum(ln.branch_id ?? 0) === branchId);
 
-            if (matchingLine) {
-                const currentCount = taggedCountByKey.get(keyLine(poId, productId, branchId)) ?? 0;
-                const expected = toNum(matchingLine.ordered_quantity);
-                if (currentCount >= expected) {
-                    return bad(`Scanning limit reached. This line only expects ${expected} items.`, 403);
-                }
-            }
+
 
             // Resolve discount from PO header
             const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=discount_type.*,discount_type.line_per_discount_type.line_id.*,vat_amount,withholding_tax_amount`;

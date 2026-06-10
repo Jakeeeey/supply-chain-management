@@ -1057,6 +1057,25 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                         return updated;
                     });
 
+                    // ✅ Sync activePorId React state
+                    if (activePorId === targetPorId) {
+                        setActivePorId(realPorId);
+                    }
+
+                    // ✅ Sync verifiedPorIds
+                    setVerifiedPorIds(prev => prev.map(id => id === targetPorId ? realPorId : id));
+
+                    // ✅ Sync metaDataByPorId
+                    setMetaDataByPorId(prev => {
+                        if (prev[targetPorId] !== undefined) {
+                            const next = { ...prev };
+                            next[realPorId] = next[targetPorId];
+                            delete next[targetPorId];
+                            return next;
+                        }
+                        return prev;
+                    });
+
                     // ✅ Sync scannedCountByPorId
                     setScannedCountByPorId(prev => {
                         const next = { ...(prev ?? {}) };
