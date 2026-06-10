@@ -676,7 +676,11 @@ export function UpdateSalesReturnModal({
       customerName: getCustomerName(headerData.customerCode),
       customerCode: headerData.customerCode,
       branchName: getSalesmanBranch(headerData.salesmanId),
-      items: details,
+      items: details.map((item) => ({
+        ...item,
+        discountTypeName:
+          discountOptions.find((d) => d.id.toString() === item.discountType?.toString())?.discount_type || "No Discount",
+      })),
       totalAmount: details.reduce(
         (acc, item) => acc + (item.totalAmount || 0),
         0,
@@ -700,7 +704,7 @@ export function UpdateSalesReturnModal({
     const styleOverride = printWindow.document.createElement("style");
     styleOverride.innerHTML = `
       body { background-color: #e5e7eb; padding: 40px; display: flex; justify-content: center; }
-      #print-root { background-color: white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+      #print-root { background-color: white; }
       .hidden { display: block !important; }
     `;
     printWindow.document.head.appendChild(styleOverride);
