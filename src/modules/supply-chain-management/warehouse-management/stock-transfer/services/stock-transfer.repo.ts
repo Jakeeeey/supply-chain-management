@@ -111,6 +111,47 @@ export async function fetchProducts(search?: string, limit: number = 100, offset
   return res.data;
 }
 
+type SupplierRecord = { product_id: number; supplier_id: { supplier_shortcut: string } };
+
+/**
+ * Fetches the product_per_supplier relationships for an array of product IDs.
+ * Since product_per_supplier is not available directly on the products collection 
+ * as an alias, we must fetch it directly from the junction table.
+ */
+export async function fetchProductSuppliers(productIds: number[]): Promise<Record<number, SupplierRecord[]>> {
+  if (productIds.length === 0) return {};
+
+  const uniqueIds = Array.from(new Set(productIds)).filter(id => id > 0);
+  if (uniqueIds.length === 0) return {};
+
+  // Fetch in chunks to avoid URL length limits
+  const CHUNK_SIZE = 100;
+  const allRecords: SupplierRecord[] = [];
+
+  for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(i, i + CHUNK_SIZE);
+    const params = {
+      "filter[product_id][_in]": chunk.join(","),
+      fields: "product_id,supplier_id.supplier_shortcut",
+      limit: -1,
+    };
+    const res = await fetchItems<SupplierRecord>("items/product_per_supplier", params);
+    allRecords.push(...(res.data || []));
+  }
+
+  // Group by product_id
+  const supplierMap: Record<number, SupplierRecord[]> = {};
+  for (const record of allRecords) {
+    const pId = record.product_id;
+    if (!supplierMap[pId]) supplierMap[pId] = [];
+    supplierMap[pId].push(record);
+  }
+
+  return supplierMap;
+}
+
+
+
 /**
  * Fetches a single product by its ID with full details.
  */

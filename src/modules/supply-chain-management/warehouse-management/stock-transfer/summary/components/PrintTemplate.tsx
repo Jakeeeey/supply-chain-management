@@ -81,7 +81,7 @@ export const PrintTemplate = React.forwardRef<HTMLDivElement, PrintTemplateProps
         <div style={{ textAlign: 'right' }}>
           <p style={{ margin: 0, fontSize: '12px', fontWeight: 'bold' }}>NO: {group.orderNo}</p>
           {salesmanName && (
-            <p style={{ margin: '2px 0 0', fontSize: '12px', fontWeight: 'bold', color: '#2563eb' }}>SALESMAN: {salesmanName.toUpperCase()}</p>
+            <p style={{ margin: '2px 0 0', fontSize: '12px', fontWeight: 'bold',  }}>SALESMAN: {salesmanName.toUpperCase()}</p>
           )}
         </div>
       </div>
