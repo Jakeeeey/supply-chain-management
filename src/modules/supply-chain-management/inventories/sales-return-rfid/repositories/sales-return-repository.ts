@@ -215,7 +215,7 @@ export async function getRawSupplierCategoryDiscount(customerCode: string) {
  */
 export async function getRawInvoices(salesmanId?: string, customerCode?: string) {
   let url =
-    "/items/sales_invoice?limit=-1&fields=invoice_id,invoice_no,order_id,customer_code,salesman_id,total_amount";
+    "/items/sales_invoice?limit=-1&fields=invoice_id,invoice_no,order_id,customer_code,salesman_id,isPosted,total_amount";
 
   if (salesmanId) {
     url += `&filter[salesman_id][_eq]=${salesmanId}`;
@@ -370,6 +370,16 @@ export async function deleteJunctionLink(linkId: number) {
     "DELETE",
   );
 }
+
+/**
+ * Fetches the isPosted field of a specific invoice.
+ */
+export async function getInvoiceStatus(invoiceId: number) {
+  return directusGet<{ data: Record<string, unknown> }>(
+    `/items/sales_invoice/${invoiceId}?fields=isPosted`,
+  );
+}
+
 
 // =============================================================================
 // REPOSITORY METHODS — RFID

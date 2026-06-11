@@ -372,3 +372,13 @@ export async function deleteJunctionLink(linkId: number) {
     "DELETE",
   );
 }
+
+/**
+ * Fetches the isPosted field of a specific invoice.
+ */
+export async function getInvoiceStatus(invoiceId: number) {
+  return directusGet<{ data: Record<string, unknown> }>(
+    `/items/sales_invoice/${invoiceId}?fields=isPosted`,
+  );
+}
+
