@@ -154,7 +154,7 @@ export function useStockTransferDispatchManual() {
           items: group.items.map((i: OrderGroupItem) => ({ 
             id: i.id, 
             status: 'Picked',
-            scanned_quantity: scannedQtys[i.id] ?? 0 
+            allocated_quantity: scannedQtys[i.id] ?? 0 
           })),
           status: 'Picked'
         });

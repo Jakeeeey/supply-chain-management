@@ -200,6 +200,8 @@ export async function updateTransfersStatus(
     id: number; 
     status: string; 
     allocated_quantity?: number; 
+    scanned_quantity?: number;
+    received_quantity?: number;
     date_received?: string | null; 
     receiver_id?: number | null;
     dispatched_by?: number | null;
@@ -215,6 +217,8 @@ export async function updateTransfersStatus(
     const key = JSON.stringify({
       status: item.status,
       ...(item.allocated_quantity !== undefined ? { allocated_quantity: item.allocated_quantity } : {}),
+      ...(item.scanned_quantity !== undefined ? { scanned_quantity: item.scanned_quantity } : {}),
+      ...(item.received_quantity !== undefined ? { received_quantity: item.received_quantity } : {}),
       ...(item.date_received !== undefined ? { date_received: item.date_received } : {}),
       ...(item.receiver_id !== undefined ? { receiver_id: item.receiver_id } : {}),
       ...(item.dispatched_by !== undefined ? { dispatched_by: item.dispatched_by } : {}),
