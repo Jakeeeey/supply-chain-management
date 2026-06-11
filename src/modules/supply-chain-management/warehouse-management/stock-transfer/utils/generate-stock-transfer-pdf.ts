@@ -538,13 +538,13 @@ export function generateStockTransferReceivingPDF(data: ReceivingPDFData): jsPDF
   
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text(date, pageW - margin, y, { align: 'right' });
+   doc.text(`Checked By: ${checkedBy.toUpperCase()}`, pageW - margin, y, { align: 'right' });
   y += 6;
 
   // Secondary Info
   doc.setFontSize(9);
   doc.text(`TR#: ${orderNo}`, margin, y);
-  doc.text(`Checked By: ${checkedBy.toUpperCase()}`, pageW - margin, y, { align: 'right' });
+   doc.text(`Received At: ${date}`, pageW - margin, y, { align: 'right' });
   y += 5;
 
   if (salesmanName) {

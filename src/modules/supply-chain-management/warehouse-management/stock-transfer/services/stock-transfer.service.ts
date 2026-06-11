@@ -36,7 +36,7 @@ export async function getEnrichedTransfers(status?: string): Promise<StockTransf
   // Fetch missing product_per_supplier data
   const productIds = transfers
     .filter(t => t.product_id && typeof t.product_id === 'object' && t.product_id.product_id)
-    .map(t => (t.product_id as any).product_id as number);
+    .map(t => (t.product_id as { product_id: number }).product_id);
     
   const supplierMap = await repo.fetchProductSuppliers(productIds);
 
