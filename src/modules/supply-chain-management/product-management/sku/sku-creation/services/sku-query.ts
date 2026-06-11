@@ -17,28 +17,115 @@ export const skuQueryService = {
     offset: number = 0,
     search?: string,
     sort?: string,
+    supplierId?: number,
+    facets?: {
+      categoryId?: number;
+      classId?: number;
+      segmentId?: number;
+      itemType?: string;
+      brandId?: number;
+      status?: string;
+    },
   ): Promise<PaginatedSKU> {
     const filter: { _and: (Record<string, object> | { _or: Record<string, object>[] })[] } = {
       _and: [{ item_type: { _neq: "bundle" } }],
     };
+
+    // Apply facet filters
+    if (facets?.categoryId) {
+      filter._and.push({ product_category: { _eq: facets.categoryId } });
+    }
+    if (facets?.classId) {
+      filter._and.push({ product_class: { _eq: facets.classId } });
+    }
+    if (facets?.segmentId) {
+      filter._and.push({ product_segment: { _eq: facets.segmentId } });
+    }
+    if (facets?.itemType) {
+      filter._and.push({ inventory_type: { _eq: facets.itemType } });
+    }
+    if (facets?.brandId) {
+      filter._and.push({ product_brand: { _eq: facets.brandId } });
+    }
+    if (facets?.status === "active") {
+      filter._and.push({ isActive: { _eq: 1 } });
+    } else if (facets?.status === "inactive") {
+      filter._and.push({ isActive: { _eq: 0 } });
+    }
+    
+    if (supplierId) {
+      let supplierProductIds: number[] = [];
+      try {
+        const { data: supplierLinks } = await fetchItems<{
+          product_id: number;
+        }>("/items/product_per_supplier", {
+          filter: JSON.stringify({ supplier_id: { _eq: supplierId } }),
+          limit: -1,
+        });
+        if (supplierLinks) {
+           supplierProductIds = supplierLinks.map(l => l.product_id).filter(Boolean);
+        }
+      } catch (err) {
+        console.warn("[SKU Query] Failed to fetch supplier links for filtering:", err);
+      }
+      
+      filter._and.push({ 
+        product_id: { _in: supplierProductIds.length > 0 ? supplierProductIds : [-1] } 
+      });
+    }
     const searchFilter = CellHelpers.buildSearchFilter(search);
     if (searchFilter) {
       filter._and.push(searchFilter);
     }
+    
+    // Remove product_supplier from sort if it was accidentally passed
+    const cleanSort = sort?.split(',').filter(s => !s.includes('product_supplier')).join(',') || "-created_at,-product_id";
 
     const { data, meta } = await fetchItems<SKU>("/items/products", {
       limit,
       offset,
       fields: "*,parent_id.*",
       meta: "filter_count",
-      sort: sort || "-created_at,-product_id",
+      sort: cleanSort,
       ...(Object.keys(filter).length > 0
         ? { filter: JSON.stringify(filter) }
         : {}),
     });
 
+    const products = data || [];
+    if (products.length > 0) {
+      const productIds = products.map((p) => p.product_id || p.id).filter(Boolean);
+      try {
+        const { data: supplierLinks } = await fetchItems<{
+          product_id: number;
+          supplier_id: number;
+        }>("/items/product_per_supplier", {
+          filter: JSON.stringify({
+            product_id: { _in: productIds as number[] },
+          }),
+          limit: -1,
+        });
+
+        if (supplierLinks?.length) {
+          const supplierMap = new Map<number, number>();
+          for (const link of supplierLinks) {
+            supplierMap.set(link.product_id, link.supplier_id);
+          }
+          for (const p of products) {
+            const pid = (p.product_id || p.id) as number;
+            const sId = supplierMap.get(pid);
+            if (sId) {
+              p.product_supplier = sId;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[SKU Query] Failed to enrich products with supplier data:", err);
+      }
+    }
+
     return {
-      data: data || [],
+      data: products,
       meta: {
         total_count: meta?.filter_count || 0,
         filter_count: meta?.filter_count || 0,
@@ -79,8 +166,41 @@ export const skuQueryService = {
       filter: JSON.stringify(filter),
     });
 
+    // Enrich drafts with supplier from junction table (product_draft_per_supplier)
+    const drafts = data || [];
+    if (drafts.length > 0) {
+      const draftIds = drafts.map((d) => d.product_id || d.id).filter(Boolean);
+      try {
+        const { data: supplierLinks } = await fetchItems<{
+          product_draft_id: number;
+          supplier_id: number;
+        }>("/items/product_draft_per_supplier", {
+          filter: JSON.stringify({
+            product_draft_id: { _in: draftIds },
+          }),
+          limit: -1,
+        });
+
+        if (supplierLinks?.length) {
+          const supplierMap = new Map<number, number>();
+          for (const link of supplierLinks) {
+            supplierMap.set(link.product_draft_id, link.supplier_id);
+          }
+          for (const draft of drafts) {
+            const draftId = (draft.product_id || draft.id) as number;
+            const supplierId = supplierMap.get(draftId);
+            if (supplierId) {
+              draft.product_supplier = supplierId;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[SKU Query] Failed to enrich drafts with supplier data:", err);
+      }
+    }
+
     return {
-      data: data || [],
+      data: drafts,
       meta: {
         total_count: meta?.filter_count || 0,
         filter_count: meta?.filter_count || 0,

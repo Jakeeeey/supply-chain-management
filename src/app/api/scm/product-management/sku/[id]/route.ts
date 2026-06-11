@@ -19,9 +19,16 @@ export async function GET(req: NextRequest, { params }: { params: Params }) {
 export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   try {
     const { id } = await params;
+    const isMaster = req.nextUrl.searchParams.get("type") === "master";
     const body = await req.json();
-    const data = await skuService.updateDraft(id, body);
-    return NextResponse.json({ data });
+
+    if (isMaster) {
+      const data = await skuService.submitMasterEdit(id, body);
+      return NextResponse.json({ data, message: "Edit submitted for approval" });
+    } else {
+      const data = await skuService.updateDraft(id, body);
+      return NextResponse.json({ data });
+    }
   } catch (error: unknown) {
     const err = error as Error;
     return NextResponse.json({ error: err.message }, { status: 400 });
@@ -62,9 +69,11 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       return NextResponse.json({ success: true });
     }
 
+
+
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error: unknown) {
     const err = error as Error;
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 400 });
   }
 }

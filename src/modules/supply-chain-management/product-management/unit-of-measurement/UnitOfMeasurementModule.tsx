@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { DataTable } from "@/components/ui/new-data-table";
+import { DataTable } from "./components/UnitOfMeasurementDataTable";
 import ErrorPage from "@/components/shared/ErrorPage";
 
 import { UnitApiRow } from "./types";

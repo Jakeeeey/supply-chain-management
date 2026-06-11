@@ -25,7 +25,6 @@ interface ApprovalTableProps {
   isLoading: boolean;
   onApprove?: (id: number | string) => void;
   onReject?: (sku: SKU) => void;
-  onEdit?: (sku: SKU) => void;
   onSearch?: (v: string) => void;
   title: string;
   onSelectionChange?: (selectedRows: SKU[]) => void;
@@ -47,7 +46,6 @@ export function ApprovalTable({
   isLoading,
   onApprove,
   onReject,
-  onEdit,
   onSearch,
   onSelectionChange,
   actionComponent,
@@ -61,9 +59,8 @@ export function ApprovalTable({
         undefined, // No onView provided
         onApprove,
         onReject,
-        onEdit,
       ),
-    [masterData, onApprove, onReject, onEdit],
+    [masterData, onApprove, onReject],
   );
 
   return (

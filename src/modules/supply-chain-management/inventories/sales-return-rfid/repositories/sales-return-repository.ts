@@ -131,7 +131,7 @@ export async function getRawReturnById(returnId: number) {
  */
 export async function getRawLinkedInvoice(returnId: number) {
   return directusGet<{ data: Record<string, unknown>[] }>(
-    `/items/sales_invoice_sales_return?filter[return_no][_eq]=${returnId}&fields=invoice_no.invoice_no`,
+    `/items/sales_invoice_sales_return?filter[return_no][_eq]=${returnId}&fields=invoice_no.invoice_id,invoice_no.invoice_no,invoice_no.isPosted`,
   );
 }
 
@@ -177,6 +177,13 @@ export async function getRawLineDiscounts() {
 }
 
 /**
+ * Fetches all discount types.
+ */
+export async function getRawDiscountTypes() {
+  return directusGet<{ data: Record<string, unknown>[] }>("/items/discount_type?limit=-1");
+}
+
+/**
  * Fetches all product catalog data needed for ProductLookupModal.
  */
 export async function getRawProductCatalog() {
@@ -208,7 +215,7 @@ export async function getRawSupplierCategoryDiscount(customerCode: string) {
  */
 export async function getRawInvoices(salesmanId?: string, customerCode?: string) {
   let url =
-    "/items/sales_invoice?limit=-1&fields=invoice_id,invoice_no,order_id,customer_code,salesman_id,total_amount";
+    "/items/sales_invoice?limit=-1&fields=invoice_id,invoice_no,order_id,customer_code,salesman_id,isPosted,total_amount";
 
   if (salesmanId) {
     url += `&filter[salesman_id][_eq]=${salesmanId}`;
@@ -363,6 +370,16 @@ export async function deleteJunctionLink(linkId: number) {
     "DELETE",
   );
 }
+
+/**
+ * Fetches the isPosted field of a specific invoice.
+ */
+export async function getInvoiceStatus(invoiceId: number) {
+  return directusGet<{ data: Record<string, unknown> }>(
+    `/items/sales_invoice/${invoiceId}?fields=isPosted`,
+  );
+}
+
 
 // =============================================================================
 // REPOSITORY METHODS — RFID
