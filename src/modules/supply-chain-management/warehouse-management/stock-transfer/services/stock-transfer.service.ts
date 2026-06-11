@@ -33,11 +33,29 @@ export async function getEnrichedTransfers(status?: string): Promise<StockTransf
     rfidMap[r.stock_transfer_id].push(r.rfid_tag);
   });
 
-  // Attach RFIDs to each row
-  return transfers.map(t => ({
-    ...t,
-    dispatched_rfids: rfidMap[t.id] || []
-  }));
+  // Fetch missing product_per_supplier data
+  const productIds = transfers
+    .filter(t => t.product_id && typeof t.product_id === 'object' && t.product_id.product_id)
+    .map(t => (t.product_id as any).product_id as number);
+    
+  const supplierMap = await repo.fetchProductSuppliers(productIds);
+
+  // Attach RFIDs and Suppliers to each row
+  return transfers.map(t => {
+    let enrichedProduct = t.product_id;
+    if (enrichedProduct && typeof enrichedProduct === 'object' && enrichedProduct.product_id) {
+      enrichedProduct = {
+        ...enrichedProduct,
+        product_per_supplier: supplierMap[enrichedProduct.product_id] || []
+      };
+    }
+
+    return {
+      ...t,
+      product_id: enrichedProduct,
+      dispatched_rfids: rfidMap[t.id] || []
+    };
+  });
 }
 
 /**
