@@ -131,7 +131,7 @@ export async function getRawReturnById(returnId: number) {
  */
 export async function getRawLinkedInvoice(returnId: number) {
   return directusGet<{ data: Record<string, unknown>[] }>(
-    `/items/sales_invoice_sales_return?filter[return_no][_eq]=${returnId}&fields=invoice_no.invoice_no,invoice_no.invoice_id,invoice_no.isPosted`,
+    `/items/sales_invoice_sales_return?filter[return_no][_eq]=${returnId}&fields=invoice_no.invoice_id,invoice_no.invoice_no,invoice_no.isPosted`,
   );
 }
 
@@ -372,3 +372,13 @@ export async function deleteJunctionLink(linkId: number) {
     "DELETE",
   );
 }
+
+/**
+ * Fetches the isPosted field of a specific invoice.
+ */
+export async function getInvoiceStatus(invoiceId: number) {
+  return directusGet<{ data: Record<string, unknown> }>(
+    `/items/sales_invoice/${invoiceId}?fields=isPosted`,
+  );
+}
+
