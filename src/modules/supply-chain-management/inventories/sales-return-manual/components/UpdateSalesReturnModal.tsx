@@ -632,9 +632,10 @@ export function UpdateSalesReturnModal({
       }
       setIsUpdateConfirmOpen(false);
       setIsUpdateSuccessOpen(true);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Update failed", error);
-      toast.error(error?.message || "An unexpected error occurred.");
+      const errMsg = error instanceof Error ? error.message : "An unexpected error occurred.";
+      toast.error(errMsg);
     } finally {
       setIsUpdating(false);
     }
@@ -672,9 +673,10 @@ export function UpdateSalesReturnModal({
       );
       setIsReceiveConfirmOpen(false);
       setIsUpdateSuccessOpen(true);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Receive failed", error);
-      toast.error(error?.message || "An unexpected error occurred.");
+      const errMsg = error instanceof Error ? error.message : "An unexpected error occurred.";
+      toast.error(errMsg);
     } finally {
       setIsReceiving(false);
     }
