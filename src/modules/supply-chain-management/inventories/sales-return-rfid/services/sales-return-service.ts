@@ -46,7 +46,7 @@ const nowPH = (): string => {
   const hour = String(d.getUTCHours()).padStart(2, "0");
   const minute = String(d.getUTCMinutes()).padStart(2, "0");
   const second = String(d.getUTCSeconds()).padStart(2, "0");
-  return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 };
 
 const formatDateForAPI = (dateString: string | Date) => {
@@ -516,10 +516,14 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
   // 🟢 Handle Optional Junction Link to Invoice
   if (payload.appliedInvoiceId && returnId) {
     try {
+      const returnAmount = Math.round(Number(payload.totalAmount) * 100) / 100;
       await repo.createJunctionLink({
         return_no: returnId,
         invoice_no: payload.appliedInvoiceId,
         linked_by: userId,
+        amount: returnAmount,
+        created_at: nowPH(),
+        updated_at: nowPH(),
       });
     } catch (e) {
       console.error("Failed to create junction link during submission", e);
@@ -650,12 +654,17 @@ export async function updateReturn(
           await repo.updateJunctionLink(linkId, {
             invoice_no: payload.appliedInvoiceId,
             linked_by: userId,
+            amount: totalNet,
+            updated_at: nowPH(),
           });
         } else {
           await repo.createJunctionLink({
             return_no: payload.returnId,
             invoice_no: payload.appliedInvoiceId,
             linked_by: userId,
+            amount: totalNet,
+            created_at: nowPH(),
+            updated_at: nowPH(),
           });
         }
       } else if (payload.appliedInvoiceId === null && existingLinks.length > 0) {

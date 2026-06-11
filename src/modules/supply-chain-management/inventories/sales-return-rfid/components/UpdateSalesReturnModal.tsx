@@ -261,6 +261,7 @@ export function UpdateSalesReturnModal({
 
   // 🟢 Track the ID for the junction table link
   const [appliedInvoiceId, setAppliedInvoiceId] = useState<number | null>(null);
+  const [isInvoicePosted, setIsInvoicePosted] = useState<boolean>(false);
 
   const [discountOptions, setDiscountOptions] = useState<API_LineDiscount[]>(
     [],
@@ -333,6 +334,12 @@ export function UpdateSalesReturnModal({
 
         setDetails(items);
         setStatusCardData(statusData);
+        if (statusData?.appliedInvoiceId) {
+          setAppliedInvoiceId(statusData.appliedInvoiceId);
+        }
+        if (statusData?.isInvoicePosted) {
+          setIsInvoicePosted(statusData.isInvoicePosted);
+        }
         setDiscountOptions(discounts);
         setReturnTypeOptions(retTypes);
         setSalesmenOptions(salesmen);
@@ -719,7 +726,7 @@ export function UpdateSalesReturnModal({
         remarks: headerData.remarks || "",
         invoiceNo: headerData.invoiceNo,
         orderNo: headerData.orderNo,
-        appliedInvoiceId: appliedInvoiceId ?? undefined,
+        appliedInvoiceId,
         isThirdParty: headerData.isThirdParty,
       };
 
@@ -745,7 +752,7 @@ export function UpdateSalesReturnModal({
         remarks: headerData.remarks || "",
         invoiceNo: headerData.invoiceNo,
         orderNo: headerData.orderNo,
-        appliedInvoiceId: appliedInvoiceId ?? undefined,
+        appliedInvoiceId,
         isThirdParty: headerData.isThirdParty,
       };
       await SalesReturnProvider.updateReturn(savePayload);
@@ -1461,7 +1468,7 @@ export function UpdateSalesReturnModal({
                     {/* 🟢 REVISED: Editable if Pending or Received (canEditLimited) */}
                     {loading && !statusCardData ? (
                       <Skeleton className="h-6 w-28" />
-                    ) : canEditLimited ? (
+                    ) : (canEditLimited && !isInvoicePosted) ? (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1539,6 +1546,7 @@ export function UpdateSalesReturnModal({
                     appliedTo: "",
                   }));
                   setAppliedInvoiceId(null);
+                  setIsInvoicePosted(false);
                   setIsInvoiceLookupOpen(false);
                 }}
               >
@@ -1563,6 +1571,7 @@ export function UpdateSalesReturnModal({
                         appliedTo: inv.invoice_no,
                       }));
                       setAppliedInvoiceId(Number(inv.id));
+                      setIsInvoicePosted(false);
                       setIsInvoiceLookupOpen(false);
                     }}
                   >
