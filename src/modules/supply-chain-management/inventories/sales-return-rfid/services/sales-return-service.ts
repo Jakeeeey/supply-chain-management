@@ -428,13 +428,17 @@ export async function fetchStatusCard(
 
     // Fetch linked invoice
     let appliedToText = "-";
+    let appliedInvoiceId = null;
+    let isInvoicePosted = false;
     try {
       const linkRes = await repo.getRawLinkedInvoice(returnId);
       const linkData = (linkRes.data || []) as any[];
       if (linkData.length > 0) {
         const linkedRec = linkData[0];
-        if (linkedRec.invoice_no && linkedRec.invoice_no.invoice_no) {
-          appliedToText = linkedRec.invoice_no.invoice_no;
+        if (linkedRec.invoice_no) {
+          appliedToText = linkedRec.invoice_no.invoice_no || "-";
+          appliedInvoiceId = linkedRec.invoice_no.invoice_id || null;
+          isInvoicePosted = parseBoolean(linkedRec.invoice_no.isPosted);
         }
       }
     } catch {
@@ -451,6 +455,8 @@ export async function fetchStatusCard(
       isPosted: parseBoolean(data.isPosted),
       isReceived: parseBoolean(data.isReceived),
       appliedTo: appliedToText,
+      appliedInvoiceId,
+      isInvoicePosted,
     };
   } catch {
     return null;
@@ -465,7 +471,7 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
     const invoiceData = await repo.getInvoiceStatus(payload.appliedInvoiceId);
     const isPosted = parseBoolean(invoiceData?.data?.isPosted);
     if (isPosted) {
-      throw new Error("Cannot link to a posted invoice.");
+      throw new Error("This invoice has already been posted. You can only link to invoices that are not yet posted.");
     }
   }
 
@@ -663,7 +669,7 @@ export async function updateReturn(
         if (currentInvoiceId && Number(currentInvoiceId) !== payload.appliedInvoiceId) {
           const currentInvoiceData = await repo.getInvoiceStatus(Number(currentInvoiceId));
           if (parseBoolean(currentInvoiceData?.data?.isPosted)) {
-            throw new Error("Cannot unlink or modify a posted invoice.");
+            throw new Error("This invoice has already been posted. Once an invoice is posted, it is locked and cannot be unlinked or changed.");
           }
         }
       }
@@ -672,7 +678,7 @@ export async function updateReturn(
         // Rule B: Prevent linking to a posted invoice
         const targetInvoiceData = await repo.getInvoiceStatus(payload.appliedInvoiceId);
         if (parseBoolean(targetInvoiceData?.data?.isPosted)) {
-          throw new Error("Cannot link to a posted invoice.");
+          throw new Error("This invoice has already been posted. You can only link to invoices that are not yet posted.");
         }
 
         // Link or Update

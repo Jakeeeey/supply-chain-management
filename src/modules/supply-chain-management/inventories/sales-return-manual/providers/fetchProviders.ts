@@ -183,7 +183,11 @@ export const SalesReturnProvider = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    return handleResponse(res);
+    const json = await res.json();
+    if (!res.ok) {
+      return { success: false, error: json.error || json.message || `HTTP ${res.status}` };
+    }
+    return { success: true, data: json.data };
   },
 
   async updateStatus(

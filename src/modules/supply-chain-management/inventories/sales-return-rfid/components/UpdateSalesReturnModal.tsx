@@ -730,12 +730,16 @@ export function UpdateSalesReturnModal({
         isThirdParty: headerData.isThirdParty,
       };
 
-      await SalesReturnProvider.updateReturn(payload);
+      const res = await SalesReturnProvider.updateReturn(payload);
+      if (res && res.success === false) {
+        toast.error(res.error || "Failed to update sales return.");
+        return;
+      }
       setIsUpdateConfirmOpen(false);
       setIsUpdateSuccessOpen(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Update failed", error);
-      alert("Failed to update sales return.");
+      toast.error(error?.message || "An unexpected error occurred.");
     } finally {
       setIsUpdating(false);
     }
@@ -755,7 +759,11 @@ export function UpdateSalesReturnModal({
         appliedInvoiceId,
         isThirdParty: headerData.isThirdParty,
       };
-      await SalesReturnProvider.updateReturn(savePayload);
+      const saveRes = await SalesReturnProvider.updateReturn(savePayload);
+      if (saveRes && saveRes.success === false) {
+        toast.error(saveRes.error || "Failed to update sales return.");
+        return;
+      }
       // Then update status with extra fields
       const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
       const d = new Date(manilaMs);
@@ -769,9 +777,9 @@ export function UpdateSalesReturnModal({
       );
       setIsReceiveConfirmOpen(false);
       setIsUpdateSuccessOpen(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Receive failed", error);
-      toast.error("Failed to receive sales return.");
+      toast.error(error?.message || "An unexpected error occurred.");
     } finally {
       setIsReceiving(false);
     }
@@ -1541,6 +1549,10 @@ export function UpdateSalesReturnModal({
               <div
                 className="p-3 hover:bg-destructive/10 cursor-pointer flex items-center gap-3 transition-colors text-destructive font-medium border-b"
                 onClick={() => {
+                  if (isInvoicePosted) {
+                    toast.error("This invoice has already been posted. Once an invoice is posted, it is locked and cannot be unlinked or changed.");
+                    return;
+                  }
                   setStatusCardData((prev) => ({
                     ...prev!,
                     appliedTo: "",
@@ -1566,6 +1578,10 @@ export function UpdateSalesReturnModal({
                     key={inv.id}
                     className="p-3 hover:bg-primary/10 cursor-pointer flex items-center gap-3 transition-colors justify-between"
                     onClick={() => {
+                      if (isInvoicePosted) {
+                        toast.error("This invoice has already been posted. Once an invoice is posted, it is locked and cannot be unlinked or changed.");
+                        return;
+                      }
                       setStatusCardData((prev) => ({
                         ...prev!,
                         appliedTo: inv.invoice_no,
