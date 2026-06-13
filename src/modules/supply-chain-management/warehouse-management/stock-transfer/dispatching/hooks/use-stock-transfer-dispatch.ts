@@ -236,7 +236,8 @@ export function useStockTransferDispatch() {
 
       const itemsPayload = group.items.map(i => ({
         id: i.id,
-        status: 'For Loading'
+        status: 'For Loading',
+        allocated_quantity: i.scannedQty
       }));
 
       await stockTransferLifecycleService.submitStatusUpdate({ 

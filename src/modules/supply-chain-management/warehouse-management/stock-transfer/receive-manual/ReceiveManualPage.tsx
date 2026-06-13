@@ -62,7 +62,7 @@ export default function StockTransferReceiveManualView({ currentUser }: { curren
   ) || [];
 
   const isAllReceived = selectedGroup?.items.every((i: OrderGroupItem) => {
-    const targetQty = Math.max(0, i.allocated_quantity ?? 0);
+    const targetQty = Math.max(0, i.scanned_quantity ?? i.allocated_quantity ?? 0);
     return (receivedQtys[i.id] ?? 0) >= targetQty;
   }) ?? false;
 
@@ -128,8 +128,8 @@ export default function StockTransferReceiveManualView({ currentUser }: { curren
                     <p className="font-medium text-sm">{getBranchName(selectedGroup.targetBranch)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider font-mono">{selectedGroup.orderNo}</p>
-                    <p className="font-medium text-sm">Active Reference</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider font-mono">Reference</p>
+                    <p className="font-medium text-sm">{selectedGroup.orderNo}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Requested On</p>
@@ -151,7 +151,7 @@ export default function StockTransferReceiveManualView({ currentUser }: { curren
                   </TableHeader>
                   <TableBody>
                     {paginatedItems.map((item: OrderGroupItem) => {
-                      const targetQty = Math.max(0, item.allocated_quantity ?? 0);
+                      const targetQty = Math.max(0, item.scanned_quantity ?? item.allocated_quantity ?? 0);
                       const currentQty = receivedQtys[item.id] ?? 0;
                       const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
                       const productName = product?.product_name || `PRD-${item.product_id}`;
@@ -182,7 +182,7 @@ export default function StockTransferReceiveManualView({ currentUser }: { curren
                               />
                           </TableCell>
                           <TableCell className="text-right text-xs font-semibold font-mono text-foreground">
-                            ₱{((currentQty || 0) * (item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                            ₱{((currentQty || 0) * Number(product?.cost_per_unit || 0)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                           </TableCell>
                         </TableRow>
                       );
@@ -194,7 +194,8 @@ export default function StockTransferReceiveManualView({ currentUser }: { curren
                       <TableCell className="text-right text-sm font-bold text-foreground font-mono">
                          ₱{selectedGroup.items.reduce((sum: number, item: OrderGroupItem) => {
                           const rqty = receivedQtys[item.id] ?? 0;
-                          const unitPrice = item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0;
+                          const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
+                          const unitPrice = Number(product?.cost_per_unit || 0);
                           return sum + (rqty * unitPrice);
                         }, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                       </TableCell>
@@ -278,6 +279,7 @@ export default function StockTransferReceiveManualView({ currentUser }: { curren
           items={selectedGroup.items}
           sourceBranch={getBranchName(selectedGroup.sourceBranch)}
           targetBranch={getBranchName(selectedGroup.targetBranch)}
+          salesmanName={currentUser.name}
         />
       )}
     </div>

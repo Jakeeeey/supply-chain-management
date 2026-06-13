@@ -10,6 +10,7 @@ interface PrintTemplateProps {
   getBranchName: (id: number | null) => string;
   getUserName: (id: number | null | undefined) => string;
   getUnitName: (id: unknown) => string;
+  salesmanName?: string;
 }
 
 export const PrintTemplate = React.forwardRef<HTMLDivElement, PrintTemplateProps>(({
@@ -18,6 +19,7 @@ export const PrintTemplate = React.forwardRef<HTMLDivElement, PrintTemplateProps
   getBranchName,
   getUserName,
   getUnitName,
+  salesmanName,
 }, ref) => {
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return '—';
@@ -78,6 +80,9 @@ export const PrintTemplate = React.forwardRef<HTMLDivElement, PrintTemplateProps
         <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>STOCK TRANSFER SLIP</h2>
         <div style={{ textAlign: 'right' }}>
           <p style={{ margin: 0, fontSize: '12px', fontWeight: 'bold' }}>NO: {group.orderNo}</p>
+          {salesmanName && (
+            <p style={{ margin: '2px 0 0', fontSize: '12px', fontWeight: 'bold',  }}>SALESMAN: {salesmanName.toUpperCase()}</p>
+          )}
         </div>
       </div>
 
