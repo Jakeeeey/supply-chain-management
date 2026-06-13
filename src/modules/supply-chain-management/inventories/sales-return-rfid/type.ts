@@ -209,6 +209,7 @@ export interface InvoiceOption {
   customerCode: string;
   salesman_id: number;
   amount?: number;
+  isPosted?: boolean;
 }
 
 // RFID Tag record (sales_return_rfid table)
