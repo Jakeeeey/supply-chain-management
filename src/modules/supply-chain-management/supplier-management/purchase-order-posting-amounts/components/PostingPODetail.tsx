@@ -34,7 +34,7 @@ function statusLabel(status: string) {
 }
 
 export function PostingPODetail() {
-    const { selectedPO, postError, successMsg, clearSuccess, postAllReceipts, posting, poLoading } =
+    const { selectedPO, postError, successMsg, clearSuccess, postAllReceipts, forcePost, posting, poLoading } =
         usePostingOfPo();
 
     if (poLoading) {
@@ -80,11 +80,8 @@ export function PostingPODetail() {
     // - No receipts yet (status-only PO, e.g. PARTIAL) OR
     // - There are unposted receipts (PARTIAL_POSTED still has more to post) OR
     // - Status is RECEIVED (fully received, has unposted receipts)
-    const showPostAll =
-        selectedPO.receiptsCount === 0 ||
-        selectedPO.unpostedReceiptsCount > 0 ||
-        status === "PARTIAL" ||
-        status === "PARTIAL_POSTED";
+    const showPostAll = selectedPO.unpostedReceiptsCount > 0;
+    const showForcePost = selectedPO.unpostedReceiptsCount === 0 && status !== "CLOSED";
 
 
 
@@ -113,6 +110,17 @@ export function PostingPODetail() {
                             className="bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-[10px] h-8 rounded-lg shadow-sm"
                         >
                             {posting ? "Posting..." : "Post Amount"}
+                        </Button>
+                    )}
+                    {showForcePost && (
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={posting}
+                            onClick={() => forcePost(String(selectedPO.id))}
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-[10px] h-8 rounded-lg shadow-sm"
+                        >
+                            {posting ? "Posting..." : "Force Post"}
                         </Button>
                     )}
                     <PostingPOPrintAction />
