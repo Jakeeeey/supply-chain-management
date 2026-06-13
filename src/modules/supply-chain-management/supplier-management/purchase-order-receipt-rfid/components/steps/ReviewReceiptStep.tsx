@@ -174,7 +174,7 @@ export function ReviewReceiptStep({ receiverName, onBack }: { receiverName?: str
         const newLots: Record<string, string> = {};
         const newBatches: Record<string, string> = {};
         const newExpiries: Record<string, string> = {};
-        let syncReady = true;
+        const syncReady = true;
 
         if (selectedPO?.allocations) {
             selectedPO.allocations.forEach(a => {
@@ -202,7 +202,7 @@ export function ReviewReceiptStep({ receiverName, onBack }: { receiverName?: str
             setExpiryDates(prev => ({ ...newExpiries, ...prev }));
         }
 
-    }, [selectedPO?.id]);
+    }, [selectedPO?.id, selectedPO?.allocations, draftMetaData]);
 
     React.useEffect(() => {
         if (draftMetaData && Object.keys(draftMetaData).length > 0) {

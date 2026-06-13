@@ -988,10 +988,7 @@ export async function POST(req: NextRequest) {
             if (dup.exists) return bad(dup.detail ?? "Duplicate RFID.", 409);
 
             // ✅ Fetch current totals to enforce cap
-            const porRows = await fetchPORByPOIds(base, [poId]);
             const lines = await fetchPOProductsByPOId(base, poId);
-            const receivingItems = await fetchReceivingItemsByLinkIds(base, [...porRows.map(r => toNum(r.purchase_order_product_id)), ...lines.map(l => toNum(l.purchase_order_product_id))]);
-            const { taggedCountByKey } = buildTagMapsForScopes({ poLines: lines, porRows, receivingItems });
 
             const matchingLine = lines.find((ln: POProductRow) => toNum(ln.product_id) === productId && toNum(ln.branch_id ?? 0) === branchId);
 
