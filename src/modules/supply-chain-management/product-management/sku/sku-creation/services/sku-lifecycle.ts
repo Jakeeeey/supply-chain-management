@@ -143,12 +143,27 @@ export const skuLifecycleService = {
 
     if (units.length > 1) {
       await Promise.all(
-        units.slice(1).map((u, i) =>
-          request(`${API_BASE_URL}/items/product_draft`, {
+        units.slice(1).map(async (u, i) => {
+          const { data: child } = await request<{ data: SKU }>(`${API_BASE_URL}/items/product_draft`, {
             method: "POST",
             body: JSON.stringify(createPayload(u, codes[i + 1], pId)),
-          }),
-        ),
+          });
+
+          const childId = child.id || child.product_id;
+          if (childId && sId) {
+            try {
+              await request(`${API_BASE_URL}/items/product_draft_per_supplier`, {
+                method: "POST",
+                body: JSON.stringify({ product_draft_id: childId, supplier_id: sId }),
+              });
+            } catch (err: unknown) {
+              console.error(
+                `[SKU Lifecycle] Failed to save supplier for child draft ${childId}:`,
+                err instanceof Error ? err.message : err,
+              );
+            }
+          }
+        }),
       );
     }
     return parent;

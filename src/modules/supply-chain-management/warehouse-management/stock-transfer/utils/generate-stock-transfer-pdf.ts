@@ -10,6 +10,7 @@ export interface StockTransferPDFData {
   leadDate: string;
   scannedItems: ScannedItem[];
   companyData: CompanyData | null;
+  salesmanName?: string;
 }
 
 // ── Corporate Header Helper ────────────────────────────────────
@@ -67,7 +68,7 @@ function drawCorporateHeader(doc: jsPDF, companyData: CompanyData | null, margin
 }
 
 export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
-  const { orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData } = data;
+  const { orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData, salesmanName } = data;
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
 
@@ -92,6 +93,15 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
   }
 
   y += 8;
+
+  if (salesmanName) {
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235);
+    doc.text(`SALESMAN: ${salesmanName.toUpperCase()}`, margin, y - 2);
+    doc.setTextColor(0, 0, 0);
+    y += 4;
+  }
 
   // ── Info grid — outline box only, no fill ─────────────────────
   doc.setDrawColor(200, 200, 200);
@@ -244,6 +254,7 @@ export interface PicklistPDFData {
   date: string;
   items: OrderGroupItem[]; 
   companyData: CompanyData | null;
+  salesmanName?: string;
 }
 
 export interface ReceivingPDFData {
@@ -254,6 +265,7 @@ export interface ReceivingPDFData {
   companyData: CompanyData | null;
   sourceBranch?: string;
   targetBranch?: string;
+  salesmanName?: string;
 }
 
 /**
@@ -261,7 +273,7 @@ export interface ReceivingPDFData {
  * Grouped by Supplier/Brand and includes checkboxes.
  */
 export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
-  const { orderNo, pickerName, date, items, companyData } = data;
+  const { orderNo, pickerName, date, items, companyData, salesmanName } = data;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
 
   const pageW = doc.internal.pageSize.getWidth();
@@ -308,7 +320,16 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text(`Picker: ${pickerName.toUpperCase()}`, margin, y);
-  y += 10;
+  y += 5;
+
+  if (salesmanName) {
+    doc.setTextColor(37, 99, 235);
+    doc.text(`Salesman: ${salesmanName.toUpperCase()}`, margin, y);
+    doc.setTextColor(0, 0, 0);
+    y += 5;
+  }
+
+  y += 5;
 
   // ── Table Header ──────────────────────────────────────────────
   doc.setDrawColor(0, 0, 0);
@@ -502,7 +523,7 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
  * Generates a Receiving Checklist PDF.
  */
 export function generateStockTransferReceivingPDF(data: ReceivingPDFData): jsPDF {
-  const { orderNo, checkedBy, date, items, companyData, sourceBranch, targetBranch } = data;
+  const { orderNo, checkedBy, date, items, companyData, sourceBranch, targetBranch, salesmanName } = data;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
 
   const pageW = doc.internal.pageSize.getWidth();
@@ -517,14 +538,21 @@ export function generateStockTransferReceivingPDF(data: ReceivingPDFData): jsPDF
   
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text(date, pageW - margin, y, { align: 'right' });
+   doc.text(`Checked By: ${checkedBy.toUpperCase()}`, pageW - margin, y, { align: 'right' });
   y += 6;
 
   // Secondary Info
   doc.setFontSize(9);
   doc.text(`TR#: ${orderNo}`, margin, y);
-  doc.text(`Checked By: ${checkedBy.toUpperCase()}`, pageW - margin, y, { align: 'right' });
+   doc.text(`Received At: ${date}`, pageW - margin, y, { align: 'right' });
   y += 5;
+
+  if (salesmanName) {
+    doc.setTextColor(37, 99, 235);
+    doc.text(`Salesman: ${salesmanName.toUpperCase()}`, margin, y);
+    doc.setTextColor(0, 0, 0);
+    y += 5;
+  }
 
   if (sourceBranch || targetBranch) {
     doc.text(`Source: ${sourceBranch || 'N/A'}`, margin, y);

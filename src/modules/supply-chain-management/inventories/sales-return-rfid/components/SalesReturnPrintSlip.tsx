@@ -15,7 +15,7 @@ interface PrintData {
   customerCode: string;
   branchName: string;
   priceType?: string; // Added to match image
-  items: SalesReturnItem[];
+  items: (SalesReturnItem & { discountTypeName?: string })[];
   totalAmount: number;
 }
 
@@ -37,7 +37,7 @@ export const SalesReturnPrintSlip = forwardRef<
       acc[type].push(item);
       return acc;
     },
-    {} as Record<string, SalesReturnItem[]>,
+    {} as Record<string, (SalesReturnItem & { discountTypeName?: string })[]>,
   );
 
   return (
@@ -47,13 +47,31 @@ export const SalesReturnPrintSlip = forwardRef<
     >
       <style type="text/css" media="print">
         {`
-            @page { size: A4; margin: 10mm; }
-            body { -webkit-print-color-adjust: exact; }
+            @page { size: A4; margin: 0; }
+            body { -webkit-print-color-adjust: exact; margin: 15mm 10mm; }
             .print-hidden { display: none !important; }
             table { border-collapse: collapse; width: 100%; }
             th, td { padding: 6px 4px; }
+            .page-footer {
+              position: fixed;
+              bottom: 10mm;
+              right: 10mm;
+              font-size: 10px;
+              color: #9ca3af;
+              display: none;
+            }
+            @media print {
+              .page-footer {
+                display: block;
+              }
+            }
           `}
       </style>
+
+      {/* Page Footer for Print Page Count */}
+      <div className="page-footer">
+        Page 1 of 1
+      </div>
 
       {/* --- HEADER SECTION --- */}
       <div className="flex flex-col items-center mb-6">
@@ -126,11 +144,12 @@ export const SalesReturnPrintSlip = forwardRef<
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-black text-left">
-                  <th className="font-bold w-[40%]">Product Name</th>
+                  <th className="font-bold w-[35%]">Product Name</th>
                   <th className="font-bold w-[10%]">Unit</th>
                   <th className="font-bold w-[10%] text-center">Quantity</th>
                   <th className="font-bold w-[15%] text-right">Unit Price</th>
-                  <th className="font-bold w-[20%] text-right">Total Amount</th>
+                  <th className="font-bold w-[15%] text-center">Discount Type</th>
+                  <th className="font-bold w-[15%] text-right">Total Amount</th>
                 </tr>
               </thead>
               <tbody>
@@ -144,6 +163,9 @@ export const SalesReturnPrintSlip = forwardRef<
                         minimumFractionDigits: 2,
                       })}
                     </td>
+                    <td className="align-top text-center font-medium text-gray-700">
+                      {item.discountTypeName || "No Discount"}
+                    </td>
                     <td className="align-top text-right">
                       {Number(item.totalAmount).toLocaleString(undefined, {
                         minimumFractionDigits: 2,
@@ -154,7 +176,7 @@ export const SalesReturnPrintSlip = forwardRef<
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={4} className="text-right font-bold pt-2">
+                  <td colSpan={5} className="text-right font-bold pt-2">
                     Subtotal:
                   </td>
                   <td className="text-right font-bold pt-2">

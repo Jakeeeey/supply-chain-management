@@ -478,6 +478,7 @@ export default function StockTransferDispatchView({ currentUser }: { currentUser
           orderNo={selectedGroup.orderNo}
           pickerName={currentUser.name}
           items={selectedGroup.items}
+          salesmanName={currentUser.name}
         />
       )}
     </div>

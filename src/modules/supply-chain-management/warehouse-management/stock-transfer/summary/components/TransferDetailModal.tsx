@@ -243,6 +243,7 @@ export function TransferDetailModal({
         getBranchName={getBranchName}
         getUserName={getUserName}
         getUnitName={getUnitName}
+        salesmanName={getUserName(group.encoderId)}
       />
     </Dialog>
   );

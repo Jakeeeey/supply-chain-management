@@ -19,6 +19,7 @@ interface StockTransferPicklistPreviewProps {
   orderNo: string;
   pickerName: string;
   items: OrderGroupItem[];
+  salesmanName?: string;
 }
 
 export function StockTransferPicklistPreview({
@@ -27,6 +28,7 @@ export function StockTransferPicklistPreview({
   orderNo,
   pickerName,
   items,
+  salesmanName,
 }: StockTransferPicklistPreviewProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [generating, setGenerating] = useState(open);
@@ -63,6 +65,7 @@ export function StockTransferPicklistPreview({
         date: new Date().toLocaleString('en-PH'),
         items,
         companyData,
+        salesmanName,
       });
 
       const blob = doc.output('blob');
@@ -72,7 +75,7 @@ export function StockTransferPicklistPreview({
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [open, orderNo, pickerName, items, companyData]);
+  }, [open, orderNo, pickerName, items, companyData, salesmanName]);
 
   const handleClose = useCallback(() => {
     if (pdfUrl) {
@@ -89,13 +92,14 @@ export function StockTransferPicklistPreview({
       date: new Date().toLocaleString('en-PH'),
       items,
       companyData,
+      salesmanName,
     });
     doc.autoPrint();
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  }, [orderNo, pickerName, items, companyData]);
+  }, [orderNo, pickerName, items, companyData, salesmanName]);
 
   const handleSave = useCallback(() => {
     const doc = generateStockTransferPicklistPDF({
@@ -104,10 +108,11 @@ export function StockTransferPicklistPreview({
       date: new Date().toLocaleString('en-PH'),
       items,
       companyData,
+      salesmanName,
     });
     const filename = `PICKLIST-${orderNo || 'UNSAVED'}.pdf`;
     doc.save(filename);
-  }, [orderNo, pickerName, items, companyData]);
+  }, [orderNo, pickerName, items, companyData, salesmanName]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>

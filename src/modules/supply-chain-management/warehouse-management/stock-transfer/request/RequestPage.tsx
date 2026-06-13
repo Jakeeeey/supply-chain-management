@@ -27,7 +27,7 @@ import { ProductSelectionModal } from '../shared/components/ProductSelectionModa
 import { EnrichedProduct } from '../types/stock-transfer.types';
 import { StockTransferPrintPreview } from '../shared/components/StockTransferPrintPreview';
 
-export default function StockTransferRequestView() {
+export default function StockTransferRequestView({ salesmanName }: { salesmanName?: string }) {
   const {
     branches,
     loading,
@@ -223,6 +223,7 @@ export default function StockTransferRequestView() {
         targetBranchLabel={targetBranchLabel}
         leadDate={leadDate}
         scannedItems={scannedItems}
+        salesmanName={salesmanName}
       />
       <ProductSelectionModal 
         open={showProductModal} 
