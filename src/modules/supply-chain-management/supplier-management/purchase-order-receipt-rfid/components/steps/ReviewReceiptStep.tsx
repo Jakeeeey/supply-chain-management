@@ -67,6 +67,7 @@ export function ReviewReceiptStep({ receiverName, onBack }: { receiverName?: str
 
     const [clientSaveError, setClientSaveError] = React.useState("");
     const [customCounts, setCustomCounts] = React.useState<Record<string, number>>({});
+    const [selectedRows, setSelectedRows] = React.useState<Record<string, boolean>>({});
 
     const physicalCounts = React.useMemo(() => {
         const counts: Record<string, number> = {};
@@ -81,23 +82,41 @@ export function ReviewReceiptStep({ receiverName, onBack }: { receiverName?: str
         return counts;
     }, [selectedPO]);
 
+    const lastInitializedRef = React.useRef<{ poId: string | null; editingReceiptId: string | null }>({ poId: null, editingReceiptId: null });
+
     React.useEffect(() => {
-        if (editingReceiptId) {
-            if (scannedCountByPorId) {
-                setCustomCounts(scannedCountByPorId);
-            }
-        } else if (selectedPO?.allocations) {
-            if (scannedCountByPorId && Object.keys(scannedCountByPorId).length > 0) {
-                setCustomCounts(scannedCountByPorId);
-            } else {
+        if (!selectedPO) return;
+        const poId = selectedPO.id;
+
+        const isNewPO = lastInitializedRef.current.poId !== poId;
+        const isNewEdit = editingReceiptId && lastInitializedRef.current.editingReceiptId !== editingReceiptId;
+
+        if (isNewPO || isNewEdit) {
+            if (editingReceiptId) {
+                if (scannedCountByPorId && Object.keys(scannedCountByPorId).length > 0) {
+                    lastInitializedRef.current = { poId, editingReceiptId };
+                    setCustomCounts(scannedCountByPorId);
+                    const initialSelected: Record<string, boolean> = {};
+                    Object.entries(scannedCountByPorId).forEach(([porId, val]) => {
+                        if (val > 0) {
+                            initialSelected[porId] = true;
+                        }
+                    });
+                    setSelectedRows(initialSelected);
+                }
+            } else if (selectedPO?.allocations) {
+                lastInitializedRef.current = { poId, editingReceiptId: null };
                 const counts: Record<string, number> = {};
+                const initialSelected: Record<string, boolean> = {};
                 selectedPO.allocations.forEach(a => {
                     a.items.forEach(it => {
                         const porId = String(it.porId || it.id);
-                        counts[porId] = Math.max(0, Number(it.taggedQty || 0) - Number(it.receivedQty || 0));
+                        counts[porId] = 0;
+                        initialSelected[porId] = false;
                     });
                 });
                 setCustomCounts(counts);
+                setSelectedRows(initialSelected);
             }
         }
     }, [selectedPO, editingReceiptId, scannedCountByPorId]);
@@ -183,9 +202,27 @@ export function ReviewReceiptStep({ receiverName, onBack }: { receiverName?: str
             setExpiryDates(prev => ({ ...newExpiries, ...prev }));
         }
 
-        return () => { syncReady = false; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedPO?.id]);
+
+    React.useEffect(() => {
+        if (draftMetaData && Object.keys(draftMetaData).length > 0) {
+            const newLots: Record<string, string> = {};
+            const newBatches: Record<string, string> = {};
+            const newExpiries: Record<string, string> = {};
+            
+            Object.entries(draftMetaData).forEach(([porId, meta]) => {
+                if (meta.lotId) newLots[porId] = String(meta.lotId);
+                if (meta.batchNo) newBatches[porId] = meta.batchNo;
+                if (meta.expiryDate) {
+                    newExpiries[porId] = meta.expiryDate.split("T")[0];
+                }
+            });
+
+            setLotIds(prev => ({ ...prev, ...newLots }));
+            setBatchNos(prev => ({ ...prev, ...newBatches }));
+            setExpiryDates(prev => ({ ...prev, ...newExpiries }));
+        }
+    }, [draftMetaData]);
 
     React.useEffect(() => {
         const metaData: Record<string, { lotId: string; batchNo: string; expiryDate: string }> = {};
@@ -197,9 +234,19 @@ export function ReviewReceiptStep({ receiverName, onBack }: { receiverName?: str
         });
 
         if (hasData) {
-            setMetaDataByPorId(metaData);
+            const isDifferent = Object.keys(metaData).some(id => {
+                const existing = draftMetaData?.[id];
+                return !existing ||
+                    existing.lotId !== metaData[id].lotId ||
+                    existing.batchNo !== metaData[id].batchNo ||
+                    existing.expiryDate !== metaData[id].expiryDate;
+            }) || Object.keys(draftMetaData || {}).length !== Object.keys(metaData).length;
+
+            if (isDifferent) {
+                setMetaDataByPorId(metaData);
+            }
         }
-    }, [lotIds, batchNos, expiryDates, setMetaDataByPorId]);
+    }, [lotIds, batchNos, expiryDates, setMetaDataByPorId, draftMetaData]);
 
     React.useEffect(() => {
         if (!receiptSaved) return;
@@ -220,9 +267,13 @@ export function ReviewReceiptStep({ receiverName, onBack }: { receiverName?: str
                     porId: String(it.porId || it.id),
                     branchName: a?.branch?.name ?? "Unassigned",
                 }))
-                .filter((it) => Number(it.expectedQty || 0) > 0 || (physicalCounts[it.porId] || 0) > 0 || it.isExtra) as Array<ReceivingPOItem & { branchName: string }>;
+                .filter((it) => {
+                    const hasPhysical = (physicalCounts[it.porId] || 0) > 0;
+                    const hasCustom = (customCounts[it.porId] || 0) > 0;
+                    return hasPhysical || hasCustom;
+                }) as Array<ReceivingPOItem & { branchName: string }>;
         });
-    }, [selectedPO, physicalCounts]);
+    }, [selectedPO, physicalCounts, customCounts]);
 
     const filteredItems = React.useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
@@ -444,40 +495,6 @@ export function ReviewReceiptStep({ receiverName, onBack }: { receiverName?: str
                 </Card>
             )}
 
-            {/* ✅ Tagged Stock Reference Card */}
-            {!receiptSaved && selectedPO && (
-                <Card className="p-4 border-indigo-500/20 bg-indigo-500/5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
-                            <svg className="h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            Physically Tagged Stock
-                        </div>
-                    </div>
-                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        {allItems.map((it: ReceivingPOItem) => {
-                            const porId = String(it.porId || it.id);
-                            const totalTagged = physicalCounts[porId] ?? 0;
-                            return (
-                                <div key={porId} className="flex items-center justify-between gap-3 text-xs bg-background/70 border border-indigo-500/10 rounded-lg p-2.5 shadow-sm">
-                                    <div className="min-w-0">
-                                        <div className="font-bold truncate text-foreground text-xs" title={it.name}>
-                                            {it.name}
-                                        </div>
-                                        <div className="text-[9px] text-muted-foreground truncate font-mono mt-0.5">
-                                            SKU: {it.barcode}
-                                        </div>
-                                    </div>
-                                    <Badge variant="secondary" className="bg-indigo-600/10 text-indigo-700 border-indigo-600/20 px-2 font-black shrink-0 text-xs">
-                                        {totalTagged} tagged
-                                    </Badge>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </Card>
-            )}
             {receiptSaved ? (
                 <Card className="p-6 border-green-500 shadow-md">
                     <h3 className="text-xl font-bold mb-2">Receipt Saved!</h3>
@@ -619,12 +636,12 @@ export function ReviewReceiptStep({ receiverName, onBack }: { receiverName?: str
                                 <div className="text-sm font-semibold">Products Finalization</div>
                                 <div className="text-xs text-muted-foreground">Specify the Batch No, Lot selection and Expiry Date for each scanned product.</div>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 w-full sm:w-auto">
                                 <Input
                                     placeholder="Search product name or SKU..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="h-8 text-xs bg-background max-w-[240px]"
+                                    className="h-8 text-xs bg-background max-w-[400px] w-full sm:w-80"
                                 />
                             </div>
                         </div>
@@ -711,18 +728,48 @@ export function ReviewReceiptStep({ receiverName, onBack }: { receiverName?: str
                                                         </Badge>
                                                     </TableCell>
                                                     <TableCell className="text-center">
-                                                        <Input
-                                                            type="number"
-                                                            min={0}
-                                                            max={physicalCounts[porId] ?? 0}
-                                                            value={customCounts[porId] ?? 0}
-                                                            onChange={(e) => {
-                                                                const limit = physicalCounts[porId] ?? 0;
-                                                                const val = Math.max(0, Math.min(limit, Number(e.target.value)));
-                                                                setCustomCounts(prev => ({ ...prev, [porId]: val }));
-                                                            }}
-                                                            className="w-16 h-7 text-center text-xs font-bold bg-background mx-auto"
-                                                        />
+                                                        {!selectedRows[porId] ? (
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-8 w-24 text-xs font-bold border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/5 mx-auto flex items-center justify-center"
+                                                                onClick={() => {
+                                                                    setSelectedRows(prev => ({ ...prev, [porId]: true }));
+                                                                    setCustomCounts(prev => ({ ...prev, [porId]: 0 }));
+                                                                }}
+                                                            >
+                                                                Select
+                                                            </Button>
+                                                        ) : (
+                                                            <div className="flex items-center gap-1 justify-center">
+                                                                <Input
+                                                                    type="number"
+                                                                    min={0}
+                                                                    max={physicalCounts[porId] ?? 0}
+                                                                    value={customCounts[porId] ?? 0}
+                                                                    onChange={(e) => {
+                                                                        const limit = physicalCounts[porId] ?? 0;
+                                                                        const val = Math.max(0, Math.min(limit, Number(e.target.value)));
+                                                                        setCustomCounts(prev => ({ ...prev, [porId]: val }));
+                                                                    }}
+                                                                    className="w-16 h-8 text-center text-xs font-bold bg-background"
+                                                                />
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                                                    onClick={() => {
+                                                                        setSelectedRows(prev => ({ ...prev, [porId]: false }));
+                                                                        setCustomCounts(prev => ({ ...prev, [porId]: 0 }));
+                                                                    }}
+                                                                    title="Deselect product"
+                                                                >
+                                                                    <XCircle className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        )}
                                                     </TableCell>
                                                 </TableRow>
                                             )

@@ -676,8 +676,8 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                         
                         toast.info("Previous edit session cleared. You can start a new receipt or click 'Edit' in history to resume.");
                     } else {
-                        // ✅ PERSISTENCE: Check server reverted draft first
-                        const restoredDraft = detail ? restoreServerDraft(detail) : false;
+                        // Do not automatically restore server draft/reverted receipt. User must select explicitly from history.
+                        const restoredDraft = false;
 
                         if (!restoredDraft) {
                             // Fallback to local draft
@@ -812,8 +812,8 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                         
                         toast.info("Previous edit session cleared. You can start a new receipt or click 'Edit' in history to resume.");
                     } else {
-                        // ✅ PERSISTENCE: Check server reverted draft first
-                        const restoredDraft = detail ? restoreServerDraft(detail) : false;
+                        // Do not automatically restore server draft/reverted receipt. User must select explicitly from history.
+                        const restoredDraft = false;
 
                         if (!restoredDraft) {
                             // Fallback to local draft

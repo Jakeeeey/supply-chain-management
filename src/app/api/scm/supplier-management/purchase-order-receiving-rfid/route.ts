@@ -639,7 +639,7 @@ export async function POST(req: NextRequest) {
 
         if (action === "load_receipt") {
             const { poId, receiptNo } = body;
-            const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=purchase_order_product_id,product_id,branch_id,received_quantity,lot_id,batch_no,expiry_date,receipt_type`;
+            const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=purchase_order_product_id,product_id,branch_id,received_quantity,lot_id,batch_no,expiry_date,receipt_type,discount_type,unit_price,discounted_amount`;
             const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
 
             const porIds = (j?.data || []).map(r => toNum(r.purchase_order_product_id)).filter(id => id > 0);
@@ -719,17 +719,32 @@ export async function POST(req: NextRequest) {
                 const pors = porIdsByKey.get(k) || [];
                 const receivedQty = pors.reduce((sum, id) => sum + effectiveReceivedQty(porRows.find(r => toNum(r.purchase_order_product_id) === id)!), 0);
 
-                const { lineDiscountTypeStr, dAmount } = resolveLineDiscount({
-                    pid,
-                    unitPrice: toNum(ln.unit_price),
-                    productLinksMap,
-                    discountMap,
-                    headerDiscountPercent,
-                    headerDiscountType: dType
-                });
-
                 const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1));
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
+
+                let lineDiscountTypeStr = "No Discount";
+                let dAmount = 0;
+                const uPrice = openRow && openRow.unit_price !== null ? toNum(openRow.unit_price) : toNum(ln.unit_price);
+
+                if (openRow && (openRow.discount_type !== null || openRow.discounted_amount !== null)) {
+                    dAmount = toNum(openRow.discounted_amount);
+                    const dtId = String(openRow.discount_type ?? "");
+                    if (dtId) {
+                        const dt = discountMap.get(dtId);
+                        lineDiscountTypeStr = dt ? dt.name : `Discount #${dtId}`;
+                    }
+                } else {
+                    const resolved = resolveLineDiscount({
+                        pid,
+                        unitPrice: toNum(ln.unit_price),
+                        productLinksMap,
+                        discountMap,
+                        headerDiscountPercent,
+                        headerDiscountType: dType
+                    });
+                    lineDiscountTypeStr = resolved.lineDiscountTypeStr;
+                    dAmount = resolved.dAmount;
+                }
 
                 const orderedQty = toNum(ln.ordered_quantity);
                 const otherRows = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).filter(r => r && r.purchase_order_product_id !== openRow?.purchase_order_product_id);
@@ -750,10 +765,10 @@ export async function POST(req: NextRequest) {
                     taggedQty: taggedCountByKey.get(k) || 0,
                     rfids: rfidsByKey.get(k) || [],
                     isReceived: receivedQty >= orderedQty,
-                    unitPrice: toNum(ln.unit_price),
+                    unitPrice: uPrice,
                     discountType: lineDiscountTypeStr,
                     discountAmount: dAmount,
-                    netAmount: receivedQty * (toNum(ln.unit_price) - dAmount)
+                    netAmount: receivedQty * (uPrice - dAmount)
                 };
                 const arr = allocationsMap.get(bid) ?? [];
                 arr.push(item);
@@ -777,16 +792,29 @@ export async function POST(req: NextRequest) {
                 const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1));
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
 
-                const { lineDiscountTypeStr, dAmount } = resolveLineDiscount({
-                    pid,
-                    unitPrice: toNum(p?.cost_per_unit || 0),
-                    productLinksMap,
-                    discountMap,
-                    headerDiscountPercent,
-                    headerDiscountType: dType
-                });
+                let lineDiscountTypeStr = "No Discount";
+                let dAmount = 0;
+                const uPrice = openRow && openRow.unit_price !== null ? toNum(openRow.unit_price) : toNum(p?.cost_per_unit || 0);
 
-                const uPrice = toNum(p?.cost_per_unit || 0);
+                if (openRow && (openRow.discount_type !== null || openRow.discounted_amount !== null)) {
+                    dAmount = toNum(openRow.discounted_amount);
+                    const dtId = String(openRow.discount_type ?? "");
+                    if (dtId) {
+                        const dt = discountMap.get(dtId);
+                        lineDiscountTypeStr = dt ? dt.name : `Discount #${dtId}`;
+                    }
+                } else {
+                    const resolved = resolveLineDiscount({
+                        pid,
+                        unitPrice: toNum(p?.cost_per_unit || 0),
+                        productLinksMap,
+                        discountMap,
+                        headerDiscountPercent,
+                        headerDiscountType: dType
+                    });
+                    lineDiscountTypeStr = resolved.lineDiscountTypeStr;
+                    dAmount = resolved.dAmount;
+                }
 
                 const item: POItem = {
                     id: porIdStr,

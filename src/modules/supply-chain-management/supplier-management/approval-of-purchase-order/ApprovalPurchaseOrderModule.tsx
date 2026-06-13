@@ -106,6 +106,30 @@ export default function ApprovalPurchaseOrderModule({ approverId, approverName }
         [selectedId, refreshList, approverId]
     );
 
+    const onReject = React.useCallback(
+        async () => {
+            if (!selectedId) return;
+
+            const promise = provider.rejectPurchaseOrder({
+                id: selectedId,
+                approverId: approverId,
+            });
+
+            try {
+                await promise;
+                toast.success(`PO ${selectedId} rejected successfully!`);
+                refreshList();
+                setSelectedId(null);
+                setDetail(null);
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : String(err);
+                setError(msg);
+                toast.error(`Rejection failed: ${msg}`);
+            }
+        },
+        [selectedId, refreshList, approverId]
+    );
+
     return (
         <div className="w-full min-w-0 space-y-4">
             <div className="space-y-1">
@@ -135,6 +159,7 @@ export default function ApprovalPurchaseOrderModule({ approverId, approverName }
                     disabled={loadingList}
                     paymentTerms={paymentTerms}
                     onApprove={onApprove}
+                    onReject={onReject}
                     approverName={approverName}
                 />
             </div>
