@@ -257,6 +257,7 @@ export interface PicklistPDFData {
   salesmanName?: string;
   sourceBranch?: string;
   targetBranch?: string;
+  requestedDate?: string;
 }
 
 export interface ReceivingPDFData {
@@ -268,6 +269,7 @@ export interface ReceivingPDFData {
   sourceBranch?: string;
   targetBranch?: string;
   salesmanName?: string;
+  requestedDate?: string;
 }
 
 /**
