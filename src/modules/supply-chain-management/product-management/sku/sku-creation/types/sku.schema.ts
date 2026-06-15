@@ -89,6 +89,8 @@ export const skuSchema = z
     date_added: z.string().nullable().optional(),
     last_updated: z.string().nullable().optional(),
     created_at: z.string().nullable().optional(),
+    created_by: z.union([z.string(), z.number()]).nullable().optional(),
+    updated_by: z.union([z.string(), z.number()]).nullable().optional(),
     remarks: z.string().nullable().optional(),
   })
   .superRefine((data, ctx) => {

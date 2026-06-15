@@ -93,6 +93,8 @@ export const productRegistrationService = {
       ),
     );
 
+    const nowGMT = new Date().toISOString();
+
     const createPayload = (
       u: {
         unit_id: number;
@@ -114,6 +116,8 @@ export const productRegistrationService = {
       cost_per_unit: u.cost,
       barcode: u.barcode,
       product_code: code,
+      date_added: nowGMT,
+      last_updated: nowGMT,
     });
 
     // Insert parent product
@@ -180,11 +184,12 @@ export const productRegistrationService = {
    * Restricted to editable fields: name, supplier, description, taxonomy.
    */
   async updateProduct(id: number | string, data: Partial<SKU>): Promise<SKU> {
+    const nowGMT = new Date().toISOString();
     const { data: updated } = await request<{ data: SKU }>(
       `${API_BASE_URL}/items/products/${id}`,
       {
         method: "PATCH",
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, last_updated: nowGMT }),
       },
     );
 

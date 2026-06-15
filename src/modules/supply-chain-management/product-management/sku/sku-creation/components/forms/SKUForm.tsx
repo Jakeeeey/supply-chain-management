@@ -658,8 +658,8 @@ export function SKUForm({
             {loading
               ? "Processing..."
               : initialData
-                ? "Update Record"
-                : "Create Draft"}
+                ? "Update SKU"
+                : "Create SKU"}
           </Button>
         </div>
       </form>
