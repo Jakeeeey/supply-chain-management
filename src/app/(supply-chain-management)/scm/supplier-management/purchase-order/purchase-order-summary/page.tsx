@@ -132,8 +132,12 @@ async function getData() {
             
             // Only override if not permanently closed (14) or cancelled (7)
             if (dbStatus !== 14 && dbStatus !== 7) {
+                // If PO is already fully posted, mark as Received (6)
+                if (Number(po.is_posted) === 1 || po.is_posted === true) {
+                    effectiveStatus = 6;
+                }
                 // If there's receiving activity, it takes precedence
-                if (hasReceipt) {
+                else if (hasReceipt) {
                     const fullyReceived = totalOrdered > 0 && totalReceived >= totalOrdered;
                     if (fullyReceived) {
                         const invPosted = allInvPostedByPo.get(poId) || false;

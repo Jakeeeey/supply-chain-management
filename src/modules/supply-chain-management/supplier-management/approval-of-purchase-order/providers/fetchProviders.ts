@@ -46,4 +46,17 @@ export async function fetchPaymentTerms(): Promise<PaymentTerm[]> {
     return fetchData<PaymentTerm[]>("/api/scm/supplier-management/payment-terms");
 }
 
-
+export async function rejectPurchaseOrder(payload: {
+    id: string | number;
+    approverId?: number;
+}): Promise<unknown> {
+    const { approverId, id } = payload;
+    return fetchData<unknown>(BASE, {
+        method: "POST",
+        body: JSON.stringify({
+            id,
+            action: "reject",
+            approver_id: approverId,
+        }),
+    });
+}

@@ -13,7 +13,7 @@ import {
   BranchLookup,
   SupplierLookup
 } from "../types/stock-adjustment-summary.types";
-import { StockAdjustmentHeader } from "../../stock-adjustment/types/stock-adjustment.schema";
+import { StockAdjustmentHeader } from "../../stock-adjustment-registration/types/stock-adjustment.schema";
 
 interface StockAdjustmentSummaryContextType {
   // States

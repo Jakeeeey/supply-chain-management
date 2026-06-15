@@ -479,6 +479,9 @@ export default function StockTransferDispatchView({ currentUser }: { currentUser
           pickerName={currentUser.name}
           items={selectedGroup.items}
           salesmanName={currentUser.name}
+          sourceBranch={getBranchName(selectedGroup.sourceBranch)}
+          targetBranch={getBranchName(selectedGroup.targetBranch)}
+          requestedDate={new Date(selectedGroup.dateRequested).toLocaleString('en-PH')}
         />
       )}
     </div>

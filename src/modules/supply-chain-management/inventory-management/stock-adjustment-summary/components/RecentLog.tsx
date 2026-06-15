@@ -12,12 +12,16 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Eye,
+  Pencil
 } from "lucide-react";
 import { stockAdjustmentSummaryService } from "../services/stock-adjustment-summary-service";
+import { useRouter } from "next/navigation";
 
 export function RecentLog() {
   const { filteredData } = useStockAdjustmentSummary();
+  const router = useRouter();
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -150,11 +154,34 @@ export function RecentLog() {
 
                     {/* Financial Emphasis (₱ Column) */}
                     <div className="flex items-center gap-3 pr-4">
-                      <div className="text-right min-w-[120px]">
+                      <div className="text-right pr-6 mr-6 border-r border-border min-w-[120px]">
                         <span className="text-[10px] uppercase font-bold text-muted-foreground/60 block mb-0.5">Total Amount</span>
                         <span className="text-base font-bold text-primary">
                           ₱{item.amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}
                         </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => router.push(`/scm/inventory-management/stock-adjustment-posting?id=${item.id}`)} 
+                          className="text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg h-9 w-9"
+                          title="View Details"
+                        >
+                          <Eye className="h-4.5 w-4.5 stroke-[1.5]" />
+                        </Button>
+                        {!isPosted && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => router.push(`/scm/inventory-management/stock-adjustment-posting?id=${item.id}`)} 
+                            className="text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg h-9 w-9"
+                            title="Edit Draft"
+                          >
+                            <Pencil className="h-4.5 w-4.5 stroke-[1.5]" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>

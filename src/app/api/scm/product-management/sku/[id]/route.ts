@@ -22,6 +22,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
     const isMaster = req.nextUrl.searchParams.get("type") === "master";
     const body = await req.json();
 
+    const token = req.cookies.get("vos_access_token")?.value;
+    let userId: string | number | undefined = undefined;
+    if (token) {
+      try {
+        const parts = token.split(".");
+        if (parts.length >= 2) {
+          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
+          userId = payload.user_id ?? payload.userId ?? payload.id ?? payload.sub;
+        }
+      } catch (e) {
+        console.warn("Failed to decode token", e);
+      }
+    }
+
+    if (userId) {
+      body.updated_by = userId;
+      body.user_updated = userId;
+    }
+
     if (isMaster) {
       const data = await skuService.submitMasterEdit(id, body);
       return NextResponse.json({ data, message: "Edit submitted for approval" });

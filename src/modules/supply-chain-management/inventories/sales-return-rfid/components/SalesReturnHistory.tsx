@@ -31,7 +31,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { DataTable } from "@/components/ui/new-data-table";
+import { SalesReturnDataTable } from "./SalesReturnDataTable";
 
 import { SalesReturn } from "../type";
 
@@ -150,6 +150,7 @@ interface SalesReturnHistoryProps {
   page: number;
   pageSize: number;
   totalPages: number;
+  totalRecords: number;
   filters: { salesman: string; customer: string; status: string };
   salesmenOptions: { value: string; label: string; code?: string }[];
   customerOptions: { value: string; label: string }[];
@@ -170,6 +171,7 @@ export function SalesReturnHistory({
   page,
   pageSize,
   totalPages,
+  totalRecords,
   filters,
   salesmenOptions,
   customerOptions,
@@ -417,7 +419,7 @@ export function SalesReturnHistory({
       </div>
 
       {/* ===== DATA TABLE ===== */}
-      <DataTable
+      <SalesReturnDataTable
         columns={clickableColumns}
         data={data}
         searchKey="returnNo"
@@ -426,6 +428,7 @@ export function SalesReturnHistory({
         manualPagination={true}
         pageCount={totalPages}
         pagination={{ pageIndex: page - 1, pageSize: pageSize }}
+        totalRecords={totalRecords}
         onPaginationChange={(p) => {
           if (p.pageSize !== pageSize) {
             onPageSizeChange(p.pageSize);
