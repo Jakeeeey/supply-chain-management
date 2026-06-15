@@ -20,6 +20,9 @@ interface StockTransferPicklistPreviewProps {
   pickerName: string;
   items: OrderGroupItem[];
   salesmanName?: string;
+  sourceBranch?: string;
+  targetBranch?: string;
+  requestedDate?: string;
 }
 
 export function StockTransferPicklistPreview({
@@ -29,6 +32,9 @@ export function StockTransferPicklistPreview({
   pickerName,
   items,
   salesmanName,
+  sourceBranch,
+  targetBranch,
+  requestedDate,
 }: StockTransferPicklistPreviewProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [generating, setGenerating] = useState(open);
@@ -63,9 +69,12 @@ export function StockTransferPicklistPreview({
         orderNo,
         pickerName,
         date: new Date().toLocaleString('en-PH'),
+        requestedDate,
         items,
         companyData,
         salesmanName,
+        sourceBranch,
+        targetBranch,
       });
 
       const blob = doc.output('blob');
@@ -75,7 +84,7 @@ export function StockTransferPicklistPreview({
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [open, orderNo, pickerName, items, companyData, salesmanName]);
+  }, [open, orderNo, pickerName, items, companyData, salesmanName, sourceBranch, targetBranch, requestedDate]);
 
   const handleClose = useCallback(() => {
     if (pdfUrl) {
@@ -90,29 +99,35 @@ export function StockTransferPicklistPreview({
       orderNo,
       pickerName,
       date: new Date().toLocaleString('en-PH'),
+      requestedDate,
       items,
       companyData,
       salesmanName,
+      sourceBranch,
+      targetBranch,
     });
     doc.autoPrint();
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  }, [orderNo, pickerName, items, companyData, salesmanName]);
+  }, [orderNo, pickerName, items, companyData, salesmanName, sourceBranch, targetBranch, requestedDate]);
 
   const handleSave = useCallback(() => {
     const doc = generateStockTransferPicklistPDF({
       orderNo,
       pickerName,
       date: new Date().toLocaleString('en-PH'),
+      requestedDate,
       items,
       companyData,
       salesmanName,
+      sourceBranch,
+      targetBranch,
     });
     const filename = `PICKLIST-${orderNo || 'UNSAVED'}.pdf`;
     doc.save(filename);
-  }, [orderNo, pickerName, items, companyData, salesmanName]);
+  }, [orderNo, pickerName, items, companyData, salesmanName, sourceBranch, targetBranch, requestedDate]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>

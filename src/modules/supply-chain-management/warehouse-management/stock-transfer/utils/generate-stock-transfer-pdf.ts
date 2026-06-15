@@ -255,6 +255,9 @@ export interface PicklistPDFData {
   items: OrderGroupItem[]; 
   companyData: CompanyData | null;
   salesmanName?: string;
+  sourceBranch?: string;
+  targetBranch?: string;
+  requestedDate?: string;
 }
 
 export interface ReceivingPDFData {
@@ -266,6 +269,7 @@ export interface ReceivingPDFData {
   sourceBranch?: string;
   targetBranch?: string;
   salesmanName?: string;
+  requestedDate?: string;
 }
 
 /**
@@ -273,7 +277,7 @@ export interface ReceivingPDFData {
  * Grouped by Supplier/Brand and includes checkboxes.
  */
 export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
-  const { orderNo, pickerName, date, items, companyData, salesmanName } = data;
+  const { orderNo, pickerName, date, requestedDate, items, companyData, salesmanName, sourceBranch, targetBranch } = data;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
 
   const pageW = doc.internal.pageSize.getWidth();
@@ -314,22 +318,36 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(120, 120, 120);
-  doc.text(`Date: ${date}`, pageW - margin, y, { align: 'right' });
+  doc.text(`Printed: ${date}`, pageW - margin, y, { align: 'right' });
+  
+  if (requestedDate) {
+    y += 4;
+    doc.text(`Requested At: ${requestedDate}`, pageW - margin, y, { align: 'right' });
+  }
   
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('helvetica', 'normal');
   doc.setTextColor(0, 0, 0);
   doc.text(`Picker: ${pickerName.toUpperCase()}`, margin, y);
   y += 5;
 
   if (salesmanName) {
-    doc.setTextColor(37, 99, 235);
+    doc.setTextColor(0, 0, 0); // Changed from blue to black
     doc.text(`Salesman: ${salesmanName.toUpperCase()}`, margin, y);
-    doc.setTextColor(0, 0, 0);
     y += 5;
   }
 
-  y += 5;
+  // Branch Info
+  if (sourceBranch || targetBranch) {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal'); // Changed from bold to normal
+    doc.setTextColor(100, 100, 100);
+    const branchText = `Source: ${sourceBranch || 'N/A'}   |   Target: ${targetBranch || 'N/A'}`;
+    doc.text(branchText, margin, y);
+    y += 5;
+  }
+
+  y += 2;
 
   // ── Table Header ──────────────────────────────────────────────
   doc.setDrawColor(0, 0, 0);
@@ -548,9 +566,8 @@ export function generateStockTransferReceivingPDF(data: ReceivingPDFData): jsPDF
   y += 5;
 
   if (salesmanName) {
-    doc.setTextColor(37, 99, 235);
+    doc.setTextColor(0, 0, 0); // Changed from blue to black
     doc.text(`Salesman: ${salesmanName.toUpperCase()}`, margin, y);
-    doc.setTextColor(0, 0, 0);
     y += 5;
   }
 
