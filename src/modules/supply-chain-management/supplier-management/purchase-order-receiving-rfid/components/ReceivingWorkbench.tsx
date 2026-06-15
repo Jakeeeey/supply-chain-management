@@ -2,39 +2,12 @@
 
 import * as React from "react";
 import { useReceivingProducts } from "../providers/ReceivingProductsProvider";
-import { 
-    ReceiptDetailsStep, 
-    ProductChecklistStep, 
-    TagRFIDStep, 
-    ReviewReceiptStep 
-} from "./steps";
+import { TagRFIDStep } from "./steps";
 
 import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 
-function StepDot({ active }: { active: boolean }) {
-    return (
-        <div
-            className={cn("h-2.5 w-2.5 rounded-full", active ? "bg-primary" : "bg-muted")}
-        />
-    );
-}
-
-export function ReceivingWorkbench({ receiverName }: { receiverName?: string }) {
-    const { selectedPO, receiptSaved } = useReceivingProducts();
-    const [step, setStep] = React.useState(0);
-
-    // Reset to step 0 if PO is deselected
-    React.useEffect(() => {
-        if (!selectedPO) setStep(0);
-    }, [selectedPO]);
-
-    // If receipt is saved, stay on step 3 to show success state
-    React.useEffect(() => {
-        if (receiptSaved) {
-            setStep(3);
-        }
-    }, [receiptSaved]);
+export function ReceivingWorkbench() {
+    const { selectedPO } = useReceivingProducts();
 
     if (!selectedPO) {
         return (
@@ -46,7 +19,7 @@ export function ReceivingWorkbench({ receiverName }: { receiverName?: string }) 
                 </div>
                 <div>
                     <div className="text-lg font-semibold">No Purchase Order Selected</div>
-                    <div className="text-sm text-muted-foreground">Select a PO from the sidebar to begin receiving</div>
+                    <div className="text-sm text-muted-foreground">Select a PO from the sidebar to begin tagging</div>
                 </div>
             </Card>
         );
@@ -56,30 +29,21 @@ export function ReceivingWorkbench({ receiverName }: { receiverName?: string }) 
         <Card className="p-4 min-w-0">
             <div className="flex items-start justify-between gap-3">
                 <div>
-                    <div className="text-base font-semibold">Receiving Workbench RFID</div>
+                    <div className="text-base font-semibold">RFID Tagging Workbench</div>
                     <div className="text-xs text-muted-foreground">
-                        Follow the steps to receive items for {selectedPO.poNumber}
+                        Tag products with RFID for {selectedPO.poNumber}
                     </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <StepDot active={step === 0} />
-                    <StepDot active={step === 1} />
-                    <StepDot active={step === 2} />
-                    <StepDot active={step === 3} />
+                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mr-2">
+                        RFID Tagging
+                    </div>
                 </div>
             </div>
 
             <div className="mt-4">
-                {step === 0 ? (
-                    <ReceiptDetailsStep onContinue={() => setStep(1)} />
-                ) : step === 1 ? (
-                    <ProductChecklistStep onContinue={() => setStep(2)} />
-                ) : step === 2 ? (
-                    <TagRFIDStep onContinue={() => setStep(3)} onBack={() => setStep(1)} />
-                ) : step === 3 ? (
-                    <ReviewReceiptStep onBack={() => setStep(2)} receiverName={receiverName} />
-                ) : null}
+                <TagRFIDStep />
             </div>
         </Card>
     );

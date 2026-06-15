@@ -151,7 +151,11 @@ export function useStockTransferDispatchManual() {
       const group = orderGroups.find((g: OrderGroup) => g.orderNo === orderNo);
       if (group) {
         await stockTransferLifecycleService.submitStatusUpdate({
-          items: group.items.map((i: OrderGroupItem) => ({ id: i.id, status: 'Picked' })),
+          items: group.items.map((i: OrderGroupItem) => ({ 
+            id: i.id, 
+            status: 'Picked',
+            allocated_quantity: scannedQtys[i.id] ?? i.allocated_quantity ?? 0 
+          })),
           status: 'Picked'
         });
         toast.success(`Successfully marked as Done Picking.`);

@@ -64,11 +64,30 @@ export type ReceivingPODetail = {
         receiptNo: string;
         receiptDate: string;
         isPosted: boolean;
+        isReverted?: boolean;
         itemsCount: number;
     }>;
     createdAt: string;
     priceType?: string;
     isInvoice?: boolean;
+    draftData?: Array<{
+        porId: number;
+        productId: number;
+        branchId: number;
+        receivedQuantity: number;
+        batchNo: string | null;
+        expiryDate: string | null;
+        lotId: number | null;
+        receiptNo: string | null;
+        receiptDate: string | null;
+        receiptType: string | null;
+    }>;
+    draftRfids?: Array<{
+        rfid_code: string;
+        product_id: string | number;
+        purchase_order_product_id: string | number;
+        created_at?: string;
+    }>;
 };
 
 type ScanRFIDResult = {
@@ -195,6 +214,7 @@ type Ctx = {
     scanRFID: (rfidOverride?: string) => Promise<void>;
     removeActivity: (id: string) => void;
     saveReceipt: (porMetaData?: Record<string, { lotId: string; batchNo: string; expiryDate: string }>) => Promise<void>;
+    saveRFIDTagging: () => Promise<void>;
     savingReceipt: boolean;
     saveError: string;
 
@@ -223,6 +243,10 @@ type Ctx = {
     // ✅ UNITS
     units: UnitOption[];
     unitsLoading: boolean;
+
+    // ✅ STEP state for workbench coordination
+    step: number;
+    setStep: React.Dispatch<React.SetStateAction<number>>;
 };
 
 const ReceivingProductsContext = React.createContext<Ctx | null>(null);
@@ -357,6 +381,9 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
     // ✅ NEW: Edit Receipt
     const [editingReceiptId, setEditingReceiptId] = React.useState<string | null>(null);
     const clearEditingReceiptId = React.useCallback(() => {
+        if (selectedPO?.id) {
+            localStorage.removeItem(`editing_receipt_${selectedPO.id}`);
+        }
         setEditingReceiptId(null);
         setReceiptNo("");
         setReceiptDate("");
@@ -365,7 +392,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         setScannedCountByPorId({});
         setVerifiedPorIds([]);
         setMetaDataByPorId({});
-    }, []);
+    }, [selectedPO?.id]);
 
 
 
@@ -376,6 +403,9 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
     // ✅ UNITS
     const [units, setUnits] = React.useState<UnitOption[]>([]);
     const [unitsLoading, setUnitsLoading] = React.useState(false);
+
+    // ✅ STEP state for workbench coordination (Step 1 is Tagging, Step 2 is Finalization)
+    const [step, setStep] = React.useState(1);
 
     // ✅ NEW FLOW: Product Barcode Verification State
     const [verifiedPorIds, setVerifiedPorIds] = React.useState<string[]>([]);
@@ -460,8 +490,10 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         setActiveProductId(null);
         setEditingReceiptId(null);
         setMetaDataByPorId({});
+        setStep(1);
         if (opts?.clearStorage && opts?.poId) {
             clearDraft(opts.poId);
+            localStorage.removeItem(`editing_receipt_${opts.poId}`);
         }
     }, []);
 
@@ -507,6 +539,89 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         });
     }, [selectedPO?.id, selectedPO?.allocations, localScannedRfids, activity, scannedCountByPorId, verifiedPorIds, receiptNo, receiptType, receiptDate, metaDataByPorId]);
 
+    const restoreServerDraft = React.useCallback((detail: ReceivingPODetail) => {
+        const draftData = detail.draftData || [];
+        const hasServerDraft = draftData.length > 0;
+
+        if (hasServerDraft && detail.id) {
+            clearDraft(detail.id);
+
+            const newCounts: Record<string, number> = {};
+            const newVerifiedIds: string[] = [];
+            const newLocalRfids: Array<{
+                rfid: string;
+                productId: string;
+                branchId: string;
+                status: "unknown" | "known";
+                porId?: string;
+                productName: string;
+            }> = [];
+            const newActivity: ActivityRow[] = [];
+            const meta: Record<string, { batchNo?: string; lotId?: string; expiryDate?: string }> = {};
+
+            const draftRfids = detail.draftRfids || [];
+
+            draftRfids.forEach((it) => {
+                const rfid = String(it.rfid_code);
+                const porId = String(it.purchase_order_product_id);
+                const pid = String(it.product_id);
+
+                let productName = `Product #${pid}`;
+                let branchId = "";
+                detail.allocations.forEach(a => {
+                    a.items.forEach(i => {
+                        if (i.porId === porId || i.id === porId) {
+                            productName = i.name;
+                            branchId = a.branch.id;
+                        }
+                    });
+                });
+
+                newLocalRfids.push({ rfid, productId: pid, branchId, status: "known", porId, productName });
+                newActivity.unshift({
+                    id: rfid, rfid, productName, productId: pid, porId,
+                    time: it.created_at ? new Date(it.created_at).toLocaleTimeString() : new Date().toLocaleTimeString(),
+                    status: "ok"
+                });
+
+                newCounts[porId] = (newCounts[porId] || 0) + 1;
+                if (!newVerifiedIds.includes(porId)) newVerifiedIds.push(porId);
+            });
+
+            draftData.forEach((d) => {
+                const porId = String(d.porId);
+                if (d.batchNo || d.expiryDate || d.lotId) {
+                    meta[porId] = {
+                        batchNo: d.batchNo || undefined,
+                        expiryDate: d.expiryDate || undefined,
+                        lotId: d.lotId ? String(d.lotId) : undefined
+                    };
+                }
+                if (!newVerifiedIds.includes(porId)) newVerifiedIds.push(porId);
+            });
+
+            setLocalScannedRfids(newLocalRfids);
+            setActivity(newActivity);
+            setScannedCountByPorId(newCounts);
+            setVerifiedPorIds(newVerifiedIds);
+            setMetaDataByPorId(meta);
+
+            const firstDraft = draftData[0];
+            const rNo = firstDraft?.receiptNo || "";
+            setReceiptNo(rNo);
+            setReceiptDate(firstDraft?.receiptDate ? firstDraft.receiptDate.split("T")[0] : todayYMD());
+            setReceiptType(firstDraft?.receiptType || "");
+            setEditingReceiptId(rNo);
+            if (rNo) {
+                localStorage.setItem(`editing_receipt_${detail.id}`, rNo);
+            }
+
+            toast.info("Reverted receipt data restored.");
+            return true;
+        }
+        return false;
+    }, []);
+
     const openPOById = React.useCallback(
         async (poId: string, options?: { silent?: boolean }) => {
             const silent = !!options?.silent;
@@ -536,68 +651,97 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
 
                 if (!silent) {
                     setPoBarcode(detail?.poNumber ?? "");
-                    // ✅ PERSISTENCE: Restore draft if available
-                    const draft = detail?.id ? loadDraft(detail.id) : null;
-                    const hasDraftData = draft ? (
-                        draft.localScannedRfids.length > 0 ||
-                        Object.keys(draft.scannedCountByPorId || {}).length > 0 ||
-                        (draft.verifiedPorIds && draft.verifiedPorIds.length > 0) ||
-                        Object.keys(draft.metaDataByPorId || {}).length > 0 ||
-                        (draft.extraItems && draft.extraItems.length > 0)
-                    ) : false;
+                    
+                    const storedEditingId = detail?.id ? localStorage.getItem(`editing_receipt_${detail.id}`) : null;
 
-                    if (hasDraftData && draft) {
-                        // ✅ Restore extra items into PO allocations
-                        if (draft.extraItems && draft.extraItems.length > 0 && detail) {
-                            const restored = { ...detail };
-                            const allocs = [...restored.allocations];
-                            for (const extra of draft.extraItems) {
-                                let branchAlloc = allocs.find(a => a.branch.id === extra.branchId);
-                                if (!branchAlloc) {
-                                    branchAlloc = { branch: { id: extra.branchId, name: extra.branchName }, items: [] };
-                                    allocs.push(branchAlloc);
-                                }
-                                const alreadyExists = branchAlloc.items.some(i => i.productId === extra.productId);
-                                if (!alreadyExists) {
-                                    const uPrice = extra.unitPrice || 0;
-                                    const dPct = extra.discountPercent || 0;
-                                    const dAmt = Number((uPrice * (dPct / 100)).toFixed(2));
-                                    branchAlloc.items = [...branchAlloc.items, {
-                                        id: `${extra.productId}-${extra.branchId}`,
-                                        productId: String(extra.productId),
-                                        name: extra.name,
-                                        barcode: extra.sku || extra.barcode,
-                                        uom: extra.uom || "BOX",
-                                        expectedQty: 0,
-                                        receivedQty: 0,
-                                        requiresRfid: true,
-                                        taggedQty: 0,
-                                        rfids: [],
-                                        isReceived: false,
-                                        unitPrice: uPrice,
-                                        discountType: extra.discountType || "No Discount",
-                                        discountAmount: dAmt,
-                                        netAmount: 0,
-                                        isExtra: true
-                                    }];
-                                }
-                            }
-                            restored.allocations = allocs;
-                            setSelectedPO(restored);
+                    if (storedEditingId) {
+                        // User reloaded while editing a reverted receipt. 
+                        // We clear the state and leave the workbench clean so they can explicitly choose what to do next.
+                        if (detail?.id) {
+                            localStorage.removeItem(`editing_receipt_${detail.id}`);
+                            clearDraft(detail.id); // Clear local draft to prevent data bleed into a new receipt
                         }
-                        setLocalScannedRfids(draft.localScannedRfids);
-                        setActivity(draft.activity);
-                        setScannedCountByPorId(draft.scannedCountByPorId);
-                        setVerifiedPorIds(draft.verifiedPorIds || []);
-                        setMetaDataByPorId(draft.metaDataByPorId || {});
-                        setReceiptNo(draft.receiptNo || "");
-                        setReceiptType(draft.receiptType || "");
-                        setReceiptDate(draft.receiptDate || todayYMD());
-                        toast.info("Draft restored from previous session.");
-                    } else {
+                        
+                        setLocalScannedRfids([]);
+                        setActivity([]);
+                        setScannedCountByPorId({});
+                        setVerifiedPorIds([]);
+                        setMetaDataByPorId({});
                         setReceiptDate(todayYMD());
                         setReceiptNo("");
                         setReceiptType("");
+                        setEditingReceiptId(null);
+                        
+                        toast.info("Previous edit session cleared. You can start a new receipt or click 'Edit' in history to resume.");
+                    } else {
+                        // ✅ PERSISTENCE: Check server reverted draft first
+                        const restoredDraft = detail ? restoreServerDraft(detail) : false;
+
+                        if (!restoredDraft) {
+                            // Fallback to local draft
+                            const draft = detail?.id ? loadDraft(detail.id) : null;
+                            const hasDraftData = draft ? (
+                                draft.localScannedRfids.length > 0 ||
+                                Object.keys(draft.scannedCountByPorId || {}).length > 0 ||
+                                (draft.verifiedPorIds && draft.verifiedPorIds.length > 0) ||
+                                Object.keys(draft.metaDataByPorId || {}).length > 0 ||
+                                (draft.extraItems && draft.extraItems.length > 0)
+                            ) : false;
+
+                            if (hasDraftData && draft) {
+                                // ✅ Restore extra items into PO allocations
+                                if (draft.extraItems && draft.extraItems.length > 0 && detail) {
+                                    const restored = { ...detail };
+                                    const allocs = [...restored.allocations];
+                                    for (const extra of draft.extraItems) {
+                                        let branchAlloc = allocs.find(a => a.branch.id === extra.branchId);
+                                        if (!branchAlloc) {
+                                            branchAlloc = { branch: { id: extra.branchId, name: extra.branchName }, items: [] };
+                                            allocs.push(branchAlloc);
+                                        }
+                                        const alreadyExists = branchAlloc.items.some(i => i.productId === extra.productId);
+                                        if (!alreadyExists) {
+                                            const uPrice = extra.unitPrice || 0;
+                                            const dPct = extra.discountPercent || 0;
+                                            const dAmt = Number((uPrice * (dPct / 100)).toFixed(2));
+                                            branchAlloc.items = [...branchAlloc.items, {
+                                                id: `${extra.productId}-${extra.branchId}`,
+                                                productId: String(extra.productId),
+                                                name: extra.name,
+                                                barcode: extra.sku || extra.barcode,
+                                                uom: extra.uom || "BOX",
+                                                expectedQty: 0,
+                                                receivedQty: 0,
+                                                requiresRfid: true,
+                                                taggedQty: 0,
+                                                rfids: [],
+                                                isReceived: false,
+                                                unitPrice: uPrice,
+                                                discountType: extra.discountType || "No Discount",
+                                                discountAmount: dAmt,
+                                                netAmount: 0,
+                                                isExtra: true
+                                            }];
+                                        }
+                                    }
+                                    restored.allocations = allocs;
+                                    setSelectedPO(restored);
+                                }
+                                setLocalScannedRfids(draft.localScannedRfids);
+                                setActivity(draft.activity);
+                                setScannedCountByPorId(draft.scannedCountByPorId);
+                                setVerifiedPorIds(draft.verifiedPorIds || []);
+                                setMetaDataByPorId(draft.metaDataByPorId || {});
+                                setReceiptNo(draft.receiptNo || "");
+                                setReceiptType(draft.receiptType || "");
+                                setReceiptDate(draft.receiptDate || todayYMD());
+                                toast.info("Draft restored from previous session.");
+                            } else {
+                                setReceiptDate(todayYMD());
+                                setReceiptNo("");
+                                setReceiptType("");
+                            }
+                        }
                     }
                 }
             } catch (e: unknown) {
@@ -608,7 +752,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 }
             }
         },
-        [resetSession]
+        [resetSession, restoreServerDraft]
     );
 
     const openPOByBarcode = React.useCallback(
@@ -643,68 +787,97 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
 
                 if (!silent) {
                     setPoBarcode(code);
-                    // ✅ PERSISTENCE: Restore draft if available
-                    const draft = detail?.id ? loadDraft(detail.id) : null;
-                    const hasDraftData = draft ? (
-                        draft.localScannedRfids.length > 0 ||
-                        Object.keys(draft.scannedCountByPorId || {}).length > 0 ||
-                        (draft.verifiedPorIds && draft.verifiedPorIds.length > 0) ||
-                        Object.keys(draft.metaDataByPorId || {}).length > 0 ||
-                        (draft.extraItems && draft.extraItems.length > 0)
-                    ) : false;
+                    
+                    const storedEditingId = detail?.id ? localStorage.getItem(`editing_receipt_${detail.id}`) : null;
 
-                    if (hasDraftData && draft) {
-                        // Restore extra items into PO allocations
-                        if (draft.extraItems && draft.extraItems.length > 0 && detail) {
-                            const restored = { ...detail };
-                            const allocs = [...restored.allocations];
-                            for (const extra of draft.extraItems) {
-                                let branchAlloc = allocs.find(a => a.branch.id === extra.branchId);
-                                if (!branchAlloc) {
-                                    branchAlloc = { branch: { id: extra.branchId, name: extra.branchName }, items: [] };
-                                    allocs.push(branchAlloc);
-                                }
-                                const alreadyExists = branchAlloc.items.some(i => i.productId === extra.productId);
-                                if (!alreadyExists) {
-                                    const uPrice = extra.unitPrice || 0;
-                                    const dPct = extra.discountPercent || 0;
-                                    const dAmt = Number((uPrice * (dPct / 100)).toFixed(2));
-                                    branchAlloc.items = [...branchAlloc.items, {
-                                        id: `${extra.productId}-${extra.branchId}`,
-                                        productId: String(extra.productId),
-                                        name: extra.name,
-                                        barcode: extra.sku || extra.barcode,
-                                        uom: extra.uom || "BOX",
-                                        expectedQty: 0,
-                                        receivedQty: 0,
-                                        requiresRfid: true,
-                                        taggedQty: 0,
-                                        rfids: [],
-                                        isReceived: false,
-                                        unitPrice: uPrice,
-                                        discountType: extra.discountType || "No Discount",
-                                        discountAmount: dAmt,
-                                        netAmount: 0,
-                                        isExtra: true
-                                    }];
-                                }
-                            }
-                            restored.allocations = allocs;
-                            setSelectedPO(restored);
+                    if (storedEditingId) {
+                        // User reloaded while editing a reverted receipt. 
+                        // We clear the state and leave the workbench clean so they can explicitly choose what to do next.
+                        if (detail?.id) {
+                            localStorage.removeItem(`editing_receipt_${detail.id}`);
+                            clearDraft(detail.id); // Clear local draft to prevent data bleed into a new receipt
                         }
-                        setLocalScannedRfids(draft.localScannedRfids);
-                        setActivity(draft.activity);
-                        setScannedCountByPorId(draft.scannedCountByPorId);
-                        setVerifiedPorIds(draft.verifiedPorIds || []);
-                        setMetaDataByPorId(draft.metaDataByPorId || {});
-                        setReceiptNo(draft.receiptNo || "");
-                        setReceiptType(draft.receiptType || "");
-                        setReceiptDate(draft.receiptDate || todayYMD());
-                        toast.info("Draft restored from previous session.");
-                    } else {
+                        
+                        setLocalScannedRfids([]);
+                        setActivity([]);
+                        setScannedCountByPorId({});
+                        setVerifiedPorIds([]);
+                        setMetaDataByPorId({});
                         setReceiptDate(todayYMD());
                         setReceiptNo("");
                         setReceiptType("");
+                        setEditingReceiptId(null);
+                        
+                        toast.info("Previous edit session cleared. You can start a new receipt or click 'Edit' in history to resume.");
+                    } else {
+                        // ✅ PERSISTENCE: Check server reverted draft first
+                        const restoredDraft = detail ? restoreServerDraft(detail) : false;
+
+                        if (!restoredDraft) {
+                            // Fallback to local draft
+                            const draft = detail?.id ? loadDraft(detail.id) : null;
+                            const hasDraftData = draft ? (
+                                draft.localScannedRfids.length > 0 ||
+                                Object.keys(draft.scannedCountByPorId || {}).length > 0 ||
+                                (draft.verifiedPorIds && draft.verifiedPorIds.length > 0) ||
+                                Object.keys(draft.metaDataByPorId || {}).length > 0 ||
+                                (draft.extraItems && draft.extraItems.length > 0)
+                            ) : false;
+
+                            if (hasDraftData && draft) {
+                                // Restore extra items into PO allocations
+                                if (draft.extraItems && draft.extraItems.length > 0 && detail) {
+                                    const restored = { ...detail };
+                                    const allocs = [...restored.allocations];
+                                    for (const extra of draft.extraItems) {
+                                        let branchAlloc = allocs.find(a => a.branch.id === extra.branchId);
+                                        if (!branchAlloc) {
+                                            branchAlloc = { branch: { id: extra.branchId, name: extra.branchName }, items: [] };
+                                            allocs.push(branchAlloc);
+                                        }
+                                        const alreadyExists = branchAlloc.items.some(i => i.productId === extra.productId);
+                                        if (!alreadyExists) {
+                                            const uPrice = extra.unitPrice || 0;
+                                            const dPct = extra.discountPercent || 0;
+                                            const dAmt = Number((uPrice * (dPct / 100)).toFixed(2));
+                                            branchAlloc.items = [...branchAlloc.items, {
+                                                id: `${extra.productId}-${extra.branchId}`,
+                                                productId: String(extra.productId),
+                                                name: extra.name,
+                                                barcode: extra.sku || extra.barcode,
+                                                uom: extra.uom || "BOX",
+                                                expectedQty: 0,
+                                                receivedQty: 0,
+                                                requiresRfid: true,
+                                                taggedQty: 0,
+                                                rfids: [],
+                                                isReceived: false,
+                                                unitPrice: uPrice,
+                                                discountType: extra.discountType || "No Discount",
+                                                discountAmount: dAmt,
+                                                netAmount: 0,
+                                                isExtra: true
+                                            }];
+                                        }
+                                    }
+                                    restored.allocations = allocs;
+                                    setSelectedPO(restored);
+                                }
+                                setLocalScannedRfids(draft.localScannedRfids);
+                                setActivity(draft.activity);
+                                setScannedCountByPorId(draft.scannedCountByPorId);
+                                setVerifiedPorIds(draft.verifiedPorIds || []);
+                                setMetaDataByPorId(draft.metaDataByPorId || {});
+                                setReceiptNo(draft.receiptNo || "");
+                                setReceiptType(draft.receiptType || "");
+                                setReceiptDate(draft.receiptDate || todayYMD());
+                                toast.info("Draft restored from previous session.");
+                            } else {
+                                setReceiptDate(todayYMD());
+                                setReceiptNo("");
+                                setReceiptType("");
+                            }
+                        }
                     }
                 }
             } catch (e: unknown) {
@@ -715,7 +888,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 }
             }
         },
-        [resetSession]
+        [resetSession, restoreServerDraft]
     );
 
     const openPO = React.useCallback(
@@ -832,11 +1005,17 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 return;
             }
 
-            // ✅ 2. Database Check (Server-side)
+            // ✅ 2. Database Tag & Check (Server-side)
             const r = await fetch(API_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "scan_rfid", poId: selectedPO.id, rfid: value }),
+                body: JSON.stringify({
+                    action: "tag_and_receive",
+                    poId: selectedPO.id,
+                    productId: activeItem.productId,
+                    branchId: activeItem.branchId,
+                    rfid: value
+                }),
             });
             const j = await asJson(r);
             const data = j?.data as ScanRFIDResult | null;
@@ -876,6 +1055,25 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                             })
                         }));
                         return updated;
+                    });
+
+                    // ✅ Sync activePorId React state
+                    if (activePorId === targetPorId) {
+                        setActivePorId(realPorId);
+                    }
+
+                    // ✅ Sync verifiedPorIds
+                    setVerifiedPorIds(prev => prev.map(id => id === targetPorId ? realPorId : id));
+
+                    // ✅ Sync metaDataByPorId
+                    setMetaDataByPorId(prev => {
+                        if (prev[targetPorId] !== undefined) {
+                            const next = { ...prev };
+                            next[realPorId] = next[targetPorId];
+                            delete next[targetPorId];
+                            return next;
+                        }
+                        return prev;
                     });
 
                     // ✅ Sync scannedCountByPorId
@@ -1071,9 +1269,12 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         if (!selectedPO) return;
         setEditingReceiptId(rNo);
         setReceiptNo(rNo);
+        localStorage.setItem(`editing_receipt_${selectedPO.id}`, rNo);
         
         const hist = selectedPO.history?.find(h => h.receiptNo === rNo);
         if (hist?.receiptDate) setReceiptDate(hist.receiptDate.split("T")[0]);
+        // Restore receiptType from history if available (will be overwritten by API response if present)
+        if ((hist as Record<string, unknown>)?.receiptType) setReceiptType(String((hist as Record<string, unknown>).receiptType));
 
         try {
             const r = await fetch(API_URL, {
@@ -1146,8 +1347,29 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
             setScannedCountByPorId(newCounts);
             setVerifiedPorIds(newVerifiedIds);
             setMetaDataByPorId(meta);
-        } catch {
-            toast.error("Failed to load receipt details");
+
+            // ✅ Restore receiptType from load_receipt API response
+            const loadedReceiptType = j?.data?.receiptType;
+            if (loadedReceiptType) setReceiptType(String(loadedReceiptType));
+
+            // Determine if all expected items in PO have RFID tags
+            const poItems = selectedPO.allocations?.flatMap(a => a.items) || [];
+            const expectedItems = poItems.filter(i => Number(i.expectedQty || 0) > 0);
+            
+            const allHaveRfid = expectedItems.length > 0 && expectedItems.every(i => {
+                const porId = String(i.porId || i.id);
+                return (newCounts[porId] || 0) > 0;
+            });
+
+            if (allHaveRfid) {
+                setStep(2); // Jump directly to Details & Finalization
+                toast.success("Receipt loaded. All items have RFID tags—proceeding directly to Details & Finalization.");
+            } else {
+                setStep(1); // Go to tagging screen
+                toast.success("Receipt loaded. Untagged items are ready for scanning.");
+            }
+        } catch (e: unknown) {
+            toast.error("Failed to load receipt.", { description: (e as Error).message });
         }
     }, [selectedPO]);
 
@@ -1193,7 +1415,8 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                     porCounts: counts,
                     porMetaData: porMetaData ?? {},
                     newTags,
-                    isEdit: !!editingReceiptId
+                    isEdit: !!editingReceiptId,
+                    editingReceiptNo: editingReceiptId || undefined
                 }),
             });
             const j = await asJson(r);
@@ -1217,6 +1440,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
 
             const savedItems: SavedItem[] = (allItems as ReceivingPOItem[])
                 .filter((it) => verifiedPorIds.includes(String(it.porId || it.id)))
+                .filter((it) => Number(countsMap[String(it.porId || it.id)] || 0) > 0)
                 .map((it) => {
                     const porId = String(it.porId || it.id);
                     const scannedNow = Number(countsMap[porId] || 0);
@@ -1276,6 +1500,20 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         }
     }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession, localScannedRfids, activity, receiverId, verifiedPorIds, editingReceiptId]);
 
+    const saveRFIDTagging = React.useCallback(async () => {
+        const poId = selectedPO?.id;
+        if (!poId) return;
+        try {
+            await openPOById(poId, { silent: true });
+            // Clear local draft and session states
+            clearDraft(String(poId));
+            resetSession();
+            toast.success("RFID tagging saved successfully.");
+        } catch (e: unknown) {
+            toast.error("Failed to refresh tagging data.", { description: (e as Error).message });
+        }
+    }, [selectedPO?.id, openPOById, resetSession]);
+
     const value: Ctx = {
         list,
         poList: list,
@@ -1320,6 +1558,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         scanRFID,
         removeActivity,
         saveReceipt,
+        saveRFIDTagging,
         savingReceipt,
         saveError,
 
@@ -1349,6 +1588,10 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         // ✅ UNITS
         units,
         unitsLoading,
+
+        // ✅ STEP STATE
+        step,
+        setStep,
     };
 
     return <ReceivingProductsContext.Provider value={value}>{children}</ReceivingProductsContext.Provider>;

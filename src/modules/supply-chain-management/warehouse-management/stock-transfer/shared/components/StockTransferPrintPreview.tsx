@@ -22,6 +22,7 @@ interface StockTransferPrintPreviewProps {
   targetBranchLabel: string;
   leadDate: string;
   scannedItems: ScannedItem[];
+  salesmanName?: string;
 }
 
 export function StockTransferPrintPreview({
@@ -33,6 +34,7 @@ export function StockTransferPrintPreview({
   targetBranchLabel,
   leadDate,
   scannedItems,
+  salesmanName,
 }: StockTransferPrintPreviewProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [generating, setGenerating] = useState(open);
@@ -71,6 +73,7 @@ export function StockTransferPrintPreview({
         leadDate,
         scannedItems,
         companyData,
+        salesmanName,
       });
 
       const blob = doc.output('blob');
@@ -80,7 +83,7 @@ export function StockTransferPrintPreview({
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [open, orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData]);
+  }, [open, orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData, salesmanName]);
 
   const handleClose = useCallback(() => {
     if (pdfUrl) {
@@ -99,13 +102,14 @@ export function StockTransferPrintPreview({
       leadDate,
       scannedItems,
       companyData,
+      salesmanName,
     });
     doc.autoPrint();
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  }, [orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData]);
+  }, [orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData, salesmanName]);
 
   const handleSave = useCallback(() => {
     const doc = generateStockTransferPDF({
@@ -116,10 +120,11 @@ export function StockTransferPrintPreview({
       leadDate,
       scannedItems,
       companyData,
+      salesmanName,
     });
     const filename = `ST-SLIP-${orderNo || 'UNSAVED'}.pdf`;
     doc.save(filename);
-  }, [orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData]);
+  }, [orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData, salesmanName]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>

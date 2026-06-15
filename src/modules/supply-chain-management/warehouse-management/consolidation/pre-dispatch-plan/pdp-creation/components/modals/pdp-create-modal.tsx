@@ -63,7 +63,7 @@ interface PDPCreateModalProps {
   masterData: DispatchPlanMasterData | null;
   availableOrders: SalesOrderOption[];
   isLoadingOrders: boolean;
-  onFilterChange: (clusterId?: number, branchId?: number) => void;
+  onFilterChange: (clusterId?: number | null, branchId?: number | null) => void;
   initialClusterId?: number | null;
   initialBranchId?: number | null;
   editPlan?: DispatchPlan | null;
@@ -390,7 +390,7 @@ export function PDPCreateModal({
   }, [effectiveAvailableOrders, manifestOrderIds]);
 
   const handleClusterChange = (value: string) => {
-    const id = Number(value);
+    const id = value ? Number(value) : null;
     if (id === clusterId) return;
     if (
       manifestOrders.length > 0 &&
@@ -401,11 +401,10 @@ export function PDPCreateModal({
       return;
     setClusterId(id);
     setManifestOrders([]);
-    onFilterChange(id, branchId || undefined);
   };
 
   const handleBranchChange = (value: string) => {
-    const id = Number(value);
+    const id = value ? Number(value) : null;
     if (id === branchId) return;
     if (
       manifestOrders.length > 0 &&
@@ -416,7 +415,6 @@ export function PDPCreateModal({
       return;
     setBranchId(id);
     setManifestOrders([]);
-    onFilterChange(clusterId || undefined, id);
   };
 
   const handleAddOrder = (order: SalesOrderOption) => {
@@ -499,6 +497,7 @@ export function PDPCreateModal({
                 value={driverId ? String(driverId) : ""}
                 onValueChange={(v: string) => setDriverId(v ? Number(v) : null)}
                 placeholder="Select driver"
+                disabled={isLoadingOrders || isSaving}
               />
             </div>
 
@@ -518,6 +517,7 @@ export function PDPCreateModal({
                   setVehicleId(v ? Number(v) : null)
                 }
                 placeholder="Select vehicle"
+                disabled={isLoadingOrders || isSaving}
               />
               {selectedVehicle && (
                 <p className="text-[10px] text-muted-foreground">
@@ -540,6 +540,7 @@ export function PDPCreateModal({
                 value={clusterId ? String(clusterId) : ""}
                 onValueChange={handleClusterChange}
                 placeholder="Select cluster"
+                disabled={isLoadingOrders || isSaving}
               />
             </div>
 
@@ -547,17 +548,31 @@ export function PDPCreateModal({
               <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
                 Source Branch <span className="text-destructive">*</span>
               </Label>
-              <Combobox
-                options={
-                  masterData?.branches?.map((b) => ({
-                    value: String(b.id),
-                    label: b.branch_name,
-                  })) || []
-                }
-                value={branchId ? String(branchId) : ""}
-                onValueChange={handleBranchChange}
-                placeholder="Select branch"
-              />
+              <div className="flex gap-2 items-center">
+                <div className="flex-1 min-w-0">
+                  <Combobox
+                    options={
+                      masterData?.branches?.map((b) => ({
+                        value: String(b.id),
+                        label: b.branch_name,
+                      })) || []
+                    }
+                    value={branchId ? String(branchId) : ""}
+                    onValueChange={handleBranchChange}
+                    placeholder="Select branch"
+                    disabled={isLoadingOrders || isSaving}
+                  />
+                </div>
+                <Button 
+                  type="button" 
+                  variant="default"
+                  className="h-10 px-3 shrink-0" 
+                  disabled={isLoadingOrders || isSaving || !branchId || !clusterId}
+                  onClick={() => onFilterChange(clusterId ?? undefined, branchId ?? undefined)}
+                >
+                  Load
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-1.5">
@@ -568,6 +583,7 @@ export function PDPCreateModal({
                 type="date"
                 value={dispatchDate}
                 onChange={(e) => setDispatchDate(e.target.value)}
+                disabled={isLoadingOrders || isSaving}
               />
             </div>
 
@@ -579,6 +595,7 @@ export function PDPCreateModal({
                 placeholder="e.g., Priority delivery"
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
+                disabled={isLoadingOrders || isSaving}
               />
             </div>
           </div>

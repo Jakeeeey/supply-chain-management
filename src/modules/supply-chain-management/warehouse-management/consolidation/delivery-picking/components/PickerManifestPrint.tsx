@@ -9,6 +9,8 @@ export interface PickerItem {
     quantity?: number;
     orderedQuantity?: number;
     unitOrder?: number;
+    dispatchNos?: string[] | string;
+    drivers?: string[] | string; // 🚀 ADDED DRIVERS
 }
 
 // Type definitions to replace `any` in autoTable configurations
@@ -36,7 +38,7 @@ interface AutoTablePageData {
 
 export const generatePickerPDF = async (groupedManifest: Record<string, PickerItem[]>, batchNo: string) => {
 
-    // ✅ Dynamically import libraries and use strict type casting instead of `any`
+    // ✅ Dynamically import libraries and use strict type casting
     const jsPDFModule = await import("jspdf");
     const JsPDFClass = (jsPDFModule.default || jsPDFModule.jsPDF) as unknown as typeof import("jspdf").jsPDF;
 
@@ -53,17 +55,91 @@ export const generatePickerPDF = async (groupedManifest: Record<string, PickerIt
 
         if (index > 0) doc.addPage();
 
-        // --- 1. MINIMALIST INK-SAVING HEADER ---
+        // 🚀 1. PRE-CALCULATE DATA FOR THE HEADER
+        const uomTotals: Record<string, number> = {};
+        const uniquePdps = new Set<string>();
+        const uniqueDrivers = new Set<string>(); // 🚀 NEW
+
+        items.forEach(item => {
+            // Aggregate UOMs
+            const qty = item.quantity || item.orderedQuantity || 0;
+            const uom = (item.unit || item.unitName || "UNITS").toUpperCase();
+            uomTotals[uom] = (uomTotals[uom] || 0) + qty;
+
+            // Aggregate unique PDPs
+            if (item.dispatchNos) {
+                const pdpString = Array.isArray(item.dispatchNos)
+                    ? item.dispatchNos.join(", ")
+                    : String(item.dispatchNos);
+
+                if (pdpString.trim() !== "") {
+                    pdpString.split(",").forEach(pdp => uniquePdps.add(pdp.trim()));
+                }
+            }
+
+            // 🚀 Aggregate unique Drivers
+            if (item.drivers) {
+                const driverString = Array.isArray(item.drivers)
+                    ? item.drivers.join(", ")
+                    : String(item.drivers);
+
+                if (driverString.trim() !== "") {
+                    driverString.split(",").forEach(d => uniqueDrivers.add(d.trim()));
+                }
+            }
+        });
+
+        const summaryString = Object.entries(uomTotals)
+            .map(([uom, total]) => `${total} ${uom}`)
+            .join("   |   ");
+
+        const pdpListString = Array.from(uniquePdps).join(", ");
+        const driverListString = Array.from(uniqueDrivers).join(", ");
+
+
+        // --- 2. MINIMALIST INK-SAVING HEADER WITH SUMMARIES ---
         doc.setFontSize(12).setFont("helvetica", "bold");
         doc.text(`${batchNo}`, 14, 12);
-        doc.setFontSize(8).setFont("helvetica", "normal");
-        doc.text(`Picker: ${pickerName.toUpperCase()}`, 14, 16);
 
         doc.setFontSize(7).setFont("helvetica", "normal").setTextColor(80, 80, 80);
         doc.text(new Date().toLocaleDateString(), 198, 12, { align: 'right' });
 
+        doc.setFontSize(8).setFont("helvetica", "bold").setTextColor(0, 0, 0);
+        doc.text(`Picker:`, 14, 16);
+        doc.setFont("helvetica", "normal");
+        doc.text(`${pickerName.toUpperCase()}`, 25, 16);
 
-        // --- 2. HIERARCHICAL DATA PROCESSING ---
+        // Render PDPs in Header
+        doc.setFont("helvetica", "bold").setTextColor(80, 80, 80);
+        doc.text(`PDPs:`, 14, 20);
+        doc.setFont("helvetica", "normal");
+        const splitPdps = doc.splitTextToSize(pdpListString || "N/A", 160);
+        doc.text(splitPdps, 23, 20);
+
+        // Calculate next Y position based on how many lines the PDPs took
+        let nextY = 20 + (splitPdps.length * 3.5);
+
+        // 🚀 Render Drivers in Header
+        doc.setFont("helvetica", "bold").setTextColor(80, 80, 80);
+        doc.text(`Drivers:`, 14, nextY);
+        doc.setFont("helvetica", "normal");
+        const splitDrivers = doc.splitTextToSize(driverListString || "UNASSIGNED", 160);
+        doc.text(splitDrivers, 25, nextY);
+
+        nextY += (splitDrivers.length * 3.5);
+
+        // Render UOM Totals in Header
+        doc.setFont("helvetica", "bold").setTextColor(0, 0, 0);
+        doc.text(`Totals:`, 14, nextY);
+        doc.setFont("helvetica", "bold").setTextColor(10, 10, 10);
+        const splitSummary = doc.splitTextToSize(summaryString || "N/A", 160);
+        doc.text(splitSummary, 25, nextY);
+
+        // Calculate dynamic start Y for the table so it doesn't overlap the header
+        const tableStartY = nextY + (splitSummary.length * 3.5) + 2;
+
+
+        // --- 3. HIERARCHICAL DATA PROCESSING ---
         const tableRows: TableCell[][] = [];
         const supplierGroups = items.reduce((acc: Record<string, Record<string, PickerItem[]>>, item: PickerItem) => {
             const sKey = (item.supplierName || 'DIRECT').toUpperCase();
@@ -89,41 +165,30 @@ export const generatePickerPDF = async (groupedManifest: Record<string, PickerIt
                 ]);
 
                 catItems.forEach((item: PickerItem) => {
-                    // --- DYNAMIC UNIT STYLING BASED ON `unitOrder` ---
                     let unitStyle: Record<string, unknown> = { fontStyle: 'normal', textColor: [0, 0, 0] };
 
-                    // Customize these cases to match your database `order` values!
                     switch (item.unitOrder) {
-                        case 1:
-                            unitStyle = { fontStyle: 'bold', textColor: [0, 0, 0] }; // e.g., Pieces (High priority)
-                            break;
-                        case 2:
-                            unitStyle = { fontStyle: 'italic', textColor: [80, 80, 80] }; // e.g., Boxes
-                            break;
-                        case 3:
-                            unitStyle = { fontStyle: 'bolditalic', textColor: [50, 50, 50] }; // e.g., Pallets
-                            break;
-                        default:
-                            unitStyle = { fontStyle: 'normal', textColor: [100, 100, 100] }; // Fallback
-                            break;
+                        case 1: unitStyle = { fontStyle: 'bold', textColor: [0, 0, 0] }; break;
+                        case 2: unitStyle = { fontStyle: 'italic', textColor: [80, 80, 80] }; break;
+                        case 3: unitStyle = { fontStyle: 'bolditalic', textColor: [50, 50, 50] }; break;
+                        default: unitStyle = { fontStyle: 'normal', textColor: [100, 100, 100] }; break;
                     }
 
+                    // Product description with PDPs appended below it
+                    const productDesc = item.productName.toUpperCase();
                     tableRows.push([
                         "", // Checkbox
-                        item.productName.toUpperCase(),
-                        {
-                            content: item.unit || item.unitName || "-",
-                            styles: unitStyle // Inject the dynamic style here
-                        },
+                        { content: productDesc, styles: { overflow: 'linebreak' } },
+                        { content: item.unit || item.unitName || "-", styles: unitStyle },
                         item.quantity || item.orderedQuantity || 0
                     ]);
                 });
             });
         });
 
-        // --- 3. INK-EFFICIENT TABLE RENDER ---
+        // --- 4. INK-EFFICIENT TABLE RENDER ---
         autoTable(doc, {
-            startY: 20,
+            startY: tableStartY, // Starts dynamically below the extended header
             head: [["", "PRODUCT DESCRIPTION", "UNIT", "QTY"]],
             body: tableRows,
             theme: "plain",
@@ -142,8 +207,7 @@ export const generatePickerPDF = async (groupedManifest: Record<string, PickerIt
                 2: { cellWidth: 18, halign: 'center' },
                 3: { cellWidth: 12, halign: 'center', fontStyle: 'bold' }
             },
-            didDrawCell: (data: AutoTableCellData) => { 
-                // Draw square checkbox for product rows safely
+            didDrawCell: (data: AutoTableCellData) => {
                 if (data.column.index === 0 && data.cell.section === 'body' && data.cell.raw === "") {
                     const size = 3;
                     const x = data.cell.x + (data.cell.width / 2) - (size / 2);
@@ -157,12 +221,14 @@ export const generatePickerPDF = async (groupedManifest: Record<string, PickerIt
             }
         });
 
-        // --- 4. TIGHT FOOTER SIGNATURES ---
-        // Safely cast doc to access the lastAutoTable property injected by the plugin
+        // --- 5. TIGHT FOOTER SIGNATURES ---
         const extendedDoc = doc as import("jspdf").jsPDF & { lastAutoTable: { finalY: number } };
-        const finalY = extendedDoc.lastAutoTable.finalY + 5;
-        
-        if (finalY > 282) doc.addPage();
+        let finalY = extendedDoc.lastAutoTable.finalY + 10;
+
+        if (finalY > 275) {
+            doc.addPage();
+            finalY = 20;
+        }
 
         doc.setDrawColor(0, 0, 0);
         doc.setLineWidth(0.2);

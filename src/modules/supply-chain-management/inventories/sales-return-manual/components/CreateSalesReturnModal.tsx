@@ -12,6 +12,8 @@ import {
   Calculator,
   CheckCircle,
   Loader2,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -21,6 +23,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { useSearchParams } from "next/navigation";
 import {
@@ -66,6 +70,70 @@ interface SalesReturnGroup {
 // =============================================================================
 // OPTIMIZED SUB-COMPONENTS (PERFORMANCE FIX)
 // =============================================================================
+
+const LocalSearchableSelect = ({
+  options,
+  value,
+  onValueChange,
+  placeholder = "Select...",
+  className,
+  disabled = false,
+}: {
+  options: { value: string; label: string }[];
+  value: string;
+  onValueChange: (val: string) => void;
+  placeholder?: string;
+  className?: string;
+  disabled?: boolean;
+}) => {
+  const [open, setOpen] = useState(false);
+  const selectedLabel = options.find((opt) => opt.value === value)?.label;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen} modal={true}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn("w-full justify-between font-normal text-xs px-2 h-8", !value && "text-muted-foreground", className)}
+          disabled={disabled}
+        >
+          <span className="truncate">{selectedLabel || placeholder}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[9999]" align="start">
+        <Command>
+          <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
+          <CommandList className="max-h-[200px] overflow-y-auto">
+            <CommandEmpty>No results found.</CommandEmpty>
+            <CommandGroup>
+              {options.map((opt) => (
+                <CommandItem
+                  key={opt.value}
+                  value={opt.label}
+                  onSelect={() => {
+                    onValueChange(opt.value);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === opt.value ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {opt.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 const RemarksInputSection = React.memo(({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
   const [localRemarks, setLocalRemarks] = useState(value);
@@ -115,9 +183,14 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const searchParams = useSearchParams();
   const fromClearance = searchParams.get("fromClearance");
   // --- 1. FORM STATE ---
-  const [returnDate, setReturnDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
+  const [returnDate, setReturnDate] = useState(() => {
+    const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
+    const d = new Date(manilaMs);
+    const year = d.getUTCFullYear();
+    const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  });
 
   const [selectedSalesmanId, setSelectedSalesmanId] = useState("");
   const [salesmanCode, setSalesmanCode] = useState("");
@@ -464,7 +537,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   // --- RESET FUNCTION ---
   const resetForm = () => {
     setItems([]);
-    setReturnDate(new Date().toISOString().split("T")[0]);
+    const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
+    const d = new Date(manilaMs);
+    const year = d.getUTCFullYear();
+    const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    setReturnDate(`${year}-${month}-${day}`);
     setSelectedSalesmanId("");
     setSalesmanSearch("");
     setSalesmanCode("");
@@ -607,7 +685,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         const qty = item.quantity || 1;
         
         if (existingIndex >= 0) {
-          const existing = updated[existingIndex];
+          const existing = { ...updated[existingIndex] };
           existing.quantity += qty;
           existing.grossAmount = Math.round(existing.quantity * existing.unitPrice * 100) / 100;
           
@@ -625,6 +703,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
           if (item.rfidTags) {
             existing.rfidTags = [...(existing.rfidTags || []), ...item.rfidTags];
           }
+          updated[existingIndex] = existing;
         } else {
           const resultRecord = item as Record<string, unknown>;
           const priceKey = `price${priceType}`;
@@ -728,11 +807,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const totalNet = Math.round(items.reduce((sum, item) => sum + item.totalAmount, 0) * 100) / 100;
 
   const filteredInvoices = invoiceOptions.filter((inv) =>
-    inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
+    !inv.isPosted && inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
   );
 
   const filteredOrders = invoiceOptions.filter((inv) =>
-    inv.order_id.toLowerCase().includes(orderSearch.toLowerCase()),
+    !inv.isPosted && inv.order_id.toLowerCase().includes(orderSearch.toLowerCase()),
   );
 
   if (!isOpen) return null;
@@ -1070,22 +1149,27 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               ₱{(item.grossAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
                             <td className="px-4 py-2">
-                              <Select
-                                value={item.discountType?.toString() || "none"}
-                                onValueChange={(val) => handleItemChange(idx, "discountType", val === "none" ? "" : val)}
-                              >
-                                <SelectTrigger className="w-full h-8 bg-background border-border text-sm focus:ring-1 focus:ring-primary shadow-sm px-2">
-                                  <SelectValue placeholder="None" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-background z-50">
-                                  <SelectItem value="none">None</SelectItem>
-                                  {lineDiscountOptions.map((opt) => (
-                                    <SelectItem key={opt.id} value={opt.id.toString()}>
-                                      {opt.discount_type}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              {(() => {
+                                const noDiscountOpt = lineDiscountOptions.find(o => o.discount_type === "No Discount");
+                                const defaultVal = noDiscountOpt ? noDiscountOpt.id.toString() : "";
+                                const currentDiscVal = item.discountType?.toString() ? (
+                                  lineDiscountOptions.some(o => o.id.toString() === item.discountType?.toString())
+                                    ? item.discountType.toString()
+                                    : defaultVal
+                                ) : defaultVal;
+                                return (
+                                  <LocalSearchableSelect
+                                    value={currentDiscVal}
+                                    onValueChange={(val) => handleItemChange(idx, "discountType", val)}
+                                    options={lineDiscountOptions.map((opt) => ({
+                                      value: opt.id.toString(),
+                                      label: opt.discount_type,
+                                    }))}
+                                    placeholder="Select Discount..."
+                                    className="w-full h-8 text-xs"
+                                  />
+                                );
+                              })()}
                             </td>
                             <td className="px-4 py-2">
                               <input
@@ -1253,22 +1337,27 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 ₱{(item.grossAmount || 0).toLocaleString()}
                               </td>
                               <td className="px-4 py-2">
-                                <Select
-                                  value={item.discountType?.toString() || "none"}
-                                  onValueChange={(val) => handleItemChange(idx, "discountType", val === "none" ? "" : val)}
-                                >
-                                  <SelectTrigger className="w-full h-8 bg-background border-border text-sm focus:ring-1 focus:ring-primary shadow-sm px-2">
-                                    <SelectValue placeholder="None" />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-background z-50">
-                                    <SelectItem value="none">None</SelectItem>
-                                    {lineDiscountOptions.map((opt) => (
-                                      <SelectItem key={opt.id} value={opt.id.toString()}>
-                                        {opt.discount_type}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                {(() => {
+                                  const noDiscountOpt = lineDiscountOptions.find(o => o.discount_type === "No Discount");
+                                  const defaultVal = noDiscountOpt ? noDiscountOpt.id.toString() : "";
+                                  const currentDiscVal = item.discountType?.toString() ? (
+                                    lineDiscountOptions.some(o => o.id.toString() === item.discountType?.toString())
+                                      ? item.discountType.toString()
+                                      : defaultVal
+                                  ) : defaultVal;
+                                  return (
+                                    <LocalSearchableSelect
+                                      value={currentDiscVal}
+                                      onValueChange={(val) => handleItemChange(idx, "discountType", val)}
+                                      options={lineDiscountOptions.map((opt) => ({
+                                        value: opt.id.toString(),
+                                        label: opt.discount_type,
+                                      }))}
+                                      placeholder="Select Discount..."
+                                      className="w-full h-8 text-xs"
+                                    />
+                                  );
+                                })()}
                               </td>
                               <td className="px-4 py-2">
                                 <input
@@ -1557,6 +1646,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         onConfirm={handleAddProducts}
         priceType={priceType}
         customerCode={customerCode}
+        lineDiscounts={lineDiscountOptions}
       />
 
       {/* SUCCESS MODAL */}

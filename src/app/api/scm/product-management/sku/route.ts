@@ -36,6 +36,40 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(paginated);
     }
 
+
+
+    if (type === "pending-edits") {
+      const idsParam = searchParams.get("ids") || "";
+      const ids = idsParam.split(",").map(Number).filter(Boolean);
+      if (ids.length === 0) {
+        return NextResponse.json({ data: [] });
+      }
+      // Find drafts with remarks matching MASTER_EDIT:<id> pattern and status FOR_APPROVAL
+      const { fetchItems } = await import(
+        "@/modules/supply-chain-management/product-management/sku/sku-creation/services/sku-api"
+      );
+      const { data: pendingDrafts } = await fetchItems<{ remarks: string }>(
+        "/items/product_draft",
+        {
+          filter: JSON.stringify({
+            _and: [
+              { status: { _eq: "FOR_APPROVAL" } },
+              { remarks: { _starts_with: "MASTER_EDIT:" } },
+            ],
+          }),
+          fields: "remarks",
+          limit: -1,
+        },
+      );
+      const pendingMasterIds = (pendingDrafts || [])
+        .map((d) => {
+          const match = d.remarks?.match(/^MASTER_EDIT:(\d+)$/);
+          return match ? parseInt(match[1]) : null;
+        })
+        .filter((id): id is number => id !== null && ids.includes(id));
+      return NextResponse.json({ data: pendingMasterIds });
+    }
+
     if (type === "duplicate-check") {
       const name = searchParams.get("name") || "";
       const isDuplicate = await skuService.checkDuplicateName(name);
@@ -43,11 +77,22 @@ export async function GET(req: NextRequest) {
     }
 
     const search = searchParams.get("search") || undefined;
+    const supplierIdParam = searchParams.get("supplier");
+    const supplierId = supplierIdParam ? parseInt(supplierIdParam) : undefined;
+    const categoryId = searchParams.get("category") ? parseInt(searchParams.get("category")!) : undefined;
+    const classId = searchParams.get("class") ? parseInt(searchParams.get("class")!) : undefined;
+    const segmentId = searchParams.get("segment") ? parseInt(searchParams.get("segment")!) : undefined;
+    const itemType = searchParams.get("itemType") || undefined;
+    const brandId = searchParams.get("brand") ? parseInt(searchParams.get("brand")!) : undefined;
+    const statusParam = searchParams.get("status") || undefined;
+    
     const paginated = await skuService.fetchApproved(
       limit,
       offset,
       search,
       sort,
+      supplierId,
+      { categoryId, classId, segmentId, itemType, brandId, status: statusParam },
     );
     console.log(
       `API Route [approved]: Returning ${paginated.data.length} items, total: ${paginated.meta.total_count}`,
@@ -65,15 +110,36 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     console.log("POST body received:", JSON.stringify(body, null, 2));
 
+    const token = req.cookies.get("vos_access_token")?.value;
+    let userId: string | number | undefined = undefined;
+    if (token) {
+      try {
+        const parts = token.split(".");
+        if (parts.length >= 2) {
+          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
+          userId = payload.user_id ?? payload.userId ?? payload.id ?? payload.sub;
+        }
+      } catch (e) {
+        console.warn("Failed to decode token", e);
+      }
+    }
+
     // Sanitize body for essential fields that might be null from form/defaults
     const sanitizedBody = {
       ...body,
       isActive: body.isActive ?? 0,
       status: body.status ?? "DRAFT",
       inventory_type: body.inventory_type ?? "Regular",
+      short_description: body.short_description || body.description || "",
       unit_of_measurement_count: body.unit_of_measurement_count ?? 1,
       barcode: body.barcode ?? "",
       unit_of_measurement: body.unit_of_measurement ?? body.base_unit,
+      ...(userId ? { 
+        created_by: userId, 
+        updated_by: userId,
+        user_created: userId,
+        user_updated: userId
+      } : {}),
     };
 
     // Prune ID fields if they are not positive numbers (creating new)

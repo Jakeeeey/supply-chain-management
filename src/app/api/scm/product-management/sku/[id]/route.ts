@@ -19,9 +19,35 @@ export async function GET(req: NextRequest, { params }: { params: Params }) {
 export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   try {
     const { id } = await params;
+    const isMaster = req.nextUrl.searchParams.get("type") === "master";
     const body = await req.json();
-    const data = await skuService.updateDraft(id, body);
-    return NextResponse.json({ data });
+
+    const token = req.cookies.get("vos_access_token")?.value;
+    let userId: string | number | undefined = undefined;
+    if (token) {
+      try {
+        const parts = token.split(".");
+        if (parts.length >= 2) {
+          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
+          userId = payload.user_id ?? payload.userId ?? payload.id ?? payload.sub;
+        }
+      } catch (e) {
+        console.warn("Failed to decode token", e);
+      }
+    }
+
+    if (userId) {
+      body.updated_by = userId;
+      body.user_updated = userId;
+    }
+
+    if (isMaster) {
+      const data = await skuService.submitMasterEdit(id, body);
+      return NextResponse.json({ data, message: "Edit submitted for approval" });
+    } else {
+      const data = await skuService.updateDraft(id, body);
+      return NextResponse.json({ data });
+    }
   } catch (error: unknown) {
     const err = error as Error;
     return NextResponse.json({ error: err.message }, { status: 400 });
@@ -62,9 +88,11 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       return NextResponse.json({ success: true });
     }
 
+
+
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error: unknown) {
     const err = error as Error;
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 400 });
   }
 }

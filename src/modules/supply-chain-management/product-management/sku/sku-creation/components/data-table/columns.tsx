@@ -14,7 +14,9 @@ import {
   XCircle,
   MoreHorizontal,
   Eye,
+  // ImageIcon,
 } from "lucide-react";
+// import Image from "next/image";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,6 +67,36 @@ export const getColumns = (
     enableSorting: false,
     enableHiding: false,
   },
+  // {
+  //   accessorKey: "main_image",
+  //   header: ({ column }) => (
+  //     <DataTableColumnHeader column={column} label="Image" />
+  //   ),
+  //   meta: { label: "Image" },
+  //   cell: ({ row }) => {
+  //     const sku = row.original;
+  //     const imageUrl = sku.main_image
+  //       ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/assets/${sku.main_image}?width=40&height=40&fit=cover`
+  //       : null;
+
+  //     return (
+  //       <div className="flex items-center justify-center w-9 h-9 rounded-md border bg-muted overflow-hidden shrink-0">
+  //         {imageUrl ? (
+  //           <Image
+  //             src={imageUrl}
+  //             alt={sku.product_name || "Product"}
+  //             width={36}
+  //             height={36}
+  //             className="object-cover"
+  //             unoptimized
+  //           />
+  //         ) : (
+  //           <ImageIcon className="h-3.5 w-3.5 text-muted-foreground/40" />
+  //         )}
+  //       </div>
+  //     );
+  //   },
+  // },
   {
     accessorKey: "product_code",
     enableSorting: true,
@@ -94,9 +126,43 @@ export const getColumns = (
     ),
     meta: { label: "Product Name" },
     cell: ({ row }) => (
-      <span className="font-medium">
+      <span className="font-medium block truncate max-w-[400px]">
         {row.original.product_name || "Unnamed Product"}
       </span>
+    ),
+  },
+  {
+    accessorKey: "product_supplier",
+    enableSorting: false,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Supplier" />
+    ),
+    meta: { label: "Supplier" },
+    cell: ({ row }) => (
+      <span className="text-xs">
+        {CellHelpers.renderMasterText(
+          row.original.product_supplier,
+          masterData?.suppliers,
+        )}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "product_brand",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Brand" />
+    ),
+    meta: { label: "Brand" },
+    cell: ({ row }) => (
+      <div className="w-full truncate">
+        <span className="text-xs">
+          {CellHelpers.renderMasterText(
+            row.original.product_brand,
+            masterData?.brands,
+          )}
+        </span>
+      </div>
     ),
   },
   {
@@ -118,6 +184,54 @@ export const getColumns = (
     ),
   },
   {
+    accessorKey: "product_class",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Class" />
+    ),
+    meta: { label: "Class" },
+    cell: ({ row }) => (
+      <span className="text-xs">
+        {CellHelpers.renderMasterText(
+          row.original.product_class,
+          masterData?.classes,
+        )}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "product_segment",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Segment" />
+    ),
+    meta: { label: "Segment" },
+    cell: ({ row }) => (
+      <span className="text-xs">
+        {CellHelpers.renderMasterText(
+          row.original.product_segment,
+          masterData?.segments,
+        )}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "product_section",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Section" />
+    ),
+    meta: { label: "Section" },
+    cell: ({ row }) => (
+      <span className="text-xs">
+        {CellHelpers.renderMasterText(
+          row.original.product_section,
+          masterData?.sections,
+        )}
+      </span>
+    ),
+  },
+  {
     accessorKey: "inventory_type",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} label="Type" />
@@ -134,24 +248,6 @@ export const getColumns = (
         </Badge>
       );
     },
-  },
-  {
-    accessorKey: "product_brand",
-    enableSorting: true,
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} label="Brand" />
-    ),
-    meta: { label: "Brand" },
-    cell: ({ row }) => (
-      <div className="w-full truncate">
-        <span className="text-xs">
-          {CellHelpers.renderMasterText(
-            row.original.product_brand,
-            masterData?.brands,
-          )}
-        </span>
-      </div>
-    ),
   },
   {
     accessorKey: "status",

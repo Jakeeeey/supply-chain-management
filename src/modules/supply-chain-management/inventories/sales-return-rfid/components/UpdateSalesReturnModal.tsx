@@ -40,13 +40,7 @@ import {
   TableBody,
   TableCell,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import {
   Popover,
   PopoverContent,
@@ -267,6 +261,7 @@ export function UpdateSalesReturnModal({
 
   // 🟢 Track the ID for the junction table link
   const [appliedInvoiceId, setAppliedInvoiceId] = useState<number | null>(null);
+  const [isInvoicePosted, setIsInvoicePosted] = useState<boolean>(false);
 
   const [discountOptions, setDiscountOptions] = useState<API_LineDiscount[]>(
     [],
@@ -339,6 +334,12 @@ export function UpdateSalesReturnModal({
 
         setDetails(items);
         setStatusCardData(statusData);
+        if (statusData?.appliedInvoiceId) {
+          setAppliedInvoiceId(statusData.appliedInvoiceId);
+        }
+        if (statusData?.isInvoicePosted) {
+          setIsInvoicePosted(statusData.isInvoicePosted);
+        }
         setDiscountOptions(discounts);
         setReturnTypeOptions(retTypes);
         setSalesmenOptions(salesmen);
@@ -725,16 +726,21 @@ export function UpdateSalesReturnModal({
         remarks: headerData.remarks || "",
         invoiceNo: headerData.invoiceNo,
         orderNo: headerData.orderNo,
-        appliedInvoiceId: appliedInvoiceId ?? undefined,
+        appliedInvoiceId,
         isThirdParty: headerData.isThirdParty,
       };
 
-      await SalesReturnProvider.updateReturn(payload);
+      const res = await SalesReturnProvider.updateReturn(payload);
+      if (res && res.success === false) {
+        toast.error(res.error || "Failed to update sales return.");
+        return;
+      }
       setIsUpdateConfirmOpen(false);
       setIsUpdateSuccessOpen(true);
     } catch (error) {
       console.error("Update failed", error);
-      alert("Failed to update sales return.");
+      const errMsg = error instanceof Error ? error.message : "An unexpected error occurred.";
+      toast.error(errMsg);
     } finally {
       setIsUpdating(false);
     }
@@ -751,12 +757,18 @@ export function UpdateSalesReturnModal({
         remarks: headerData.remarks || "",
         invoiceNo: headerData.invoiceNo,
         orderNo: headerData.orderNo,
-        appliedInvoiceId: appliedInvoiceId ?? undefined,
+        appliedInvoiceId,
         isThirdParty: headerData.isThirdParty,
       };
-      await SalesReturnProvider.updateReturn(savePayload);
+      const saveRes = await SalesReturnProvider.updateReturn(savePayload);
+      if (saveRes && saveRes.success === false) {
+        toast.error(saveRes.error || "Failed to update sales return.");
+        return;
+      }
       // Then update status with extra fields
-      const now = new Date().toISOString();
+      const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
+      const d = new Date(manilaMs);
+      const now = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}T${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:${String(d.getUTCSeconds()).padStart(2, "0")}`;
       await SalesReturnProvider.updateStatus(headerData.id, "Received", true, now);
       setHeaderData({ ...headerData, status: "Received", isReceived: true, receivedAt: now });
       setStatusCardData((prev) =>
@@ -768,7 +780,8 @@ export function UpdateSalesReturnModal({
       setIsUpdateSuccessOpen(true);
     } catch (error) {
       console.error("Receive failed", error);
-      toast.error("Failed to receive sales return.");
+      const errMsg = error instanceof Error ? error.message : "An unexpected error occurred.";
+      toast.error(errMsg);
     } finally {
       setIsReceiving(false);
     }
@@ -785,7 +798,11 @@ export function UpdateSalesReturnModal({
       customerName: getCustomerName(headerData.customerCode),
       customerCode: headerData.customerCode,
       branchName: getSalesmanBranch(headerData.salesmanId),
-      items: details,
+      items: details.map((item) => ({
+        ...item,
+        discountTypeName:
+          discountOptions.find((d) => d.id.toString() === item.discountType?.toString())?.discount_type || "No Discount",
+      })),
       totalAmount: details.reduce(
         (acc, item) => acc + (item.totalAmount || 0),
         0,
@@ -809,7 +826,7 @@ export function UpdateSalesReturnModal({
     const styleOverride = printWindow.document.createElement("style");
     styleOverride.innerHTML = `
       body { background-color: #e5e7eb; padding: 40px; display: flex; justify-content: center; }
-      #print-root { background-color: white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+      #print-root { background-color: white; }
       .hidden { display: block !important; }
     `;
     printWindow.document.head.appendChild(styleOverride);
@@ -1100,25 +1117,30 @@ export function UpdateSalesReturnModal({
                             </TableCell>
                             <TableCell className="px-4 py-2">
                               {canEditAll ? (
-                                <Select
-                                  value={item.discountType?.toString() || "No Discount"}
-                                  onValueChange={(val) => handleDetailChange(idx, "discountType", val)}
-                                >
-                                  <SelectTrigger className="h-8 w-full text-sm border-border bg-background">
-                                    <SelectValue placeholder="None" />
-                                  </SelectTrigger>
-                                  <SelectContent className="z-[200]">
-                                    <SelectItem value="No Discount">None</SelectItem>
-                                    {discountOptions.map((opt) => (
-                                      <SelectItem key={opt.id} value={opt.id.toString()}>
-                                        {opt.discount_type}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                (() => {
+                                  const noDiscountOpt = discountOptions.find(o => o.discount_type === "No Discount");
+                                  const defaultVal = noDiscountOpt ? noDiscountOpt.id.toString() : "";
+                                  const currentDiscVal = item.discountType?.toString() ? (
+                                    discountOptions.some(o => o.id.toString() === item.discountType?.toString())
+                                      ? item.discountType.toString()
+                                      : defaultVal
+                                  ) : defaultVal;
+                                  return (
+                                    <LocalSearchableSelect
+                                      value={currentDiscVal}
+                                      onValueChange={(val) => handleDetailChange(idx, "discountType", val)}
+                                      options={discountOptions.map((opt) => ({
+                                        value: opt.id.toString(),
+                                        label: opt.discount_type,
+                                      }))}
+                                      placeholder="Select Discount..."
+                                      className="h-8 w-full text-xs"
+                                    />
+                                  );
+                                })()
                               ) : (
                                 <span className="text-sm text-muted-foreground">
-                                  {discountOptions.find(d => d.id.toString() == item.discountType)?.discount_type || "None"}
+                                  {discountOptions.find(d => d.id.toString() == item.discountType)?.discount_type || "No Discount"}
                                 </span>
                               )}
                             </TableCell>
@@ -1456,7 +1478,7 @@ export function UpdateSalesReturnModal({
                     {/* 🟢 REVISED: Editable if Pending or Received (canEditLimited) */}
                     {loading && !statusCardData ? (
                       <Skeleton className="h-6 w-28" />
-                    ) : canEditLimited ? (
+                    ) : (canEditLimited && !isInvoicePosted) ? (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1529,11 +1551,16 @@ export function UpdateSalesReturnModal({
               <div
                 className="p-3 hover:bg-destructive/10 cursor-pointer flex items-center gap-3 transition-colors text-destructive font-medium border-b"
                 onClick={() => {
+                  if (isInvoicePosted) {
+                    toast.error("This invoice has already been posted. Once an invoice is posted, it is locked and cannot be unlinked or changed.");
+                    return;
+                  }
                   setStatusCardData((prev) => ({
                     ...prev!,
                     appliedTo: "",
                   }));
                   setAppliedInvoiceId(null);
+                  setIsInvoicePosted(false);
                   setIsInvoiceLookupOpen(false);
                 }}
               >
@@ -1553,11 +1580,16 @@ export function UpdateSalesReturnModal({
                     key={inv.id}
                     className="p-3 hover:bg-primary/10 cursor-pointer flex items-center gap-3 transition-colors justify-between"
                     onClick={() => {
+                      if (isInvoicePosted) {
+                        toast.error("This invoice has already been posted. Once an invoice is posted, it is locked and cannot be unlinked or changed.");
+                        return;
+                      }
                       setStatusCardData((prev) => ({
                         ...prev!,
                         appliedTo: inv.invoice_no,
                       }));
                       setAppliedInvoiceId(Number(inv.id));
+                      setIsInvoicePosted(false);
                       setIsInvoiceLookupOpen(false);
                     }}
                   >
@@ -1595,6 +1627,7 @@ export function UpdateSalesReturnModal({
         onConfirm={handleConfirmProductLookup}
         priceType={headerData.priceType || "A"}
         customerCode={headerData.customerCode}
+        lineDiscounts={discountOptions}
       />
 
       {/* CONFIRM DIALOGS (Update, Success, Receive) remain same structure */}
