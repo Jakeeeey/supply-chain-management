@@ -5,7 +5,8 @@ import type {
   EnrichedProduct,
   CreateTransferPayload,
   UpdateTransferPayload,
-  StockTransferInsertPayload
+  StockTransferInsertPayload,
+  ProductRow
 } from "../types/stock-transfer.types";
 import { CreateStockTransferSchema, UpdateStockTransferSchema } from "../types/stock-transfer.schema";
 
@@ -36,7 +37,7 @@ export async function getEnrichedTransfers(status?: string): Promise<StockTransf
   // Fetch missing product_per_supplier data
   const productIds = transfers
     .filter(t => t.product_id && typeof t.product_id === 'object' && t.product_id.product_id)
-    .map(t => (t.product_id as any).product_id as number);
+    .map(t => (t.product_id as ProductRow).product_id as number);
     
   const supplierMap = await repo.fetchProductSuppliers(productIds);
 
