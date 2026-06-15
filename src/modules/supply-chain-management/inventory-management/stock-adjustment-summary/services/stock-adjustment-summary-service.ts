@@ -10,7 +10,7 @@ import {
 import {
   StockAdjustmentHeader,
   StockAdjustmentItem
-} from "../../stock-adjustment/types/stock-adjustment.schema";
+} from "../../stock-adjustment-registration/types/stock-adjustment.schema";
 
 export const stockAdjustmentSummaryService = {
   // Helper to extract if posted or draft
