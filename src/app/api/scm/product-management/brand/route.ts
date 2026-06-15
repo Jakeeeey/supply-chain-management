@@ -53,6 +53,24 @@ async function proxyRequest(req: NextRequest, method: string) {
 
   if (["POST", "PATCH"].includes(method)) {
     const body = await req.json().catch(() => ({}));
+    
+    // Save as PHT (UTC+8) - Directus stores datetime without timezone info,
+    // so we must provide the value already in Philippine Standard Time
+    const nowPHT = new Date().toLocaleString("sv-SE", {
+      timeZone: "Asia/Manila",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).replace(" ", "T");
+
+    if (method === "POST") {
+      body.date_created = nowPHT;
+    }
+    body.date_updated = nowPHT;
+
     options.body = JSON.stringify(body);
   }
 
