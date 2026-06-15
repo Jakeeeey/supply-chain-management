@@ -91,6 +91,8 @@ export const skuSchema = z
     created_at: z.string().nullable().optional(),
     created_by: z.union([z.string(), z.number()]).nullable().optional(),
     updated_by: z.union([z.string(), z.number()]).nullable().optional(),
+    user_created: z.union([z.string(), z.number()]).nullable().optional(),
+    user_updated: z.union([z.string(), z.number()]).nullable().optional(),
     remarks: z.string().nullable().optional(),
   })
   .superRefine((data, ctx) => {

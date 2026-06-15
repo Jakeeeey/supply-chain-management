@@ -130,10 +130,16 @@ export async function POST(req: NextRequest) {
       isActive: body.isActive ?? 0,
       status: body.status ?? "DRAFT",
       inventory_type: body.inventory_type ?? "Regular",
+      short_description: body.short_description || body.description || "",
       unit_of_measurement_count: body.unit_of_measurement_count ?? 1,
       barcode: body.barcode ?? "",
       unit_of_measurement: body.unit_of_measurement ?? body.base_unit,
-      ...(userId ? { created_by: userId, updated_by: userId } : {}),
+      ...(userId ? { 
+        created_by: userId, 
+        updated_by: userId,
+        user_created: userId,
+        user_updated: userId
+      } : {}),
     };
 
     // Prune ID fields if they are not positive numbers (creating new)

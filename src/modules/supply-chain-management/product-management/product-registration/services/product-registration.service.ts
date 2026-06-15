@@ -80,18 +80,25 @@ export const productRegistrationService = {
           ];
 
     const masterData = await skuQueryService.fetchMasterData();
-    const codes = await Promise.all(
-      units.map((u) =>
-        generateSKUCode(
-          {
-            ...baseData,
-            unit_of_measurement: u.unit_id,
-            unit_of_measurement_count: u.conversion_factor,
-          } as SKU,
-          masterData,
-        ),
-      ),
-    );
+    const codes: string[] = [];
+    let parentSequence: string | undefined = undefined;
+
+    for (const u of units) {
+      const result = await generateSKUCode(
+        {
+          ...baseData,
+          unit_of_measurement: u.unit_id,
+          unit_of_measurement_count: u.conversion_factor,
+        } as SKU,
+        masterData,
+        parentSequence
+      );
+      
+      codes.push(result.code);
+      if (!parentSequence) {
+        parentSequence = result.sequence;
+      }
+    }
 
     const nowGMT = new Date().toISOString();
 
@@ -118,14 +125,21 @@ export const productRegistrationService = {
       product_code: code,
       date_added: nowGMT,
       last_updated: nowGMT,
+      created_at: nowGMT,
+      updated_at: nowGMT,
+      // Note: created_by and updated_by are merged from baseData
     });
 
     // Insert parent product
+    const parentPayload = createPayload(units[0], codes[0]);
+    console.log("[Product Registration] DEBUG parent payload inventory_type:", parentPayload.inventory_type);
+    console.log("[Product Registration] DEBUG payload created_by:", parentPayload.created_by, "user_created:", parentPayload.user_created, "updated_by:", parentPayload.updated_by);
+    console.log("[Product Registration] DEBUG full baseData keys:", Object.keys(baseData));
     const { data: parent } = await request<{ data: SKU }>(
       `${API_BASE_URL}/items/products`,
       {
         method: "POST",
-        body: JSON.stringify(createPayload(units[0], codes[0])),
+        body: JSON.stringify(parentPayload),
       },
     );
     const parentId = parent.id || parent.product_id;

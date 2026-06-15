@@ -14,9 +14,9 @@ import {
   XCircle,
   MoreHorizontal,
   Eye,
-  ImageIcon,
+  // ImageIcon,
 } from "lucide-react";
-import Image from "next/image";
+// import Image from "next/image";
 import {
   DropdownMenu,
   DropdownMenuContent,

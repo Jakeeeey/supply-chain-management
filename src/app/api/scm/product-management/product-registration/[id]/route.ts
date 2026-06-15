@@ -27,6 +27,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }): P
 
     if (userId) {
       body.updated_by = userId;
+      body.user_updated = userId;
     }
 
     if (type === "image") {

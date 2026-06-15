@@ -38,6 +38,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
 
     if (userId) {
       body.updated_by = userId;
+      body.user_updated = userId;
     }
 
     if (isMaster) {
