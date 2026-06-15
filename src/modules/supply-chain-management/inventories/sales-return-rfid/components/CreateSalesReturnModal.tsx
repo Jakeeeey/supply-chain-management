@@ -746,11 +746,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   );
 
   const filteredInvoices = invoiceOptions.filter((inv) =>
-    inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
+    !inv.isPosted && inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
   );
 
   const filteredOrders = invoiceOptions.filter((inv) =>
-    inv.order_id.toLowerCase().includes(orderSearch.toLowerCase()),
+    !inv.isPosted && inv.order_id.toLowerCase().includes(orderSearch.toLowerCase()),
   );
 
 

@@ -191,6 +191,7 @@ export default function PurchaseOrderReviewPanel(props: {
         branch_id?: number | null;
         receiver_id?: number | null;
     }) => void | Promise<void>;
+    onReject?: () => void | Promise<void>;
     approverName?: string;
 }) {
     const fmt = React.useMemo(() => money(), []);
@@ -201,6 +202,7 @@ export default function PurchaseOrderReviewPanel(props: {
     const [termsDays, setTermsDays] = React.useState<number>(30);
 
     const [confirmOpen, setConfirmOpen] = React.useState(false);
+    const [rejectConfirmOpen, setRejectConfirmOpen] = React.useState(false);
     const [submitting, setSubmitting] = React.useState(false);
 
     const [currentPage, setCurrentPage] = React.useState(1);
@@ -396,6 +398,21 @@ export default function PurchaseOrderReviewPanel(props: {
         }
     }
 
+    async function runReject() {
+        if (approveDisabled) return;
+
+        try {
+            setSubmitting(true);
+            await Promise.resolve(props.onReject?.());
+            setRejectConfirmOpen(false);
+        } catch (e: unknown) {
+            setRejectConfirmOpen(false);
+            throw e;
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
     return (
         <>
             <div
@@ -491,7 +508,7 @@ export default function PurchaseOrderReviewPanel(props: {
                                 </div>
                                 {lines.length ? (
                                     <div className="rounded-lg border border-border bg-background overflow-hidden">
-                                        <div className="overflow-auto max-h-[400px]">
+                                        <div className="relative overflow-auto max-h-[400px]">
                                             <table className="w-full text-left text-xs border-separate border-spacing-0">
                                                 <thead className="sticky top-0 z-10 bg-muted/90 backdrop-blur-sm shadow-sm">
                                                 <tr>
@@ -741,6 +758,43 @@ export default function PurchaseOrderReviewPanel(props: {
                                             <Printer className="mr-2 h-4 w-4" />
                                             Print PO
                                         </Button>
+
+                                        <AlertDialog open={rejectConfirmOpen} onOpenChange={(o) => !submitting && setRejectConfirmOpen(o)}>
+                                            <AlertDialogTrigger asChild>
+                                                <Button
+                                                    type="button"
+                                                    variant="destructive"
+                                                    className="h-10 rounded-xl font-black uppercase tracking-wider"
+                                                    disabled={approveDisabled}
+                                                    onClick={() => setRejectConfirmOpen(true)}
+                                                >
+                                                    {submitting ? "Rejecting..." : "Reject PO"}
+                                                </Button>
+                                            </AlertDialogTrigger>
+
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Are you sure you want to reject this Purchase Order?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        This will reject the Purchase Order. It cannot be approved or processed further.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel asChild>
+                                                        <Button type="button" variant="outline" disabled={submitting}>
+                                                            Cancel
+                                                        </Button>
+                                                    </AlertDialogCancel>
+
+                                                    <AlertDialogAction asChild>
+                                                        <Button type="button" variant="destructive" onClick={runReject} disabled={approveDisabled}>
+                                                            Confirm &amp; Reject
+                                                        </Button>
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
 
                                         <AlertDialog open={confirmOpen} onOpenChange={(o) => !submitting && setConfirmOpen(o)}>
                                             <AlertDialogTrigger asChild>

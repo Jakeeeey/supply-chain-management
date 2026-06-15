@@ -218,14 +218,14 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                                         <>
                                             <Badge
                                                 variant="outline"
-                                                className="text-[10px] uppercase h-4 px-1 leading-none border-orange-500/40 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
+                                                className="text-[10px] uppercase h-4 px-1 leading-none border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-400"
                                             >
                                                 Reverted
                                             </Badge>
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                className="h-5 px-1.5 text-[10px] text-orange-700 hover:text-orange-900 hover:bg-orange-100"
+                                                className="h-5 px-1.5 text-[10px] text-orange-600 dark:text-orange-400 hover:bg-orange-500/10 gap-1"
                                                 onClick={() => loadReceipt(h.receiptNo)}
                                             >
                                                 <Pencil className="h-3 w-3 mr-0.5" />
@@ -236,8 +236,10 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                                         <Badge
                                             variant="outline"
                                             className={cn(
-                                                "text-[10px] uppercase h-4 px-1 leading-none border-amber-500/30",
-                                                h.isPosted ? "bg-amber-100 text-amber-800" : "bg-white text-muted-foreground"
+                                                "text-[10px] uppercase h-4 px-1 leading-none font-bold",
+                                                h.isPosted 
+                                                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" 
+                                                    : "bg-muted text-muted-foreground border-border"
                                             )}
                                         >
                                             {h.isPosted ? "Posted" : "Unposted"}

@@ -148,27 +148,27 @@ export function ProductVerificationStep({ onContinue, onBack }: { onContinue: ()
             </Card>
 
             <Card className="p-4 overflow-hidden shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
+                <div className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div className="text-base font-semibold text-primary uppercase tracking-wider">Expected Products Checklist</div>
-                    <div className="flex items-center gap-3">
-                        <div className="relative w-64 group">
+                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                        <div className="relative w-full md:w-64 group">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
                             <Input
                                 placeholder="Search product or SKU..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="h-8 pl-9 text-[11px] font-medium border-primary/20 focus-visible:ring-primary/20 focus-visible:border-primary"
+                                className="h-8 pl-9 text-[11px] font-medium border-primary/20 focus-visible:ring-primary/20 focus-visible:border-primary w-full"
                             />
                         </div>
                         <Button 
                             variant="outline" 
                             size="sm" 
-                            className="h-8 text-[10px] font-black uppercase tracking-widest gap-1.5 border-primary/20 hover:border-primary hover:bg-primary/5"
+                            className="h-8 text-[10px] font-black uppercase tracking-widest gap-1.5 border-primary/20 hover:border-primary hover:bg-primary/5 shrink-0"
                             onClick={() => setIsAddModalOpen(true)}
                         >
                             <Plus className="h-3 w-3" /> Add Extra Product
                         </Button>
-                        <Badge variant="secondary" className="font-bold">
+                        <Badge variant="secondary" className="font-bold shrink-0">
                             Selected: {visibleVerifiedCount} / {allItems.length}
                         </Badge>
                     </div>
@@ -203,12 +203,12 @@ export function ProductVerificationStep({ onContinue, onBack }: { onContinue: ()
                                     const isOver = isVerified && (currentEntry + posted) > ordered && currentEntry > 0;
 
                                     return (
-                                        <TableRow key={item.id} className={cn(isVerified && "bg-green-50/30", isOver && "bg-red-50/50")}>
+                                        <TableRow key={item.id} className={cn(isVerified && "bg-emerald-500/10 text-foreground", isOver && "bg-destructive/10 text-destructive")}>
                                             <TableCell className="align-middle py-3">
                                                 <div className="flex flex-col">
                                                     <div className="font-bold text-sm leading-none flex items-center gap-2">
                                                         {item.name}
-                                                        {item.isExtra && <Badge variant="outline" className="text-[8px] bg-amber-50 text-amber-600 border-amber-200 uppercase font-black px-1.5 h-4">Extra</Badge>}
+                                                        {item.isExtra && <Badge variant="outline" className="text-[8px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 uppercase font-black px-1.5 h-4">Extra</Badge>}
                                                     </div>
                                                     <div className="text-[10px] font-mono text-muted-foreground mt-1">SKU: {item.barcode}</div>
                                                 </div>
@@ -228,9 +228,9 @@ export function ProductVerificationStep({ onContinue, onBack }: { onContinue: ()
                                                             className={cn(
                                                                 "h-8 w-full text-center font-black text-sm border-2 focus-visible:ring-0 shadow-none transition-colors",
                                                                 isOver 
-                                                                ? "border-red-500 text-red-700 bg-red-50 focus-visible:border-red-600 focus-visible:ring-red-100" 
+                                                                ? "border-destructive text-destructive bg-destructive/10 dark:bg-destructive/20 focus-visible:border-destructive/80 focus-visible:ring-destructive/20" 
                                                                 : isVerified && currentEntry === 0
-                                                                ? "border-amber-400 bg-amber-50 focus-visible:border-amber-500"
+                                                                ? "border-amber-400 bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 focus-visible:border-amber-500"
                                                                 : "border-primary/30 focus-visible:border-primary"
                                                             )}
                                                         />

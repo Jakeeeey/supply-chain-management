@@ -209,4 +209,5 @@ export interface InvoiceOption {
   order_id: string; // 🟢 Added this line
   salesman_id: number; // 🟢 Added this line
   amount?: number;
+  isPosted?: boolean;
 }

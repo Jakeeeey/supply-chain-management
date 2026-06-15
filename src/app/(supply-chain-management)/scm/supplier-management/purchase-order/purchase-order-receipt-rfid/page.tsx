@@ -1,3 +1,5 @@
+// src/app/(supply-chain-management)/scm/supplier-management/purchase-order/purchase-order-receipt-rfid/page.tsx
+
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -6,15 +8,14 @@ import {
     BreadcrumbPage,
     BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { NavUser } from "@/components/shared/app-sidebar/nav-user";
 
 import { cookies } from "next/headers";
 
-// ✅ Wire the module you asked for
-// import ComingSoon from "../../_components/ComingSoon";
-import SalesReturnSerial from "@/modules/supply-chain-management/inventories/sales-return-serial/SalesReturnSerialModule";
+import ReceiptDetailsModule from "@/modules/supply-chain-management/supplier-management/purchase-order-receipt-rfid/ReceiptDetailsModule";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -74,51 +75,61 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 }
 
 export default async function Page() {
-    // ✅ Next.js 16: cookies() is async
     const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
+    const payload = token ? decodeJwtPayload(token) : null;
+    const receiverId = Number(payload?.sub) || undefined;
 
     const headerUser = buildHeaderUserFromToken(token);
 
     return (
-        // ✅ This fills the RIGHT column provided by SidebarInset (which is now fixed-height).
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            {/* ✅ Topbar is fixed in place because ONLY <main> scrolls */}
-            <header className="relative z-10 flex h-14 shrink-0 items-center justify-between border-b shadow-sm bg-background sm:h-16 overflow-hidden">
-                <div className="flex h-full min-w-0 items-center gap-2 px-3 sm:px-4 overflow-hidden">
-                    <SidebarTrigger className="-ml-1 shrink-0" />
-
+        <div className="flex h-full min-h-0 flex-col">
+            {/* ===== Header ===== */}
+            <header
+                className="
+                    sticky top-2 z-50 relative
+                    flex h-16 shrink-0 items-center justify-between
+                    border-b bg-background shadow-sm
+                    before:content-[''] before:absolute before:inset-x-0
+                    before:-top-2 before:h-2 before:bg-background
+                "
+            >
+                <div className="flex h-full items-center gap-2 px-4">
+                    <SidebarTrigger className="-ml-1" />
                     <Separator
                         orientation="vertical"
-                        className="hidden sm:block mr-2 data-[orientation=vertical]:h-4 shrink-0"
+                        className="mr-2 data-[orientation=vertical]:h-4"
                     />
 
-                    <div className="min-w-0 overflow-hidden">
-                        <Breadcrumb>
-                            <BreadcrumbList className="min-w-0 overflow-hidden">
-                                <BreadcrumbItem className="hidden md:block shrink-0">
-                                    <BreadcrumbLink href="#">Inventories</BreadcrumbLink>
-                                </BreadcrumbItem>
-                                <BreadcrumbSeparator className="hidden md:block shrink-0" />
-                                <BreadcrumbItem className="min-w-0 overflow-hidden">
-                                    <BreadcrumbPage className="truncate max-w-[56vw] sm:max-w-[60vw] md:max-w-none">
-                                        Sales Return
-                                    </BreadcrumbPage>
-                                </BreadcrumbItem>
-                            </BreadcrumbList>
-                        </Breadcrumb>
-                    </div>
+                    <Breadcrumb>
+                        <BreadcrumbList>
+                            <BreadcrumbItem className="hidden md:block">
+                                <BreadcrumbLink href="#">
+                                    Supplier Management
+                                </BreadcrumbLink>
+                            </BreadcrumbItem>
+                            <BreadcrumbSeparator className="hidden md:block" />
+                            <BreadcrumbItem>
+                                <BreadcrumbPage>
+                                    Receipt Details RFID
+                                </BreadcrumbPage>
+                            </BreadcrumbItem>
+                        </BreadcrumbList>
+                    </Breadcrumb>
                 </div>
 
-                <div className="flex h-full items-center px-2 sm:px-4 shrink-0 max-w-[48vw] sm:max-w-none overflow-hidden">
+                <div className="flex h-full items-center px-4">
                     <NavUser user={headerUser} />
                 </div>
             </header>
 
-            {/* ✅ Only content scrolls inside RIGHT column */}
-            <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4">
-                <SalesReturnSerial />
-            </main>
+            {/* ===== Content ===== */}
+            <ScrollArea className="min-h-0 flex-1">
+                <div className="p-4">
+                    {/* ✅ Purchase Order UI (Create / Approval / Receiving / Posting) */}
+                    <ReceiptDetailsModule receiverId={receiverId} receiverName={headerUser.name} />
+                </div>
+            </ScrollArea>
         </div>
     );
 }
