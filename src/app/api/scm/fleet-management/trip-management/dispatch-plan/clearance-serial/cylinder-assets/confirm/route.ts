@@ -93,13 +93,13 @@ export async function POST(request: Request) {
         // 2. Insert drafted ones to cylinder_assets
         if (draftAssets.length > 0) {
             const payloads = draftAssets.map((asset: Record<string, unknown>) => {
-                // remove draft id and system fields that are read-only
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { 
-                    id: _id, 
-                    user_created: _uc, 
-                    date_created: _dc, 
-                    user_updated: _uu, 
-                    date_updated: _du, 
+                    id, 
+                    user_created, 
+                    date_created, 
+                    user_updated, 
+                    date_updated, 
                     ...rest 
                 } = asset; 
                 return rest;

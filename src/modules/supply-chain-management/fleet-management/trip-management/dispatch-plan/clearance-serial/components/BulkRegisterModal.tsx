@@ -46,7 +46,6 @@ export function BulkRegisterModal({
     unregisteredSerials,
     onRegisterSuccess,
     productId,
-    branchId: _branchId,
     cost
 }: BulkRegisterModalProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
