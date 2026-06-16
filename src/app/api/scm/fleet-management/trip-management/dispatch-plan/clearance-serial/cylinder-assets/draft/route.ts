@@ -29,7 +29,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Body must be an array of assets' }, { status: 400 });
         }
 
-        const payloads = body.map((asset: any) => ({
+        const payloads = body.map((asset: Record<string, unknown>) => ({
             product_id: Number(asset.product_id),
             serial_number: asset.serial_number,
             cylinder_status: asset.cylinder_status || 'AVAILABLE',
@@ -44,8 +44,9 @@ export async function POST(request: Request) {
         const res = await poster('/cylinder_assets_draft', payloads);
 
         return NextResponse.json({ success: true, data: res });
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error('Bulk Cylinder Asset Draft Registration API Error:', err);
-        return NextResponse.json({ error: err.message || 'Failed to draft Cylinder Assets' }, { status: 500 });
+        const errorMessage = err instanceof Error ? err.message : 'Failed to draft Cylinder Assets';
+        return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
 }

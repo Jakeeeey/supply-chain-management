@@ -46,7 +46,7 @@ export function BulkRegisterModal({
     unregisteredSerials,
     onRegisterSuccess,
     productId,
-    branchId,
+    branchId: _branchId,
     cost
 }: BulkRegisterModalProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -160,9 +160,10 @@ export function BulkRegisterModal({
             toast.success(`Successfully registered ${assets.length} cylinders.`);
             onRegisterSuccess(assets.map(a => a.serial_number));
             onClose();
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error(error);
-            toast.error(error.message || 'Failed to register cylinder assets.');
+            const errorMessage = error instanceof Error ? error.message : 'Failed to register cylinder assets.';
+            toast.error(errorMessage);
         } finally {
             setIsSubmitting(false);
         }
@@ -210,7 +211,7 @@ export function BulkRegisterModal({
                             </div>
                             <Select 
                                 value={bulkCondition} 
-                                onValueChange={(val: any) => setBulkCondition(val)}
+                                onValueChange={(val: 'GOOD' | 'FOR_REPAIR' | 'DAMAGED' | 'SCRAP') => setBulkCondition(val)}
                             >
                                 <SelectTrigger className="h-10 bg-background border-border rounded-lg text-xs font-bold">
                                     <SelectValue placeholder="Select condition" />
@@ -276,7 +277,7 @@ export function BulkRegisterModal({
                                         <td className="p-3.5 w-48">
                                             <Select 
                                                 value={asset.cylinder_condition} 
-                                                onValueChange={(val: any) => handleAssetChange(index, 'cylinder_condition', val)}
+                                                onValueChange={(val: 'GOOD' | 'FOR_REPAIR' | 'DAMAGED' | 'SCRAP') => handleAssetChange(index, 'cylinder_condition', val)}
                                             >
                                                 <SelectTrigger className="h-9 bg-background border-border rounded-lg text-xs font-bold">
                                                     <SelectValue placeholder="Select condition" />

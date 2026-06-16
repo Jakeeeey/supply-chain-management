@@ -92,14 +92,14 @@ export async function POST(request: Request) {
 
         // 2. Insert drafted ones to cylinder_assets
         if (draftAssets.length > 0) {
-            const payloads = draftAssets.map((asset: any) => {
+            const payloads = draftAssets.map((asset: Record<string, unknown>) => {
                 // remove draft id and system fields that are read-only
                 const { 
-                    id, 
-                    user_created, 
-                    date_created, 
-                    user_updated, 
-                    date_updated, 
+                    id: _id, 
+                    user_created: _uc, 
+                    date_created: _dc, 
+                    user_updated: _uu, 
+                    date_updated: _du, 
                     ...rest 
                 } = asset; 
                 return rest;
@@ -107,13 +107,13 @@ export async function POST(request: Request) {
             await poster('/cylinder_assets', payloads);
             
             // Delete from draft using array of IDs in request body
-            const draftIds = draftAssets.map((a: any) => a.id);
+            const draftIds = draftAssets.map((a: { id: string | number }) => a.id);
             await deleter('/cylinder_assets_draft', draftIds);
         }
 
         // 3. Update existing assets in cylinder_assets
         if (existingAssets.length > 0) {
-            const bulkUpdates = existingAssets.map((a: any) => ({
+            const bulkUpdates = existingAssets.map((a: { id: string | number }) => ({
                 id: a.id,
                 product_id: Number(selectedProductId),
                 cylinder_status: 'EMPTY'
@@ -122,8 +122,9 @@ export async function POST(request: Request) {
         }
 
         return NextResponse.json({ success: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error('Confirm Cylinder Assets API Error:', err);
-        return NextResponse.json({ error: err.message || 'Failed to confirm Cylinder Assets' }, { status: 500 });
+        const errorMessage = err instanceof Error ? err.message : 'Failed to confirm Cylinder Assets';
+        return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
 }
