@@ -93,16 +93,13 @@ export async function POST(request: Request) {
         // 2. Insert drafted ones to cylinder_assets
         if (draftAssets.length > 0) {
             const payloads = draftAssets.map((asset: Record<string, unknown>) => {
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const { 
-                    id, 
-                    user_created, 
-                    date_created, 
-                    user_updated, 
-                    date_updated, 
-                    ...rest 
-                } = asset; 
-                return rest;
+                const newAsset = { ...asset };
+                delete newAsset.id;
+                delete newAsset.user_created;
+                delete newAsset.date_created;
+                delete newAsset.user_updated;
+                delete newAsset.date_updated;
+                return newAsset;
             });
             await poster('/cylinder_assets', payloads);
             
