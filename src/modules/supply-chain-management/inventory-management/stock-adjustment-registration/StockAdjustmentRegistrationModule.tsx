@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { StockAdjustmentForm } from "@/modules/supply-chain-management/inventory-management/stock-adjustment-registration/components/forms/StockAdjustmentForm";
 
 interface StockAdjustmentModuleProps {
@@ -8,16 +8,15 @@ interface StockAdjustmentModuleProps {
 }
 
 export default function StockAdjustmentModule({ mode = "creation" }: StockAdjustmentModuleProps) {
-  const [formKey, setFormKey] = useState(0);
+  const router = useRouter();
 
   return (
     <div className="stock-adjustment-module">
       <StockAdjustmentForm
-        key={formKey}
         id={null}
         onCancel={undefined} // Hides cancel/back-to-list buttons, shows "Clear Form" instead
         onSuccess={() => {
-          setFormKey((prev) => prev + 1);
+          router.push("/scm/inventory-management/stock-adjustment-summary");
         }}
         mode={mode}
       />
