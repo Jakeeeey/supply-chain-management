@@ -1070,6 +1070,31 @@ export async function POST(req: NextRequest) {
             });
         }
 
+        // -------------------------
+        // delete_rfid — remove a single RFID tag from the database
+        // -------------------------
+        if (action === "delete_rfid") {
+            const rawRfid = toStr(body.rfid);
+            const rfid = normalizeRfid(rawRfid);
+            if (!rfid || rfid.length !== RFID_LEN) {
+                return bad(`Invalid RFID. Must be exactly ${RFID_LEN} hex characters.`, 400);
+            }
+
+            // Find the receiving item by rfid_code
+            const findUrl = `${base}/items/${POR_ITEMS_COLLECTION}?limit=1&filter[rfid_code][_eq]=${encodeURIComponent(rfid)}&fields=receiving_item_id`;
+            const found = await fetchJson<{ data: Array<{ receiving_item_id: number }> }>(findUrl);
+            const row = found?.data?.[0];
+            if (!row?.receiving_item_id) {
+                // Tag not found in DB — already deleted or never persisted; treat as success
+                return ok({ deleted: false, message: "Tag not found in database." });
+            }
+
+            // Delete the receiving item
+            await fetchJson(`${base}/items/${POR_ITEMS_COLLECTION}/${row.receiving_item_id}`, { method: "DELETE" });
+
+            return ok({ deleted: true, rfid, receivingItemId: row.receiving_item_id });
+        }
+
         if (action === "save_receipt") {
             const poId = toNum(body.poId);
             const receiptNo = toStr(body.receiptNo);

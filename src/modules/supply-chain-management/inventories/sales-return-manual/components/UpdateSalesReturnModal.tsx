@@ -1766,6 +1766,7 @@ export function UpdateSalesReturnModal({
         priceType={headerData.priceType || "A"}
         customerCode={headerData.customerCode}
         lineDiscounts={discountOptions}
+        includeInactive={true}
       />
 
       <Dialog

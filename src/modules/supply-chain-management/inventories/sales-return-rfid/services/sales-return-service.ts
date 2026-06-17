@@ -340,7 +340,10 @@ export async function fetchReferences(): Promise<{
 /**
  * Fetches the product catalog for the ProductLookupModal.
  */
-export async function fetchProductCatalog(customerCode?: string): Promise<{
+export async function fetchProductCatalog(
+  customerCode?: string,
+  includeInactive = false,
+): Promise<{
   brands: Brand[];
   categories: Category[];
   suppliers: Supplier[];
@@ -349,7 +352,7 @@ export async function fetchProductCatalog(customerCode?: string): Promise<{
   supplierCategoryDiscount: any[];
   products: Product[];
 }> {
-  const catalogData = await repo.getRawProductCatalog();
+  const catalogData = await repo.getRawProductCatalog(includeInactive);
   const [brandsRes, categoriesRes, suppliersRes, unitsRes, connectionsRes, productsRes] = catalogData;
 
   let scdpcRes = { data: [] as any[] };
