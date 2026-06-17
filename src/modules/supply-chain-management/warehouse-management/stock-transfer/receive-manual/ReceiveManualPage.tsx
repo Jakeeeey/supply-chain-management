@@ -133,7 +133,7 @@ export default function StockTransferReceiveManualView({ currentUser }: { curren
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Requested On</p>
-                    <p className="font-medium text-sm">{new Date(selectedGroup.dateRequested).toLocaleDateString()}</p>
+                    <p className="font-medium text-sm">{new Date(selectedGroup.dateRequested).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' })}</p>
                   </div>
                 </div>
               </div>
