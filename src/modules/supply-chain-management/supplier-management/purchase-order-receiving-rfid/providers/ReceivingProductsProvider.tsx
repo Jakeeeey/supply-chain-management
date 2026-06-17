@@ -959,6 +959,15 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         setLocalScannedRfids((buffer) => buffer.filter(b => b.rfid !== row.rfid));
 
         setActivity((prev) => prev.filter((a) => a.id !== id));
+
+        // ✅ Delete RFID tag from the database (fire-and-forget)
+        if (row.rfid) {
+            fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "delete_rfid", rfid: row.rfid }),
+            }).catch(() => { /* silent — UI already removed the tag */ });
+        }
     }, [activity]);
 
     const scanRFID = React.useCallback(async (rfidOverride?: string) => {

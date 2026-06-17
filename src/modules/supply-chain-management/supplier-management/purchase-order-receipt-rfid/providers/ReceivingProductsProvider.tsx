@@ -385,9 +385,11 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
     const clearEditingReceiptId = React.useCallback(() => {
         if (selectedPO?.id) {
             localStorage.removeItem(`editing_receipt_${selectedPO.id}`);
+            clearDraft(selectedPO.id); // ✅ Prevent draft values from bleeding into next receipt
         }
         setEditingReceiptId(null);
         setReceiptNo("");
+        setReceiptType(""); // ✅ Also reset receipt type
         setReceiptDate("");
         setActivity([]);
         setLocalScannedRfids([]);
