@@ -8,8 +8,6 @@ import {
   Plus,
   Trash2,
   Save,
-  AlertCircle,
-  Tag,
   ArrowLeft,
   Package,
   Send,
@@ -18,17 +16,17 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Paperclip,
+  AlertCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { RFIDScannerModal } from "../modals/RFIDScannerModal";
-import { ProductSelectionModal } from "../modals/ProductSelectionModal";
 import {
-  StockAdjustmentFormSchema,
-  StockAdjustmentFormValues,
-  StockAdjustmentItem,
-} from "../../types/stock-adjustment.schema";
-import { useStockAdjustmentForm } from "../../hooks/useStockAdjustmentForm";
+  StockAdjustmentManualFormSchema,
+  StockAdjustmentManualFormValues,
+  StockAdjustmentManualItem,
+} from "../../types/stock-adjustment-manual.schema";
+import { useStockAdjustmentManualForm } from "../../hooks/useStockAdjustmentManualForm";
 import { isPostedStatus } from "../../utils/status-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,10 +52,11 @@ import {
   ComboboxItem,
   ComboboxEmpty,
 } from "@/components/ui/combobox";
-
+import { ProductSelectionModal } from "../modals/ProductSelectionModal";
+import { AttachmentUpload } from "../AttachmentUpload";
 
 // ——————————————————————————————————————————————————————————————————————————————
-interface StockAdjustmentFormProps {
+interface StockAdjustmentManualFormProps {
   id: number | null;
   onCancel?: () => void;
   onSuccess: () => void;
@@ -67,42 +66,42 @@ interface StockAdjustmentFormProps {
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
-// Memoised item row (renders only when *its own* data changes)
-interface ItemRowProps {
+// ——————————————————————————————————————————————————————————————————————————————
+// Table row for the main form
+interface ProductTableRowProps {
   index: number;
-  control: Control<StockAdjustmentFormValues>;
+  control: Control<StockAdjustmentManualFormValues>;
   onRemove: (index: number) => void;
-  setValue: UseFormSetValue<StockAdjustmentFormValues>;
-  onOpenScanner: (index: number) => void;
+  setValue: UseFormSetValue<StockAdjustmentManualFormValues>;
   isReadOnly?: boolean;
 }
 
-const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
+const ProductTableRow = React.memo(function ProductTableRow({
   index,
   control,
   onRemove,
   setValue,
-  onOpenScanner,
   isReadOnly = false,
-}: ItemRowProps) {
+}: ProductTableRowProps) {
   const product_name = useWatch({ control, name: `items.${index}.product_name` });
+  const product_code = useWatch({ control, name: `items.${index}.product_code` });
   const unitName = useWatch({ control, name: `items.${index}.unit_name` });
   const quantity = useWatch({ control, name: `items.${index}.quantity` });
   const costPerUnit = useWatch({ control, name: `items.${index}.cost_per_unit` });
-  const hasRfid = useWatch({ control, name: `items.${index}.has_rfid` });
   const brandName = useWatch({ control, name: `items.${index}.brand_name` });
-  const barcode = useWatch({ control, name: `items.${index}.barcode` });
-  const unitOrder = useWatch({ control, name: `items.${index}.unit_order` });
-
-  const rfidTags = useWatch({ control, name: `items.${index}.rfid_tags` });
-  const isRfidMissing = (hasRfid || unitOrder === 3) && (!rfidTags || rfidTags.length === 0);
 
   const { errors } = useFormState({ control });
   const rowError = Array.isArray(errors.items)
-    ? (errors.items[index] as FieldErrors<StockAdjustmentItem>)
+    ? (errors.items[index] as FieldErrors<StockAdjustmentManualItem>)
     : undefined;
 
   const totalCost = Number(quantity || 0) * Number(costPerUnit || 0);
+
+  const handleUpdateQuantity = (delta: number) => {
+    const currentQty = Number(quantity || 0);
+    const newQty = Math.max(1, currentQty + delta);
+    setValue(`items.${index}.quantity`, newQty, { shouldValidate: true });
+  };
 
   return (
     <tr className="border-b border-border/50 hover:bg-muted/10 transition-colors bg-card">
@@ -113,7 +112,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
       <td className="p-3 min-w-[250px]">
         <div className="flex flex-col">
           <span className="text-xs font-bold text-foreground leading-tight">{product_name || "—"}</span>
-          <span className="text-[10px] text-muted-foreground font-mono mt-0.5">{barcode || "N/A"}</span>
+          <span className="text-[10px] text-muted-foreground font-mono mt-0.5">{product_code}</span>
         </div>
       </td>
       <td className="p-3">
@@ -122,56 +121,19 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
         </span>
       </td>
       <td className="p-3">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-primary bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded uppercase shrink-0">
-            {unitName || "-"}
-          </span>
-          {hasRfid && (
-            <span className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded uppercase shrink-0 flex items-center gap-1">
-              <Tag className="h-2.5 w-2.5 fill-amber-500" />
-              RFID
-            </span>
-          )}
-        </div>
+        <span className="text-[10px] font-bold text-primary bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded uppercase shrink-0">
+          {unitName || "-"}
+        </span>
       </td>
-      <td className="p-3 w-40">
+      <td className="p-3 w-32">
         {isReadOnly ? (
           <span className="text-xs font-bold px-3 py-1 bg-muted rounded-md border border-border/50">{quantity}</span>
-        ) : hasRfid || unitOrder === 3 ? (
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold px-3 py-1 rounded-md border min-w-10 text-center select-none ${
-                isRfidMissing 
-                  ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400"
-                  : "bg-muted/50 border-border/50"
-              }`}>{isRfidMissing ? 0 : quantity}</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onOpenScanner(index)}
-                className={`h-8 font-bold gap-1 px-2 transition-all duration-200 shadow-sm rounded-lg text-[10px] ${
-                  isRfidMissing
-                    ? "border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 hover:bg-red-100 hover:border-red-300 dark:hover:bg-red-900/40"
-                    : "border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700"
-                }`}
-              >
-                <Tag className={`h-3 w-3 ${isRfidMissing ? "text-red-500 animate-pulse" : "text-blue-500"}`} />
-                SCAN
-              </Button>
-            </div>
-            {isRfidMissing && (
-              <span className="text-[9px] text-red-500 font-black animate-pulse leading-none mt-1 uppercase tracking-wider pl-1 block">
-                Scan Required
-              </span>
-            )}
-          </div>
         ) : (
           <div className="flex items-center gap-0 w-min bg-background border border-border rounded-md overflow-hidden">
-            <button 
+            <button
               type="button"
               className="w-7 h-7 flex items-center justify-center hover:bg-muted text-muted-foreground disabled:opacity-50 transition-colors"
-              onClick={() => setValue(`items.${index}.quantity`, Math.max(1, Number(quantity || 0) - 1), { shouldValidate: true })}
+              onClick={() => handleUpdateQuantity(-1)}
               disabled={Number(quantity || 0) <= 1}
             >
               <Minus className="h-3 w-3" />
@@ -187,10 +149,10 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
               className="w-12 h-7 text-center text-xs font-bold border-x border-border focus:outline-none focus:ring-0 bg-transparent p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               min={1}
             />
-            <button 
+            <button
               type="button"
               className="w-7 h-7 flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors"
-              onClick={() => setValue(`items.${index}.quantity`, Number(quantity || 0) + 1, { shouldValidate: true })}
+              onClick={() => handleUpdateQuantity(1)}
             >
               <Plus className="h-3 w-3" />
             </button>
@@ -227,27 +189,23 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
 function FormSummary({
   control,
   fieldCount,
-  isRfidLoading,
 }: {
-  control: Control<StockAdjustmentFormValues>;
+  control: Control<StockAdjustmentManualFormValues>;
   fieldCount: number;
-  isRfidLoading: boolean;
 }) {
   const items = useWatch({ control, name: "items" });
 
-  const { totalQuantity, totalAmount, rfidItemsCount } = useMemo(() => {
+  const { totalQuantity, totalAmount } = useMemo(() => {
     const currentItems = items || [];
     let qty = 0;
     let amt = 0;
-    let rfid = 0;
     for (const item of currentItems) {
       const q = Number(item?.quantity || 0);
       const c = Number(item?.cost_per_unit || 0);
       qty += q;
       amt += q * c;
-      if (item?.has_rfid) rfid++;
     }
-    return { totalQuantity: qty, totalAmount: amt, rfidItemsCount: rfid };
+    return { totalQuantity: qty, totalAmount: amt };
   }, [items]);
 
   return (
@@ -280,70 +238,21 @@ function FormSummary({
           </span>
         </div>
 
-        {(rfidItemsCount > 0 || isRfidLoading) && (
-          <>
-            <div className="h-px bg-border w-full" />
-            <div className="flex justify-between items-center text-sm">
-              <span className="font-bold text-amber-600 dark:text-amber-400">
-                Items with RFID:
-              </span>
-              {isRfidLoading ? (
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-4 w-16 bg-amber-100/20 dark:bg-amber-900/20 animate-pulse" />
-                  <span className="text-[10px] text-amber-400 animate-pulse">
-                    Checking...
-                  </span>
-                </div>
-              ) : (
-                <span className="font-bold text-amber-700 dark:text-amber-400">
-                  {rfidItemsCount} product(s)
-                </span>
-              )}
-            </div>
-          </>
-        )}
       </div>
     </div>
   );
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
-function RfidBanner({ control }: { control: Control<StockAdjustmentFormValues> }) {
-  const items = useWatch({ control, name: "items" });
-  const rfidItemsCount = useMemo(() => {
-    const currentItems = (items || []) as StockAdjustmentItem[];
-    return currentItems.filter((item) => item?.has_rfid).length;
-  }, [items]);
-
-  if (rfidItemsCount === 0) return null;
-
-  return (
-    <div className="bg-amber-500/5 border border-amber-200/30 px-6 py-4 rounded-xl flex items-start gap-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
-      <div className="p-2 bg-amber-500/10 rounded-lg">
-        <AlertCircle className="h-5 w-5 text-amber-500" />
-      </div>
-      <div>
-        <h4 className="font-bold text-amber-600">
-          RFID Tracked Items Detected
-        </h4>
-        <p className="text-xs text-amber-700/80 dark:text-amber-500/80 font-semibold mt-1">
-          {rfidItemsCount} item(s) in this adjustment have RFID tags in
-          inventory. Please ensure proper RFID tag scanning.
-        </p>
-      </div>
-    </div>
-  );
-}
 
 // ——————————————————————————————————————————————————————————————————————————————
-export function StockAdjustmentForm({
+export function StockAdjustmentManualForm({
   id,
   onCancel,
   onSuccess,
-  mode = "creation",
   unpostedList,
   onSelectId,
-}: StockAdjustmentFormProps) {
+}: StockAdjustmentManualFormProps) {
   const router = useRouter();
   const {
     fetchById,
@@ -354,50 +263,44 @@ export function StockAdjustmentForm({
     suppliers = [],
     isProductsLoading,
     isSuppliersLoading,
-    isRfidLoading,
     branches,
     fetchInventory,
-    fetchBranchRfidData,
     fetchBranchInventory,
-    rfidProductIds,
     inventoryMap,
     fetchNextDocNo,
     postAdjustment,
-    validateRFIDAvailability,
     deleteAdjustment,
-  } = useStockAdjustmentForm();
+  } = useStockAdjustmentManualForm();
 
   const [loading, setLoading] = useState(false);
-  const [showRFIDScanner, setShowRFIDScanner] = useState(false);
+  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
+  const [pendingExitAction, setPendingExitAction] = useState<string | (() => void) | null>(null);
+  const initialValuesRef = useRef<string>("");
   const [showPostConfirmation, setShowPostConfirmation] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [scannerContext, setScannerContext] = useState<{ index: number; productName: string } | null>(null);
-  const [isScannerPreparing, setIsScannerPreparing] = useState(false);
   const [branchInputValue, setBranchInputValue] = useState("");
   const [supplierInputValue, setSupplierInputValue] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
-
+  const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
   const [tableSearch, setTableSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
-  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
-  const [pendingExitAction, setPendingExitAction] = useState<string | (() => void) | null>(null);
-  const initialValuesRef = useRef<string>("");
 
-
-  const form = useForm<StockAdjustmentFormValues>({
-    resolver: zodResolver(StockAdjustmentFormSchema),
+  const form = useForm<StockAdjustmentManualFormValues>({
+    mode: "all",
+    resolver: zodResolver(StockAdjustmentManualFormSchema),
     defaultValues: {
-      doc_no: "", 
+      doc_no: "", // Will be fetched via effect
       branch_id: 0,
       supplier_id: 0,
       type: "IN",
       remarks: "",
       items: [],
       isPosted: false,
+      stock_adjustment_attachment: [],
     },
   });
 
@@ -406,21 +309,38 @@ export function StockAdjustmentForm({
     name: "items",
   });
 
+  // ——————————————————————————————————————————————————————————————————————————————
+  // Unlock body scroll/pointer-events when save/post loading clears.
   useEffect(() => {
     const unlock = () => {
-      if (document.body.style.overflow === 'hidden') {
-        document.body.style.setProperty('overflow', 'auto', 'important');
-        document.body.style.removeProperty('pointer-events');
-      }
+      document.body.style.setProperty('overflow', 'auto', 'important');
+      document.body.style.removeProperty('pointer-events');
     };
     unlock();
-    const timer = setTimeout(unlock, 1000);
-    const timer2 = setTimeout(unlock, 3000);
+    const timer = setTimeout(unlock, 300);
+    const timer2 = setTimeout(unlock, 1000);
     return () => {
       clearTimeout(timer);
       clearTimeout(timer2);
     };
   }, [loading]);
+
+  // Unlock body scroll/pointer-events when product loading clears.
+  // @base-ui Combobox Portal can leave pointer-events:none on <body> after
+  // its popup closes, which makes branch/supplier comboboxes unresponsive.
+  useEffect(() => {
+    const unlock = () => {
+      document.body.style.setProperty('overflow', 'auto', 'important');
+      document.body.style.removeProperty('pointer-events');
+    };
+    unlock();
+    const timer = setTimeout(unlock, 300);
+    const timer2 = setTimeout(unlock, 1000);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(timer2);
+    };
+  }, [isProductsLoading]);
 
   useEffect(() => {
     if (id) {
@@ -429,34 +349,36 @@ export function StockAdjustmentForm({
         try {
           const data = await fetchById(id);
 
+          // --- Auto-Infer Supplier ID ---
           let finalSupplierId = data.supplier_id
             ? (typeof data.supplier_id === "object" ? (data.supplier_id as { id: number }).id : data.supplier_id)
             : 0;
 
+          // If header supplier is missing, try to get it from the first item with an inferred supplier
+          // If header supplier is missing, try to get it from the first item with an inferred supplier
           if (!finalSupplierId && data.items && data.items.length > 0) {
-            const firstWithInferred = data.items.find((item) => (item as StockAdjustmentItem).inferred_supplier_id);
+            const firstWithInferred = data.items.find((item) => (item as StockAdjustmentManualItem).inferred_supplier_id);
             if (firstWithInferred) {
-              finalSupplierId = (firstWithInferred as StockAdjustmentItem).inferred_supplier_id || 0;
+              finalSupplierId = (firstWithInferred as StockAdjustmentManualItem).inferred_supplier_id || 0;
             }
           }
 
+          // Robust check for isPosted (handles boolean, number, string, or Directus Buffer)
           const resolvedIsPosted = isPostedStatus(data.isPosted);
 
           const resetObj = {
-            doc_no: data.doc_no || "",
+            doc_no: data.doc_no,
             branch_id:
               typeof data.branch_id === "object"
-                ? Number(data.branch_id?.id || 0)
-                : Number(data.branch_id || 0),
-            supplier_id: Number(finalSupplierId || 0),
-            type: (data.type?.toUpperCase() as "IN" | "OUT") || "IN",
+                ? data.branch_id?.id
+                : (data.branch_id || 0),
+            supplier_id: finalSupplierId,
+            type: data.type,
             remarks: data.remarks || "",
             isPosted: resolvedIsPosted,
-            postedAt: data.postedAt || undefined,
-            posted_by: data.posted_by || undefined,
+            postedAt: data.postedAt || "",
             items: data.items.map((item) => ({
               ...item,
-              quantity: Number(item.quantity || 0),
               product_id: Number(
                 (item.product_id as { id?: number; product_id?: number })?.id ||
                 (item.product_id as { id?: number; product_id?: number })?.product_id ||
@@ -470,23 +392,21 @@ export function StockAdjustmentForm({
                 (item.product_id as { product_code?: string })?.product_code ||
                 item.product_code ||
                 "",
-              cost_per_unit: Number(
+              cost_per_unit:
                 (item.product_id as { cost_per_unit?: number; price_per_unit?: number })?.cost_per_unit ||
                 (item.product_id as { cost_per_unit?: number; price_per_unit?: number })?.price_per_unit ||
                 item.cost_per_unit ||
-                0
-              ),
-              current_stock: Number(item.current_stock || 0),
+                0,
+              current_stock: item.current_stock || 0,
               unit_name:
                 item.unit_name ||
                 (item.product_id as { unit_name?: string })?.unit_name ||
                 "pcs",
               unit_order: (item.product_id as { unit_of_measurement?: { order: number } })?.unit_of_measurement?.order || 1,
-              rfid_tags: item.rfid_tags || [],
-              rfid_count: item.rfid_count || 0,
-              db_id: Number(item.id || 0),
-              has_rfid: (item.rfid_tags && item.rfid_tags.length > 0) || rfidProductIds.has(Number((item.product_id as { id?: number; product_id?: number })?.product_id || (item.product_id as { id?: number; product_id?: number })?.id || item.product_id)),
+              db_id: item.id,
             })),
+            posted_by: data.posted_by,
+            stock_adjustment_attachment: data.stock_adjustment_attachment || [],
           };
 
           form.reset(resetObj);
@@ -503,6 +423,9 @@ export function StockAdjustmentForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // ——————————————————————————————————————————————————————————————————————————————
+  // Auto-populate combobox display labels when editing (branch & supplier)
+  // Runs whenever branches/suppliers load OR when the form values change.
   const watchedBranchId = useWatch({ control: form.control, name: "branch_id" });
   const watchedSupplierId = useWatch({ control: form.control, name: "supplier_id" });
 
@@ -522,42 +445,120 @@ export function StockAdjustmentForm({
 
   useEffect(() => {
     if (watchedBranchId) {
-      fetchBranchRfidData(Number(watchedBranchId));
       fetchBranchInventory(Number(watchedBranchId));
     }
-  }, [watchedBranchId, fetchBranchRfidData, fetchBranchInventory]);
+  }, [watchedBranchId, fetchBranchInventory]);
 
+  useEffect(() => {
+    if (!id) {
+      const defaultVal = {
+        doc_no: form.getValues("doc_no") || "",
+        branch_id: 0,
+        supplier_id: 0,
+        type: "IN",
+        remarks: "",
+        items: [],
+        isPosted: false,
+        stock_adjustment_attachment: [],
+      };
+      initialValuesRef.current = JSON.stringify(defaultVal);
+    }
+  }, [id, form]);
+
+  // ——————————————————————————————————————————————————————————————————————————————
   useEffect(() => {
     if (!id) {
       const updateDocNo = async () => {
         const type = form.getValues("type");
         const nextDocNo = await fetchNextDocNo(type);
-        form.setValue("doc_no", nextDocNo);
+        form.setValue("doc_no", nextDocNo, { shouldValidate: true });
+        try {
+          const current = JSON.parse(initialValuesRef.current || "{}");
+          current.doc_no = nextDocNo;
+          initialValuesRef.current = JSON.stringify(current);
+        } catch {}
       };
       updateDocNo();
     }
   }, [id, fetchNextDocNo, form]);
 
+  // ——————————————————————————————————————————————————————————————————————————————
   const watchedTypeToUpdateDocNo = useWatch({ control: form.control, name: "type" });
   useEffect(() => {
     if (!id && watchedTypeToUpdateDocNo) {
       const updateDocNo = async () => {
         const nextDocNo = await fetchNextDocNo(watchedTypeToUpdateDocNo);
         form.setValue("doc_no", nextDocNo);
+        try {
+          const current = JSON.parse(initialValuesRef.current || "{}");
+          current.doc_no = nextDocNo;
+          initialValuesRef.current = JSON.stringify(current);
+        } catch {}
       };
       updateDocNo();
     }
   }, [id, watchedTypeToUpdateDocNo, fetchNextDocNo, form]);
 
+  // ——————————————————————————————————————————————————————————————————————————————
   useEffect(() => {
     if (watchedSupplierId) {
       fetchProductsBySupplier(Number(watchedSupplierId));
     }
   }, [watchedSupplierId, fetchProductsBySupplier]);
 
+  // ——————————————————————————————————————————————————————————————————————————————
   const isFormLoading = id ? loading : false;
   const isPosted = useWatch({ control: form.control, name: "isPosted" });
   const isReadOnly = !!isPosted;
+
+  // ——————————————————————————————————————————————————————————————————————————————
+  const handlePost = async () => {
+    if (!id) return;
+    // Validate the form before showing the confirmation dialog
+    const isValid = await form.trigger();
+    if (!isValid) {
+      toast.error("Please fill in all required fields correctly before posting.");
+      return;
+    }
+    setShowPostConfirmation(true);
+  };
+
+  const confirmPost = async () => {
+    setShowPostConfirmation(false);
+    if (!id) return;
+    setLoading(true);
+    try {
+      // Auto-save all pending edits (products, qty, attachments) before posting
+      const currentValues = form.getValues();
+      await updateAdjustment(id, currentValues);
+      await postAdjustment(id);
+      toast.success("Adjustment Posted Successfully");
+      onSuccess();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to post adjustment");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    setShowDeleteConfirmation(false);
+    if (!id) return;
+    setLoading(true);
+    try {
+      await deleteAdjustment(id);
+      toast.success("Adjustment Deleted Successfully");
+      onSuccess();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete adjustment");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onInvalid = () => {
+    toast.error("Please fill in all required fields correctly.");
+  };
 
   const isFormModified = useCallback(() => {
     if (isReadOnly) return false;
@@ -584,11 +585,15 @@ export function StockAdjustmentForm({
         const iItem = initialItems[i];
         if (Number(cItem?.product_id) !== Number(iItem?.product_id)) return true;
         if (Number(cItem?.quantity) !== Number(iItem?.quantity)) return true;
+      }
 
-        const cTags = cItem?.rfid_tags || [];
-        const iTags = iItem?.rfid_tags || [];
-        if (cTags.length !== iTags.length) return true;
-        if (cTags.some((tag, idx) => tag !== iTags[idx])) return true;
+      const currentAtts = current.stock_adjustment_attachment || [];
+      const initialAtts = initial.stock_adjustment_attachment || [];
+      if (currentAtts.length !== initialAtts.length) return true;
+      for (let i = 0; i < currentAtts.length; i++) {
+        const cAtt = typeof currentAtts[i]?.attachment === 'object' ? currentAtts[i].attachment.id : currentAtts[i]?.attachment;
+        const iAtt = typeof initialAtts[i]?.attachment === 'object' ? initialAtts[i].attachment.id : initialAtts[i]?.attachment;
+        if (cAtt !== iAtt) return true;
       }
     } catch (e) {
       console.error("Error checking form modifications:", e);
@@ -597,15 +602,17 @@ export function StockAdjustmentForm({
     return false;
   }, [form, isReadOnly]);
 
-  const handleCancelOrExit = useCallback((action: string | (() => void)) => {
+  const handleCancelOrExit = useCallback((action: string | (() => void) | undefined) => {
     if (isFormModified()) {
-      setPendingExitAction(() => action);
+      setPendingExitAction(() => action || null);
       setShowUnsavedChangesModal(true);
     } else {
       if (typeof action === "function") {
         action();
-      } else {
+      } else if (typeof action === "string") {
         router.push(action);
+      } else {
+        router.push("/scm/inventory-management/stock-adjustment-manual-summary");
       }
     }
   }, [isFormModified, router]);
@@ -617,129 +624,15 @@ export function StockAdjustmentForm({
     } else if (typeof pendingExitAction === "string") {
       router.push(pendingExitAction);
     } else {
-      router.push("/scm/inventory-management/stock-adjustment-summary");
+      router.push("/scm/inventory-management/stock-adjustment-manual-summary");
     }
     setPendingExitAction(null);
   }, [pendingExitAction, router]);
 
-  const handlePost = async () => {
-    if (!id) return;
-    setShowPostConfirmation(true);
-  };
-
-  const confirmPost = async () => {
-    setShowPostConfirmation(false);
-    if (!id) return;
-
-    form.handleSubmit(
-      async (values) => {
-        // Validate that all items requiring RFID have scanned tags
-        const missingRfidItem = values.items.find(
-          (item) => (item.has_rfid || item.unit_order === 3) && (!item.rfid_tags || item.rfid_tags.length === 0)
-        );
-
-        if (missingRfidItem) {
-          toast.error("RFID Scan Required", {
-            description: `Product "${missingRfidItem.product_name || "Unknown"}" is tracked via RFID. Please complete scanning tags before saving.`,
-            duration: 5000,
-          });
-          return;
-        }
-
-        setLoading(true);
-        try {
-          // 1. Save/update the adjustment with current form values (e.g. added products)
-          await updateAdjustment(id, values);
-
-          // 2. Post the adjustment to finalize and update inventory
-          await postAdjustment(id);
-          toast.success("Adjustment Posted Successfully");
-          onSuccess();
-        } catch (error) {
-          toast.error(error instanceof Error ? error.message : "Failed to post adjustment");
-        } finally {
-          setLoading(false);
-        }
-      },
-      onInvalid
-    )();
-  };
-
-  const confirmDelete = async () => {
-    setShowDeleteConfirmation(false);
-    if (!id) return;
-    setLoading(true);
-    try {
-      await deleteAdjustment(id);
-      toast.success("Adjustment Deleted Successfully");
-      onSuccess();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete adjustment");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const onInvalid = () => {
-    toast.error("Please fill in all required fields correctly.");
-  };
-
-  const onSubmit = useCallback(
-    async (values: StockAdjustmentFormValues) => {
-      // Validate that all items requiring RFID have scanned tags
-      const missingRfidItem = values.items.find(
-        (item) => (item.has_rfid || item.unit_order === 3) && (!item.rfid_tags || item.rfid_tags.length === 0)
-      );
-
-      if (missingRfidItem) {
-        toast.error("RFID Scan Required", {
-          description: `Product "${missingRfidItem.product_name || "Unknown"}" is tracked via RFID. Please complete scanning tags before saving.`,
-          duration: 5000,
-        });
-        return;
-      }
-
-      setLoading(true);
-      try {
-        if (id) {
-          await updateAdjustment(id, values);
-          // Reset the "initial" snapshot so the form is no longer considered
-          // modified — prevents the unsaved-changes modal from appearing after saving.
-          initialValuesRef.current = JSON.stringify(values);
-          form.reset(values, { keepValues: true });
-          toast.success("Adjustment Updated Successfully");
-        } else {
-          await createAdjustment(values);
-          toast.success("Adjustment Created Successfully");
-        }
-        onSuccess();
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "Failed to save adjustment";
-        toast.error(message);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [id, createAdjustment, updateAdjustment, onSuccess, form]
-  );
-
   const handleSaveAndExit = useCallback(async () => {
     setShowUnsavedChangesModal(false);
     await form.handleSubmit(
-      async (values: StockAdjustmentFormValues) => {
-        // Validate that all items requiring RFID have scanned tags
-        const missingRfidItem = values.items.find(
-          (item) => (item.has_rfid || item.unit_order === 3) && (!item.rfid_tags || item.rfid_tags.length === 0)
-        );
-
-        if (missingRfidItem) {
-          toast.error("RFID Scan Required", {
-            description: `Product "${missingRfidItem.product_name || "Unknown"}" is tracked via RFID. Please complete scanning tags before saving.`,
-            duration: 5000,
-          });
-          return;
-        }
-
+      async (values: StockAdjustmentManualFormValues) => {
         setLoading(true);
         try {
           if (id) {
@@ -749,13 +642,14 @@ export function StockAdjustmentForm({
             await createAdjustment(values);
             toast.success("Adjustment Created Successfully");
           }
+          initialValuesRef.current = JSON.stringify(values);
 
           if (typeof pendingExitAction === "function") {
             pendingExitAction();
           } else if (typeof pendingExitAction === "string") {
             router.push(pendingExitAction);
           } else {
-            router.push("/scm/inventory-management/stock-adjustment-summary");
+            router.push("/scm/inventory-management/stock-adjustment-manual-summary");
           }
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : "Failed to save adjustment";
@@ -769,61 +663,62 @@ export function StockAdjustmentForm({
     )();
   }, [id, createAdjustment, updateAdjustment, router, form, pendingExitAction]);
 
+  // ——————————————————————————————————————————————————————————————————————————————
+  const onSubmit = useCallback(
+    async (values: StockAdjustmentManualFormValues) => {
+      setLoading(true);
+      try {
+        if (id) {
+          await updateAdjustment(id, values);
+          toast.success("Adjustment Updated Successfully");
+        } else {
+          await createAdjustment(values);
+          toast.success("Adjustment Created Successfully");
+        }
+        initialValuesRef.current = JSON.stringify(values);
+        onSuccess?.();
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Failed to save adjustment";
+        toast.error(message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [id, createAdjustment, updateAdjustment, onSuccess]
+  );
+
+  // ——————————————————————————————————————————————————————————————————————————————
+  // handleConfirmModalItems — applies modal cart state to form
   const handleConfirmModalItems = useCallback(
-    (newItems: StockAdjustmentItem[]) => {
+    (newItems: StockAdjustmentManualItem[]) => {
       const branchId = form.getValues("branch_id");
       const currentType = form.getValues("type");
-      
+
       const mapped = newItems.map((item) => ({
         ...item,
         branch_id: branchId,
         type: currentType
       }));
-      
+
       form.setValue("items", mapped, { shouldValidate: true });
-      
+
       // Async stock fetch
       mapped.forEach((item, idx) => {
         const pid = Number(item.product_id);
         const cachedStock = inventoryMap.get(pid) ?? 0;
         if (cachedStock === 0) {
-           fetchInventory(pid, branchId).then(stock => {
-              form.setValue(`items.${idx}.current_stock`, stock);
-           }).catch(console.error);
+          fetchInventory(pid, branchId).then(stock => {
+            form.setValue(`items.${idx}.current_stock`, stock);
+          }).catch(console.error);
         } else {
-           form.setValue(`items.${idx}.current_stock`, cachedStock);
+          form.setValue(`items.${idx}.current_stock`, cachedStock);
         }
       });
     },
     [form, fetchInventory, inventoryMap]
   );
 
-  const handleRFIDSave = useCallback((tags: string[]) => {
-    if (scannerContext) {
-      const { index } = scannerContext;
-      form.setValue(`items.${index}.rfid_tags`, tags);
-      form.setValue(`items.${index}.quantity`, tags.length, { shouldValidate: true });
-      form.setValue(`items.${index}.rfid_count`, tags.length);
-      setScannerContext(null);
-    }
-  }, [scannerContext, form]);
 
-
-  const handleOpenScanner = useCallback((index: number) => {
-    const productName = form.getValues(`items.${index}.product_name`) ?? "Product";
-    setScannerContext({ index, productName });
-
-    setIsScannerPreparing(true);
-    toast.info(`Opening RFID Scanner`, {
-      description: `Preparing scanner for ${productName}...`,
-      duration: 1500,
-    });
-
-    setTimeout(() => {
-      setIsScannerPreparing(false);
-      setShowRFIDScanner(true);
-    }, 600);
-  }, [form]);
 
   const watchedBranchIdForSelect = useWatch({ control: form.control, name: "branch_id" });
   const watchedSupplierIdForSelect = useWatch({ control: form.control, name: "supplier_id" });
@@ -851,6 +746,7 @@ export function StockAdjustmentForm({
     return filteredFields.slice(startIndex, startIndex + rowsPerPage);
   }, [filteredFields, currentPage, rowsPerPage]);
 
+  // Ensure current page is valid when filtering changes total pages
   useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(totalPages);
@@ -866,7 +762,7 @@ export function StockAdjustmentForm({
           </div>
           <div>
             <h2 className="text-xl font-bold text-foreground leading-tight">
-              Stock Adjustment Module
+              Stock Adjustment Manual Registration
             </h2>
             <p className="text-xs text-muted-foreground font-medium">
               Inventory Management System
@@ -878,7 +774,7 @@ export function StockAdjustmentForm({
             <Button
               variant="outline"
               onClick={() => handleCancelOrExit(onCancel)}
-              className="gap-2 h-10 border-border bg-card shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg transition-all"
+              className="gap-2 h-10 border-border bg-card shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg"
             >
               <ArrowLeft className="h-4 w-4" />
               Back to List
@@ -886,8 +782,8 @@ export function StockAdjustmentForm({
           ) : (
             <Button
               variant="outline"
-              onClick={() => handleCancelOrExit("/scm/inventory-management/stock-adjustment-summary")}
-              className="gap-2 h-10 border-border bg-card shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg transition-all"
+              onClick={() => handleCancelOrExit("/scm/inventory-management/stock-adjustment-manual-summary")}
+              className="gap-2 h-10 border-border bg-card shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg"
             >
               <ArrowLeft className="h-4 w-4" />
               Back to Summary
@@ -899,13 +795,13 @@ export function StockAdjustmentForm({
       <div className="flex flex-col gap-1 mb-2">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {id ? "Edit Stock Adjustment" : "New Stock Adjustment"}
+            {id ? "Edit Stock Adjustment" : "New Stock Adjustment Registration"}
           </h1>
           {id && (
             <Badge
               variant="outline"
               className={`px-3 py-1 font-bold shadow-sm ${isPosted
-                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:blue-400 border-blue-200 dark:border-blue-800/50 uppercase tracking-wider'
+                ? 'bg-blue-50 dark:bg-blue-900/20 text-primary/90 dark:blue-400 border-primary/20 dark:border-blue-800/50 uppercase tracking-wider'
                 : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:amber-400 border-amber-200 dark:border-amber-800/50 uppercase tracking-wider'
                 }`}
             >
@@ -919,18 +815,24 @@ export function StockAdjustmentForm({
 
         {isPosted && (
           <div className="flex items-center gap-6 mt-2 animate-in fade-in slide-in-from-left-2 duration-300">
-            <div className="flex items-center gap-2 bg-blue-50/50 dark:bg-blue-900/10 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800/30">
-              <span className="text-[10px] uppercase font-black text-blue-400">Posted At:</span>
-              <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
+            <div className="flex items-center gap-2 bg-primary/5 dark:bg-blue-900/10 px-3 py-1.5 rounded-lg border border-primary/30 dark:border-blue-800/30">
+              <span className="text-[10px] uppercase font-black text-primary/70">Posted At:</span>
+              <span className="text-xs font-bold text-primary/90 dark:text-blue-300">
                 {form.getValues().postedAt ? format(new Date(form.getValues().postedAt as string), "MMMM d, yyyy, hh:mm a") : "-"}
               </span>
             </div>
-            <div className="flex items-center gap-2 bg-blue-50/50 dark:bg-blue-900/10 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800/30">
-              <span className="text-[10px] uppercase font-black text-blue-400">Posted By:</span>
-              <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
+            <div className="flex items-center gap-2 bg-primary/5 dark:bg-blue-900/10 px-3 py-1.5 rounded-lg border border-primary/30 dark:border-blue-800/30">
+              <span className="text-[10px] uppercase font-black text-primary/70">Posted By:</span>
+              <span className="text-xs font-bold text-primary/90 dark:text-blue-300">
                 {(() => {
                   const postedBy = form.getValues("posted_by");
-                  return typeof postedBy === 'object' ? `${postedBy?.user_fname} ${postedBy?.user_lname}` : postedBy || "System User";
+                  if (typeof postedBy === 'object' && postedBy !== null) {
+                    const fname = postedBy.user_fname || "";
+                    const lname = postedBy.user_lname || "";
+                    const fullName = `${fname} ${lname}`.trim();
+                    return fullName || "System User";
+                  }
+                  return postedBy || "System User";
                 })()}
               </span>
             </div>
@@ -938,30 +840,8 @@ export function StockAdjustmentForm({
         )}
       </div>
 
-      <RfidBanner control={form.control} />
-
-      {isScannerPreparing && (
-        <div className="fixed inset-0 bg-background/40 backdrop-blur-[1px] z-[100] flex items-center justify-center animate-in fade-in duration-300">
-          <Card className="w-full max-w-sm border-none shadow-2xl bg-card/90 overflow-hidden p-0 backdrop-blur-md">
-            <div className="bg-primary h-1.5 w-full">
-              <div className="bg-blue-400 h-full animate-[loading_1.5s_infinite_linear]" style={{ width: '40%' }} />
-            </div>
-            <CardContent className="p-8 flex flex-col items-center gap-4">
-              <div className="relative">
-                <div className="h-16 w-16 rounded-full border-4 border-muted border-t-blue-500 animate-spin" />
-                <Tag className="h-6 w-6 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-              </div>
-              <div className="text-center space-y-1">
-                <h3 className="font-bold text-foreground">Preparing RFID Scanner</h3>
-                <p className="text-sm text-muted-foreground">Please wait a moment...</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
       <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
-        <Card className="border-border shadow-sm bg-card border border-border/40">
+        <Card className="border-border shadow-sm bg-card">
           <CardHeader className="bg-card border-b border-border py-4 px-6">
             <CardTitle className="text-base font-bold text-foreground">
               Adjustment Information
@@ -970,7 +850,7 @@ export function StockAdjustmentForm({
           <CardContent className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="doc_no" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                <Label htmlFor="doc_no" className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-wider font-sans px-0.5">
                   {unpostedList ? "Review Document" : "Document Number"}
                 </Label>
                 {unpostedList && onSelectId ? (
@@ -980,7 +860,7 @@ export function StockAdjustmentForm({
                       if (v) onSelectId(Number(v));
                     }}
                     inputValue={form.watch("doc_no") || ""}
-                    onInputValueChange={() => {}}
+                    onInputValueChange={() => { }}
                   >
                     <ComboboxInput
                       placeholder="Select Document"
@@ -1007,7 +887,7 @@ export function StockAdjustmentForm({
                 )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="branch" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                <Label htmlFor="branch" className="text-sm font-bold text-muted-foreground">
                   Branch <span className="text-red-500">*</span>
                 </Label>
                 <Combobox
@@ -1037,7 +917,7 @@ export function StockAdjustmentForm({
                   <ComboboxInput
                     placeholder="Select Branch"
                     disabled={isReadOnly || !!id || fields.length > 0}
-                    className={form.formState.errors.branch_id ? "border-red-500 bg-red-50 dark:bg-red-900/10 text-xs" : "text-xs"}
+                    className={form.formState.errors.branch_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
                     showTrigger={!id && fields.length === 0}
                     showClear={!id && !isReadOnly && fields.length === 0}
                   />
@@ -1054,7 +934,7 @@ export function StockAdjustmentForm({
                           return (
                             <ComboboxItem key={b.id} value={String(b.id)}>
                               <div className="flex items-center justify-between w-full">
-                                <span className="font-medium text-xs">{b.branch_name}</span>
+                                <span className="font-medium">{b.branch_name}</span>
                                 <span className="text-[10px] font-bold text-muted-foreground/40 font-mono">
                                   {bCode}
                                 </span>
@@ -1067,14 +947,14 @@ export function StockAdjustmentForm({
                   </ComboboxContent>
                 </Combobox>
                 {form.formState.errors.branch_id && (
-                  <p className="text-xs text-red-500 font-medium mt-1">
+                  <p className="text-xs text-red-500 font-medium">
                     {String(form.formState.errors.branch_id.message)}
                   </p>
                 )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="supplier" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                <Label htmlFor="supplier" className="text-sm font-bold text-muted-foreground">
                   Supplier <span className="text-red-500">*</span>
                 </Label>
                 <Combobox
@@ -1104,7 +984,7 @@ export function StockAdjustmentForm({
                   <ComboboxInput
                     placeholder={isSuppliersLoading ? "Loading suppliers..." : "Select Supplier"}
                     disabled={isReadOnly || !!id || fields.length > 0}
-                    className={form.formState.errors.supplier_id ? "border-red-500 bg-red-50 dark:bg-red-900/10 text-xs" : "text-xs"}
+                    className={form.formState.errors.supplier_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
                     showTrigger={!id && fields.length === 0}
                     showClear={!id && !isReadOnly && fields.length === 0}
                   />
@@ -1124,7 +1004,7 @@ export function StockAdjustmentForm({
                         }
                         return filtered.map(s => (
                           <ComboboxItem key={s.id} value={String(s.id)}>
-                            <span className="font-medium text-xs">{s.supplier_name}</span>
+                            <span className="font-medium">{s.supplier_name}</span>
                             <span className="text-[10px] font-bold text-muted-foreground/40 font-mono italic ml-2">
                               {s.supplier_shortcut || ""}
                             </span>
@@ -1135,7 +1015,7 @@ export function StockAdjustmentForm({
                   </ComboboxContent>
                 </Combobox>
                 {form.formState.errors.supplier_id && (
-                  <p className="text-xs text-red-500 font-medium mt-1">
+                  <p className="text-xs text-red-500 font-medium">
                     {String(form.formState.errors.supplier_id.message)}
                   </p>
                 )}
@@ -1143,14 +1023,14 @@ export function StockAdjustmentForm({
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              <Label className="text-sm font-bold text-muted-foreground">
                 Adjustment Type <span className="text-red-500">*</span>
               </Label>
               <RadioGroup
                 value={watchedType}
                 onValueChange={(v) => form.setValue("type", v as "IN" | "OUT")}
                 className="flex gap-4 pt-1"
-                disabled={isReadOnly || !!id || fields.length > 0}
+                disabled={isReadOnly || !!id}
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem
@@ -1158,7 +1038,7 @@ export function StockAdjustmentForm({
                     id="type-in"
                     className="border-primary text-primary h-4 w-4"
                   />
-                  <Label htmlFor="type-in" className="text-xs font-bold text-foreground/80 uppercase">
+                  <Label htmlFor="type-in" className="text-sm font-bold text-foreground/80">
                     Stock In
                   </Label>
                 </div>
@@ -1168,36 +1048,35 @@ export function StockAdjustmentForm({
                     id="type-out"
                     className="border-input text-primary h-4 w-4"
                   />
-                  <Label htmlFor="type-out" className="text-xs font-bold text-foreground/80 uppercase">
+                  <Label htmlFor="type-out" className="text-sm font-bold text-foreground/80">
                     Stock Out
                   </Label>
                 </div>
               </RadioGroup>
               {form.formState.errors.type && (
-                <p className="text-xs text-red-500 font-medium mt-1">
+                <p className="text-xs text-red-500 font-medium">
                   {String(form.formState.errors.type.message)}
                 </p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="remarks" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              <Label htmlFor="remarks" className="text-sm font-bold text-muted-foreground">
                 Remarks
               </Label>
               <Textarea
                 id="remarks"
                 {...form.register("remarks")}
                 placeholder="Additional information about this adjustment..."
-                className="min-h-[120px] bg-background border-input focus:ring-primary rounded-xl p-4 text-xs font-medium"
+                className="min-h-[120px] bg-background border-input focus:ring-primary rounded-xl p-4 text-sm"
                 disabled={isReadOnly}
               />
             </div>
           </CardContent>
         </Card>
 
-        {/* Product Items Table Workspace */}
-        <Card className="border-border shadow-sm bg-card border border-border/40">
-          <CardHeader className="bg-card border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4 py-4 px-6">
+        <Card className="border-border shadow-sm bg-card">
+          <CardHeader className="bg-card border-b border-border py-4 px-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <CardTitle className="text-base font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
                 <Package className="w-5 h-5 text-primary" />
@@ -1215,7 +1094,7 @@ export function StockAdjustmentForm({
                     setTableSearch(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="pl-9 h-9 text-xs border-input font-semibold"
+                  className="pl-9 h-9 text-sm border-input"
                 />
               </div>
               {!isReadOnly && (
@@ -1223,7 +1102,7 @@ export function StockAdjustmentForm({
                   type="button"
                   onClick={() => setIsModalOpen(true)}
                   disabled={!watchedSupplierIdForSelect}
-                  className="font-bold h-9 px-4 rounded-full shadow-sm flex items-center gap-2 text-xs transition-all border-primary/20 text-primary bg-primary/10 hover:bg-primary/20 dark:bg-primary/20 dark:border-primary/40 shrink-0"
+                  className="font-bold h-9 px-4 rounded-full shadow-sm flex items-center gap-2 text-sm transition-all border-primary/20 text-primary/90 bg-primary/10 hover:bg-primary/20 dark:bg-primary/20 dark:border-primary/40 shrink-0"
                   variant="outline"
                 >
                   <Plus className="h-4 w-4" />
@@ -1233,7 +1112,7 @@ export function StockAdjustmentForm({
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            {isFormLoading || (isProductsLoading && fields.length === 0) ? (
+            {isFormLoading ? (
               <div className="p-6 space-y-6">
                 {[1, 2, 3].map((i) => (
                   <div key={i} className="flex gap-4">
@@ -1254,13 +1133,13 @@ export function StockAdjustmentForm({
                 <h3 className="text-lg font-bold text-foreground mb-1">
                   {watchedSupplierIdForSelect ? "Empty Cart" : "Supplier required"}
                 </h3>
-                <p className="text-muted-foreground font-semibold max-w-xs mx-auto text-xs">
+                <p className="text-muted-foreground font-medium max-w-xs mx-auto text-sm">
                   {watchedSupplierIdForSelect
                     ? "Click \"ADD MORE PRODUCTS\" to browse and add items."
                     : "Select a supplier first to browse and add products."}
                 </p>
                 {form.formState.errors.items && form.formState.errors.items.message && (
-                  <p className="text-sm text-red-500 font-bold mt-4 animate-in fade-in">
+                  <p className="text-sm text-red-500 font-bold mt-4">
                     {form.formState.errors.items.message}
                   </p>
                 )}
@@ -1275,7 +1154,7 @@ export function StockAdjustmentForm({
                       <th className="p-3">Product Name</th>
                       <th className="p-3">Price</th>
                       <th className="p-3">UOM</th>
-                      <th className="p-3 w-40 text-center">Qty</th>
+                      <th className="p-3 w-32 text-center">Qty</th>
                       <th className="p-3">Net Total</th>
                       <th className="p-3 text-center w-16">Action</th>
                     </tr>
@@ -1289,26 +1168,25 @@ export function StockAdjustmentForm({
                       </tr>
                     ) : (
                       paginatedFields.map(({ field, index }) => (
-                        <StockAdjustmentItemRow
+                        <ProductTableRow
                           key={field.id}
                           index={index}
                           control={form.control}
                           onRemove={(idx) => setDeletingIndex(idx)}
                           setValue={form.setValue}
-                          onOpenScanner={handleOpenScanner}
                           isReadOnly={isReadOnly}
                         />
                       ))
                     )}
                   </tbody>
                 </table>
-                <div className="p-4 bg-muted/10 border-t border-border/50 text-xs font-semibold text-muted-foreground flex justify-between items-center">
+                <div className="p-4 bg-muted/10 border-t border-border/50 text-sm font-medium text-muted-foreground flex justify-between items-center">
                   <span>{filteredFields.length} total rows</span>
                   <div className="flex items-center gap-6">
                     <div className="flex items-center gap-2">
                       <span className="text-xs">Rows per page</span>
-                      <select 
-                        className="h-8 border border-border rounded-md bg-card px-2 text-xs focus:outline-none font-bold"
+                      <select
+                        className="h-8 border border-border rounded-md bg-card px-2 text-xs focus:outline-none"
                         value={rowsPerPage}
                         onChange={(e) => {
                           setRowsPerPage(Number(e.target.value));
@@ -1374,19 +1252,54 @@ export function StockAdjustmentForm({
             <FormSummary
               control={form.control}
               fieldCount={fields.length}
-              isRfidLoading={isRfidLoading}
             />
           </CardContent>
         </Card>
 
-        {/* Action Workspace buttons */}
+        {/* Attachments Card */}
+        <Card className="border border-border/50 shadow-sm bg-card">
+          <CardHeader className="bg-card border-b border-border/50 py-4 px-6">
+            <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+              <Paperclip className="h-4 w-4 text-primary" />
+              Attachments
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            <AttachmentUpload
+              value={form.watch("stock_adjustment_attachment") || []}
+              onChange={(atts) => form.setValue("stock_adjustment_attachment", atts, { shouldValidate: true })}
+              disabled={isReadOnly}
+            />
+            {form.formState.errors.stock_adjustment_attachment?.message && (
+              <p className="text-xs text-red-500 font-bold mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                {String(form.formState.errors.stock_adjustment_attachment.message)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <ProductSelectionModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          supplierName={
+            suppliers.find((s) => String(s.id) === String(watchedSupplierIdForSelect))?.supplier_name || ""
+          }
+          branchName={
+            branches?.find((b) => String(b.id) === String(watchedBranchIdForSelect))?.branch_name || ""
+          }
+          products={products}
+          isLoading={isProductsLoading}
+          initialSelectedItems={form.getValues("items")}
+          onConfirm={handleConfirmModalItems}
+        />
+
         <div className="flex items-center justify-end gap-3 pb-8">
           {onCancel ? (
             <Button
               type="button"
               variant="outline"
               onClick={() => handleCancelOrExit(onCancel)}
-              className="h-10 px-8 font-bold border-border text-muted-foreground hover:bg-card rounded-lg transition-colors text-xs"
+              className="h-10 px-8 font-bold border-border text-muted-foreground hover:bg-card rounded-lg"
             >
               Cancel
             </Button>
@@ -1394,8 +1307,8 @@ export function StockAdjustmentForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() => handleCancelOrExit("/scm/inventory-management/stock-adjustment-summary")}
-              className="h-10 px-8 font-bold border-border text-muted-foreground hover:bg-card rounded-lg transition-colors text-xs"
+              onClick={() => handleCancelOrExit(onSuccess)}
+              className="h-10 px-8 font-bold border-border text-muted-foreground hover:bg-card rounded-lg"
             >
               Cancel
             </Button>
@@ -1404,7 +1317,7 @@ export function StockAdjustmentForm({
             <Button
               type="submit"
               disabled={loading}
-              className="h-10 px-8 font-bold bg-primary hover:bg-primary/95 text-primary-foreground gap-2 shadow-sm rounded-lg transition-all duration-300 hover:scale-[1.02] text-xs"
+              className="h-10 px-8 font-bold bg-primary hover:bg-primary/90 text-white gap-2 shadow-sm rounded-lg"
             >
               {loading ? (
                 <span className="animate-spin mr-2">â—Œ</span>
@@ -1415,7 +1328,7 @@ export function StockAdjustmentForm({
             </Button>
           )}
 
-          {id && !isPosted && mode === "posting" && (
+          {id && !isReadOnly && (
             <Button
               type="button"
               onClick={() => setShowDeleteConfirmation(true)}
@@ -1427,12 +1340,12 @@ export function StockAdjustmentForm({
             </Button>
           )}
 
-          {id && !isPosted && mode === "posting" && (
+          {id && !isReadOnly && (
             <Button
               type="button"
               onClick={handlePost}
               disabled={loading}
-              className="h-10 px-8 font-bold bg-green-600 hover:bg-green-700 text-white gap-2 shadow-sm rounded-lg animate-in fade-in zoom-in-95 duration-200 transition-all duration-300 hover:scale-[1.02] text-xs"
+              className="h-10 px-8 font-bold bg-green-600 hover:bg-green-700 text-white gap-2 shadow-sm rounded-lg animate-in fade-in zoom-in-95 duration-200"
             >
               {loading ? (
                 <span className="animate-spin mr-2">â—Œ</span>
@@ -1445,48 +1358,16 @@ export function StockAdjustmentForm({
         </div>
       </form>
 
-      {scannerContext && (
-        <RFIDScannerModal
-          open={showRFIDScanner}
-          onOpenChange={setShowRFIDScanner}
-          productName={scannerContext.productName}
-          onSave={handleRFIDSave}
-          type={form.getValues("type")}
-          initialTags={form.getValues(`items.${scannerContext.index}.rfid_tags`) || []}
-          branchId={Number(form.getValues("branch_id"))}
-          validateRFID={validateRFIDAvailability}
-        />
-      )}
 
-      {isModalOpen && (
-        <ProductSelectionModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          supplierName={
-            suppliers.find((s) => String(s.id) === String(watchedSupplierIdForSelect))?.supplier_name || ""
-          }
-          branchName={
-            branches?.find((b) => String(b.id) === String(watchedBranchIdForSelect))?.branch_name || ""
-          }
-          products={products}
-          isLoading={isProductsLoading}
-          rfidProductIds={rfidProductIds}
-          initialSelectedItems={form.getValues("items")}
-          onConfirm={handleConfirmModalItems}
-        />
-      )}
-
-
-
-      {/* Post Confirmation AlertDialog Popup */}
+      {/* Post Confirmation Modal */}
       <AlertDialog open={showPostConfirmation} onOpenChange={setShowPostConfirmation}>
         <AlertDialogContent className="max-w-md bg-card p-6 rounded-xl shadow-2xl border-none">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+            <AlertDialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
               <Send className="h-5 w-5 text-primary" />
               Confirm Post Adjustment
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground py-4 text-xs font-semibold">
+            <AlertDialogDescription className="text-muted-foreground py-4">
               Are you sure you want to post this adjustment? Once posted, the record will become **READ-ONLY** and inventory levels will be updated across the system.
               <br /><br />
               This action cannot be undone.
@@ -1496,13 +1377,13 @@ export function StockAdjustmentForm({
             <Button
               variant="outline"
               onClick={() => setShowPostConfirmation(false)}
-              className="flex-1 h-11 font-bold text-muted-foreground border-border hover:bg-muted rounded-lg text-xs"
+              className="flex-1 h-11 font-bold text-muted-foreground border-border hover:bg-muted rounded-lg"
             >
               Cancel
             </Button>
             <Button
               onClick={confirmPost}
-              className="flex-1 h-11 font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/10 rounded-lg text-xs"
+              className="flex-1 h-11 font-bold bg-primary hover:bg-primary/90 text-white shadow-md shadow-primary/20 dark:shadow-none rounded-lg"
             >
               Confirm and Post
             </Button>
@@ -1514,11 +1395,11 @@ export function StockAdjustmentForm({
       <AlertDialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
         <AlertDialogContent className="max-w-md bg-card p-6 rounded-xl shadow-2xl border-none">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+            <AlertDialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
               <Trash2 className="h-5 w-5 text-red-600" />
               Confirm Delete Adjustment
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground py-4 text-xs font-semibold">
+            <AlertDialogDescription className="text-muted-foreground py-4">
               Are you sure you want to delete this stock adjustment transaction? This action will permanently remove it from the system.
               <br /><br />
               This action cannot be undone.
@@ -1528,15 +1409,59 @@ export function StockAdjustmentForm({
             <Button
               variant="outline"
               onClick={() => setShowDeleteConfirmation(false)}
-              className="flex-1 h-11 font-bold text-muted-foreground border-border hover:bg-muted rounded-lg text-xs"
+              className="flex-1 h-11 font-bold text-muted-foreground border-border hover:bg-muted rounded-lg"
             >
               Cancel
             </Button>
             <Button
               onClick={confirmDelete}
-              className="flex-1 h-11 font-bold bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-100 rounded-lg text-xs"
+              className="flex-1 h-11 font-bold bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-100 dark:shadow-none rounded-lg"
             >
               Confirm and Delete
+            </Button>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Item Delete Confirmation */}
+      <AlertDialog
+        open={deletingIndex !== null}
+        onOpenChange={(open) => !open && setDeletingIndex(null)}
+      >
+        <AlertDialogContent className="max-w-md bg-card p-6 rounded-xl shadow-2xl border-none">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-600" />
+              Remove Item
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground py-4">
+              Are you sure you want to remove this item from the adjustment list?
+              {deletingIndex !== null && form.getValues(`items.${deletingIndex}.db_id`) && (
+                <span className="block mt-2 font-bold text-red-500/80">
+                  Note: This is an existing record. Removing it will delete it from this adjustment once you save.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex items-center gap-3 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setDeletingIndex(null)}
+              className="flex-1 h-11 font-bold text-muted-foreground border-border hover:bg-muted rounded-lg"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (deletingIndex !== null) {
+                  remove(deletingIndex);
+                  setDeletingIndex(null);
+                  toast.success("Item removed from list");
+                }
+              }}
+              className="flex-1 h-11 font-bold bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-100 dark:shadow-none rounded-lg"
+            >
+              Confirm and Remove
             </Button>
           </div>
         </AlertDialogContent>
@@ -1583,50 +1508,7 @@ export function StockAdjustmentForm({
           </div>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Item Delete Confirmation */}
-      <AlertDialog
-        open={deletingIndex !== null}
-        onOpenChange={(open) => !open && setDeletingIndex(null)}
-      >
-        <AlertDialogContent className="max-w-md bg-card p-6 rounded-xl shadow-2xl border-none">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold text-foreground flex items-center gap-2">
-              <Trash2 className="h-5 w-5 text-red-600" />
-              Remove Item
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground py-4 text-xs font-semibold">
-              Are you sure you want to remove this item from the adjustment list?
-              {deletingIndex !== null && form.getValues(`items.${deletingIndex}.db_id`) && (
-                <span className="block mt-2 font-bold text-red-500/80">
-                  Note: This is an existing record. Removing it will delete it from this adjustment once you save.
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="flex items-center gap-3 mt-4">
-            <Button
-              variant="outline"
-              onClick={() => setDeletingIndex(null)}
-              className="flex-1 h-11 font-bold text-muted-foreground border-border hover:bg-muted rounded-lg text-xs"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (deletingIndex !== null) {
-                  remove(deletingIndex);
-                  setDeletingIndex(null);
-                  toast.success("Item removed from list");
-                }
-              }}
-              className="flex-1 h-11 font-bold bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-100 rounded-lg text-xs"
-            >
-              Confirm and Remove
-            </Button>
-          </div>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
+
