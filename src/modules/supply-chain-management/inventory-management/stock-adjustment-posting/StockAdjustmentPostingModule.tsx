@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useStockAdjustment } from "@/modules/supply-chain-management/inventory-management/stock-adjustment-posting/hooks/useStockAdjustment";
 import { StockAdjustmentForm } from "@/modules/supply-chain-management/inventory-management/stock-adjustment-posting/components/forms/StockAdjustmentForm";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
@@ -12,6 +13,7 @@ interface StockAdjustmentModuleProps {
 }
 
 export default function StockAdjustmentModule({ mode = "creation", initialId = null }: StockAdjustmentModuleProps) {
+  const router = useRouter();
   const { data, isLoading, error, refresh } = useStockAdjustment("Unposted");
   const [selectedId, setSelectedId] = useState<number | null>(initialId || null);
 
@@ -25,7 +27,7 @@ export default function StockAdjustmentModule({ mode = "creation", initialId = n
       } else if (data.length === 0 && selectedId !== initialId) {
         setSelectedId(null);
       } else if (selectedId === null || (!data.some((item) => item.id === selectedId) && selectedId !== initialId)) {
-        setSelectedId(data[0].id!);
+        setSelectedId(data[0]?.id || null);
       }
     }
   }, [isLoading, data, selectedId, initialId]);
@@ -64,7 +66,7 @@ export default function StockAdjustmentModule({ mode = "creation", initialId = n
           id={selectedId}
           onCancel={undefined} // Hides cancel/back-to-list buttons, shows "Reset Changes" instead
           onSuccess={() => {
-            refresh();
+            router.push("/scm/inventory-management/stock-adjustment-summary");
           }}
           mode={mode}
           unpostedList={data}
