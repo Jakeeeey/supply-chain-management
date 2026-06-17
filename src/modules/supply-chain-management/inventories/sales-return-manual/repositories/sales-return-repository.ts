@@ -141,10 +141,10 @@ export async function getRawLinkedInvoice(returnId: number) {
 export async function getRawReferences() {
   return Promise.all([
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code&filter[isActive][_eq]=1",
+      "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name,discount_type&filter[isActive][_eq]=1",
+      "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name,discount_type",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/branches?limit=-1&fields=id,branch_name",
@@ -186,7 +186,7 @@ export async function getRawDiscountTypes() {
 /**
  * Fetches all product catalog data needed for ProductLookupModal.
  */
-export async function getRawProductCatalog() {
+export async function getRawProductCatalog(includeInactive = false) {
   return Promise.all([
     directusGet<{ data: Record<string, unknown>[] }>("/items/brand?limit=-1"),
     directusGet<{ data: Record<string, unknown>[] }>("/items/categories?limit=-1"),
@@ -195,7 +195,9 @@ export async function getRawProductCatalog() {
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/product_per_supplier?limit=-1",
     ),
-    directusGet<{ data: Record<string, unknown>[] }>("/items/products?limit=-1&filter[isActive][_eq]=1"),
+    directusGet<{ data: Record<string, unknown>[] }>(
+      `/items/products?limit=-1${includeInactive ? "" : "&filter[isActive][_eq]=1"}`,
+    ),
   ]);
 }
 
