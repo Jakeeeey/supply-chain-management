@@ -65,6 +65,34 @@ interface Props {
   onSuccess?: () => void;
 }
 
+const RFID_HEX_LENGTH = 24;
+
+function extractHexCharacters(value: string): string {
+    return value.toUpperCase().replace(/[^0-9A-F]/g, "");
+}
+
+function finalizeHexTag(rawValue: string): string {
+    const hex = extractHexCharacters(rawValue);
+
+    if (hex.length < RFID_HEX_LENGTH) {
+        return "";
+    }
+
+    if (hex.length === RFID_HEX_LENGTH) {
+        return hex;
+    }
+
+    return hex.slice(-RFID_HEX_LENGTH);
+}
+
+function sameTag(a: string, b: string): boolean {
+    return finalizeHexTag(a) === finalizeHexTag(b);
+}
+
+function isHexKey(key: string): boolean {
+    return /^[0-9A-Fa-f]$/.test(key);
+}
+
 // =============================================================================
 // OPTIMIZED SUB-COMPONENTS (PERFORMANCE FIX)
 // =============================================================================
@@ -380,9 +408,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setInvoiceSearch("");
   }, []);
 
-  /**
-   * RFID Scan Handler — looks up the product and auto-adds to items table.
-   */
   const handleRfidScan = async (tag: string) => {
     if (!tag.trim()) return;
 
@@ -401,12 +426,18 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       return;
     }
 
+    const cleanedTag = finalizeHexTag(tag);
+    if (!cleanedTag) {
+      toast.error(`Invalid RFID Tag: "${tag}" must be a 24-character hexadecimal string.`);
+      return;
+    }
+
     // Check for duplicate RFID already in items
     const isDuplicate = items.some(
-      (item) => item.rfidTags && item.rfidTags.includes(tag),
+      (item) => item.rfidTags && item.rfidTags.some(existingTag => sameTag(existingTag, cleanedTag)),
     );
     if (isDuplicate) {
-      toast.error(`RFID tag "${tag}" is already in the list.`);
+      toast.error(`RFID tag "${cleanedTag}" is already in the list.`);
       return;
     }
 
@@ -422,31 +453,40 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     }
 
     setRfidScanning(true);
-    setLastScannedRfid(tag);
+    setLastScannedRfid(cleanedTag);
 
     try {
       // 1. Global Duplicate Check (Has this tag been returned before?)
-      const dupCheck = await SalesReturnProvider.checkRfidDuplicate(tag);
+      const dupCheck = await SalesReturnProvider.checkRfidDuplicate(cleanedTag);
       if (dupCheck.isDuplicate) {
         setLastScannedRfid("");
-        toast.error(`Tag "${tag}" already returned in SR #${dupCheck.returnNo}`);
+        toast.error(`Tag "${cleanedTag}" already returned in SR #${dupCheck.returnNo}`);
         return;
       }
 
       // 2. Inventory Check (Is it currently on-hand?)
-      const result = await SalesReturnProvider.lookupRfid(tag, branchId);
+      const result = await SalesReturnProvider.lookupRfid(cleanedTag, branchId);
 
       if (result?.isOnInventory) {
-        setLastScannedRfid("");
-        toast.error("Already in Stock", {
-          description: "This item is already in the branch's inventory. Sales Return is not allowed for on-hand items.",
-          duration: 5000,
-        });
-        return;
+        if (Number(result.currentBranchId) === Number(branchId)) {
+          setLastScannedRfid("");
+          toast.error("Already in Stock", {
+            description: "This item is already in the branch's inventory. Sales Return is not allowed for on-hand items.",
+            duration: 5000,
+          });
+          return;
+        } else {
+          setLastScannedRfid("");
+          toast.error("Invalid Branch Location", {
+            description: `This product belongs to ${result.currentBranchName || 'another branch'}. It cannot be returned to the selected salesman's branch.`,
+            duration: 5000,
+          });
+          return;
+        }
       }
 
       // 3. Local Duplicate Check (Is it already in our current session?)
-      if (items.some((i) => i.rfidTags?.includes(tag))) {
+      if (items.some((i) => i.rfidTags?.some(existingTag => sameTag(existingTag, cleanedTag)))) {
         setLastScannedRfid("");
         toast.warning("Tag already scanned in this session.");
         return;
@@ -458,7 +498,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         const row = next[selectedRowIndex];
         if (!row) return prev;
 
-        const newTags = [...(row.rfidTags || []), tag];
+        const newTags = [...(row.rfidTags || []), cleanedTag];
         const newQty = newTags.length;
         
         // Recalculate amounts for this row

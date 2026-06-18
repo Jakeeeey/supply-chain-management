@@ -92,7 +92,7 @@ export async function getRawReturns(
   filters: { salesman?: string; customer?: string; status?: string; invoiceNo?: string } = {},
 ) {
   const allowedFields =
-    "return_id,return_number,invoice_no,customer_code,salesman_id,total_amount,status,return_date,remarks,order_id,isThirdParty,created_at,price_type";
+    "return_id,return_number,invoice_no,customer_code,salesman_id,total_amount,status,return_date,remarks,order_id,isThirdParty,created_at,price_type,received_at";
 
   let url = `/items/sales_return?page=${page}&limit=${limit}&meta=filter_count&fields=${allowedFields}&sort=-return_id`;
 
@@ -120,7 +120,7 @@ export async function getRawReturnDetails(returnNo: string) {
  * Fetches a single sales return header by ID (for status card).
  */
 export async function getRawReturnById(returnId: number) {
-  const fields = "return_id,isApplied,updated_at,status,isPosted,isReceived,order_id";
+  const fields = "return_id,isApplied,updated_at,status,isPosted,isReceived,order_id,received_at";
   return directusGet<{ data: Record<string, unknown> }>(
     `/items/sales_return/${returnId}?fields=${fields}`,
   );
