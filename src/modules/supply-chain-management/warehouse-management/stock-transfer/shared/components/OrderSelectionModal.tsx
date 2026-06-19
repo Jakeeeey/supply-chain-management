@@ -179,7 +179,7 @@ export function OrderSelectionModal({
                         </span>
                     </TableCell>
                     <TableCell className="text-right text-[10px] text-muted-foreground font-medium">
-                      {new Date(group.dateRequested).toLocaleDateString()}
+                      {new Date(group.dateRequested).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' })}
                     </TableCell>
                     <TableCell className="text-right">
                         <div className={`w-2 h-2 rounded-full mx-auto transition-all ${selectedOrderNo === group.orderNo ? 'bg-primary scale-125' : 'bg-transparent'}`} />
