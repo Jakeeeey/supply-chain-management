@@ -49,7 +49,7 @@ export const formatDatePrinted = (d: Date) => {
 
 export const parseLocalDate = (dateString: string) => {
     if (!dateString) return new Date(NaN);
-    const datePart = dateString.includes(" ") ? dateString.split(" ")[0] : dateString;
+    const datePart = dateString.split(/[ T]/)[0];
     const [y, m, d] = datePart.split("-").map(Number);
     return new Date(y, (m || 1) - 1, d || 1);
 };
@@ -187,7 +187,7 @@ export const sortRowsFn = (rows: TableRow[], sortConfig: SortConfig | null) => {
         if (cu !== 0) return cu;
         const s = a.salesmanName.localeCompare(b.salesmanName);
         if (s !== 0) return s;
-        return a.orderDate.localeCompare(b.orderDate);
+        return a.createdDate.localeCompare(b.createdDate);
     });
 
     if (!sortConfig) return base;
@@ -237,6 +237,6 @@ export const sortRowsFn = (rows: TableRow[], sortConfig: SortConfig | null) => {
             if (cmp !== 0) return sortConfig.direction === "asc" ? cmp : -cmp;
         }
 
-        return a.orderDate.localeCompare(b.orderDate);
+        return a.createdDate.localeCompare(b.createdDate);
     });
 };
