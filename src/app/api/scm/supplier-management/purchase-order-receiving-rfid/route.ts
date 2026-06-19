@@ -719,7 +719,7 @@ export async function POST(req: NextRequest) {
                 const pors = porIdsByKey.get(k) || [];
                 const receivedQty = pors.reduce((sum, id) => sum + effectiveReceivedQty(porRows.find(r => toNum(r.purchase_order_product_id) === id)!), 0);
 
-                const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1));
+                const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && !toStr(r.receipt_no) && toNum(r.is_reverted) !== 1);
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
 
                 let lineDiscountTypeStr = "No Discount";
@@ -789,7 +789,7 @@ export async function POST(req: NextRequest) {
                 const p = productsMap.get(pid);
                 const pors = porIdsByKey.get(k) || [];
                 const receivedQty = pors.reduce((sum, id) => sum + effectiveReceivedQty(porRows.find(r => toNum(r.purchase_order_product_id) === id)!), 0);
-                const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1));
+                const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && !toStr(r.receipt_no) && toNum(r.is_reverted) !== 1);
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
 
                 let lineDiscountTypeStr = "No Discount";

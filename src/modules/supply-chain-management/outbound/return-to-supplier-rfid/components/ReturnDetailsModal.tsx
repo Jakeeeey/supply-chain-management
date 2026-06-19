@@ -34,6 +34,34 @@ interface ReturnDetailsModalProps {
   onUpdateSuccess?: () => void;
 }
 
+const RFID_HEX_LENGTH = 24;
+
+function extractHexCharacters(value: string): string {
+    return value.toUpperCase().replace(/[^0-9A-F]/g, "");
+}
+
+function finalizeHexTag(rawValue: string): string {
+    const hex = extractHexCharacters(rawValue);
+
+    if (hex.length < RFID_HEX_LENGTH) {
+        return "";
+    }
+
+    if (hex.length === RFID_HEX_LENGTH) {
+        return hex;
+    }
+
+    return hex.slice(-RFID_HEX_LENGTH);
+}
+
+function sameTag(a: string, b: string): boolean {
+    return finalizeHexTag(a) === finalizeHexTag(b);
+}
+
+function isHexKey(key: string): boolean {
+    return /^[0-9A-Fa-f]$/.test(key);
+}
+
 export function ReturnDetailsModal({
   isOpen,
   onClose,
@@ -340,22 +368,23 @@ export function ReturnDetailsModal({
         return;
       }
 
-      if (rfidTag.length > 24) {
-        toast.error("Invalid RFID", { description: "RFID tag must be <= 24 chars." });
+      const cleanedTag = finalizeHexTag(rfidTag);
+      if (!cleanedTag) {
+        toast.error("Invalid RFID Tag", { description: `RFID tag "${rfidTag}" must be a 24-character hexadecimal string.` });
         return;
       }
 
-      if (items.some((i) => i.rfid_tag === rfidTag)) {
-        toast.warning("Duplicate RFID", { description: `RFID "${rfidTag}" is already added.` });
+      if (items.some((i) => i.rfid_tag && sameTag(i.rfid_tag, cleanedTag))) {
+        toast.warning("Duplicate RFID", { description: `RFID "${cleanedTag}" is already added.` });
         return;
       }
 
-      setLastScannedRfid(rfidTag);
+      setLastScannedRfid(cleanedTag);
       setRfidScanning(true);
       try {
-        const result = await lookupRfid(rfidTag, currentBranchId);
+        const result = await lookupRfid(cleanedTag, currentBranchId);
         if (!result || !result.productId) {
-          toast.error("RFID Not Found", { description: `No product found for RFID "${rfidTag}" at this branch.` });
+          toast.error("RFID Not Found", { description: `No product found for RFID "${cleanedTag}" at this branch.` });
           return;
         }
 
@@ -385,7 +414,7 @@ export function ReturnDetailsModal({
           price: invRecord.price,
           uom_id: matchedUnit.unit_id,
           supplierDiscount: 0,
-          rfid_tag: rfidTag,
+          rfid_tag: cleanedTag,
           parentId: invRecord.familyId || null,
           discountTypeId: undefined as number | undefined,
         };
