@@ -58,9 +58,6 @@ function sameTag(a: string, b: string): boolean {
     return finalizeHexTag(a) === finalizeHexTag(b);
 }
 
-function isHexKey(key: string): boolean {
-    return /^[0-9A-Fa-f]$/.test(key);
-}
 
 export function ReturnDetailsModal({
   isOpen,

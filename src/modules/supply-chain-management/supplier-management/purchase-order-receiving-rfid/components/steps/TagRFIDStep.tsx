@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Trash2, AlertTriangle, Plus, X, Pencil } from "lucide-react";
+import { Trash2, AlertTriangle, Plus, X } from "lucide-react";
 import { useReceivingProducts, ReceivingPOItem, ActivityRow } from "../../providers/ReceivingProductsProvider";
 import { useKeyboardScanner } from "../../hooks/useKeyboardScanner";
 import { toast } from "sonner";
@@ -31,7 +31,6 @@ export function TagRFIDStep() {
         editingReceiptId,
         clearEditingReceiptId,
         removeExtraProductLocally,
-        loadReceipt,
         saveRFIDTagging,
     } = useReceivingProducts();
 
