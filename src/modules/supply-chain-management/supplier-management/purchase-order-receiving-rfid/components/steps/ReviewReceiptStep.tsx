@@ -73,7 +73,6 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
     const [isPartialModalOpen, setIsPartialModalOpen] = React.useState(false);
     const [reviewPage, setReviewPage] = React.useState(1);
     const [showErrors, setShowErrors] = React.useState(false);
-    const [searchQuery, setSearchQuery] = React.useState("");
 
     const [receiptNoDupError, setReceiptNoDupError] = React.useState<string | null>(null);
     const [checkingDup, setCheckingDup] = React.useState(false);
@@ -191,16 +190,6 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         });
     }, [selectedPO, verifiedPorIds, safeCounts]);
 
-    const filteredItems = React.useMemo(() => {
-        const query = searchQuery.trim().toLowerCase();
-        if (!query) return allItems;
-        return allItems.filter(
-            (it) =>
-                String(it.name || "").toLowerCase().includes(query) ||
-                String(it.barcode || "").toLowerCase().includes(query)
-        );
-    }, [allItems, searchQuery]);
-
     const branchesLabel = React.useMemo(() => {
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
         const names = allocs
@@ -252,7 +241,6 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         }
 
         if (errs.length > 0) {
-            setShowErrors(true);
             setClientSaveError(errs.join(" "));
             toast.error("Receipt Details Invalid", {
                 description: errs.join(" ")
@@ -356,8 +344,10 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                 </Card>
             ) : (
                 <div className="space-y-4 animate-in fade-in duration-300">
+                    {/* Top: Details side-by-side layout */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Card className="p-4 border-primary/20 shadow-sm">
+                        {/* Receipt Form Details Card */}
+                        <Card className="p-4 border-indigo-500/20 shadow-sm">
                             <div className="flex items-center justify-between mb-3">
                                 <div className="text-sm font-semibold">Receipt Header Details</div>
                                 {editingReceiptId && (
@@ -371,16 +361,16 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                     </Button>
                                 )}
                             </div>
- 
+
                             {editingReceiptId && (
                                 <div className="mb-3 text-xs font-bold text-orange-700 bg-orange-50 border border-orange-200 rounded px-2.5 py-1 uppercase tracking-wider">
                                     Editing reverted receipt: {editingReceiptId}
                                 </div>
                             )}
- 
+
                             <div className="grid gap-3">
                                 <div className="grid gap-1">
-                                    <Label className="text-xs font-bold text-muted-foreground">Receipt Number *</Label>
+                                    <Label className="text-xs font-bold text-slate-600">Receipt Number *</Label>
                                     <Input 
                                         value={receiptNo} 
                                         onChange={(e) => {
@@ -392,8 +382,8 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                         }}
                                         placeholder="Enter Receipt Number..."
                                         className={cn(
-                                            "h-9 text-xs bg-background",
-                                            (receiptNoDupError || (showErrors && !receiptNo.trim())) ? "border-destructive ring-1 ring-destructive focus-visible:ring-destructive" : ""
+                                            "h-9 text-xs",
+                                            receiptNoDupError ? "border-destructive focus-visible:ring-destructive" : ""
                                         )}
                                     />
                                     {receiptNoDupError && (
@@ -406,11 +396,11 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                         <div className="text-[10px] text-muted-foreground mt-0.5">Checking availability...</div>
                                     )}
                                 </div>
- 
+
                                 <div className="grid gap-1">
-                                    <Label className="text-xs font-bold text-muted-foreground">Receipt Type *</Label>
+                                    <Label className="text-xs font-bold text-slate-600">Receipt Type *</Label>
                                     <Select value={receiptType} onValueChange={setReceiptType}>
-                                        <SelectTrigger className={cn("h-9 text-xs bg-background", showErrors && !receiptType.trim() && "border-destructive ring-1 ring-destructive")}>
+                                        <SelectTrigger className="h-9 text-xs">
                                             <SelectValue placeholder="Select type..." />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -422,25 +412,23 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                         </SelectContent>
                                     </Select>
                                 </div>
- 
+
                                 <div className="grid gap-1">
-                                    <Label className="text-xs font-bold text-muted-foreground">Receipt Date *</Label>
+                                    <Label className="text-xs font-bold text-slate-600">Receipt Date *</Label>
                                     <Input
                                         type="date"
                                         value={receiptDate}
                                         max="3000-12-31"
                                         min="2000-01-01"
                                         onChange={(e) => setReceiptDate(e.target.value)}
-                                        className={cn(
-                                            "h-9 text-xs bg-background",
-                                            showErrors && !receiptDate.trim() && "border-destructive ring-1 ring-destructive"
-                                        )}
+                                        className="h-9 text-xs"
                                     />
                                 </div>
                             </div>
                         </Card>
- 
-                        <Card className="p-4 bg-muted/30 shadow-sm border">
+
+                        {/* PO Summary Card */}
+                        <Card className="p-4 bg-slate-50/50 shadow-sm border border-slate-200">
                             <div className="flex items-start justify-between gap-3 border-b pb-2 mb-3">
                                 <div>
                                     <div className="text-sm font-semibold">Selected PO Details</div>
@@ -456,22 +444,22 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                             <div className="space-y-2.5 text-xs">
                                 <div className="flex justify-between items-center">
                                     <span className="text-muted-foreground">PO Number:</span>
-                                    <span className="font-bold text-foreground">{selectedPO?.poNumber ?? "—"}</span>
+                                    <span className="font-bold text-slate-800">{selectedPO?.poNumber ?? "—"}</span>
                                 </div>
 
                                 <div className="flex justify-between items-center">
                                     <span className="text-muted-foreground">Supplier:</span>
-                                    <span className="font-bold text-foreground">{selectedPO?.supplier?.name ?? "—"}</span>
+                                    <span className="font-bold text-slate-800">{selectedPO?.supplier?.name ?? "—"}</span>
                                 </div>
 
                                 <div className="flex justify-between items-center">
                                     <span className="text-muted-foreground">Delivery Branches:</span>
-                                    <span className="font-bold text-foreground truncate max-w-[220px]" title={branchesLabel}>{branchesLabel}</span>
+                                    <span className="font-bold text-slate-800 truncate max-w-[220px]" title={branchesLabel}>{branchesLabel}</span>
                                 </div>
 
                                 <div className="flex justify-between items-center">
                                     <span className="text-muted-foreground">Receiving Progress:</span>
-                                    <span className="font-bold text-foreground">
+                                    <span className="font-bold text-slate-800">
                                         {progress.totalReceived} / {progress.totalTagged} units
                                     </span>
                                 </div>
@@ -480,43 +468,35 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                     </div>
 
                     {/* Metadata items table card */}
-                    <Card className="p-4 shadow-sm border">
-                        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+                    <Card className="p-4 shadow-sm border border-slate-200">
+                        <div className="mb-4 flex justify-between items-center">
                             <div>
                                 <div className="text-sm font-semibold">Item Level Metadata Finalization</div>
                                 <div className="text-xs text-muted-foreground">Specify the Batch No, Lot selection and Expiry Date for each scanned product.</div>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <Input
-                                    placeholder="Search product name or SKU..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="h-8 text-xs bg-background max-w-[240px]"
-                                />
-                                <Button variant="ghost" size="sm" className="font-black uppercase tracking-wider text-xs" onClick={onBack}>← Back to Tagging</Button>
-                            </div>
+                            <Button variant="ghost" size="sm" className="font-black uppercase tracking-wider text-xs" onClick={onBack}>← Back to Tagging</Button>
                         </div>
 
                         <div className="border rounded-md overflow-hidden">
                             <Table>
                                 <TableHeader className="bg-muted/50">
                                     <TableRow>
-                                        <TableHead className="text-[10px] uppercase font-bold text-muted-foreground">Product Name</TableHead>
-                                        <TableHead className="text-[10px] uppercase font-bold text-muted-foreground w-36">Batch</TableHead>
-                                        <TableHead className="text-[10px] uppercase font-bold text-muted-foreground w-44">Lot</TableHead>
-                                        <TableHead className="text-[10px] uppercase font-bold text-muted-foreground w-44">Expiry</TableHead>
-                                        <TableHead className="text-[10px] uppercase font-bold text-muted-foreground text-right">Unit Price</TableHead>
-                                        <TableHead className="text-[10px] uppercase font-bold text-muted-foreground text-center w-24">Disc. Type</TableHead>
-                                        <TableHead className="text-[10px] uppercase font-bold text-muted-foreground text-right">Disc. Amt</TableHead>
-                                        <TableHead className="text-[10px] uppercase font-bold text-muted-foreground text-right">Net Amt</TableHead>
-                                        <TableHead className="text-[10px] uppercase font-bold text-muted-foreground text-center w-20">Expected</TableHead>
-                                        <TableHead className="text-[10px] uppercase font-bold text-muted-foreground text-center w-20">Tagged</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700">Product Name</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 w-36">Batch</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 w-44">Lot</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 w-44">Expiry</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 text-right">Unit Price</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 text-center w-24">Disc. Type</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 text-right">Disc. Amt</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 text-right">Net Amt</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 text-center w-20">Expected</TableHead>
+                                        <TableHead className="text-[10px] uppercase font-bold text-slate-700 text-center w-20">Tagged</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {(() => {
                                         const PAGE_SIZE = 10;
-                                        const paginatedItems = filteredItems.slice((reviewPage - 1) * PAGE_SIZE, reviewPage * PAGE_SIZE);
+                                        const paginatedItems = allItems.slice((reviewPage - 1) * PAGE_SIZE, reviewPage * PAGE_SIZE);
                                         return paginatedItems.map((it: ReceivingPOItem) => {
                                             const porId = String(it.porId || it.id);
                                             const scanned = safeCounts[porId] ?? 0;
@@ -536,7 +516,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                                         <Input 
                                                             className={cn(
                                                                 "h-8 text-[11px] font-bold",
-                                                                showErrors && scanned > 0 && !(batchNos[porId] || "").trim() && "border-destructive ring-1 ring-destructive"
+                                                                showErrors && scanned > 0 && !(batchNos[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
                                                             )}
                                                             placeholder="Batch #" 
                                                             value={batchNos[porId] || ""} 
@@ -547,7 +527,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                                         <select 
                                                             className={cn(
                                                                 "h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]",
-                                                                showErrors && scanned > 0 && !(lotIds[porId] || "").trim() && "border-destructive ring-1 ring-destructive"
+                                                                showErrors && scanned > 0 && !(lotIds[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
                                                             )}
                                                             value={lotIds[porId] || ""} 
                                                             onChange={(e) => setLotIds(prev => ({ ...prev, [porId]: e.target.value }))}
@@ -561,7 +541,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                                             type="date" 
                                                             className={cn(
                                                                 "h-8 text-[11px]",
-                                                                showErrors && scanned > 0 && !(expiryDates[porId] || "").trim() && "border-destructive ring-1 ring-destructive"
+                                                                showErrors && scanned > 0 && !(expiryDates[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
                                                             )}
                                                             value={expiryDates[porId] || ""} 
                                                             onChange={(e) => setExpiryDates(prev => ({ ...prev, [porId]: e.target.value }))} 
@@ -569,11 +549,11 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                                     </TableCell>
                                                     <TableCell className="text-right text-xs">{formatPHP(unitP)}</TableCell>
                                                     <TableCell className="text-center text-[10px] text-muted-foreground">{it.discountType}</TableCell>
-                                                    <TableCell className="text-right text-xs text-destructive font-medium">{(discA || 0) > 0 ? `${formatPHP(discA * scanned)}` : "—"}</TableCell>
+                                                    <TableCell className="text-right text-xs text-red-600 font-medium">{(discA || 0) > 0 ? `${formatPHP(discA * scanned)}` : "—"}</TableCell>
                                                     <TableCell className="text-right font-bold text-xs">{formatPHP(lineTotal)}</TableCell>
                                                     <TableCell className="text-center font-bold text-xs">{expected}</TableCell>
                                                     <TableCell className="text-center">
-                                                        <Badge variant="default" className="h-5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold">{scanned}</Badge>
+                                                        <Badge variant="default" className="h-5 bg-indigo-600 hover:bg-indigo-700 font-bold">{scanned}</Badge>
                                                     </TableCell>
                                                 </TableRow>
                                             )
@@ -583,7 +563,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                 <TableFooter className="bg-muted/10 border-t">
                                     <TableRow>
                                         <TableCell colSpan={7} className="text-right text-[10px] font-bold uppercase">Subtotal</TableCell>
-                                        <TableCell className="text-right font-black text-foreground">{formatPHP(financials.gross)}</TableCell>
+                                        <TableCell className="text-right font-black text-slate-800">{formatPHP(financials.gross)}</TableCell>
                                         <TableCell className="text-center font-bold">{totalExpected}</TableCell>
                                         <TableCell className="text-center font-black">{totalScanned}</TableCell>
                                     </TableRow>
@@ -592,19 +572,19 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                         </div>
 
                         {/* Pagination Controls */}
-                        {filteredItems.length > 10 && (
+                        {allItems.length > 10 && (
                             <div className="flex items-center justify-between px-4 py-3 border rounded-md bg-muted/10 mt-2">
                                 <span className="text-xs text-muted-foreground font-medium font-mono">
-                                    Showing {(reviewPage - 1) * 10 + 1}–{Math.min(reviewPage * 10, filteredItems.length)} of {filteredItems.length} items
+                                    Showing {(reviewPage - 1) * 10 + 1}–{Math.min(reviewPage * 10, allItems.length)} of {allItems.length} items
                                 </span>
                                 <div className="flex items-center gap-2">
                                     <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setReviewPage(p => Math.max(1, p - 1))} disabled={reviewPage === 1}>
                                         <ChevronLeft className="h-4 w-4" />
                                     </Button>
                                     <span className="text-xs font-bold px-2">
-                                        Page {reviewPage} of {Math.ceil(filteredItems.length / 10)}
+                                        Page {reviewPage} of {Math.ceil(allItems.length / 10)}
                                     </span>
-                                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setReviewPage(p => Math.min(Math.ceil(filteredItems.length / 10), p + 1))} disabled={reviewPage === Math.ceil(filteredItems.length / 10)}>
+                                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setReviewPage(p => Math.min(Math.ceil(allItems.length / 10), p + 1))} disabled={reviewPage === Math.ceil(allItems.length / 10)}>
                                         <ChevronRight className="h-4 w-4" />
                                     </Button>
                                 </div>
@@ -613,33 +593,33 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
 
                         <div className="mt-4 flex flex-col md:flex-row justify-end gap-6 border-t pt-4">
                             <div className="flex-1 max-w-sm ml-auto space-y-2 text-xs">
-                                <div className="flex justify-between items-center text-muted-foreground">
-                                    <span className="font-bold uppercase tracking-wider text-[10px]">Gross Amount:</span>
-                                    <span className="font-bold text-foreground">{formatPHP(financials.gross)}</span>
+                                <div className="flex justify-between items-center text-slate-600">
+                                    <span className="font-bold uppercase tracking-wider text-[10px] text-slate-500">Gross Amount:</span>
+                                    <span className="font-bold text-slate-700">{formatPHP(financials.gross)}</span>
                                 </div>
-                                <div className="flex justify-between items-center text-destructive">
+                                <div className="flex justify-between items-center text-red-600">
                                     <span className="font-bold uppercase tracking-wider text-[10px]">Discount:</span>
                                     <span className="font-bold">{formatPHP(financials.discount)}</span>
                                 </div>
-                                <div className="flex justify-between items-center text-muted-foreground pb-2 border-b">
+                                <div className="flex justify-between items-center text-slate-600 pb-2 border-b">
                                     <span className="font-bold uppercase tracking-wider text-[10px]">Net Amount:</span>
-                                    <span className="font-bold text-foreground">{formatPHP(financials.net)}</span>
+                                    <span className="font-bold text-slate-700">{formatPHP(financials.net)}</span>
                                 </div>
                                 {selectedPO?.isInvoice && (
                                     <>
-                                        <div className="flex justify-between items-center text-muted-foreground">
+                                        <div className="flex justify-between items-center text-slate-600">
                                             <span className="font-bold uppercase tracking-wider text-[10px]">VAT Details:</span>
-                                            <span className="font-bold text-foreground">{financials.isExclusive ? "+" : ""}{formatPHP(financials.vatAmount)}</span>
+                                            <span className="font-bold text-slate-700">{financials.isExclusive ? "+" : ""}{formatPHP(financials.vatAmount)}</span>
                                         </div>
-                                        <div className="flex justify-between items-center text-destructive pb-2 border-b">
+                                        <div className="flex justify-between items-center text-red-600 pb-2 border-b">
                                             <span className="font-bold uppercase tracking-wider text-[10px]">EWT:</span>
                                             <span className="font-bold">{formatPHP(financials.whtAmount)}</span>
                                         </div>
                                     </>
                                 )}
                                 <div className="flex justify-between items-center pt-4">
-                                    <span className="font-black text-sm uppercase tracking-widest text-foreground underline decoration-primary underline-offset-4">Grand Total:</span>
-                                    <span className="font-black text-xl text-primary drop-shadow-sm">{formatPHP(financials.grandTotal)}</span>
+                                    <span className="font-black text-sm uppercase tracking-widest text-slate-900 underline decoration-indigo-500 underline-offset-4">Grand Total:</span>
+                                    <span className="font-black text-xl text-indigo-600 drop-shadow-sm">{formatPHP(financials.grandTotal)}</span>
                                 </div>
                                 {selectedPO?.isInvoice && (
                                     <p className="text-[10px] text-muted-foreground mt-2 italic leading-tight text-right">
@@ -650,14 +630,14 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                         </div>
 
                         {(clientSaveError || saveError) && (
-                            <div className="mt-4 p-3 bg-destructive/15 text-destructive text-xs font-bold text-center border border-destructive/20 rounded-md">
+                            <div className="mt-4 p-3 bg-red-50 text-red-600 text-xs font-bold text-center border border-red-200 rounded-md">
                                 {clientSaveError || saveError}
                             </div>
                         )}
 
                         <div className="mt-4 flex justify-end gap-3 border-t pt-4">
                             <Button 
-                                className="bg-primary text-primary-foreground hover:bg-primary/90 font-black uppercase text-xs tracking-wider h-11 px-8 shadow-md"
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-xs tracking-wider h-11 px-8 shadow-md"
                                 onClick={handleSaveReceipt}
                                 disabled={savingReceipt}
                             >

@@ -50,6 +50,7 @@ export function ReceiptPreviewModal({
     if (!data) return null;
 
     const handleDownload = async () => {
+        if (!companyData) return;
         await generateReceivingPdf({
             poNumber,
             supplierName,
@@ -73,7 +74,7 @@ export function ReceiptPreviewModal({
                 expiryDate: it.expiryDate,
                 uom: it.uom,
             })),
-        }, companyData || {} as CompanyData);
+        }, companyData);
     };
 
     return (

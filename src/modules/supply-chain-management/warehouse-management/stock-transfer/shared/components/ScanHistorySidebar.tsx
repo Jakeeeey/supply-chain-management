@@ -206,7 +206,7 @@ export function ScanHistorySidebar({ scans, isScanning, selectedGroup, buffer, i
                     <div className="mt-2 flex items-center justify-between border-t border-border/50 pt-2 opacity-50 text-[9px] uppercase font-bold tracking-tighter">
                       <div className="flex items-center gap-1">
                         <Clock className="w-2.5 h-2.5" />
-                        {new Date(scan.timestamp).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Manila' })}
+                        {new Date(scan.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </div>
                       {!isError && isNewest && <span className="text-emerald-600 animate-pulse">Just Scanned</span>}
                       {isError && <span className="text-destructive">Action Failed</span>}

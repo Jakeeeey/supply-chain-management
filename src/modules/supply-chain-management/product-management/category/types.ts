@@ -7,8 +7,7 @@ export interface CategoryApiRow {
   image?: string;
   created_by?: string;
   updated_by?: string;
-  created_at?: string;
-  updated_at?: string;
+  date_created?: string;
 }
 
 export const categorySchema = z.object({

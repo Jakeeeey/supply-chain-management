@@ -103,8 +103,7 @@ export async function GET(req: NextRequest) {
 
       case "products": {
         const customerCode = url.searchParams.get("customerCode") || undefined;
-        const includeInactive = url.searchParams.get("includeInactive") === "true";
-        const data = await fetchProductCatalog(customerCode, includeInactive);
+        const data = await fetchProductCatalog(customerCode);
         return json({ data });
       }
 

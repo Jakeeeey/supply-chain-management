@@ -69,44 +69,49 @@ export function useStockTransferDispatchManual() {
         const sourceBranch = selectedGroup.sourceBranch!;
         const sourceBranchName = base.getBranchName(sourceBranch);
 
-        // Fetch all uncached product inventories in a single request
+        // Fetch all uncached product inventories in parallel
         const itemsToFetch = selectedGroup.items.filter((item: OrderGroupItem) => {
           const product = item.product_id as ProductRow;
           const pid = product?.product_id || item.product_id;
           return pid && scannedInventory[pid as number] === undefined;
         });
 
-        if (itemsToFetch.length > 0) {
+        const results = await Promise.allSettled(itemsToFetch.map(async (item: OrderGroupItem) => {
+          const product = item.product_id as ProductRow;
+          const pid = product?.product_id || item.product_id;
+
           const params = new URLSearchParams({
             branchName: sourceBranchName,
             branchId: String(sourceBranch),
+            productId: String(pid),
             current: '0'
           });
 
           const proxyUrl = `/api/scm/warehouse-management/stock-transfer/inventory-proxy?${params.toString()}`;
           const res = await fetch(proxyUrl);
-          
           if (res.ok) {
             const data = await res.json();
             const list = Array.isArray(data) ? data : (data.data || []);
+            // Handle both camelCase (productId) and snake_case (product_id) from Spring API
+            const inventoryList = list.filter((inv: Record<string, string | number>) => 
+               String(inv.productId ?? inv.product_id) === String(pid) && 
+               String(inv.branchId ?? inv.branch_id) === String(sourceBranch)
+            );
             
-            itemsToFetch.forEach((item: OrderGroupItem) => {
-              const product = item.product_id as ProductRow;
-              const pid = product?.product_id || item.product_id;
-              
-              const inventoryList = list.filter((inv: Record<string, string | number>) => 
-                 String(inv.productId ?? inv.product_id) === String(pid) && 
-                 String(inv.branchId ?? inv.branch_id) === String(sourceBranch)
-              );
-              
-              const availableCount = inventoryList.reduce((acc: number, inv: Record<string, string | number>) => acc + Number(inv.runningInventory ?? inv.running_inventory ?? 0), 0);
-              const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
-              newAvailable[pid as number] = Math.max(0, Math.floor(availableCount / unitCount));
-            });
-            
-            setScannedInventory(newAvailable);
+            const availableCount = inventoryList.reduce((acc: number, inv: Record<string, string | number>) => acc + Number(inv.runningInventory ?? inv.running_inventory ?? 0), 0);
+            const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
+            return { pid: pid as number, available: Math.max(0, Math.floor(availableCount / unitCount)) };
+          }
+          return { pid: pid as number, available: 0 };
+        }));
+
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            newAvailable[result.value.pid] = result.value.available;
           }
         }
+        
+        if (results.some((r) => r.status === 'fulfilled')) setScannedInventory(newAvailable);
       } catch (err) {
         console.error('Failed to fetch initial available quantities:', err);
       } finally {
@@ -149,7 +154,7 @@ export function useStockTransferDispatchManual() {
           items: group.items.map((i: OrderGroupItem) => ({ 
             id: i.id, 
             status: 'Picked',
-            allocated_quantity: scannedQtys[i.id] ?? i.allocated_quantity ?? 0 
+            scanned_quantity: scannedQtys[i.id] ?? 0 
           })),
           status: 'Picked'
         });

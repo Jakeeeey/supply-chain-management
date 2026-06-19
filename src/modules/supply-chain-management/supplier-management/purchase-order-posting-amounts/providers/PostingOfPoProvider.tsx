@@ -39,7 +39,6 @@ type Ctx = {
     postError: string;
     postReceipt: (poId: string, receiptNo: string) => Promise<void>;
     postAllReceipts: (poId: string) => Promise<void>;
-    forcePost: (poId: string) => Promise<void>;
     poLoading: boolean;
 
     // success banner (no global toast dependency)
@@ -222,42 +221,6 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
         [openPO, refreshList, clearSuccess]
     );
 
-    const forcePost = React.useCallback(
-        async (poId: string) => {
-            setPosting(true);
-            setPostError("");
-            clearSuccess();
-
-            try {
-                const r = await fetch(API, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: "force_post", poId }),
-                });
-                await asJson(r);
-
-                toast.success("PO force posted successfully!", {
-                    description: "Purchase order has been forced to fully received and posted.",
-                });
-
-                setSuccessMsg("Purchase order force posted successfully.");
-
-                await refreshList();
-                await openPO(poId);
-            } catch (e: unknown) {
-                const err = e as Error;
-                const msg = String(err?.message ?? err);
-
-                toast.error("Failed to force post", { description: msg });
-                setPostError(msg);
-            } finally {
-                setPosting(false);
-            }
-        },
-        [openPO, refreshList, clearSuccess]
-    );
-
-
 
     const value: Ctx = {
         list,
@@ -279,7 +242,6 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
         postError,
         postReceipt,
         postAllReceipts,
-        forcePost,
         poLoading,
 
         successMsg,

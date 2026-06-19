@@ -21,7 +21,6 @@ interface StockTransferReceivingPreviewProps {
   items: OrderGroupItem[];
   sourceBranch?: string;
   targetBranch?: string;
-  salesmanName?: string;
 }
 
 export function StockTransferReceivingPreview({
@@ -32,7 +31,6 @@ export function StockTransferReceivingPreview({
   items,
   sourceBranch,
   targetBranch,
-  salesmanName,
 }: StockTransferReceivingPreviewProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [generating, setGenerating] = useState(open);
@@ -66,12 +64,11 @@ export function StockTransferReceivingPreview({
       const doc = generateStockTransferReceivingPDF({
         orderNo,
         checkedBy,
-        date: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
+        date: new Date().toLocaleString('en-PH'),
         items,
         companyData: companyData || null,
         sourceBranch,
         targetBranch,
-        salesmanName,
       });
 
       const blob = doc.output('blob');
@@ -81,7 +78,7 @@ export function StockTransferReceivingPreview({
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [open, orderNo, checkedBy, items, companyData, sourceBranch, targetBranch, salesmanName]);
+  }, [open, orderNo, checkedBy, items, companyData, sourceBranch, targetBranch]);
 
   const handleClose = useCallback(() => {
     if (pdfUrl) {
@@ -95,34 +92,32 @@ export function StockTransferReceivingPreview({
     const doc = generateStockTransferReceivingPDF({
       orderNo,
       checkedBy,
-      date: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
+      date: new Date().toLocaleString('en-PH'),
       items,
       companyData,
       sourceBranch,
       targetBranch,
-      salesmanName,
     });
     doc.autoPrint();
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  }, [orderNo, checkedBy, items, companyData, sourceBranch, targetBranch, salesmanName]);
+  }, [orderNo, checkedBy, items, companyData, sourceBranch, targetBranch]);
 
   const handleSave = useCallback(() => {
     const doc = generateStockTransferReceivingPDF({
       orderNo,
       checkedBy,
-      date: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
+      date: new Date().toLocaleString('en-PH'),
       items,
       companyData,
       sourceBranch,
       targetBranch,
-      salesmanName,
     });
     const filename = `RECEIVING-${orderNo || 'UNSAVED'}.pdf`;
     doc.save(filename);
-  }, [orderNo, checkedBy, items, companyData, sourceBranch, targetBranch, salesmanName]);
+  }, [orderNo, checkedBy, items, companyData, sourceBranch, targetBranch]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>

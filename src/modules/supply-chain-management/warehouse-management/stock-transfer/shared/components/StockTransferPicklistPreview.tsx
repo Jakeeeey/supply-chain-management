@@ -19,10 +19,6 @@ interface StockTransferPicklistPreviewProps {
   orderNo: string;
   pickerName: string;
   items: OrderGroupItem[];
-  salesmanName?: string;
-  sourceBranch?: string;
-  targetBranch?: string;
-  requestedDate?: string;
 }
 
 export function StockTransferPicklistPreview({
@@ -31,10 +27,6 @@ export function StockTransferPicklistPreview({
   orderNo,
   pickerName,
   items,
-  salesmanName,
-  sourceBranch,
-  targetBranch,
-  requestedDate,
 }: StockTransferPicklistPreviewProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [generating, setGenerating] = useState(open);
@@ -68,13 +60,9 @@ export function StockTransferPicklistPreview({
       const doc = generateStockTransferPicklistPDF({
         orderNo,
         pickerName,
-        date: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
-        requestedDate,
+        date: new Date().toLocaleString('en-PH'),
         items,
         companyData,
-        salesmanName,
-        sourceBranch,
-        targetBranch,
       });
 
       const blob = doc.output('blob');
@@ -84,7 +72,7 @@ export function StockTransferPicklistPreview({
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [open, orderNo, pickerName, items, companyData, salesmanName, sourceBranch, targetBranch, requestedDate]);
+  }, [open, orderNo, pickerName, items, companyData]);
 
   const handleClose = useCallback(() => {
     if (pdfUrl) {
@@ -98,36 +86,28 @@ export function StockTransferPicklistPreview({
     const doc = generateStockTransferPicklistPDF({
       orderNo,
       pickerName,
-      date: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
-      requestedDate,
+      date: new Date().toLocaleString('en-PH'),
       items,
       companyData,
-      salesmanName,
-      sourceBranch,
-      targetBranch,
     });
     doc.autoPrint();
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  }, [orderNo, pickerName, items, companyData, salesmanName, sourceBranch, targetBranch, requestedDate]);
+  }, [orderNo, pickerName, items, companyData]);
 
   const handleSave = useCallback(() => {
     const doc = generateStockTransferPicklistPDF({
       orderNo,
       pickerName,
-      date: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
-      requestedDate,
+      date: new Date().toLocaleString('en-PH'),
       items,
       companyData,
-      salesmanName,
-      sourceBranch,
-      targetBranch,
     });
     const filename = `PICKLIST-${orderNo || 'UNSAVED'}.pdf`;
     doc.save(filename);
-  }, [orderNo, pickerName, items, companyData, salesmanName, sourceBranch, targetBranch, requestedDate]);
+  }, [orderNo, pickerName, items, companyData]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>

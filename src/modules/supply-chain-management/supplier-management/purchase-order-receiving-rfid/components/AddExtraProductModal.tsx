@@ -123,21 +123,9 @@ export function AddExtraProductModal({ isOpen, onClose }: AddExtraProductModalPr
 
     const isAlreadyAdded = (productId: string) => {
         if (!selectedPO?.allocations) return false;
-        let exists = false;
-        let allFullyTagged = true;
-        selectedPO.allocations.forEach(a => {
-            a.items.forEach((i: ReceivingPOItem) => {
-                if (i.productId === productId) {
-                    exists = true;
-                    const expected = Number(i.expectedQty || 0);
-                    const tagged = Number(i.taggedQty || 0);
-                    if (expected > 0 && tagged < expected) {
-                        allFullyTagged = false;
-                    }
-                }
-            });
-        });
-        return exists && !allFullyTagged;
+        return selectedPO.allocations.some(a => 
+            a.items.some((i: ReceivingPOItem) => i.productId === productId)
+        );
     };
 
     return (

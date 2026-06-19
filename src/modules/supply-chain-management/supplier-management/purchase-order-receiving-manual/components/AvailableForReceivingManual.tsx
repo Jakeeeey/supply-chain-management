@@ -71,7 +71,7 @@ export function AvailableForReceivingManual() {
     }, [filtered, startIndex, endIndex]);
 
     return (
-        <Card className="p-4 lg:sticky lg:top-4 lg:self-start">
+        <Card className="p-4 sticky top-4 self-start">
             <div className="flex items-start justify-between gap-3">
                 <div>
                     <div className="text-base font-semibold">Available for Receiving</div>

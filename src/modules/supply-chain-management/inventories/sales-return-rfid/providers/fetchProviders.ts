@@ -153,8 +153,8 @@ export const SalesReturnProvider = {
     return catalog.products;
   },
 
-  async getFullCatalog(customerCode?: string, includeInactive = false): Promise<ProductCatalog> {
-    return this._getProductCatalog(customerCode, includeInactive);
+  async getFullCatalog(customerCode?: string): Promise<ProductCatalog> {
+    return this._getProductCatalog(customerCode);
   },
 
   // --- 5. CRUD OPERATIONS ---
@@ -174,7 +174,7 @@ export const SalesReturnProvider = {
     remarks: string;
     invoiceNo?: string;
     orderNo?: string;
-    appliedInvoiceId?: number | null;
+    appliedInvoiceId?: number;
     isThirdParty?: boolean;
   }): Promise<any> {
     const res = await fetch(API_BASE, {
@@ -182,11 +182,7 @@ export const SalesReturnProvider = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const json = await res.json();
-    if (!res.ok) {
-      return { success: false, error: json.error || json.message || `HTTP ${res.status}` };
-    }
-    return { success: true, data: json.data };
+    return handleResponse(res);
   },
 
   async updateStatus(
@@ -257,9 +253,9 @@ export const SalesReturnProvider = {
   _productCatalogCache: {} as Record<string, ProductCatalog>,
   _productCatalogCacheTime: {} as Record<string, number>,
 
-  async _getProductCatalog(customerCode?: string, includeInactive = false): Promise<ProductCatalog> {
+  async _getProductCatalog(customerCode?: string): Promise<ProductCatalog> {
     const now = Date.now();
-    const cacheKey = `${customerCode || "default"}_${includeInactive}`;
+    const cacheKey = customerCode || "default";
 
     // Cache product catalog for 30 seconds
     if (
@@ -271,7 +267,6 @@ export const SalesReturnProvider = {
 
     const params = new URLSearchParams({ action: "products" });
     if (customerCode) params.set("customerCode", customerCode);
-    if (includeInactive) params.set("includeInactive", "true");
 
     const res = await fetch(`${API_BASE}?${params}`, {
       cache: "no-store",
@@ -296,8 +291,6 @@ export const SalesReturnProvider = {
   ): Promise<{
     isOnInventory: boolean;
     productId?: number;
-    currentBranchId?: number;
-    currentBranchName?: string;
   } | null> {
     const params = new URLSearchParams({
       action: "rfid-lookup",
@@ -309,8 +302,6 @@ export const SalesReturnProvider = {
     return handleResponse<{
       isOnInventory: boolean;
       productId?: number;
-      currentBranchId?: number;
-      currentBranchName?: string;
     } | null>(res);
   },
 

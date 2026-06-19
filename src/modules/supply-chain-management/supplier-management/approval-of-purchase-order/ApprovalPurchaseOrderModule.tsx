@@ -91,40 +91,25 @@ export default function ApprovalPurchaseOrderModule({ approverId, approverName }
                 approverId: approverId,
             });
 
-            try {
-                await promise;
-                toast.success(`PO ${selectedId} approved successfully!`);
-                refreshList();
-                setSelectedId(null);
-                setDetail(null);
-            } catch (err: unknown) {
-                const msg = err instanceof Error ? err.message : String(err);
-                setError(msg);
-                toast.error(`Approval failed: ${msg}`);
-            }
-        },
-        [selectedId, refreshList, approverId]
-    );
-
-    const onReject = React.useCallback(
-        async () => {
-            if (!selectedId) return;
-
-            const promise = provider.rejectPurchaseOrder({
-                id: selectedId,
-                approverId: approverId,
+            toast.promise(promise, {
+                loading: `Approving PO ${selectedId}...`,
+                success: () => {
+                    refreshList();
+                    setSelectedId(null);
+                    setDetail(null);
+                    return `PO ${selectedId} approved successfully!`;
+                },
+                error: (err: unknown) => {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    setError(msg);
+                    return `Approval failed: ${msg}`;
+                },
             });
 
             try {
                 await promise;
-                toast.success(`PO ${selectedId} rejected successfully!`);
-                refreshList();
-                setSelectedId(null);
-                setDetail(null);
-            } catch (err: unknown) {
-                const msg = err instanceof Error ? err.message : String(err);
-                setError(msg);
-                toast.error(`Rejection failed: ${msg}`);
+            } catch {
+                // error handled by toast
             }
         },
         [selectedId, refreshList, approverId]
@@ -159,7 +144,6 @@ export default function ApprovalPurchaseOrderModule({ approverId, approverName }
                     disabled={loadingList}
                     paymentTerms={paymentTerms}
                     onApprove={onApprove}
-                    onReject={onReject}
                     approverName={approverName}
                 />
             </div>

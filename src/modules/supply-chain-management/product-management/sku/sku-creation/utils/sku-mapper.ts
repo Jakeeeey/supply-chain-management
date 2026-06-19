@@ -40,6 +40,10 @@ export const prepareSKUPayload = (
     id,
     product_id,
     units,
+    created_at,
+    updated_at,
+    user_created,
+    user_updated,
     date_created,
     date_updated,
     status,
@@ -48,27 +52,17 @@ export const prepareSKUPayload = (
   /* eslint-enable @typescript-eslint/no-unused-vars */
 
   const payload = restPayload as Record<string, unknown>;
-  const nowGMT = new Date().toISOString();
-
   return {
     ...payload,
     product_code: code || draft.product_code,
     isActive: 1,
     status: "ACTIVE",
     parent_id: draft.parent_id ? pMasterId : null,
-    date_added: draft.date_added || nowGMT,
-    last_updated: nowGMT,
-    created_at: draft.created_at || nowGMT,
-    updated_at: nowGMT,
-    created_by: draft.created_by || null,
-    updated_by: draft.updated_by || null,
-    user_created: draft.user_created || draft.created_by || null,
-    user_updated: draft.user_updated || draft.updated_by || null,
     product_brand: (draft.product_brand as Record<string, unknown>)?.id ?? draft.product_brand,
     product_category: (draft.product_category as Record<string, unknown>)?.id ?? draft.product_category,
-    product_class: (draft.product_class as Record<string, unknown>)?.id ?? draft.product_class,
-    product_segment: (draft.product_segment as Record<string, unknown>)?.id ?? draft.product_segment,
-    product_section: (draft.product_section as Record<string, unknown>)?.id ?? draft.product_section,
+    product_class: null,
+    product_segment: null,
+    product_section: null,
     product_supplier: (draft.product_supplier as Record<string, unknown>)?.id ?? draft.product_supplier,
     unit_of_measurement:
       (draft.unit_of_measurement as Record<string, unknown>)?.id ?? draft.unit_of_measurement,

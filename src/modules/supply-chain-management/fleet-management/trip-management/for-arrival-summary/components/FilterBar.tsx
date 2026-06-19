@@ -2,7 +2,14 @@
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Combobox } from "./Combobox";
+import {
+  Combobox,
+  ComboboxInput,
+  ComboboxContent,
+  ComboboxList,
+  ComboboxItem,
+  ComboboxEmpty,
+} from "@/components/ui/combobox";
 import { RefreshCcw, Search } from "lucide-react";
 
 interface FilterBarProps {
@@ -57,45 +64,83 @@ export function FilterBar({
       {/* Driver Filter */}
       <Combobox
         value={driverFilter}
-        onValueChange={onDriverFilterChange}
-        placeholder="All Drivers"
-        emptyMessage="No drivers found"
-        options={[
-          { value: "All Drivers", label: "All Drivers" },
-          ...uniqueDrivers.map((name) => ({ value: name, label: name }))
-        ]}
-        className="h-9 w-full sm:w-[180px]"
-      />
+        onValueChange={(val) => onDriverFilterChange(val as string)}
+      >
+        <ComboboxInput
+          id="for-arrival-driver-filter"
+          placeholder="All Drivers"
+          className="h-9 w-full sm:w-[180px]"
+        />
+        <ComboboxContent>
+          <ComboboxList>
+            <ComboboxItem value="All Drivers">All Drivers</ComboboxItem>
+            {uniqueDrivers.map((name) => (
+              <ComboboxItem key={name} value={name}>
+                {name}
+              </ComboboxItem>
+            ))}
+            {uniqueDrivers.length === 0 && (
+              <ComboboxEmpty>No drivers found</ComboboxEmpty>
+            )}
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
 
       {/* Vehicle Filter */}
       <Combobox
         value={vehicleFilter}
-        onValueChange={onVehicleFilterChange}
-        placeholder="All Vehicles"
-        emptyMessage="No vehicles found"
-        options={[
-          { value: "All Vehicles", label: "All Vehicles" },
-          ...uniqueVehicles.map((plate) => ({ value: plate, label: plate }))
-        ]}
-        className="h-9 w-full sm:w-[160px]"
-      />
+        onValueChange={(val) => onVehicleFilterChange(val as string)}
+      >
+        <ComboboxInput
+          id="for-arrival-vehicle-filter"
+          placeholder="All Vehicles"
+          className="h-9 w-full sm:w-[160px]"
+        />
+        <ComboboxContent>
+          <ComboboxList>
+            <ComboboxItem value="All Vehicles">All Vehicles</ComboboxItem>
+            {uniqueVehicles.map((plate) => (
+              <ComboboxItem key={plate} value={plate}>
+                {plate}
+              </ComboboxItem>
+            ))}
+            {uniqueVehicles.length === 0 && (
+              <ComboboxEmpty>No vehicles found</ComboboxEmpty>
+            )}
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
 
       {/* Customer Filter */}
       <Combobox
         value={customerFilter}
-        onValueChange={onCustomerFilterChange}
-        placeholder="All Customers"
-        emptyMessage="No customers found"
-        options={[
-          { value: "All Customers", label: "All Customers" },
-          ...uniqueCustomers.map((name) => ({ value: name, label: name }))
-        ]}
-        className="h-9 w-full sm:w-[200px]"
-      />
+        onValueChange={(val) => onCustomerFilterChange(val as string)}
+      >
+        <ComboboxInput
+          id="for-arrival-customer-filter"
+          placeholder="All Customers"
+          className="h-9 w-full sm:w-[200px]"
+        />
+        <ComboboxContent>
+          <ComboboxList>
+            <ComboboxItem value="All Customers">All Customers</ComboboxItem>
+            {uniqueCustomers.map((name) => (
+              <ComboboxItem key={name} value={name}>
+                {name}
+              </ComboboxItem>
+            ))}
+            {uniqueCustomers.length === 0 && (
+              <ComboboxEmpty>No customers found</ComboboxEmpty>
+            )}
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
 
       {/* Refresh */}
       <Button
         id="for-arrival-refresh"
+        variant="outline"
+        size="icon"
         className="h-9 w-9 shrink-0 rounded-md"
         onClick={onRefresh}
         disabled={loading}

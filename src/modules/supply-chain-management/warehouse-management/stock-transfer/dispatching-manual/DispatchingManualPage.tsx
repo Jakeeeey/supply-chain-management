@@ -151,7 +151,7 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Requested On</p>
-                    <p className="font-medium text-sm">{new Date(selectedGroup.dateRequested).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' })}</p>
+                    <p className="font-medium text-sm">{new Date(selectedGroup.dateRequested).toLocaleDateString()}</p>
                   </div>
                 </div>
               </div>
@@ -296,10 +296,6 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
           orderNo={selectedGroup.orderNo}
           pickerName={currentUser.name}
           items={selectedGroup.items}
-          salesmanName={currentUser.name}
-          sourceBranch={getBranchName(selectedGroup.sourceBranch)}
-          targetBranch={getBranchName(selectedGroup.targetBranch)}
-          requestedDate={new Date(selectedGroup.dateRequested).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}
         />
       )}
     </div>

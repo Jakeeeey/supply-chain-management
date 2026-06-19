@@ -110,36 +110,15 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     console.log("POST body received:", JSON.stringify(body, null, 2));
 
-    const token = req.cookies.get("vos_access_token")?.value;
-    let userId: string | number | undefined = undefined;
-    if (token) {
-      try {
-        const parts = token.split(".");
-        if (parts.length >= 2) {
-          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
-          userId = payload.user_id ?? payload.userId ?? payload.id ?? payload.sub;
-        }
-      } catch (e) {
-        console.warn("Failed to decode token", e);
-      }
-    }
-
     // Sanitize body for essential fields that might be null from form/defaults
     const sanitizedBody = {
       ...body,
       isActive: body.isActive ?? 0,
       status: body.status ?? "DRAFT",
       inventory_type: body.inventory_type ?? "Regular",
-      short_description: body.short_description || body.description || "",
       unit_of_measurement_count: body.unit_of_measurement_count ?? 1,
       barcode: body.barcode ?? "",
       unit_of_measurement: body.unit_of_measurement ?? body.base_unit,
-      ...(userId ? { 
-        created_by: userId, 
-        updated_by: userId,
-        user_created: userId,
-        user_updated: userId
-      } : {}),
     };
 
     // Prune ID fields if they are not positive numbers (creating new)

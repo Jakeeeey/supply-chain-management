@@ -26,7 +26,6 @@ export default function SalesReturnModule() {
     page,
     pageSize,
     totalPages,
-    totalRecords,
     setPage,
     setPageSize,
     setSearch,
@@ -100,7 +99,6 @@ export default function SalesReturnModule() {
           page={page}
           pageSize={pageSize}
           totalPages={totalPages}
-          totalRecords={totalRecords}
           filters={filters}
           salesmenOptions={options.salesmen}
           customerOptions={options.customers}

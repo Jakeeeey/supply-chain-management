@@ -70,8 +70,6 @@ export const UpdateItemSchema = z.object({
   id: z.number().min(1, "Item ID is required"),
   status: z.string().min(1, "Status is required"),
   allocated_quantity: z.number().min(0).optional(),
-  scanned_quantity: z.number().min(0).optional(),
-  received_quantity: z.number().min(0).optional(),
 });
 export type UpdateItemValue = z.infer<typeof UpdateItemSchema>;
 

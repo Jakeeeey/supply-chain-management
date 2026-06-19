@@ -129,7 +129,7 @@ export async function getRawRfidsByItemIds(itemIds: number[]) {
  */
 export async function getRawReferences() {
   return Promise.all([
-    directusGet<{ data: Record<string, unknown>[] }>("/items/suppliers?limit=-1&filter[supplier_type][_eq]=Trade&filter[_or][0][division_id][_neq]=1&filter[_or][1][division_id][_null]=true"),
+    directusGet<{ data: Record<string, unknown>[] }>("/items/suppliers?limit=-1&filter[supplier_type][_eq]=Trade"),
     directusGet<{ data: Record<string, unknown>[] }>("/items/branches?limit=-1"),
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/products?limit=-1&fields=product_id,product_name,description,product_code,parent_id,unit_of_measurement,unit_of_measurement_count,cost_per_unit",
@@ -137,7 +137,7 @@ export async function getRawReferences() {
     directusGet<{ data: Record<string, unknown>[] }>("/items/units?limit=-1&fields=unit_id,unit_name,unit_shortcut,order"),
     directusGet<{ data: Record<string, unknown>[] }>("/items/line_discount?limit=-1"),
     directusGet<{ data: Record<string, unknown>[] }>(
-        "/items/product_per_supplier?limit=-1&fields=id,product_id,supplier_id,discount_type&filter[_or][0][supplier_id][division_id][_neq]=1&filter[_or][1][supplier_id][division_id][_null]=true",
+        "/items/product_per_supplier?limit=-1&fields=id,product_id,supplier_id,discount_type",
     ),
     directusGet<{ data: Record<string, unknown>[] }>("/items/rts_return_type?limit=-1"),
     directusGet<{ data: Record<string, unknown>[] }>("/items/discount_type?limit=-1"),

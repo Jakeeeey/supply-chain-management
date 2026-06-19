@@ -197,8 +197,6 @@ export interface SalesReturnStatusCard {
   isPosted: boolean;
   isReceived: boolean;
   appliedTo: string;
-  appliedInvoiceId?: number | null;
-  isInvoicePosted?: boolean;
 }
 
 // 🟢 NEW: Add this interface for the Invoice Dropdown
@@ -209,5 +207,4 @@ export interface InvoiceOption {
   order_id: string; // 🟢 Added this line
   salesman_id: number; // 🟢 Added this line
   amount?: number;
-  isPosted?: boolean;
 }

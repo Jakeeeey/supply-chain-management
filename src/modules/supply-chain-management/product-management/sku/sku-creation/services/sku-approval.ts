@@ -275,17 +275,17 @@ export const skuApprovalService = {
     const pMasterId = await resolveParentMasterId(draft);
 
     // 3. Generate or use existing code
-    const masterCode =
-      draft.product_code || (await generateSKUCode(draft, masterData)).code;
+    const code =
+      draft.product_code || (await generateSKUCode(draft, masterData));
 
     // 4. Upsert Master records
-    const finalMasterId = await upsertMasterProduct(draft, pMasterId, masterCode);
+    const finalMasterId = await upsertMasterProduct(draft, pMasterId, code);
 
     // 5. Link to supplier
     await syncSupplierLink(draft, finalMasterId);
 
     // 6. Handle orphan child adoptions
-    await handleOrphanAdoption(finalMasterId, masterCode, draft);
+    await handleOrphanAdoption(finalMasterId, code, draft);
 
     // 7. Cleanup only THIS draft
     await cleanupDraft(draft);

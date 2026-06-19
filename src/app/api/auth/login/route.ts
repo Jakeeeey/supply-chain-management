@@ -11,7 +11,7 @@ import {
     resolveIpGeo,
     getCookieOptions,
     IS_SECURE_COOKIE
-} from "@/modules/supply-chain-management/inventory-management/stock-adjustment-registration/utils/auth-utils";
+} from "@/modules/supply-chain-management/inventory-management/stock-adjustment/utils/auth-utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

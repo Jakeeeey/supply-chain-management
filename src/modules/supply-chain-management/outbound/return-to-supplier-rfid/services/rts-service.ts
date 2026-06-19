@@ -235,31 +235,12 @@ export async function fetchInventory(
 ): Promise<InventoryRecord[]> {
   try {
     const allRows = await repo.getSpringInventory(branchId, supplierId, token);
-    const allRowsNormalized = allRows.map((r: InventoryViewRow & { familyId?: number; product_id?: number; product_code?: string; product_name?: string; unit_name?: string; unit_count?: number; branch_id?: number; supplier_id?: number; running_inventory_unit?: number; family_id?: number; product_barcode?: string; supplier_shortcut?: string }) => ({
-      ...r,
-      productId: Number(r.productId ?? r.product_id),
-      productCode: r.productCode ?? r.product_code,
-      productName: r.productName ?? r.product_name,
-      unitName: r.unitName ?? r.unit_name,
-      unitCount: Number(r.unitCount ?? r.unit_count ?? 1),
-      branchId: Number(r.branchId ?? r.branch_id),
-      supplierId: Number(r.supplierId ?? r.supplier_id),
-      runningInventoryUnit: Number(r.runningInventoryUnit ?? r.running_inventory_unit ?? 0),
-      familyId: Number(r.familyId ?? r.family_id ?? 0),
-      productBarcode: r.productBarcode ?? r.product_barcode ?? null,
-      supplierShortcut: r.supplierShortcut ?? r.supplier_shortcut ?? "",
-    }));
-
-    const supplierShortcut = await repo.getSupplierShortcut(supplierId);
-
+    
     // Filter by branch and supplier using camelCase names (Standardized in Repo/Schema)
-    const rawViewRows = allRowsNormalized.filter((r) => {
-      const branchMatch = Number(r.branchId) === Number(branchId);
-      const supplierMatch = 
-        Number(r.supplierId) === Number(supplierId) || 
-        (supplierShortcut != null && supplierShortcut !== "" && r.supplierShortcut === supplierShortcut);
-      return branchMatch && supplierMatch;
-    });
+    const rawViewRows = allRows.filter((r) => 
+      Number(r.branchId) === Number(branchId) && 
+      Number(r.supplierId) === Number(supplierId)
+    );
 
     if (rawViewRows.length === 0) return [];
 

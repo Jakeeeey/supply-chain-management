@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { COOKIE_NAME, REFRESH_COOKIE_NAME, IS_SECURE_COOKIE } from "@/modules/supply-chain-management/inventory-management/stock-adjustment-registration/utils/auth-utils"
+import { COOKIE_NAME, REFRESH_COOKIE_NAME, IS_SECURE_COOKIE } from "@/modules/supply-chain-management/inventory-management/stock-adjustment/utils/auth-utils"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"

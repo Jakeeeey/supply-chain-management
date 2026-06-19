@@ -14,8 +14,7 @@ import {
 export async function generateSKUCode(
   sku: SKU,
   masterData: MasterData,
-  precomputedSequence?: string
-): Promise<{ code: string; sequence: string }> {
+): Promise<string> {
   try {
     // 1. Resolve Category Code
     const cat = masterData.categories.find((c) => c.id == sku.product_category);
@@ -39,87 +38,84 @@ export async function generateSKUCode(
     const uomCode = getUOMCode(uomName);
 
     // 4. Resolve Sequence (3 digits)
-    let seq = precomputedSequence || "001";
+    let seq = "001";
 
-    if (!precomputedSequence) {
-      // A. Inherit sequence from parent if possible
-      if (sku.parent_id) {
-        try {
-          const [prodParent, draftParent] = await Promise.all([
-            fetchItems<SKU>("/items/products", {
-              filter: JSON.stringify({ product_id: { _eq: sku.parent_id } }),
-              fields: "product_code",
-            }),
-            fetchItems<SKU>("/items/product_draft", {
-              filter: JSON.stringify({ id: { _eq: sku.parent_id } }),
-              fields: "product_code",
-            }),
-          ]);
-          const parentCode =
-            prodParent.data?.[0]?.product_code ||
-            draftParent.data?.[0]?.product_code;
-          if (parentCode) {
-            const parts = parentCode.split("-");
-            const seqUOMPart = parts[parts.length - 1]; // e.g. "001PAC"
-            const extractedSeq = seqUOMPart.substring(0, 3);
-            if (/^\d{3}$/.test(extractedSeq)) {
-              seq = extractedSeq;
-            }
-          }
-        } catch {
-          console.warn("Sequence inheritance skipped");
-        }
-      }
-
-      // B. Otherwise, calculate new sequence
-      if (seq === "001") {
-        const commonFilters: Record<string, string | number | boolean> = {
-          "filter[product_category][_eq]": sku.product_category,
-          "filter[product_brand][_eq]": sku.product_brand,
-          "filter[parent_id][_null]": "true",
-        };
-
-        const myId = sku.id || sku.product_id;
-
-        // Create collection-aware count function
-        const countItems = async (
-          endpoint: string,
-          pKey: string,
-        ): Promise<number> => {
-          try {
-            const params: Record<string, string | number | boolean> = {
-              ...commonFilters,
-              limit: 0,
-              meta: "filter_count",
-            };
-            if (myId) {
-              params[`filter[${pKey}][_neq]`] = myId;
-            }
-            const res = await fetchItems<Record<string, unknown>>(endpoint, params);
-            return res.meta?.filter_count || 0;
-          } catch {
-            return 0;
-          }
-        };
-
-        const [prodCount, draftCount] = await Promise.all([
-          countItems("/items/products", "product_id"),
-          countItems("/items/product_draft", "id"),
+    // A. Inherit sequence from parent if possible
+    if (sku.parent_id) {
+      try {
+        const [prodParent, draftParent] = await Promise.all([
+          fetchItems<SKU>("/items/products", {
+            filter: JSON.stringify({ product_id: { _eq: sku.parent_id } }),
+            fields: "product_code",
+          }),
+          fetchItems<SKU>("/items/product_draft", {
+            filter: JSON.stringify({ id: { _eq: sku.parent_id } }),
+            fields: "product_code",
+          }),
         ]);
-
-        const totalFamilies = (prodCount || 0) + (draftCount || 0);
-        seq = String(totalFamilies + 1).padStart(3, "0");
+        const parentCode =
+          prodParent.data?.[0]?.product_code ||
+          draftParent.data?.[0]?.product_code;
+        if (parentCode) {
+          const parts = parentCode.split("-");
+          const seqUOMPart = parts[parts.length - 1]; // e.g. "001PAC"
+          const extractedSeq = seqUOMPart.substring(0, 3);
+          if (/^\d{3}$/.test(extractedSeq)) {
+            return buildFinalSKU(
+              catCode,
+              brandCode,
+              extractedSeq,
+              uomCode,
+              sku,
+            );
+          }
+        }
+      } catch {
+        console.warn("Sequence inheritance skipped");
       }
     }
 
-    const code = buildFinalSKU(catCode, brandCode, seq, uomCode, sku);
-    return { code, sequence: seq };
+    // B. Otherwise, calculate new sequence
+    const commonFilters: Record<string, string | number | boolean> = {
+      "filter[product_category][_eq]": sku.product_category,
+      "filter[product_brand][_eq]": sku.product_brand,
+      "filter[parent_id][_null]": "true",
+    };
+
+    const myId = sku.id || sku.product_id;
+
+    // Create collection-aware count function
+    const countItems = async (
+      endpoint: string,
+      pKey: string,
+    ): Promise<number> => {
+      try {
+        const params: Record<string, string | number | boolean> = {
+          ...commonFilters,
+          limit: 0,
+          meta: "filter_count",
+        };
+        if (myId) {
+          params[`filter[${pKey}][_neq]`] = myId;
+        }
+        const res = await fetchItems<Record<string, unknown>>(endpoint, params);
+        return res.meta?.filter_count || 0;
+      } catch {
+        return 0;
+      }
+    };
+
+    const [prodCount, draftCount] = await Promise.all([
+      countItems("/items/products", "product_id"),
+      countItems("/items/product_draft", "id"),
+    ]);
+
+    const totalFamilies = (prodCount || 0) + (draftCount || 0);
+    seq = String(totalFamilies + 1).padStart(3, "0");
+
+    return buildFinalSKU(catCode, brandCode, seq, uomCode, sku);
   } catch (error) {
     console.error("SKU Generation Error:", error);
-    const fallbackSeq = Date.now().toString().slice(-3);
-    return { 
-      code: `SKU-${fallbackSeq}`, 
-      sequence: fallbackSeq 
-    };
+    return `SKU-${Date.now().toString().slice(-6)}`;
   }
 }

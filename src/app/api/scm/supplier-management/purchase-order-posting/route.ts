@@ -848,6 +848,11 @@ export async function POST(req: NextRequest) {
             // The Inventory module trusts the financials saved by the Amounts module.
 
             // ── Resolve PO-level discount percent (Total Percent Source of Truth) ──
+            const poDType = po?.discount_type as Record<string, unknown> | null;
+            const poDiscountName = toStr(poDType?.discount_type || poDType?.name, "");
+            const poDiscountPercent = resolveDiscountPercent(poDType);
+
+            console.log("[DEBUG open_po] PO-level discount:", { poDType: JSON.stringify(poDType), poDiscountName, poDiscountPercent });
 
             const porIdsByKey = buildPorIdsByKey(porRows);
 

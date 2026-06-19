@@ -8,8 +8,6 @@ export interface BrandApiRow {
   image?: string;
   created_by?: string;
   updated_by?: string;
-  created_at?: string;
-  updated_at?: string;
 }
 
 // --- Zod Schemas ---

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useMemo } from "react";
 
-import { useForm, useFieldArray, useWatch, Control, Path, Resolver, FieldErrors } from "react-hook-form";
+import { useForm, useFieldArray, useWatch, Control, Path, Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   skuSchema,
@@ -10,7 +10,6 @@ import {
   MasterData,
   SKUUnit,
 } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
-import { toast } from "sonner";
 import {
   Form,
   FormControl,
@@ -314,16 +313,9 @@ export function SKUForm({
     name: "product_name",
   }) || "";
 
-  const onFormError = (errors: FieldErrors<SKU>) => {
-    toast.error("Please fill in all required fields", {
-      description: "Look for fields highlighted in red.",
-    });
-    console.warn("Form validation errors:", errors);
-  };
-
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit, onFormError)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <ScrollArea className="h-[60vh]">
           <div className="max-w-4xl mx-auto space-y-6 pb-10">
             {/* Section A: Core info */}
@@ -495,7 +487,7 @@ export function SKUForm({
                           Inventory Type
                         </FormLabel>
                         <Tabs
-                          value={field.value}
+                          defaultValue={field.value}
                           onValueChange={field.onChange}
                           className="w-full"
                         >
@@ -666,8 +658,8 @@ export function SKUForm({
             {loading
               ? "Processing..."
               : initialData
-                ? "Update SKU"
-                : "Create SKU"}
+                ? "Update Record"
+                : "Create Draft"}
           </Button>
         </div>
       </form>

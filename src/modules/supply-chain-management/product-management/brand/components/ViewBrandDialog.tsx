@@ -25,7 +25,7 @@ export function ViewBrandDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-106.25">
         <DialogHeader>
           <DialogTitle>View Brand</DialogTitle>
           <DialogDescription>
@@ -37,12 +37,13 @@ export function ViewBrandDialog({
           <div className="space-y-2">
             <h4 className="text-sm font-medium text-muted-foreground">Brand Image</h4>
             {selectedBrand.image ? (
-              <div className="relative w-full h-[200px] rounded-lg border bg-muted/30 overflow-hidden">
+              <div className="relative w-full min-h-[200px] max-h-[300px] rounded-lg border bg-muted/30 flex items-center justify-center overflow-hidden">
                 <Image 
                   src={`${process.env.NEXT_PUBLIC_API_BASE_URL}/assets/${selectedBrand.image}`} 
                   alt={selectedBrand.brand_name} 
-                  fill
-                  className="object-contain p-2 rounded-md" 
+                  width={800}
+                  height={400}
+                  className="max-w-full max-h-[300px] object-contain drop-shadow-sm" 
                   unoptimized
                 />
               </div>

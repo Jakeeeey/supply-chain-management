@@ -351,7 +351,7 @@ export default function StockTransferSummaryView() {
                         </TableCell>
                         <TableCell className="text-center">
                           <span className="text-[10px] font-medium text-muted-foreground">
-                            {new Date(group.dateRequested).toLocaleDateString('en-PH', { month: 'short', day: '2-digit', year: 'numeric', timeZone: 'Asia/Manila' })}
+                            {new Date(group.dateRequested).toLocaleDateString('en-PH', { month: 'short', day: '2-digit', year: 'numeric' })}
                           </span>
                         </TableCell>
                         <TableCell className="text-center">

@@ -73,7 +73,7 @@ async function proxyRequest(req: NextRequest, method: string) {
     upstreamUrl += `/${id}`;
   } else if (method === "GET") {
     // ✅ Include params and request meta count
-    upstreamUrl += `?sort=-created_at&page=${page}&limit=${limit}&meta=filter_count`;
+    upstreamUrl += `?sort=category_name&page=${page}&limit=${limit}&meta=filter_count`;
 
     // ✅ Apply filter directly if provided, otherwise fallback to search logic
     if (filterParam) {
@@ -110,23 +110,6 @@ async function proxyRequest(req: NextRequest, method: string) {
         body.updated_by = userId;
       }
     }
-
-    // Save as PHT (UTC+8) - Directus stores datetime without timezone info,
-    // so we must provide the value already in Philippine Standard Time
-    const nowPHT = new Date().toLocaleString("sv-SE", {
-      timeZone: "Asia/Manila",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    }).replace(" ", "T");
-
-    if (method === "POST") {
-      body.created_at = nowPHT;
-    }
-    body.updated_at = nowPHT;
 
     options.body = JSON.stringify(body);
   }

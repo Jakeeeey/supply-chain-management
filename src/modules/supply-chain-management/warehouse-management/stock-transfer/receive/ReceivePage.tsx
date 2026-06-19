@@ -290,7 +290,6 @@ export default function StockTransferReceiveView({ currentUser }: { currentUser:
           items={selectedGroup.items}
           sourceBranch={getBranchName(selectedGroup.sourceBranch)}
           targetBranch={getBranchName(selectedGroup.targetBranch)}
-          salesmanName={currentUser.name}
         />
       )}
     </div>

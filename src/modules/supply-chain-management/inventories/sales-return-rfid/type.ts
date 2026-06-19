@@ -197,8 +197,6 @@ export interface SalesReturnStatusCard {
   isPosted: boolean;
   isReceived: boolean;
   appliedTo: string;
-  appliedInvoiceId?: number | null;
-  isInvoicePosted?: boolean;
 }
 
 // Invoice Dropdown option (from sales_invoice table)
@@ -209,7 +207,6 @@ export interface InvoiceOption {
   customerCode: string;
   salesman_id: number;
   amount?: number;
-  isPosted?: boolean;
 }
 
 // RFID Tag record (sales_return_rfid table)

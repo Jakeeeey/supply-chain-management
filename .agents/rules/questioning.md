@@ -1,5 +1,5 @@
 ---
-trigger: manual
+trigger: always_on
 ---
 
 When User asks a question, you must answer the question to the best of your ability.

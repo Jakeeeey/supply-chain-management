@@ -46,7 +46,7 @@ const nowPH = (): string => {
   const hour = String(d.getUTCHours()).padStart(2, "0");
   const minute = String(d.getUTCMinutes()).padStart(2, "0");
   const second = String(d.getUTCSeconds()).padStart(2, "0");
-  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
 };
 
 const formatDateForAPI = (dateString: string | Date) => {
@@ -66,7 +66,12 @@ const formatDateForAPI = (dateString: string | Date) => {
       const day = String(d.getUTCDate()).padStart(2, "0");
       dateStr = `${year}-${month}-${day}`;
     }
-    return `${dateStr}T00:00:00.000Z`;
+
+    const nowD = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const hour = String(nowD.getUTCHours()).padStart(2, "0");
+    const minute = String(nowD.getUTCMinutes()).padStart(2, "0");
+    const second = String(nowD.getUTCSeconds()).padStart(2, "0");
+    return `${dateStr}T${hour}:${minute}:${second}`;
   } catch {
     return nowPH();
   }
@@ -125,9 +130,6 @@ export async function fetchReturns(
     priceType: item.price_type || "-",
     createdAt: item.created_at
       ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.created_at))
-      : "-",
-    receivedAt: item.received_at
-      ? new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.received_at))
       : "-",
   }));
 
@@ -312,10 +314,7 @@ export async function fetchReferences(): Promise<{
 /**
  * Fetches the product catalog for the ProductLookupModal.
  */
-export async function fetchProductCatalog(
-  customerCode?: string,
-  includeInactive = false,
-): Promise<{
+export async function fetchProductCatalog(customerCode?: string): Promise<{
   brands: Brand[];
   categories: Category[];
   suppliers: Supplier[];
@@ -324,7 +323,7 @@ export async function fetchProductCatalog(
   supplierCategoryDiscount: any[];
   products: Product[];
 }> {
-  const catalogData = await repo.getRawProductCatalog(includeInactive);
+  const catalogData = await repo.getRawProductCatalog();
   const [brandsRes, categoriesRes, suppliersRes, unitsRes, connectionsRes, productsRes] = catalogData;
 
   let scdpcRes = { data: [] as any[] };
@@ -376,8 +375,7 @@ export async function fetchInvoices(
   const uniqueInvoices = new Map<string, InvoiceOption>();
   rawData.forEach((item: any) => {
     const key = `${item.order_id || ""}_${item.invoice_no || ""}`;
-    const isPosted = parseBoolean(item.isPosted);
-    if (!isPosted && !uniqueInvoices.has(key)) {
+    if (!uniqueInvoices.has(key)) {
       uniqueInvoices.set(key, {
         id: item.invoice_id,
         invoice_no: (item.invoice_no || "").toString(),
@@ -404,17 +402,13 @@ export async function fetchStatusCard(
 
     // Fetch linked invoice
     let appliedToText = "-";
-    let appliedInvoiceId = null;
-    let isInvoicePosted = false;
     try {
       const linkRes = await repo.getRawLinkedInvoice(returnId);
       const linkData = (linkRes.data || []) as any[];
       if (linkData.length > 0) {
         const linkedRec = linkData[0];
-        if (linkedRec.invoice_no) {
-          appliedToText = linkedRec.invoice_no.invoice_no || "-";
-          appliedInvoiceId = linkedRec.invoice_no.invoice_id || null;
-          isInvoicePosted = parseBoolean(linkedRec.invoice_no.isPosted);
+        if (linkedRec.invoice_no && linkedRec.invoice_no.invoice_no) {
+          appliedToText = linkedRec.invoice_no.invoice_no;
         }
       }
     } catch {
@@ -431,8 +425,6 @@ export async function fetchStatusCard(
       isPosted: parseBoolean(data.isPosted),
       isReceived: parseBoolean(data.isReceived),
       appliedTo: appliedToText,
-      appliedInvoiceId,
-      isInvoicePosted,
     };
   } catch {
     return null;
@@ -443,14 +435,6 @@ export async function fetchStatusCard(
  * Creates a new sales return (header + details).
  */
 export async function submitReturn(payload: any, userId: number): Promise<any> {
-  if (payload.appliedInvoiceId) {
-    const invoiceData = await repo.getInvoiceStatus(payload.appliedInvoiceId);
-    const isPosted = parseBoolean(invoiceData?.data?.isPosted);
-    if (isPosted) {
-      throw new Error("This invoice has already been posted. You can only link to invoices that are not yet posted.");
-    }
-  }
-
   // Fetch line discounts for discount calculation
   const refsResult = await repo.getRawReferences();
   const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
@@ -507,14 +491,10 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
   // 🟢 Handle Optional Junction Link to Invoice
   if (payload.appliedInvoiceId && returnId) {
     try {
-      const returnAmount = Math.round(Number(payload.totalAmount) * 100) / 100;
       await repo.createJunctionLink({
         return_no: returnId,
         invoice_no: payload.appliedInvoiceId,
         linked_by: userId,
-        amount: returnAmount,
-        created_at: nowPH(),
-        updated_at: nowPH(),
       });
     } catch (e) {
       console.error("Failed to create junction link during submission", e);
@@ -623,51 +603,29 @@ export async function updateReturn(
     try {
       const linkResult = await repo.getJunctionLink(payload.returnId);
       const existingLinks = (linkResult.data || []) as any[];
-      const existingLink = existingLinks.length > 0 ? existingLinks[0] : null;
-
-      // Rule C: Prevent unlinking or changing if the current linked invoice is posted
-      if (existingLink) {
-        const currentInvoiceId = existingLink.invoice_no?.id || existingLink.invoice_no;
-        if (currentInvoiceId && Number(currentInvoiceId) !== payload.appliedInvoiceId) {
-          const currentInvoiceData = await repo.getInvoiceStatus(Number(currentInvoiceId));
-          if (parseBoolean(currentInvoiceData?.data?.isPosted)) {
-            throw new Error("This invoice has already been posted. Once an invoice is posted, it is locked and cannot be unlinked or changed.");
-          }
-        }
-      }
 
       if (payload.appliedInvoiceId) {
-        // Rule B: Prevent linking to a posted invoice
-        const targetInvoiceData = await repo.getInvoiceStatus(payload.appliedInvoiceId);
-        if (parseBoolean(targetInvoiceData?.data?.isPosted)) {
-          throw new Error("This invoice has already been posted. You can only link to invoices that are not yet posted.");
-        }
-
         // Link or Update
-        if (existingLink) {
-          await repo.updateJunctionLink(existingLink.id, {
+        if (existingLinks.length > 0) {
+          const linkId = existingLinks[0].id;
+          await repo.updateJunctionLink(linkId, {
             invoice_no: payload.appliedInvoiceId,
             linked_by: userId,
-            amount: totalNet,
-            updated_at: nowPH(),
           });
         } else {
           await repo.createJunctionLink({
             return_no: payload.returnId,
             invoice_no: payload.appliedInvoiceId,
             linked_by: userId,
-            amount: totalNet,
-            created_at: nowPH(),
-            updated_at: nowPH(),
           });
         }
-      } else if (payload.appliedInvoiceId === null && existingLink) {
+      } else if (payload.appliedInvoiceId === null && existingLinks.length > 0) {
         // Explicit Unlink (Delete)
-        await repo.deleteJunctionLink(existingLink.id);
+        const linkId = existingLinks[0].id;
+        await repo.deleteJunctionLink(linkId);
       }
-    } catch (e: any) {
+    } catch (e) {
       console.error("Failed to sync junction link:", e);
-      throw e;
     }
   }
 

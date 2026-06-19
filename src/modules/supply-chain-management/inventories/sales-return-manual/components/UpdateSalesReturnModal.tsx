@@ -269,7 +269,6 @@ export function UpdateSalesReturnModal({
 
   // 🟢 Track the ID for the junction table link
   const [appliedInvoiceId, setAppliedInvoiceId] = useState<number | null>(null);
-  const [isInvoicePosted, setIsInvoicePosted] = useState<boolean>(false);
 
   const [discountOptions, setDiscountOptions] = useState<API_LineDiscount[]>(
     [],
@@ -337,12 +336,6 @@ export function UpdateSalesReturnModal({
 
         setDetails(items);
         setStatusCardData(statusData);
-        if (statusData?.appliedInvoiceId) {
-          setAppliedInvoiceId(statusData.appliedInvoiceId);
-        }
-        if (statusData?.isInvoicePosted) {
-          setIsInvoicePosted(statusData.isInvoicePosted);
-        }
         setDiscountOptions(discounts);
         setReturnTypeOptions(retTypes);
         setSalesmenOptions(salesmen);
@@ -621,21 +614,16 @@ export function UpdateSalesReturnModal({
         remarks: headerData.remarks || "",
         invoiceNo: headerData.invoiceNo,
         orderNo: headerData.orderNo,
-        appliedInvoiceId,
+        appliedInvoiceId: appliedInvoiceId ?? undefined,
         isThirdParty: headerData.isThirdParty,
       };
 
-      const res = await SalesReturnProvider.updateReturn(payload);
-      if (res && res.success === false) {
-        toast.error(res.error || "Failed to update sales return.");
-        return;
-      }
+      await SalesReturnProvider.updateReturn(payload);
       setIsUpdateConfirmOpen(false);
       setIsUpdateSuccessOpen(true);
     } catch (error) {
       console.error("Update failed", error);
-      const errMsg = error instanceof Error ? error.message : "An unexpected error occurred.";
-      toast.error(errMsg);
+      alert("Failed to update sales return.");
     } finally {
       setIsUpdating(false);
     }
@@ -652,14 +640,10 @@ export function UpdateSalesReturnModal({
         remarks: headerData.remarks || "",
         invoiceNo: headerData.invoiceNo,
         orderNo: headerData.orderNo,
-        appliedInvoiceId,
+        appliedInvoiceId: appliedInvoiceId ?? undefined,
         isThirdParty: headerData.isThirdParty,
       };
-      const saveRes = await SalesReturnProvider.updateReturn(savePayload);
-      if (saveRes && saveRes.success === false) {
-        toast.error(saveRes.error || "Failed to update sales return.");
-        return;
-      }
+      await SalesReturnProvider.updateReturn(savePayload);
       // Then update status with extra fields
       const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
       const d = new Date(manilaMs);
@@ -675,8 +659,7 @@ export function UpdateSalesReturnModal({
       setIsUpdateSuccessOpen(true);
     } catch (error) {
       console.error("Receive failed", error);
-      const errMsg = error instanceof Error ? error.message : "An unexpected error occurred.";
-      toast.error(errMsg);
+      toast.error("Failed to receive sales return.");
     } finally {
       setIsReceiving(false);
     }
@@ -693,11 +676,7 @@ export function UpdateSalesReturnModal({
       customerName: getCustomerName(headerData.customerCode),
       customerCode: headerData.customerCode,
       branchName: getSalesmanBranch(headerData.salesmanId),
-      items: details.map((item) => ({
-        ...item,
-        discountTypeName:
-          discountOptions.find((d) => d.id.toString() === item.discountType?.toString())?.discount_type || "No Discount",
-      })),
+      items: details,
       totalAmount: details.reduce(
         (acc, item) => acc + (item.totalAmount || 0),
         0,
@@ -721,7 +700,7 @@ export function UpdateSalesReturnModal({
     const styleOverride = printWindow.document.createElement("style");
     styleOverride.innerHTML = `
       body { background-color: #e5e7eb; padding: 40px; display: flex; justify-content: center; }
-      #print-root { background-color: white; }
+      #print-root { background-color: white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
       .hidden { display: block !important; }
     `;
     printWindow.document.head.appendChild(styleOverride);
@@ -796,7 +775,7 @@ export function UpdateSalesReturnModal({
             
             <ReadOnlyField label="Branch" value={getSalesmanBranch(headerData.salesmanId)} isLoading={loading} />
             <ReadOnlyField label="Return Date" value={headerData.returnDate} />
-            <ReadOnlyField label="Received Date" value={headerData.status === "Received" && headerData.receivedAt ? headerData.receivedAt : "-"} />
+            <ReadOnlyField label="Received Date" value={headerData.createdAt} />
             <ReadOnlyField label="Price Type" value={headerData.priceType} />
             
             <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4">
@@ -1541,7 +1520,7 @@ export function UpdateSalesReturnModal({
                     {/* 🟢 REVISED: Editable if Pending or Received (canEditLimited) */}
                     {loading && !statusCardData ? (
                       <Skeleton className="h-6 w-28" />
-                    ) : (canEditLimited && !isInvoicePosted) ? (
+                    ) : canEditLimited ? (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1614,16 +1593,11 @@ export function UpdateSalesReturnModal({
               <div
                 className="p-3 hover:bg-destructive/10 cursor-pointer flex items-center gap-3 transition-colors text-destructive font-medium border-b"
                 onClick={() => {
-                  if (isInvoicePosted) {
-                    toast.error("This invoice has already been posted. Once an invoice is posted, it is locked and cannot be unlinked or changed.");
-                    return;
-                  }
                   setStatusCardData((prev) => ({
                     ...prev!,
                     appliedTo: "",
                   }));
                   setAppliedInvoiceId(null);
-                  setIsInvoicePosted(false);
                   setIsInvoiceLookupOpen(false);
                 }}
               >
@@ -1643,16 +1617,11 @@ export function UpdateSalesReturnModal({
                     key={inv.id}
                     className="p-3 hover:bg-primary/10 cursor-pointer flex items-center gap-3 transition-colors justify-between"
                     onClick={() => {
-                      if (isInvoicePosted) {
-                        toast.error("This invoice has already been posted. Once an invoice is posted, it is locked and cannot be unlinked or changed.");
-                        return;
-                      }
                       setStatusCardData((prev) => ({
                         ...prev!,
                         appliedTo: inv.invoice_no,
                       }));
                       setAppliedInvoiceId(Number(inv.id));
-                      setIsInvoicePosted(false);
                       setIsInvoiceLookupOpen(false);
                     }}
                   >
@@ -1766,7 +1735,6 @@ export function UpdateSalesReturnModal({
         priceType={headerData.priceType || "A"}
         customerCode={headerData.customerCode}
         lineDiscounts={discountOptions}
-        includeInactive={true}
       />
 
       <Dialog

@@ -255,13 +255,7 @@ interface Allocation {
     items?: AllocationItem[];
 }
 
-function buildPoProductLines(
-    input: { allocations?: Allocation[] },
-    poId: number,
-    discountMap: Map<string, { pct: number }>,
-    isInvoice: boolean,
-    productsMap: Map<number, number>
-) {
+function buildPoProductLines(input: { allocations?: Allocation[] }, poId: number, discountMap: Map<string, { pct: number }>, isInvoice: boolean) {
     const allocations = Array.isArray(input?.allocations) ? input.allocations : [];
     const lines: Record<string, unknown>[] = [];
 
@@ -281,17 +275,6 @@ function buildPoProductLines(
             const ordered_quantity = Number.isFinite(qtyNum) && qtyNum > 0 ? qtyNum : 1;
 
             const unitPrice = Number(it?.price ?? it?.pricePerBox ?? it?.unit_price ?? 0) || 0;
-
-            // ✅ Backend Safety Check: Validate against Product Master cost_per_unit
-            const masterCost = productsMap.get(productIdNum) ?? 0;
-            if (masterCost > 0) {
-                const ratio = unitPrice / masterCost;
-                if (ratio >= 1.5 || ratio <= 0.5) {
-                    throw new Error(
-                        `Pricing safety validation failed: Unit price of ₱${unitPrice.toFixed(2)} submitted for product ID ${productIdNum} deviates significantly from Product Master cost (₱${masterCost.toFixed(2)}).`
-                    );
-                }
-            }
             
             // Financial Calculations (VAT-Inclusive Logic)
             const dtId = it.discountTypeId ? String(it.discountTypeId) : null;
@@ -368,33 +351,7 @@ async function createManyPurchaseOrderProducts(base: string, lines: Record<strin
 
 async function ensurePoProducts(base: string, poId: number, input: { allocations?: Allocation[] }, isInvoice: boolean) {
     const discountMap = await fetchDiscountTypesMap(base);
-    
-    // Fetch product costs for validation
-    const productIds: number[] = [];
-    const allocations = Array.isArray(input?.allocations) ? input.allocations : [];
-    for (const a of allocations) {
-        const items = Array.isArray(a?.items) ? a.items : [];
-        for (const it of items) {
-            const productIdRaw = it?.id ?? it?.productId ?? it?.product_id ?? null;
-            const productIdNum = Number(productIdRaw);
-            if (Number.isFinite(productIdNum) && productIdNum > 0) productIds.push(productIdNum);
-        }
-    }
-    const productsMap = new Map<number, number>();
-    if (productIds.length > 0) {
-        const uniq = Array.from(new Set(productIds));
-        const url = `${base}/items/products?limit=-1&filter[product_id][_in]=${encodeURIComponent(uniq.join(","))}&fields=product_id,cost_per_unit`;
-        const res = await directusFetch(url, { method: "GET" });
-        const { json } = await safeJson(res);
-        const data = Array.isArray(json?.data) ? json.data : [];
-        for (const p of data) {
-            const pid = Number(p?.product_id);
-            const cost = Number(p?.cost_per_unit || 0);
-            if (pid) productsMap.set(pid, cost);
-        }
-    }
-
-    const lines = buildPoProductLines(input, poId, discountMap, isInvoice, productsMap);
+    const lines = buildPoProductLines(input, poId, discountMap, isInvoice);
 
     if (!lines.length) {
         return { created: 0, skipped: true, reason: "No allocation lines" };
@@ -589,33 +546,7 @@ export async function POST(req: NextRequest) {
         // 2. Create Product Lines (Batch POST)
         // ✅ ATOMIC HARDENING: Create ALL lines in ONE high-performance request
         const discountMap = await fetchDiscountTypesMap(base);
-
-        // Fetch product costs for validation
-        const productIds: number[] = [];
-        const allocations = Array.isArray(input?.allocations) ? input.allocations : [];
-        for (const a of allocations) {
-            const items = Array.isArray(a?.items) ? a.items : [];
-            for (const it of items) {
-                const productIdRaw = it?.id ?? it?.productId ?? it?.product_id ?? null;
-                const productIdNum = Number(productIdRaw);
-                if (Number.isFinite(productIdNum) && productIdNum > 0) productIds.push(productIdNum);
-            }
-        }
-        const productsMap = new Map<number, number>();
-        if (productIds.length > 0) {
-            const uniq = Array.from(new Set(productIds));
-            const url = `${base}/items/products?limit=-1&filter[product_id][_in]=${encodeURIComponent(uniq.join(","))}&fields=product_id,cost_per_unit`;
-            const res = await directusFetch(url, { method: "GET" });
-            const { json } = await safeJson(res);
-            const data = Array.isArray(json?.data) ? json.data : [];
-            for (const p of data) {
-                const pid = Number(p?.product_id);
-                const cost = Number(p?.cost_per_unit || 0);
-                if (pid) productsMap.set(pid, cost);
-            }
-        }
-
-        const lines = buildPoProductLines(input, poId, discountMap, isInvoiceFlag, productsMap);
+        const lines = buildPoProductLines(input, poId, discountMap, isInvoiceFlag);
         
         if (lines.length > 0) {
             const linesUrl = `${base}/items/purchase_order_products`;
