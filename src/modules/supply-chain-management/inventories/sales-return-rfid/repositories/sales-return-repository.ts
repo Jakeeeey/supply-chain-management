@@ -92,7 +92,7 @@ export async function getRawReturns(
   filters: { salesman?: string; customer?: string; status?: string; invoiceNo?: string } = {},
 ) {
   const allowedFields =
-    "return_id,return_number,invoice_no,customer_code,salesman_id,total_amount,status,return_date,remarks,order_id,isThirdParty,created_at,price_type";
+    "return_id,return_number,invoice_no,customer_code,salesman_id,total_amount,status,return_date,remarks,order_id,isThirdParty,created_at,price_type,received_at";
 
   let url = `/items/sales_return?page=${page}&limit=${limit}&meta=filter_count&fields=${allowedFields}&sort=-return_id`;
 
@@ -120,7 +120,7 @@ export async function getRawReturnDetails(returnNo: string) {
  * Fetches a single sales return header by ID (for status card).
  */
 export async function getRawReturnById(returnId: number) {
-  const fields = "return_id,isApplied,updated_at,status,isPosted,isReceived,order_id";
+  const fields = "return_id,isApplied,updated_at,status,isPosted,isReceived,order_id,received_at";
   return directusGet<{ data: Record<string, unknown> }>(
     `/items/sales_return/${returnId}?fields=${fields}`,
   );
@@ -131,7 +131,7 @@ export async function getRawReturnById(returnId: number) {
  */
 export async function getRawLinkedInvoice(returnId: number) {
   return directusGet<{ data: Record<string, unknown>[] }>(
-    `/items/sales_invoice_sales_return?filter[return_no][_eq]=${returnId}&fields=invoice_no.invoice_no`,
+    `/items/sales_invoice_sales_return?filter[return_no][_eq]=${returnId}&fields=invoice_no.invoice_id,invoice_no.invoice_no,invoice_no.isPosted`,
   );
 }
 
@@ -141,10 +141,10 @@ export async function getRawLinkedInvoice(returnId: number) {
 export async function getRawReferences() {
   return Promise.all([
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code&filter[isActive][_eq]=1",
+      "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name,discount_type&filter[isActive][_eq]=1",
+      "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name,discount_type",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/branches?limit=-1&fields=id,branch_name",
@@ -186,7 +186,7 @@ export async function getRawDiscountTypes() {
 /**
  * Fetches all product catalog data needed for ProductLookupModal.
  */
-export async function getRawProductCatalog() {
+export async function getRawProductCatalog(includeInactive = false) {
   return Promise.all([
     directusGet<{ data: Record<string, unknown>[] }>("/items/brand?limit=-1"),
     directusGet<{ data: Record<string, unknown>[] }>("/items/categories?limit=-1"),
@@ -195,7 +195,9 @@ export async function getRawProductCatalog() {
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/product_per_supplier?limit=-1",
     ),
-    directusGet<{ data: Record<string, unknown>[] }>("/items/products?limit=-1&filter[isActive][_eq]=1"),
+    directusGet<{ data: Record<string, unknown>[] }>(
+      `/items/products?limit=-1${includeInactive ? "" : "&filter[isActive][_eq]=1"}`,
+    ),
   ]);
 }
 
@@ -215,7 +217,7 @@ export async function getRawSupplierCategoryDiscount(customerCode: string) {
  */
 export async function getRawInvoices(salesmanId?: string, customerCode?: string) {
   let url =
-    "/items/sales_invoice?limit=-1&fields=invoice_id,invoice_no,order_id,customer_code,salesman_id,total_amount";
+    "/items/sales_invoice?limit=-1&fields=invoice_id,invoice_no,order_id,customer_code,salesman_id,isPosted,total_amount";
 
   if (salesmanId) {
     url += `&filter[salesman_id][_eq]=${salesmanId}`;
@@ -370,6 +372,16 @@ export async function deleteJunctionLink(linkId: number) {
     "DELETE",
   );
 }
+
+/**
+ * Fetches the isPosted field of a specific invoice.
+ */
+export async function getInvoiceStatus(invoiceId: number) {
+  return directusGet<{ data: Record<string, unknown> }>(
+    `/items/sales_invoice/${invoiceId}?fields=isPosted`,
+  );
+}
+
 
 // =============================================================================
 // REPOSITORY METHODS — RFID

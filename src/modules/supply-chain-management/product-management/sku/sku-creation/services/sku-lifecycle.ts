@@ -86,18 +86,25 @@ export const skuLifecycleService = {
           ];
 
     const masterData = await skuQueryService.fetchMasterData();
-    const codes = await Promise.all(
-      units.map((u) =>
-        generateSKUCode(
-          {
-            ...baseData,
-            unit_of_measurement: u.unit_id,
-            unit_of_measurement_count: u.conversion_factor,
-          } as SKU,
-          masterData,
-        ),
-      ),
-    );
+    const codes: string[] = [];
+    let parentSequence: string | undefined = undefined;
+
+    for (const u of units) {
+      const result = await generateSKUCode(
+        {
+          ...baseData,
+          unit_of_measurement: u.unit_id,
+          unit_of_measurement_count: u.conversion_factor,
+        } as SKU,
+        masterData,
+        parentSequence
+      );
+      
+      codes.push(result.code);
+      if (!parentSequence) {
+        parentSequence = result.sequence;
+      }
+    }
 
     const createPayload = (
       u: { unit_id: number; conversion_factor: number; price?: number | null; cost?: number | null; barcode?: string | null },
@@ -143,12 +150,27 @@ export const skuLifecycleService = {
 
     if (units.length > 1) {
       await Promise.all(
-        units.slice(1).map((u, i) =>
-          request(`${API_BASE_URL}/items/product_draft`, {
+        units.slice(1).map(async (u, i) => {
+          const { data: child } = await request<{ data: SKU }>(`${API_BASE_URL}/items/product_draft`, {
             method: "POST",
             body: JSON.stringify(createPayload(u, codes[i + 1], pId)),
-          }),
-        ),
+          });
+
+          const childId = child.id || child.product_id;
+          if (childId && sId) {
+            try {
+              await request(`${API_BASE_URL}/items/product_draft_per_supplier`, {
+                method: "POST",
+                body: JSON.stringify({ product_draft_id: childId, supplier_id: sId }),
+              });
+            } catch (err: unknown) {
+              console.error(
+                `[SKU Lifecycle] Failed to save supplier for child draft ${childId}:`,
+                err instanceof Error ? err.message : err,
+              );
+            }
+          }
+        }),
       );
     }
     return parent;
@@ -219,11 +241,12 @@ export const skuLifecycleService = {
         const masterData = await skuQueryService.fetchMasterData();
         await Promise.all(
           children.map(async (child) => {
-            const code = await generateSKUCode(
+            const { code } = await generateSKUCode(
               {
                 ...fields,
                 unit_of_measurement: child.unit_of_measurement,
                 unit_of_measurement_count: child.unit_of_measurement_count,
+                parent_id: id,
               } as SKU,
               masterData,
             );

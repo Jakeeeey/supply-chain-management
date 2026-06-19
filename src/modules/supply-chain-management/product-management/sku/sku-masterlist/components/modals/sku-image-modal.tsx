@@ -54,7 +54,7 @@ export function SKUImageModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[420px] gap-0 p-0">
+      <DialogContent className="sm:max-w-[600px] gap-0 p-0">
         <DialogHeader className="px-6 py-4 border-b">
           <DialogTitle>Update Product Image</DialogTitle>
           <DialogDescription>

@@ -964,12 +964,6 @@ export async function POST(req: NextRequest) {
             const fully = isFullyReceived(poId, lines, porRows);
             const supplierName = sid ? toStr(supplierMap.get(sid)) : toStr(po?.supplier_name);
 
-            // ── DEBUG: Log what productSupplierLinks contains ──
-            console.log("[DEBUG open_po] supplierId (sid):", sid);
-            console.log("[DEBUG open_po] productSupplierLinks size:", productSupplierLinks.size);
-            for (const [k, v] of Array.from(productSupplierLinks.entries())) {
-                console.log(`[DEBUG open_po] PSL entry: pid=${k}, discount_type=`, JSON.stringify(v?.discount_type));
-            }
             // Removed redundant RFID fetching (already handled above)
             
             const porPriceMap = new Map<number, number>();
@@ -979,8 +973,6 @@ export async function POST(req: NextRequest) {
             const poDType = po?.discount_type as Record<string, unknown> | null;
             const poDiscountName = toStr(poDType?.discount_type || poDType?.name, "");
             const poDiscountPercent = resolveDiscountPercent(poDType);
-
-            console.log("[DEBUG open_po] PO-level discount:", { poDType: JSON.stringify(poDType), poDiscountName, poDiscountPercent });
 
             const porIdsByKey = buildPorIdsByKey(porRows);
 
@@ -1580,6 +1572,50 @@ export async function POST(req: NextRequest) {
                 }
                 return bad(`Failed to post amounts: ${(err as Error).message}. Changes rolled back.`, 500);
             }
+        }
+
+        // -------------------------
+        // force_post — forces receipt of PO even if there are items left to be received in post inventory.
+        // Conditions: All po receipts in post amounts must be Posted (is_posted_amounts === 1).
+        // -------------------------
+        if (action === "force_post") {
+            const poId = toNum(body?.poId);
+            if (!poId) return bad("Missing poId.", 400);
+
+            const poUrl = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}?fields=purchase_order_id,purchase_order_no,supplier_name,inventory_status,discount_type.*,discount_type.line_per_discount_type.line_id.*,is_posted,gross_amount,discounted_amount,vat_amount,withholding_tax_amount,total_amount`;
+            const pj_po = await fetchJson(poUrl) as { data: Record<string, unknown> };
+            const po = pj_po?.data ?? null;
+            if (!po) return bad("PO not found for force posting.", 404);
+
+            // Check is_posted lock
+            if (toNum(po?.is_posted) === 1 || po?.is_posted === true) {
+                return bad("This PO has been fully posted and is now locked. No further changes allowed.", 409);
+            }
+
+            const porRows = await fetchPORByPOIds(base, [poId]);
+
+            // Check if there are any receipts that are inventory-posted (isPosted === 1) but NOT yet amount-posted (is_posted_amounts !== 1)
+            const unpostedAmountsReceipts = porRows.filter(
+                (r) => toNum(r.isPosted) === 1 && toNum(r.is_posted_amounts) !== 1 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no))
+            );
+
+            if (unpostedAmountsReceipts.length > 0) {
+                return bad("Cannot Force Post. All existing receipts must first be posted.", 400);
+            }
+
+            // Perform PO Header force post update: setting is_posted = 1, inventory_status = 6.
+            const poUpdate: Record<string, unknown> = {
+                is_posted: 1,
+                inventory_status: 6, // terminal: fully received and posted
+            };
+
+            await patchPO(base, poId, poUpdate);
+
+            return ok({
+                ok: true,
+                postedAt: nowISO(),
+                message: "Purchase Order has been forced to fully posted status. PO is now locked.",
+            });
         }
 
         return bad("Unknown action.", 400);

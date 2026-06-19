@@ -154,8 +154,8 @@ export const SalesReturnProvider = {
     return catalog.products;
   },
 
-  async getFullCatalog(customerCode?: string): Promise<ProductCatalog> {
-    return this._getProductCatalog(customerCode);
+  async getFullCatalog(customerCode?: string, includeInactive = false): Promise<ProductCatalog> {
+    return this._getProductCatalog(customerCode, includeInactive);
   },
 
   // --- 5. CRUD OPERATIONS ---
@@ -175,7 +175,7 @@ export const SalesReturnProvider = {
     remarks: string;
     invoiceNo?: string;
     orderNo?: string;
-    appliedInvoiceId?: number;
+    appliedInvoiceId?: number | null;
     isThirdParty?: boolean;
   }): Promise<any> {
     const res = await fetch(API_BASE, {
@@ -183,7 +183,11 @@ export const SalesReturnProvider = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    return handleResponse(res);
+    const json = await res.json();
+    if (!res.ok) {
+      return { success: false, error: json.error || json.message || `HTTP ${res.status}` };
+    }
+    return { success: true, data: json.data };
   },
 
   async updateStatus(
@@ -254,9 +258,9 @@ export const SalesReturnProvider = {
   _productCatalogCache: {} as Record<string, ProductCatalog>,
   _productCatalogCacheTime: {} as Record<string, number>,
 
-  async _getProductCatalog(customerCode?: string): Promise<ProductCatalog> {
+  async _getProductCatalog(customerCode?: string, includeInactive = false): Promise<ProductCatalog> {
     const now = Date.now();
-    const cacheKey = customerCode || "default";
+    const cacheKey = `${customerCode || "default"}_${includeInactive}`;
 
     // Cache product catalog for 30 seconds
     if (
@@ -268,6 +272,7 @@ export const SalesReturnProvider = {
 
     const params = new URLSearchParams({ action: "products" });
     if (customerCode) params.set("customerCode", customerCode);
+    if (includeInactive) params.set("includeInactive", "true");
 
     const res = await fetch(`${API_BASE}?${params}`, {
       cache: "no-store",

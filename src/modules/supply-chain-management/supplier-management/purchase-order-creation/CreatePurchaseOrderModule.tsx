@@ -599,10 +599,6 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                     if (pid) discountByProductId.set(pid, dtid);
                 }
 
-                const DEBUG_BOX_CONVERSION = false;
-                const MAX_DEBUG_LOGS = 50;
-                let debugCount = 0;
-
                 setAllProducts(
                     (rawProducts ?? []).map((rp: any) => {
                         const pid = String(rp?.product_id ?? rp?.id ?? "");
@@ -612,19 +608,6 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                             FALLBACK_NO_DISCOUNT_ID;
 
                         const np = normalizeProduct(rp, fixedDiscountTypeId);
-
-                        if (DEBUG_BOX_CONVERSION && debugCount < MAX_DEBUG_LOGS) {
-                            debugCount += 1;
-                            console.log("[BOX-CONV]", {
-                                product_id: (np as any)?.id,
-                                name: (np as any)?.name,
-                                baseUomId: (np as any)?.baseUomId,
-                                baseUnitPrice: (np as any)?.baseUnitPrice,
-                                unitsPerBox: (np as any)?.unitsPerBox,
-                                baseUnitsPerBox: (np as any)?.baseUnitsPerBox,
-                                pricePerBox: (np as any)?.price,
-                            });
-                        }
 
                         return np;
                     })
@@ -910,27 +893,15 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
             };
 
             const savePromise = provider.createPurchaseOrder(payload);
-
-            toast.promise(savePromise, {
-                loading: "Creating Purchase Order...",
-                success: (json: any) => {
-                    console.log("PO RESPONSE:", json?.data ?? json);
-                    setIsLocked(true);
-                    return `Purchase Order ${poNumber} created successfully!`;
-                },
-                error: (err: any) => {
-                    const msg = String(err?.message ?? err);
-                    setError(msg);
-                    return `Failed to create PO: ${msg}`;
-                },
-            });
-
             const json = await savePromise;
+            setIsLocked(true);
+            toast.success(`Purchase Order ${poNumber} created successfully!`);
             return json;
         } catch (e: unknown) {
             const err = e as Error;
             const msg = String(err?.message ?? err);
             setError(msg);
+            toast.error(`Failed to create PO: ${msg}`);
             throw new Error(msg);
         } finally {
             setIsSaving(false);

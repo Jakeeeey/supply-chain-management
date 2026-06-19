@@ -613,7 +613,7 @@ export const dispatchPlanQueryService = {
           limit: -1,
         },
       );
-      customerMap = new Map(customers.map((c) => [c.customer_code, c]));
+      customerMap = new Map(customers.map((c) => [c.customer_code?.trim().toUpperCase(), c]));
     }
 
     // Step 5.5: Filter "Not Fulfilled" by Clearance Status
@@ -669,7 +669,7 @@ export const dispatchPlanQueryService = {
       const { data: assignedDetails } = await fetchItemsInChunks<{
         sales_order_id: number;
       }>("/items/dispatch_plan_details", "sales_order_id", allOrderIds, {
-        "filter[dispatch_id][status][_nin]": "Dispatched,Cancelled,Delivered,Rejected",
+        "filter[dispatch_id][status][_nin]": "Dispatched,Cancelled,Delivered,Rejected,Approved",
         fields: "sales_order_id",
         limit: -1,
       });
@@ -688,33 +688,34 @@ export const dispatchPlanQueryService = {
       })
       .filter((o) => {
         if (!clusterId || !allowedAreas.length) return true;
-        const customer = customerMap.get(o.customer_code);
+        const customer = customerMap.get(o.customer_code?.trim().toUpperCase());
         if (!customer) return false;
 
         return allowedAreas.some((area) => {
-          // Province must match exactly
-          const provMatch =
-            area.province?.toUpperCase() === customer.province?.toUpperCase();
-          if (!provMatch) return false;
+          // Province must match exactly (ignoring trailing spaces, which MySQL does automatically)
+          const cProv = customer.province?.trim().toUpperCase() || "";
+          const aProv = area.province?.trim().toUpperCase() || "";
+          if (cProv !== aProv) return false;
 
-          // If customer has a city, it must match area city (if area defines one)
-          if (customer.city && area.city) {
-            if (area.city.toUpperCase() !== customer.city.toUpperCase())
-              return false;
+          // City condition: apc.city = c.city OR apc.city is null OR apc.city = ''
+          const aCity = area.city?.trim().toUpperCase() || "";
+          if (aCity !== "") {
+            const cCity = customer.city?.trim().toUpperCase() || "";
+            if (aCity !== cCity) return false;
           }
 
-          // If customer has a barangay, it must match area barangay (if area defines one)
-          if (customer.brgy && area.baranggay) {
-            if (area.baranggay.toUpperCase() !== customer.brgy.toUpperCase())
-              return false;
+          // Barangay condition: apc.baranggay = c.brgy OR apc.baranggay is null OR apc.baranggay = ''
+          const aBrgy = area.baranggay?.trim().toUpperCase() || "";
+          if (aBrgy !== "") {
+            const cBrgy = customer.brgy?.trim().toUpperCase() || "";
+            if (aBrgy !== cBrgy) return false;
           }
 
-          // If city/barangay are missing on customer side, or not defined in area, it's a match on province level
           return true;
         });
       })
       .map((o) => {
-        const customer = customerMap.get(o.customer_code);
+        const customer = customerMap.get(o.customer_code?.trim().toUpperCase());
         return {
           order_id: o.order_id,
           order_no: o.order_no,

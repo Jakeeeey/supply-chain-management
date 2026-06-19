@@ -94,17 +94,27 @@ export const skuQueryService = {
 
     const products = data || [];
     if (products.length > 0) {
-      const productIds = products.map((p) => p.product_id || p.id).filter(Boolean);
+      const productIds = products.map((p) => p.product_id || p.id).filter(Boolean) as number[];
       try {
-        const { data: supplierLinks } = await fetchItems<{
-          product_id: number;
-          supplier_id: number;
-        }>("/items/product_per_supplier", {
-          filter: JSON.stringify({
-            product_id: { _in: productIds as number[] },
-          }),
-          limit: -1,
-        });
+        // Chunk productIds into batches of 50 to avoid HTTP 431 URL length limits
+        const chunkSize = 50;
+        const supplierLinks: { product_id: number; supplier_id: number }[] = [];
+        
+        for (let i = 0; i < productIds.length; i += chunkSize) {
+          const chunk = productIds.slice(i, i + chunkSize);
+          const { data: chunkLinks } = await fetchItems<{
+            product_id: number;
+            supplier_id: number;
+          }>("/items/product_per_supplier", {
+            filter: JSON.stringify({
+              product_id: { _in: chunk },
+            }),
+            limit: -1,
+          });
+          if (chunkLinks) {
+            supplierLinks.push(...chunkLinks);
+          }
+        }
 
         if (supplierLinks?.length) {
           const supplierMap = new Map<number, number>();
