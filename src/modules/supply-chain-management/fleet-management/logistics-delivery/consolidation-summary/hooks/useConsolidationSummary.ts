@@ -56,7 +56,7 @@ export const useConsolidationSummary = () => {
 
             group.customers.forEach((customer) => {
                 customer.orders.forEach((o) => {
-                    if (!checkDateRange(o.orderDate, dateSettings.range, dateSettings.from, dateSettings.to)) return;
+                    if (!checkDateRange(o.createdDate, dateSettings.range, dateSettings.from, dateSettings.to)) return;
                     if (filters.salesman !== "All" && customer.salesmanName !== filters.salesman) return;
 
                     if (filters.search) {
@@ -66,7 +66,7 @@ export const useConsolidationSummary = () => {
                         if (!hit) return;
                     }
 
-                    const dateKey = toLocalDayKey(o.orderDate);
+                    const dateKey = toLocalDayKey(o.createdDate);
                     const key = `${customer.customerName}||${customer.salesmanName}||${dateKey}`;
                     const amt = Number(o.allocatedAmount ?? 0);
 
@@ -78,8 +78,8 @@ export const useConsolidationSummary = () => {
                             salesmanName: customer.salesmanName,
                             clusterRowSpan: 0,
                             customerRowSpan: 0,
-                            orderDate: dateKey,
-                            createdDate: o.createdDate,
+                            orderDate: o.orderDate,
+                            createdDate: dateKey,
                             approvedDate: o.approvedDate,
                             status: "For Consolidation",
                             amount: 0,
@@ -125,7 +125,7 @@ export const useConsolidationSummary = () => {
 
             group.customers.forEach((customer) => {
                 customer.orders.forEach((o) => {
-                    if (!checkDateRange(o.orderDate, dateSettings.range, dateSettings.from, dateSettings.to)) return;
+                    if (!checkDateRange(o.createdDate, dateSettings.range, dateSettings.from, dateSettings.to)) return;
                     if (filters.salesman !== "All" && customer.salesmanName !== filters.salesman) return;
 
                     if (filters.search) {
