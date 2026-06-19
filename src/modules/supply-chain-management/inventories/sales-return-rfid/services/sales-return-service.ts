@@ -66,12 +66,7 @@ const formatDateForAPI = (dateString: string | Date) => {
       const day = String(d.getUTCDate()).padStart(2, "0");
       dateStr = `${year}-${month}-${day}`;
     }
-
-    const nowD = new Date(Date.now() + 8 * 60 * 60 * 1000);
-    const hour = String(nowD.getUTCHours()).padStart(2, "0");
-    const minute = String(nowD.getUTCMinutes()).padStart(2, "0");
-    const second = String(nowD.getUTCSeconds()).padStart(2, "0");
-    return `${dateStr}T${hour}:${minute}:${second}`;
+    return `${dateStr}T00:00:00.000Z`;
   } catch {
     return nowPH();
   }
@@ -130,6 +125,9 @@ export async function fetchReturns(
     priceType: item.price_type || "-",
     createdAt: item.created_at
       ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.created_at))
+      : "-",
+    receivedAt: item.received_at
+      ? new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.received_at))
       : "-",
   }));
 
@@ -863,11 +861,11 @@ export async function lookupRfid(
   rfidTag: string,
   branchId: number,
   token: string,
-): Promise<{ isOnInventory: boolean; productId?: number } | null> {
+): Promise<{ isOnInventory: boolean; productId?: number; currentBranchId?: number; currentBranchName?: string } | null> {
   const SPRING_URL = process.env.SPRING_API_BASE_URL;
   if (!SPRING_URL) throw new Error("SPRING_API_BASE_URL is not defined");
 
-  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-rfid-onhand?rfid=${encodeURIComponent(rfidTag)}&branch_id=${branchId}`;
+  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-rfid-onhand?rfid=${encodeURIComponent(rfidTag)}`;
 
   try {
     const res = await fetch(targetUrl, {
@@ -885,9 +883,21 @@ export async function lookupRfid(
 
     const results = await res.json();
     const isOnInventory = Array.isArray(results) && results.length > 0;
-    const productId = isOnInventory ? Number(results[0].productId) : undefined;
+    if (!isOnInventory) {
+      return { isOnInventory: false };
+    }
 
-    return { isOnInventory, productId };
+    const matchedRow = results[0];
+    const rfidBranchId = Number(matchedRow.branchId ?? matchedRow.branch_id);
+    const rfidBranchName = matchedRow.branch_name ?? matchedRow.branchName ?? "Unknown Branch";
+    const productId = Number(matchedRow.productId ?? matchedRow.product_id);
+
+    return {
+      isOnInventory,
+      productId,
+      currentBranchId: rfidBranchId,
+      currentBranchName: rfidBranchName,
+    };
   } catch (err) {
     console.error("[Sales Return RFID] Product lookup failed:", err);
     throw err instanceof Error ? err : new Error(String(err));

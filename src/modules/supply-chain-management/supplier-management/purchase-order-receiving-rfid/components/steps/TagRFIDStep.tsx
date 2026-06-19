@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Trash2, AlertTriangle, Plus, X, Pencil } from "lucide-react";
+import { Trash2, AlertTriangle, Plus, X } from "lucide-react";
 import { useReceivingProducts, ReceivingPOItem, ActivityRow } from "../../providers/ReceivingProductsProvider";
 import { useKeyboardScanner } from "../../hooks/useKeyboardScanner";
 import { toast } from "sonner";
@@ -31,7 +31,6 @@ export function TagRFIDStep() {
         editingReceiptId,
         clearEditingReceiptId,
         removeExtraProductLocally,
-        loadReceipt,
         saveRFIDTagging,
     } = useReceivingProducts();
 
@@ -82,6 +81,7 @@ export function TagRFIDStep() {
 
     // Construct all products in PO allocations (excluding expectedQty <= 0)
     const allItems = React.useMemo(() => {
+        const isNewReceipt = !editingReceiptId;
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
         return allocs.flatMap((a) => {
             const items = Array.isArray(a?.items) ? a.items : [];
@@ -92,9 +92,17 @@ export function TagRFIDStep() {
                     branchName: a?.branch?.name ?? "Unassigned",
                 }))
                 .filter((it) => Number(it.expectedQty || 0) > 0 || it.isExtra)
-                .filter((it) => it.isExtra || (Number(it.taggedQty || 0) < Number(it.expectedQty)));
+                .filter((it) => {
+                    // For new receipts, exclude items that are already fully tagged
+                    if (isNewReceipt && !it.isExtra) {
+                        const tagged = Number(it.taggedQty || 0);
+                        const expected = Number(it.expectedQty || 0);
+                        if (expected > 0 && tagged >= expected) return false;
+                    }
+                    return it.isExtra || (Number(it.taggedQty || 0) < Number(it.expectedQty));
+                });
         });
-    }, [selectedPO]);
+    }, [selectedPO, editingReceiptId]);
 
     const safeCounts: Record<string, number> = React.useMemo(() =>
         scannedCountByPorId && typeof scannedCountByPorId === "object" ? scannedCountByPorId : {}, [scannedCountByPorId]);
@@ -212,18 +220,7 @@ export function TagRFIDStep() {
                                                 >
                                                     Reverted
                                                 </Badge>
-                                                {editingReceiptId !== h.receiptNo && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-5 px-1.5 text-[10px] text-orange-600 dark:text-orange-400 hover:bg-orange-500/10 gap-1"
-                                                        onClick={() => loadReceipt(h.receiptNo)}
-                                                        disabled={!!editingReceiptId}
-                                                    >
-                                                        <Pencil className="h-3 w-3" />
-                                                        Edit
-                                                    </Button>
-                                                )}
+                                                {/* Edit disabled in receiving RFID */}
                                             </>
                                         ) : (
                                             <Badge

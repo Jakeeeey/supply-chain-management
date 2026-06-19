@@ -296,6 +296,8 @@ export const SalesReturnProvider = {
   ): Promise<{
     isOnInventory: boolean;
     productId?: number;
+    currentBranchId?: number;
+    currentBranchName?: string;
   } | null> {
     const params = new URLSearchParams({
       action: "rfid-lookup",
@@ -307,6 +309,8 @@ export const SalesReturnProvider = {
     return handleResponse<{
       isOnInventory: boolean;
       productId?: number;
+      currentBranchId?: number;
+      currentBranchName?: string;
     } | null>(res);
   },
 
