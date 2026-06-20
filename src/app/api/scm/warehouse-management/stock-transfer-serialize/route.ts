@@ -40,6 +40,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(result);
     }
 
+    if (action === "verify_receive_serial") {
+      const serial = searchParams.get("serial");
+      const transferIds = searchParams.get("transferIds")?.split(",").map(Number);
+
+      if (!serial || !transferIds || transferIds.length === 0) {
+        return NextResponse.json({ error: "Serial number and transferIds are required" }, { status: 400 });
+      }
+
+      const result = await service.verifyReceiveSerial(serial, transferIds);
+      return NextResponse.json(result);
+    }
+
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (err) {
     console.error("[Stock Transfer Serialize API] GET Error:", err);
