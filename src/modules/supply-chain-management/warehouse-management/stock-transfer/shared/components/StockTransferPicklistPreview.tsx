@@ -68,7 +68,7 @@ export function StockTransferPicklistPreview({
       const doc = generateStockTransferPicklistPDF({
         orderNo,
         pickerName,
-        date: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
+        date: new Date().toLocaleString('en-PH'),
         requestedDate,
         items,
         companyData,
@@ -98,7 +98,7 @@ export function StockTransferPicklistPreview({
     const doc = generateStockTransferPicklistPDF({
       orderNo,
       pickerName,
-      date: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
+      date: new Date().toLocaleString('en-PH'),
       requestedDate,
       items,
       companyData,
@@ -117,7 +117,7 @@ export function StockTransferPicklistPreview({
     const doc = generateStockTransferPicklistPDF({
       orderNo,
       pickerName,
-      date: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
+      date: new Date().toLocaleString('en-PH'),
       requestedDate,
       items,
       companyData,

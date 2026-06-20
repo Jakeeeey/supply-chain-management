@@ -82,15 +82,18 @@ export function useStockTransferReceive() {
     });
   }, [base.baseOrderGroups]);
 
+  // Enrich items — match received scans to the correct line item via dispatched_rfids
   const orderGroups = useMemo(() => {
     return base.baseOrderGroups.map((group: OrderGroup) => {
+      const scanLogs = receivedItemsState[group.orderNo] || [];
+      const successScans = scanLogs.filter(s => s.status === 'SUCCESS');
+
+      // Track distributed scans per product for items without dispatched_rfids
+      const distributedPerProduct = new Map<number, number>();
+
       const enrichedItems = group.items.map((st: OrderGroupItem) => {
         const product = st.product_id as ProductRow;
-        const pid = product?.product_id || st.product_id;
-        
-        const scanLogs = receivedItemsState[group.orderNo] || [];
-        const itemScans = scanLogs.filter(s => s.status === 'SUCCESS' && s.productId === pid);
-        const rfids = itemScans.map(s => s.rfid);
+        const pid = (product?.product_id || st.product_id) as number;
 
         const uom = typeof product?.unit_of_measurement === 'object' ? product.unit_of_measurement : null;
         const unitName = (uom?.unit_name || '').toLowerCase();
@@ -98,14 +101,32 @@ export function useStockTransferReceive() {
 
         // Mark as loose pack if unit is pieces, tie, pcs, or loose (these don't need RFID scanning)
         const isLoosePack = unitName.includes('loose') || unitName.includes('pieces') || unitName.includes('pcs') || unitName.includes('tie') || unitId === 4;
-        
-        const manualQty = (manualQtysState[group.orderNo] || {})[pid as number] || 0;
-        
+
+        const manualQty = (manualQtysState[group.orderNo] || {})[pid] || 0;
+        const dispatchedTags = (st as OrderGroupItem).dispatched_rfids || [];
+
+        let itemRfids: string[];
+        if (dispatchedTags.length > 0) {
+          // Match received scans against this item's specific dispatched RFIDs
+          const dispatchedSet = new Set(dispatchedTags.map(t => String(t).trim()));
+          itemRfids = successScans
+            .filter(s => s.productId === pid && dispatchedSet.has(String(s.rfid).trim()))
+            .map(s => s.rfid);
+        } else {
+          // Fallback: distribute scans by capacity for items without dispatch tags
+          const productScans = successScans.filter(s => s.productId === pid);
+          const alreadyDistributed = distributedPerProduct.get(pid) || 0;
+          const targetQty = Math.max(0, st.allocated_quantity ?? 0);
+          const canAssign = Math.max(0, Math.min(targetQty, productScans.length - alreadyDistributed));
+          itemRfids = productScans.slice(alreadyDistributed, alreadyDistributed + canAssign).map(s => s.rfid);
+          distributedPerProduct.set(pid, alreadyDistributed + itemRfids.length);
+        }
+
         return {
           ...st,
-          receivedQty: isLoosePack ? manualQty : rfids.length,
-          receivedRfids: rfids,
-          dispatched_rfids: (st as OrderGroupItem).dispatched_rfids || [],
+          receivedQty: isLoosePack ? manualQty : itemRfids.length,
+          receivedRfids: itemRfids,
+          dispatched_rfids: dispatchedTags,
           isLoosePack
         };
       });
@@ -244,22 +265,42 @@ export function useStockTransferReceive() {
     try {
       const match = await stockTransferLifecycleService.lookupRfid(rfid);
       const productId = match.productId;
-      
-      const itemInOrder = selectedGroup.items.find(i => {
+
+      // Find all line items for this product
+      const matchingItems = selectedGroup.items.filter(i => {
         const itemProduct = i.product_id as ProductRow;
         const itemPid = Number(itemProduct?.product_id || i.product_id);
         return itemPid === productId;
       });
 
-      if (!itemInOrder) {
+      if (matchingItems.length === 0) {
         pushError(`Product is not part of this order!`, 'Mismatch');
         return;
       }
 
-      const dispatchedTags = itemInOrder.dispatched_rfids || [];
-      if (dispatchedTags.length > 0 && !dispatchedTags.map(t => String(t).trim()).includes(String(rfid).trim())) {
-        pushError("Tag was not part of original dispatch.", "Mismatch");
-        return;
+      // Find the specific line item whose dispatched_rfids contains this RFID
+      const rfidStr = String(rfid).trim();
+      let itemInOrder = matchingItems.find(i => {
+        const tags = (i.dispatched_rfids || []).map(t => String(t).trim());
+        return tags.includes(rfidStr);
+      });
+
+      if (!itemInOrder) {
+        // If any matching item has dispatched_rfids, reject — the tag doesn't belong here
+        const hasDispatchedTags = matchingItems.some(i => (i.dispatched_rfids || []).length > 0);
+        if (hasDispatchedTags) {
+          pushError("Tag was not part of original dispatch.", "Mismatch");
+          return;
+        }
+        // Fallback: if no items have dispatch tags, find first with remaining capacity
+        itemInOrder = matchingItems.find(i => {
+          const tQty = i.allocated_quantity || 0;
+          return (i.receivedQty || 0) < tQty;
+        });
+        if (!itemInOrder) {
+          pushError(`Already Complete for ${match.productName}`, "Over-scan");
+          return;
+        }
       }
 
       const currentScans = receivedItemsState[base.selectedOrderNo!] || [];
@@ -267,7 +308,7 @@ export function useStockTransferReceive() {
         pushError("Already Scanned", "Duplicate");
         return;
       }
-      
+
       const targetQty = itemInOrder.allocated_quantity || 0;
       if (itemInOrder.receivedQty >= targetQty) {
         pushError(`Already Complete for ${match.productName}`, "Over-scan");
