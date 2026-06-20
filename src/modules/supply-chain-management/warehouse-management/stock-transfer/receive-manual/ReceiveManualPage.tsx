@@ -62,7 +62,7 @@ export default function StockTransferReceiveManualView({ currentUser }: { curren
   ) || [];
 
   const isAllReceived = selectedGroup?.items.every((i: OrderGroupItem) => {
-    const targetQty = Math.max(0, i.scanned_quantity ?? i.allocated_quantity ?? 0);
+    const targetQty = Math.max(0, i.scanned_quantity ?? i.picked_quantity ?? i.allocated_quantity ?? 0);
     return (receivedQtys[i.id] ?? 0) >= targetQty;
   }) ?? false;
 
@@ -151,7 +151,7 @@ export default function StockTransferReceiveManualView({ currentUser }: { curren
                   </TableHeader>
                   <TableBody>
                     {paginatedItems.map((item: OrderGroupItem) => {
-                      const targetQty = Math.max(0, item.scanned_quantity ?? item.allocated_quantity ?? 0);
+                      const targetQty = Math.max(0, item.scanned_quantity ?? item.picked_quantity ?? item.allocated_quantity ?? 0);
                       const currentQty = receivedQtys[item.id] ?? 0;
                       const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
                       const productName = product?.product_name || `PRD-${item.product_id}`;
