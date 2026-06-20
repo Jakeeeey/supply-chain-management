@@ -66,12 +66,7 @@ const formatDateForAPI = (dateString: string | Date) => {
       const day = String(d.getUTCDate()).padStart(2, "0");
       dateStr = `${year}-${month}-${day}`;
     }
-
-    const nowD = new Date(Date.now() + 8 * 60 * 60 * 1000);
-    const hour = String(nowD.getUTCHours()).padStart(2, "0");
-    const minute = String(nowD.getUTCMinutes()).padStart(2, "0");
-    const second = String(nowD.getUTCSeconds()).padStart(2, "0");
-    return `${dateStr}T${hour}:${minute}:${second}`;
+    return `${dateStr}T00:00:00.000Z`;
   } catch {
     return nowPH();
   }
@@ -130,6 +125,9 @@ export async function fetchReturns(
     priceType: item.price_type || "-",
     createdAt: item.created_at
       ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.created_at))
+      : "-",
+    receivedAt: item.received_at
+      ? new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.received_at))
       : "-",
   }));
 
@@ -314,7 +312,10 @@ export async function fetchReferences(): Promise<{
 /**
  * Fetches the product catalog for the ProductLookupModal.
  */
-export async function fetchProductCatalog(customerCode?: string): Promise<{
+export async function fetchProductCatalog(
+  customerCode?: string,
+  includeInactive = false,
+): Promise<{
   brands: Brand[];
   categories: Category[];
   suppliers: Supplier[];
@@ -323,7 +324,7 @@ export async function fetchProductCatalog(customerCode?: string): Promise<{
   supplierCategoryDiscount: any[];
   products: Product[];
 }> {
-  const catalogData = await repo.getRawProductCatalog();
+  const catalogData = await repo.getRawProductCatalog(includeInactive);
   const [brandsRes, categoriesRes, suppliersRes, unitsRes, connectionsRes, productsRes] = catalogData;
 
   let scdpcRes = { data: [] as any[] };

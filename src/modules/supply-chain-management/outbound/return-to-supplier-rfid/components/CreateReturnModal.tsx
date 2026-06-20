@@ -48,6 +48,32 @@ import type {
   LinePerDiscountType 
 } from "../types/rts.schema";
 
+const RFID_HEX_LENGTH = 24;
+
+function extractHexCharacters(value: string): string {
+    return value.toUpperCase().replace(/[^0-9A-F]/g, "");
+}
+
+function finalizeHexTag(rawValue: string): string {
+    const hex = extractHexCharacters(rawValue);
+
+    if (hex.length < RFID_HEX_LENGTH) {
+        return "";
+    }
+
+    if (hex.length === RFID_HEX_LENGTH) {
+        return hex;
+    }
+
+    return hex.slice(-RFID_HEX_LENGTH);
+}
+
+function sameTag(a: string, b: string): boolean {
+    return finalizeHexTag(a) === finalizeHexTag(b);
+}
+
+
+
 export function CreateReturnModal({
   isOpen,
   onClose,
@@ -316,31 +342,31 @@ export function CreateReturnModal({
         return;
       }
 
-      // Validate: 24-character limit
-      if (rfidTag.length > 24) {
-        toast.error("Invalid RFID", {
-          description: `RFID tag must be 24 characters or fewer (received ${rfidTag.length}).`,
+      const cleanedTag = finalizeHexTag(rfidTag);
+      if (!cleanedTag) {
+        toast.error("Invalid RFID Tag", {
+          description: `RFID tag "${rfidTag}" must be a 24-character hexadecimal string.`,
         });
         return;
       }
 
       // Check for duplicate RFID already in cart
-      if (cart.some((i) => i.rfid_tag === rfidTag)) {
+      if (cart.some((i) => i.rfid_tag && sameTag(i.rfid_tag, cleanedTag))) {
         toast.warning("Duplicate RFID", {
-          description: `RFID "${rfidTag}" is already in the cart.`,
+          description: `RFID "${cleanedTag}" is already in the cart.`,
         });
         return;
       }
 
       setRfidScanning(true);
-      setLastScannedRfid(rfidTag);
+      setLastScannedRfid(cleanedTag);
 
       try {
-        const result = await lookupRfid(rfidTag, Number(selection.branchId));
+        const result = await lookupRfid(cleanedTag, Number(selection.branchId));
 
         if (!result || !result.productId) {
           toast.error("RFID Not Found", {
-            description: `No on-hand product found for RFID "${rfidTag}" at this branch.`,
+            description: `No on-hand product found for RFID "${cleanedTag}" at this branch.`,
           });
           return;
         }
@@ -353,7 +379,7 @@ export function CreateReturnModal({
 
         if (!invRecord) {
           toast.error("Supplier Mismatch", {
-            description: `Product associated with RFID "${rfidTag}" does not belong to the selected Supplier or is out of stock.`,
+            description: `Product associated with RFID "${cleanedTag}" does not belong to the selected Supplier or is out of stock.`,
           });
           return;
         }
@@ -381,7 +407,7 @@ export function CreateReturnModal({
           price: invRecord.price,
           uom_id: matchedUnit.unit_id,
           supplierDiscount: 0,
-          rfid_tag: rfidTag,
+          rfid_tag: cleanedTag,
           parentId: invRecord.familyId || null,
           discountTypeId: undefined as number | undefined,
         };
@@ -403,7 +429,7 @@ export function CreateReturnModal({
         addToCart(product, 1);
 
         toast.success("RFID Scanned", {
-          description: `Added "${product.name}" (RFID: ${rfidTag})`,
+          description: `Added "${product.name}" (RFID: ${cleanedTag})`,
         });
 
         // Auto-clear the displayed scan value after 2 seconds

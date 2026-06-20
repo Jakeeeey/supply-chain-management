@@ -66,7 +66,7 @@ export function StockTransferReceivingPreview({
       const doc = generateStockTransferReceivingPDF({
         orderNo,
         checkedBy,
-        date: new Date().toLocaleString('en-PH'),
+        date: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
         items,
         companyData: companyData || null,
         sourceBranch,
@@ -95,7 +95,7 @@ export function StockTransferReceivingPreview({
     const doc = generateStockTransferReceivingPDF({
       orderNo,
       checkedBy,
-      date: new Date().toLocaleString('en-PH'),
+      date: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
       items,
       companyData,
       sourceBranch,
@@ -113,7 +113,7 @@ export function StockTransferReceivingPreview({
     const doc = generateStockTransferReceivingPDF({
       orderNo,
       checkedBy,
-      date: new Date().toLocaleString('en-PH'),
+      date: new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }),
       items,
       companyData,
       sourceBranch,

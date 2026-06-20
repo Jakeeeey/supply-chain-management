@@ -90,8 +90,10 @@ export function ReviewReceiptStep({ receiverName, onBack }: { receiverName?: str
 
         const isNewPO = lastInitializedRef.current.poId !== poId;
         const isNewEdit = editingReceiptId && lastInitializedRef.current.editingReceiptId !== editingReceiptId;
+        // ✅ Detect cancel edit: editingReceiptId went from non-null to null
+        const isCancelledEdit = !editingReceiptId && lastInitializedRef.current.editingReceiptId !== null;
 
-        if (isNewPO || isNewEdit) {
+        if (isNewPO || isNewEdit || isCancelledEdit) {
             if (editingReceiptId) {
                 if (scannedCountByPorId && Object.keys(scannedCountByPorId).length > 0) {
                     lastInitializedRef.current = { poId, editingReceiptId };
@@ -117,6 +119,12 @@ export function ReviewReceiptStep({ receiverName, onBack }: { receiverName?: str
                 });
                 setCustomCounts(counts);
                 setSelectedRows(initialSelected);
+                // ✅ Reset metadata fields when cancelling edit to clear stale reverted data
+                if (isCancelledEdit) {
+                    setLotIds({});
+                    setBatchNos({});
+                    setExpiryDates({});
+                }
             }
         }
     }, [selectedPO, editingReceiptId, scannedCountByPorId]);

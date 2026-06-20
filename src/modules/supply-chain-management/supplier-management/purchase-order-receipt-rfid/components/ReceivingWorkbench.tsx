@@ -19,7 +19,7 @@ function StepDot({ active }: { active: boolean }) {
 }
 
 export function ReceivingWorkbench({ receiverName }: { receiverName?: string }) {
-    const { selectedPO, receiptSaved, step, setStep } = useReceivingProducts();
+    const { selectedPO, receiptSaved, step, setStep, editingReceiptId } = useReceivingProducts();
 
     // If receipt is saved, stay on step 2 to show success state
     React.useEffect(() => {
@@ -68,7 +68,7 @@ export function ReceivingWorkbench({ receiverName }: { receiverName?: string }) 
                 {step === 1 ? (
                     <TagRFIDStep onContinue={() => setStep(2)} />
                 ) : step === 2 ? (
-                    <ReviewReceiptStep onBack={() => setStep(1)} receiverName={receiverName} />
+                    <ReviewReceiptStep key={editingReceiptId || "new"} onBack={() => setStep(1)} receiverName={receiverName} />
                 ) : null}
             </div>
         </Card>
