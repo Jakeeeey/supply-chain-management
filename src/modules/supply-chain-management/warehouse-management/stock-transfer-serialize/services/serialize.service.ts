@@ -84,6 +84,7 @@ export async function listTransferGroups(params: {
   limit?: number;
   offset?: number;
 }) {
+  return await repo.fetchStockTransferGroups(params);
 }
 
 /**
