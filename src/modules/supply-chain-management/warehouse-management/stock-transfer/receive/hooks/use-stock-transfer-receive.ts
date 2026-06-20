@@ -116,7 +116,7 @@ export function useStockTransferReceive() {
           // Fallback: distribute scans by capacity for items without dispatch tags
           const productScans = successScans.filter(s => s.productId === pid);
           const alreadyDistributed = distributedPerProduct.get(pid) || 0;
-          const targetQty = Math.max(0, st.allocated_quantity ?? 0);
+          const targetQty = Math.max(0, st.picked_quantity ?? st.allocated_quantity ?? 0);
           const canAssign = Math.max(0, Math.min(targetQty, productScans.length - alreadyDistributed));
           itemRfids = productScans.slice(alreadyDistributed, alreadyDistributed + canAssign).map(s => s.rfid);
           distributedPerProduct.set(pid, alreadyDistributed + itemRfids.length);
@@ -294,7 +294,7 @@ export function useStockTransferReceive() {
         }
         // Fallback: if no items have dispatch tags, find first with remaining capacity
         itemInOrder = matchingItems.find(i => {
-          const tQty = i.allocated_quantity || 0;
+          const tQty = i.picked_quantity ?? i.allocated_quantity ?? 0;
           return (i.receivedQty || 0) < tQty;
         });
         if (!itemInOrder) {
@@ -309,7 +309,7 @@ export function useStockTransferReceive() {
         return;
       }
 
-      const targetQty = itemInOrder.allocated_quantity || 0;
+      const targetQty = itemInOrder.picked_quantity ?? itemInOrder.allocated_quantity ?? 0;
       if (itemInOrder.receivedQty >= targetQty) {
         pushError(`Already Complete for ${match.productName}`, "Over-scan");
         return;
