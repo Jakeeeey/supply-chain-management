@@ -1,4 +1,4 @@
-import type { ForArrivalInvoice, DispatchPlanGroup } from "../types/for-arrival-summary.types";
+import type { ForArrivalInvoice, DispatchPlanGroup, GroupedArrivalInvoice } from "../types/for-arrival-summary.types";
 
 export function normalizeCode(code: string): string {
   return code ? code.replace(/\s+/g, "") : "";
@@ -90,4 +90,42 @@ export function formatDateTime(dateStr: string): string {
     minute: "2-digit",
     hour12: true,
   });
+}
+
+/**
+ * Groups arrival invoices by customerName within a dispatch plan.
+ * Mirrors the groupPlanDetails logic from dispatch creation InvoiceItemsSidebar.
+ */
+export function groupArrivalInvoices(
+  invoices: ForArrivalInvoice[],
+): GroupedArrivalInvoice[] {
+  const grouped: GroupedArrivalInvoice[] = [];
+  const keyToGroup = new Map<string, GroupedArrivalInvoice>();
+
+  for (const inv of invoices) {
+    const key = inv.customerName || "Unknown Customer";
+    const existing = keyToGroup.get(key);
+
+    if (existing) {
+      existing.invoices.push(inv);
+      existing.totalNetAmount += inv.netAmount;
+      existing.totalAmount += inv.totalAmount;
+    } else {
+      const newGroup: GroupedArrivalInvoice = {
+        groupKey: key,
+        customerName: inv.customerName,
+        sequence: inv.sequence,
+        invoices: [inv],
+        totalNetAmount: inv.netAmount,
+        totalAmount: inv.totalAmount,
+        brgy: inv.brgy,
+        city: inv.city,
+        province: inv.province,
+      };
+      grouped.push(newGroup);
+      keyToGroup.set(key, newGroup);
+    }
+  }
+
+  return grouped;
 }

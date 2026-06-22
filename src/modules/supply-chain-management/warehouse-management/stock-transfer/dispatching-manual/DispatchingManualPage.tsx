@@ -299,7 +299,7 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
           salesmanName={currentUser.name}
           sourceBranch={getBranchName(selectedGroup.sourceBranch)}
           targetBranch={getBranchName(selectedGroup.targetBranch)}
-          requestedDate={new Date(selectedGroup.dateRequested).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}
+          requestedDate={new Date(selectedGroup.dateRequested).toLocaleString('en-PH')}
         />
       )}
     </div>
