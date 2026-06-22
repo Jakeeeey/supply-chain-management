@@ -26,11 +26,13 @@ interface MasterData {
 interface TripConfigurationFormProps {
   masterData: MasterData | null;
   vehicleCapacity: number;
+  disabled?: boolean;
 }
 
 export function TripConfigurationForm({ 
   masterData,
-  vehicleCapacity
+  vehicleCapacity,
+  disabled,
 }: TripConfigurationFormProps) {
   const form = useFormContext<DispatchCreationFormValues>();
   const { fields: helperFields, append, remove } = useFieldArray({
@@ -86,6 +88,7 @@ export function TripConfigurationForm({
                         value={field.value ? String(field.value) : ""}
                         onValueChange={(val) => field.onChange(Number(val))}
                         placeholder="Select branch"
+                        disabled={disabled}
                       />
                     </FormControl>
                     <FormMessage className="text-[10px]" />
@@ -94,13 +97,18 @@ export function TripConfigurationForm({
               />
 
               {/* Vehicle */}
-              <FormField
+                <FormField
                 control={form.control}
                 name="vehicle_id"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">
                       Vehicle
+                      {vehicleCapacity > 0 && (
+                        <span className="ml-1 font-normal text-muted-foreground/70 normal-case tracking-normal">
+                          (Max: {Number(vehicleCapacity).toLocaleString()} kg)
+                        </span>
+                      )}
                     </FormLabel>
                     <FormControl>
                       <SearchableSelect
@@ -111,11 +119,9 @@ export function TripConfigurationForm({
                         value={field.value ? String(field.value) : ""}
                         onValueChange={(val) => field.onChange(Number(val))}
                         placeholder="Select vehicle"
+                        disabled={disabled}
                       />
                     </FormControl>
-                    <p className="text-[10px] text-muted-foreground mt-1 px-1">
-                      Max: <span className="text-foreground">{Number(vehicleCapacity || 0).toLocaleString()} kg</span>
-                    </p>
                     <FormMessage className="text-[10px]" />
                   </FormItem>
                 )}
@@ -135,6 +141,7 @@ export function TripConfigurationForm({
                         value={field.value}
                         onChange={field.onChange}
                         placeholder="Select departure"
+                        disabled={disabled}
                       />
                     </FormControl>
                     <FormMessage className="text-[10px]" />
@@ -156,6 +163,7 @@ export function TripConfigurationForm({
                         value={field.value}
                         onChange={field.onChange}
                         placeholder="Select arrival"
+                        disabled={disabled}
                       />
                     </FormControl>
                     <FormMessage className="text-[10px]" />
@@ -182,6 +190,7 @@ export function TripConfigurationForm({
                         value={field.value ? String(field.value) : ""}
                         onValueChange={(val) => field.onChange(Number(val))}
                         placeholder="Assign a driver"
+                        disabled={disabled}
                       />
                     </FormControl>
                     <FormMessage className="text-[10px]" />
@@ -204,6 +213,7 @@ export function TripConfigurationForm({
                         value={field.value ? String(field.value) : ""}
                         onValueChange={(val) => field.onChange(Number(val))}
                         placeholder="Assign a helper"
+                        disabled={disabled}
                       />
                     </FormControl>
                     <FormMessage className="text-[10px]" />
@@ -224,6 +234,7 @@ export function TripConfigurationForm({
                       <Input
                         placeholder="Additional notes for the trip..."
                         className="h-9 text-sm bg-background/50"
+                        disabled={disabled}
                         {...field}
                       />
                     </FormControl>
@@ -256,6 +267,7 @@ export function TripConfigurationForm({
                               type="button"
                               onClick={() => remove(index)}
                               className="text-destructive hover:text-destructive/80 transition-colors"
+                              disabled={disabled}
                             >
                               <X className="h-3 w-3" />
                             </button>
@@ -266,6 +278,7 @@ export function TripConfigurationForm({
                               value={field.value ? String(field.value) : ""}
                               onValueChange={(val: string) => field.onChange(Number(val))}
                               placeholder="Select additional helper"
+                              disabled={disabled}
                             />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
@@ -285,6 +298,7 @@ export function TripConfigurationForm({
               size="sm"
               className="w-full border-dashed h-9 text-xs font-medium text-muted-foreground hover:text-foreground transition-all flex items-center justify-center gap-2"
               onClick={() => append({ user_id: 0 })}
+              disabled={disabled}
             >
               <X className="w-3.5 h-3.5 rotate-45" />
               Add Additional Helper

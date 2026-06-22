@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { Check, Search, Filter } from "lucide-react";
+import { Check, Search, Filter, RefreshCw } from "lucide-react";
 import { EnrichedApprovedPlan, ReadinessFilter } from "../../../types/dispatch.types";
 import {
   DropdownMenu,
@@ -33,6 +34,9 @@ interface PdpListSidebarProps {
   selectedBranch: number;
   currentTotalWeight: number;
   vehicleCapacity: number;
+  onLoadDeliveries?: () => void;
+  isBranchSelected?: boolean;
+  hasLoadedOnce?: boolean;
 }
 
 export function PdpListSidebar({
@@ -50,6 +54,9 @@ export function PdpListSidebar({
   selectedBranch,
   currentTotalWeight,
   vehicleCapacity,
+  onLoadDeliveries,
+  isBranchSelected,
+  hasLoadedOnce,
 }: PdpListSidebarProps) {
   const counts = useMemo(() => ({
     all: approvedPlans.length,
@@ -76,6 +83,25 @@ export function PdpListSidebar({
               className="pl-8 h-8 text-xs bg-background border-border/60"
             />
           </div>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="default"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  disabled={!isBranchSelected}
+                  onClick={onLoadDeliveries}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                Load deliveries
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button 
@@ -113,7 +139,7 @@ export function PdpListSidebar({
                 onClick={() => onFilterChange("Partial Picking")}
                 className={cn("text-xs flex items-center justify-between cursor-pointer", readinessFilter === "Partial Picking" && "bg-accent")}
               >
-                <span>Partial Picking</span>
+                <span>Partially Applied</span>
                 <Badge variant="secondary" className="h-4 px-1 text-[10px] min-w-4 justify-center">{counts.partial}</Badge>
               </DropdownMenuItem>
 
@@ -150,6 +176,11 @@ export function PdpListSidebar({
                 <Skeleton className="h-16 w-full rounded-lg" />
                 <Skeleton className="h-16 w-full rounded-lg" />
                 <Skeleton className="h-16 w-full rounded-lg" />
+              </div>
+            ) : !hasLoadedOnce && approvedPlans.length === 0 && !isLoadingPlans ? (
+              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground/40 text-center px-4">
+                <RefreshCw className="w-5 h-5 mb-2 text-muted-foreground/30" />
+                <p className="text-xs">Select a branch and click <strong className="text-muted-foreground/60">Load deliveries</strong> to check plans.</p>
               </div>
             ) : filteredPlans.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-muted-foreground/40 text-center px-4">
@@ -188,6 +219,19 @@ export function PdpListSidebar({
                             : "border-border/50 bg-background hover:border-border hover:bg-muted/30",
                       )}
                     >
+                      {/* Created At - upper left */}
+                      {p.created_at && (
+                        <p className="text-[9px] text-muted-foreground/60 mb-1">
+                          Created at:{" "}
+                          {new Date(p.created_at).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      )}
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
@@ -203,8 +247,8 @@ export function PdpListSidebar({
                               {wouldExceed 
                                 ? "Limit Reached" 
                                 : isNotSelectable 
-                                  ? p.readiness_reason || "Not Ready" 
-                                  : p.status}
+                                  ? (p.readiness_reason === "Partial Picking" ? "Partially Applied" : p.readiness_reason || "Not Ready")
+                                  : (p.status === "Picked" ? "Applied" : p.status)}
                             </Badge>
                             <p className={cn(
                               "font-semibold text-xs truncate",

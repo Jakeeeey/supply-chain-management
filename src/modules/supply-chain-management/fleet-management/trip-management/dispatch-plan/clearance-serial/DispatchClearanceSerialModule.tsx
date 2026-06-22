@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { getJoinedDispatchData } from './providers/fetchProviders';
 import { DispatchRow } from './types';
 import ClearanceModal from './components/ClearanceModal';
+import CylinderTaggingModal from './components/CylinderTaggingModal';
 
 const DispatchClearanceSerialModule = () => {
   const [data, setData] = useState<DispatchRow[]>([]);
@@ -38,6 +39,7 @@ const DispatchClearanceSerialModule = () => {
 
   const [selectedDispatch, setSelectedDispatch] = useState<DispatchRow | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCylinderModalOpen, setIsCylinderModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Date Filter State
@@ -207,14 +209,23 @@ const DispatchClearanceSerialModule = () => {
           )}
         </div>
 
-        <div className="relative w-full sm:w-80 group">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-          <Input
-            placeholder="Search dispatch, driver, vehicle..."
-            className="pl-11 h-10 bg-muted/50 border-border focus:ring-2 focus:ring-primary/20 rounded-xl transition-all"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+          <div className="relative w-full sm:w-80 group">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+            <Input
+              placeholder="Search dispatch, driver, vehicle..."
+              className="pl-11 h-10 bg-muted/50 border-border focus:ring-2 focus:ring-primary/20 rounded-xl transition-all"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <Button
+            variant="default"
+            onClick={() => setIsCylinderModalOpen(true)}
+            className="h-10 px-5 rounded-xl font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm transition-all shrink-0"
+          >
+            Cylinder Tagging
+          </Button>
         </div>
       </div>
 
@@ -352,6 +363,11 @@ const DispatchClearanceSerialModule = () => {
           dispatch={selectedDispatch}
         />
       )}
+
+      <CylinderTaggingModal
+        isOpen={isCylinderModalOpen}
+        onClose={() => setIsCylinderModalOpen(false)}
+      />
     </div>
   );
 };

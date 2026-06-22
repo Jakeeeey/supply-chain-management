@@ -35,12 +35,40 @@ const parseBoolean = (val: any): boolean => {
   return val === true;
 };
 
+const nowPH = (): string => {
+  // Add 8 hours (UTC+8) to UTC time to get Manila time.
+  // Uses getUTC* methods to avoid any server local-timezone influence.
+  const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
+  const d = new Date(manilaMs);
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const hour = String(d.getUTCHours()).padStart(2, "0");
+  const minute = String(d.getUTCMinutes()).padStart(2, "0");
+  const second = String(d.getUTCSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+};
+
 const formatDateForAPI = (dateString: string | Date) => {
   try {
-    if (!dateString) return new Date().toISOString().split("T")[0];
-    return new Date(dateString).toISOString().split("T")[0];
+    if (!dateString) {
+      return nowPH();
+    }
+    let dateStr = "";
+    if (typeof dateString === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      dateStr = dateString;
+    } else {
+      const date = typeof dateString === "string" ? new Date(dateString) : dateString;
+      const manilaMs = date.getTime() + 8 * 60 * 60 * 1000;
+      const d = new Date(manilaMs);
+      const year = d.getUTCFullYear();
+      const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(d.getUTCDate()).padStart(2, "0");
+      dateStr = `${year}-${month}-${day}`;
+    }
+    return `${dateStr}T00:00:00.000Z`;
   } catch {
-    return new Date().toISOString().split("T")[0];
+    return nowPH();
   }
 };
 
@@ -87,7 +115,7 @@ export async function fetchReturns(
     customerCode: item.customer_code,
     salesmanId: item.salesman_id,
     returnDate: item.return_date
-      ? new Date(item.return_date).toLocaleDateString()
+      ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.return_date))
       : "N/A",
     totalAmount: parseFloat(item.total_amount) || 0,
     status: item.status || "Pending",
@@ -96,7 +124,10 @@ export async function fetchReturns(
     isThirdParty: parseBoolean(item.isThirdParty),
     priceType: item.price_type || "-",
     createdAt: item.created_at
-      ? new Date(item.created_at).toLocaleDateString()
+      ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.created_at))
+      : "-",
+    receivedAt: item.received_at
+      ? new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.received_at))
       : "-",
   }));
 
@@ -307,7 +338,10 @@ export async function fetchReferences(): Promise<{
 /**
  * Fetches the product catalog for the ProductLookupModal.
  */
-export async function fetchProductCatalog(customerCode?: string): Promise<{
+export async function fetchProductCatalog(
+  customerCode?: string,
+  includeInactive = false,
+): Promise<{
   brands: Brand[];
   categories: Category[];
   suppliers: Supplier[];
@@ -316,7 +350,7 @@ export async function fetchProductCatalog(customerCode?: string): Promise<{
   supplierCategoryDiscount: any[];
   products: Product[];
 }> {
-  const catalogData = await repo.getRawProductCatalog();
+  const catalogData = await repo.getRawProductCatalog(includeInactive);
   const [brandsRes, categoriesRes, suppliersRes, unitsRes, connectionsRes, productsRes] = catalogData;
 
   let scdpcRes = { data: [] as any[] };
@@ -367,7 +401,8 @@ export async function fetchInvoices(
   const uniqueInvoices = new Map<string, InvoiceOption>();
   rawData.forEach((item: any) => {
     const key = `${item.order_id || ""}_${item.invoice_no || ""}`;
-    if (!uniqueInvoices.has(key)) {
+    const isPosted = parseBoolean(item.isPosted);
+    if (!isPosted && !uniqueInvoices.has(key)) {
       uniqueInvoices.set(key, {
         id: item.invoice_id,
         invoice_no: (item.invoice_no || "").toString(),
@@ -394,13 +429,17 @@ export async function fetchStatusCard(
 
     // Fetch linked invoice
     let appliedToText = "-";
+    let appliedInvoiceId = null;
+    let isInvoicePosted = false;
     try {
       const linkRes = await repo.getRawLinkedInvoice(returnId);
       const linkData = (linkRes.data || []) as any[];
       if (linkData.length > 0) {
         const linkedRec = linkData[0];
-        if (linkedRec.invoice_no && linkedRec.invoice_no.invoice_no) {
-          appliedToText = linkedRec.invoice_no.invoice_no;
+        if (linkedRec.invoice_no) {
+          appliedToText = linkedRec.invoice_no.invoice_no || "-";
+          appliedInvoiceId = linkedRec.invoice_no.invoice_id || null;
+          isInvoicePosted = parseBoolean(linkedRec.invoice_no.isPosted);
         }
       }
     } catch {
@@ -411,12 +450,14 @@ export async function fetchStatusCard(
       returnId: data.return_id,
       isApplied: data.isApplied === 1,
       dateApplied: data.updated_at
-        ? new Date(data.updated_at).toLocaleDateString()
+        ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(data.updated_at))
         : "-",
       transactionStatus: data.status || "Closed",
       isPosted: parseBoolean(data.isPosted),
       isReceived: parseBoolean(data.isReceived),
       appliedTo: appliedToText,
+      appliedInvoiceId,
+      isInvoicePosted,
     };
   } catch {
     return null;
@@ -427,6 +468,14 @@ export async function fetchStatusCard(
  * Creates a new sales return (header + details).
  */
 export async function submitReturn(payload: any, userId: number): Promise<any> {
+  if (payload.appliedInvoiceId) {
+    const invoiceData = await repo.getInvoiceStatus(payload.appliedInvoiceId);
+    const isPosted = parseBoolean(invoiceData?.data?.isPosted);
+    if (isPosted) {
+      throw new Error("This invoice has already been posted. You can only link to invoices that are not yet posted.");
+    }
+  }
+
   // Fetch line discounts for discount calculation
   const refsResult = await repo.getRawReferences();
   const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
@@ -471,6 +520,8 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
     remarks: payload.remarks || "Created via Web App",
     order_id: payload.orderNo || "",
     isThirdParty: payload.isThirdParty ? 1 : 0,
+    created_at: nowPH(),
+    updated_at: nowPH(),
   };
 
   const headerResult = await repo.createReturnHeader(headerPayload);
@@ -481,10 +532,14 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
   // 🟢 Handle Optional Junction Link to Invoice
   if (payload.appliedInvoiceId && returnId) {
     try {
+      const returnAmount = Math.round(Number(payload.totalAmount) * 100) / 100;
       await repo.createJunctionLink({
         return_no: returnId,
         invoice_no: payload.appliedInvoiceId,
         linked_by: userId,
+        amount: returnAmount,
+        created_at: nowPH(),
+        updated_at: nowPH(),
       });
     } catch (e) {
       console.error("Failed to create junction link during submission", e);
@@ -518,6 +573,7 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
       sales_return_type_id: typeId,
       discount_type: discId,
       reason: item.reason || null,
+      created_at: nowPH(),
     };
 
     const detailResult = await repo.createReturnDetail(detailPayload);
@@ -596,6 +652,7 @@ export async function updateReturn(
     invoice_no: payload.invoiceNo ?? "",
     order_id: payload.orderNo ?? "",
     isThirdParty: payload.isThirdParty ? 1 : 0,
+    updated_at: nowPH(),
   };
 
   await repo.updateReturnHeader(payload.returnId, headerPayload);
@@ -605,29 +662,51 @@ export async function updateReturn(
     try {
       const linkResult = await repo.getJunctionLink(payload.returnId);
       const existingLinks = (linkResult.data || []) as any[];
+      const existingLink = existingLinks.length > 0 ? existingLinks[0] : null;
+
+      // Rule C: Prevent unlinking or changing if the current linked invoice is posted
+      if (existingLink) {
+        const currentInvoiceId = existingLink.invoice_no?.id || existingLink.invoice_no;
+        if (currentInvoiceId && Number(currentInvoiceId) !== payload.appliedInvoiceId) {
+          const currentInvoiceData = await repo.getInvoiceStatus(Number(currentInvoiceId));
+          if (parseBoolean(currentInvoiceData?.data?.isPosted)) {
+            throw new Error("This invoice has already been posted. Once an invoice is posted, it is locked and cannot be unlinked or changed.");
+          }
+        }
+      }
 
       if (payload.appliedInvoiceId) {
+        // Rule B: Prevent linking to a posted invoice
+        const targetInvoiceData = await repo.getInvoiceStatus(payload.appliedInvoiceId);
+        if (parseBoolean(targetInvoiceData?.data?.isPosted)) {
+          throw new Error("This invoice has already been posted. You can only link to invoices that are not yet posted.");
+        }
+
         // Link or Update
-        if (existingLinks.length > 0) {
-          const linkId = existingLinks[0].id;
-          await repo.updateJunctionLink(linkId, {
+        if (existingLink) {
+          await repo.updateJunctionLink(existingLink.id, {
             invoice_no: payload.appliedInvoiceId,
             linked_by: userId,
+            amount: totalNet,
+            updated_at: nowPH(),
           });
         } else {
           await repo.createJunctionLink({
             return_no: payload.returnId,
             invoice_no: payload.appliedInvoiceId,
             linked_by: userId,
+            amount: totalNet,
+            created_at: nowPH(),
+            updated_at: nowPH(),
           });
         }
-      } else if (payload.appliedInvoiceId === null && existingLinks.length > 0) {
+      } else if (payload.appliedInvoiceId === null && existingLink) {
         // Explicit Unlink (Delete)
-        const linkId = existingLinks[0].id;
-        await repo.deleteJunctionLink(linkId);
+        await repo.deleteJunctionLink(existingLink.id);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to sync junction link:", e);
+      throw e;
     }
   }
 
@@ -676,6 +755,7 @@ export async function updateReturn(
       sales_return_type_id: typeId,
       discount_type: discId,
       reason: item.reason || null,
+      updated_at: nowPH(),
     };
 
     if (typeof item.id === "string" && item.id.startsWith("added-")) {
@@ -683,6 +763,7 @@ export async function updateReturn(
         ...detailPayload,
         return_no: payload.returnNo,
         product_id: Number(item.productId || item.product_id),
+        created_at: nowPH(),
       });
 
       // Save RFID tags for newly added items
@@ -780,11 +861,11 @@ export async function lookupRfid(
   rfidTag: string,
   branchId: number,
   token: string,
-): Promise<{ isOnInventory: boolean; productId?: number } | null> {
+): Promise<{ isOnInventory: boolean; productId?: number; currentBranchId?: number; currentBranchName?: string } | null> {
   const SPRING_URL = process.env.SPRING_API_BASE_URL;
   if (!SPRING_URL) throw new Error("SPRING_API_BASE_URL is not defined");
 
-  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-rfid-onhand?rfid=${encodeURIComponent(rfidTag)}&branch_id=${branchId}`;
+  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-rfid-onhand?rfid=${encodeURIComponent(rfidTag)}`;
 
   try {
     const res = await fetch(targetUrl, {
@@ -802,9 +883,21 @@ export async function lookupRfid(
 
     const results = await res.json();
     const isOnInventory = Array.isArray(results) && results.length > 0;
-    const productId = isOnInventory ? Number(results[0].productId) : undefined;
+    if (!isOnInventory) {
+      return { isOnInventory: false };
+    }
 
-    return { isOnInventory, productId };
+    const matchedRow = results[0];
+    const rfidBranchId = Number(matchedRow.branchId ?? matchedRow.branch_id);
+    const rfidBranchName = matchedRow.branch_name ?? matchedRow.branchName ?? "Unknown Branch";
+    const productId = Number(matchedRow.productId ?? matchedRow.product_id);
+
+    return {
+      isOnInventory,
+      productId,
+      currentBranchId: rfidBranchId,
+      currentBranchName: rfidBranchName,
+    };
   } catch (err) {
     console.error("[Sales Return RFID] Product lookup failed:", err);
     throw err instanceof Error ? err : new Error(String(err));

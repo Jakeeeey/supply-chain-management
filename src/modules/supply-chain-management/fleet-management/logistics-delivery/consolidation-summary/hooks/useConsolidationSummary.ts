@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { ClusterGroupRaw, TableRow, DateRange, ClusterFilterValue, SortConfig } from "../types";
 import { fetchConsolidationSummary } from "../providers/fetchProvider";
-import { toLocalDayKey, statusToBucket, checkDateRange, normalizeClusterFilter, sortRowsFn } from "../utils";
+import { toLocalDayKey, checkDateRange, normalizeClusterFilter, sortRowsFn, getDateRangeBounds } from "../utils";
 
 export const useConsolidationSummary = () => {
     const [rawGroups, setRawGroups] = useState<ClusterGroupRaw[]>([]);
@@ -20,7 +20,15 @@ export const useConsolidationSummary = () => {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const data = await fetchConsolidationSummary();
+                const { start, end } = getDateRangeBounds(dateRange, customDateFrom, customDateTo);
+                
+                // Do not fetch if custom date is selected but incomplete
+                if (dateRange === "custom" && (!start || !end)) {
+                    setLoading(false);
+                    return;
+                }
+                
+                const data = await fetchConsolidationSummary(start, end);
                 setRawGroups(data);
             } catch (err) {
                 console.error(err);
@@ -30,7 +38,7 @@ export const useConsolidationSummary = () => {
             }
         };
         fetchData();
-    }, []);
+    }, [dateRange, customDateFrom, customDateTo]);
 
     const getGroupedRows = (
         data: ClusterGroupRaw[],
@@ -48,14 +56,8 @@ export const useConsolidationSummary = () => {
 
             group.customers.forEach((customer) => {
                 customer.orders.forEach((o) => {
-                    if (!checkDateRange(o.order_date, dateSettings.range, dateSettings.from, dateSettings.to)) return;
+                    if (!checkDateRange(o.createdDate, dateSettings.range, dateSettings.from, dateSettings.to)) return;
                     if (filters.salesman !== "All" && customer.salesmanName !== filters.salesman) return;
-
-                    if (filters.status && filters.status !== "All") {
-                        const orderStatusLower = (o.order_status || "").toLowerCase();
-                        const target = filters.status.toLowerCase().replace("for ", "");
-                        if (!orderStatusLower.includes(target)) return;
-                    }
 
                     if (filters.search) {
                         const hit =
@@ -64,13 +66,9 @@ export const useConsolidationSummary = () => {
                         if (!hit) return;
                     }
 
-                    const dateKey = toLocalDayKey(o.order_date);
+                    const dateKey = toLocalDayKey(o.createdDate);
                     const key = `${customer.customerName}||${customer.salesmanName}||${dateKey}`;
-                    const amt = Number(o.allocated_amount ?? o.total_amount ?? 0);
-                    const bucket = statusToBucket(o.order_status);
-
-                    // Skip orders that are not for consolidation
-                    if (!bucket.consolidation) return;
+                    const amt = Number(o.allocatedAmount ?? 0);
 
                     if (!agg.has(key)) {
                         agg.set(key, {
@@ -80,7 +78,9 @@ export const useConsolidationSummary = () => {
                             salesmanName: customer.salesmanName,
                             clusterRowSpan: 0,
                             customerRowSpan: 0,
-                            orderDate: dateKey,
+                            orderDate: o.orderDate,
+                            createdDate: dateKey,
+                            approvedDate: o.approvedDate,
                             status: "For Consolidation",
                             amount: 0,
                             consolidation: 0,
@@ -125,14 +125,8 @@ export const useConsolidationSummary = () => {
 
             group.customers.forEach((customer) => {
                 customer.orders.forEach((o) => {
-                    if (!checkDateRange(o.order_date, dateSettings.range, dateSettings.from, dateSettings.to)) return;
+                    if (!checkDateRange(o.createdDate, dateSettings.range, dateSettings.from, dateSettings.to)) return;
                     if (filters.salesman !== "All" && customer.salesmanName !== filters.salesman) return;
-
-                    if (filters.status && filters.status !== "All") {
-                        const orderStatusLower = (o.order_status || "").toLowerCase();
-                        const target = filters.status.toLowerCase().replace("for ", "");
-                        if (!orderStatusLower.includes(target)) return;
-                    }
 
                     if (filters.search) {
                         const hit =
@@ -140,9 +134,6 @@ export const useConsolidationSummary = () => {
                             customer.salesmanName.toLowerCase().includes(searchLower);
                         if (!hit) return;
                     }
-                    
-                    const bucket = statusToBucket(o.order_status);
-                    if (!bucket.consolidation) return;
 
                     count++;
                 });

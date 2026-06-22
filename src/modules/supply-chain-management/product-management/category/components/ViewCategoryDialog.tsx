@@ -25,7 +25,7 @@ export function ViewCategoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-106.25">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>View Category</DialogTitle>
           <DialogDescription>
@@ -37,13 +37,12 @@ export function ViewCategoryDialog({
           <div className="space-y-2">
             <h4 className="text-sm font-medium text-muted-foreground">Category Image</h4>
             {selectedCategory.image ? (
-              <div className="relative w-full min-h-[200px] max-h-[300px] rounded-lg border bg-muted/30 flex items-center justify-center overflow-hidden">
+              <div className="relative w-full h-[200px] rounded-lg border bg-muted/30 overflow-hidden">
                 <Image 
                   src={`${process.env.NEXT_PUBLIC_API_BASE_URL}/assets/${selectedCategory.image}`} 
                   alt={selectedCategory.category_name} 
-                  width={800}
-                  height={400}
-                  className="max-w-full max-h-[300px] object-contain drop-shadow-sm" 
+                  fill
+                  className="object-contain p-2 rounded-md" 
                   unoptimized
                 />
               </div>

@@ -20,9 +20,12 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "Serial number is required" }, { status: 400 });
       }
 
+      const token = req.cookies.get("springboot_token")?.value || req.cookies.get("vos_access_token")?.value;
+      const parsedBranchId = branchId ? Number(branchId) : undefined;
       const result = await service.lookupSerial(
         serial, 
-        branchId ? Number(branchId) : undefined
+        isNaN(parsedBranchId as number) ? undefined : parsedBranchId,
+        token
       );
       return NextResponse.json(result);
     }
@@ -34,6 +37,18 @@ export async function GET(req: NextRequest) {
       const offset = Number(searchParams.get("offset") || 0);
 
       const result = await service.listTransferGroups({ status, search, limit, offset });
+      return NextResponse.json(result);
+    }
+
+    if (action === "verify_receive_serial") {
+      const serial = searchParams.get("serial");
+      const transferIds = searchParams.get("transferIds")?.split(",").map(Number);
+
+      if (!serial || !transferIds || transferIds.length === 0) {
+        return NextResponse.json({ error: "Serial number and transferIds are required" }, { status: 400 });
+      }
+
+      const result = await service.verifyReceiveSerial(serial, transferIds);
       return NextResponse.json(result);
     }
 

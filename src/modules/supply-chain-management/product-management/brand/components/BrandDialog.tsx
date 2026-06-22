@@ -148,7 +148,7 @@ export function BrandDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-106.25">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit Brand" : "Create Brand"}</DialogTitle>
           <DialogDescription>

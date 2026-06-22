@@ -8,6 +8,7 @@ export function useSalesReturnList() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
 
   const [options, setOptions] = useState<{
     salesmen: { value: string; label: string; code?: string }[];
@@ -110,10 +111,12 @@ export function useSalesReturnList() {
 
         setData(paginatedData);
         setTotalPages(Math.max(1, Math.ceil(totalFiltered / pageSize)));
+        setTotalRecords(totalFiltered);
       } else {
         // Normal server-paginated result
         setData(mappedData);
         setTotalPages(Math.max(1, Math.ceil(returnsResult.total / pageSize)));
+        setTotalRecords(returnsResult.total);
       }
     } catch (err) {
       console.error("Error fetching sales return list:", err);
@@ -137,6 +140,7 @@ export function useSalesReturnList() {
     page,
     pageSize,
     totalPages,
+    totalRecords,
     setPage,
     setPageSize,
     setSearch,

@@ -1,173 +1,87 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { ClusterGroupRaw, CustomerGroupRaw, SpringBootConsolidationOrder } from "@/modules/supply-chain-management/fleet-management/logistics-delivery/consolidation-summary/types";
 
 // Environment variables
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-const TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
+const SPRING_API_BASE_URL = process.env.SPRING_API_BASE_URL;
 
-if (!BASE_URL) {
-  console.error("NEXT_PUBLIC_API_BASE_URL is not defined");
-}
-if (!TOKEN) {
-  console.error("DIRECTUS_STATIC_TOKEN is not defined");
+if (!SPRING_API_BASE_URL) {
+  console.error("SPRING_API_BASE_URL is not defined");
 }
 
-interface ApiCluster { id: number; cluster_name: string; }
-interface ApiCustomer { id: number; customer_code: string; customer_name: string; cluster_id?: number; province?: string; city?: string; }
-interface ApiSalesman { id: number; salesman_name: string; salesman_code: string; }
-interface ApiSalesOrder { order_id: number; order_no: string; customer_code: string; order_status: string; allocated_amount: number; order_date: string; salesman_id: number; }
-interface ApiAreaPerCluster { id: number; cluster_id: number; province: string; city: string; }
-
-interface CustomerGroupRaw { id: string; customerName: string; salesmanName: string; orders: ApiSalesOrder[]; }
-interface ClusterGroupRaw { clusterId: string; clusterName: string; customers: CustomerGroupRaw[]; }
-
-/**
- * Fetch with retry and timeout.
- * Retries up to `retries` times with exponential back‑off.
- * Aborts after `timeoutMs` if the request hangs.
- */
-async function fetchWithRetry(url: string, options: RequestInit, retries = 3, timeoutMs = 8000): Promise<Response> {
-  let backoff = 500;
-  for (let attempt = 0; attempt < retries; attempt++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetch(url, { ...options, signal: controller.signal });
-      clearTimeout(timeout);
-      if (!response.ok && attempt < retries - 1) {
-        await new Promise(r => setTimeout(r, backoff));
-        backoff *= 2;
-        continue;
-      }
-      return response;
-    } catch (err) {
-      clearTimeout(timeout);
-      if (attempt === retries - 1) throw err;
-      await new Promise(r => setTimeout(r, backoff));
-      backoff *= 2;
-    }
-  }
-  // Should never reach here
-  throw new Error("fetchWithRetry exhausted retries");
-}
-
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const fetchOptions = {
-      cache: "no-store" as const,
+    const cookieStore = await cookies();
+    const token = cookieStore.get("vos_access_token")?.value;
+
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Extract date filter parameters from frontend request
+    const { searchParams } = new URL(req.url);
+    const startDate = searchParams.get("startDate") || "";
+    const endDate = searchParams.get("endDate") || "";
+
+    // Forward the date filters to Spring Boot API
+    const apiUrl = `${SPRING_API_BASE_URL}/api/view-consolidation-so/filter?startDate=${startDate}&endDate=${endDate}&customerName=&salesmanName=&clusterName=&consolidatorNo=`;
+
+    const response = await fetch(apiUrl, {
+      cache: "no-store",
       headers: {
-        "Authorization": `Bearer ${TOKEN}`,
+        "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-    };
-
-    // Parallel fetches to reduce total latency
-    const [clustersRes, salesmanRes, areaRes, customersRes, ordersRes] = await Promise.all([
-      fetchWithRetry(`${BASE_URL}/items/cluster?limit=-1`, fetchOptions),
-      fetchWithRetry(`${BASE_URL}/items/salesman?limit=-1`, fetchOptions),
-      fetchWithRetry(`${BASE_URL}/items/area_per_cluster?limit=-1`, fetchOptions),
-      fetchWithRetry(`${BASE_URL}/items/customer?limit=-1`, fetchOptions),
-      fetchWithRetry(`${BASE_URL}/items/sales_order?limit=-1`, fetchOptions),
-    ]);
-
-    // Helper to safely extract data or fallback to empty array
-    const safeJson = async (res: Response) => {
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        console.error(`Upstream fetch failed: ${res.url}, status: ${res.status}, body: ${txt}`);
-        return [];
-      }
-      const json = await res.json();
-      return json.data ?? [];
-    };
-
-    const [clustersData, salesmanData, areaData, customersData, ordersData] = await Promise.all([
-      safeJson(clustersRes),
-      safeJson(salesmanRes),
-      safeJson(areaRes),
-      safeJson(customersRes),
-      safeJson(ordersRes),
-    ]);
-
-    // Filter Invalid Orders
-    const bannedTerms = [
-      "en route", "en_route", "delivered", "on hold", "on_hold",
-      "cancelled", "no fulfilled", "no_fulfilled", "not fulfilled", "not_fulfilled",
-    ];
-
-    const validOrders = (ordersData as ApiSalesOrder[]).filter(order => {
-      const rawStatus = order.order_status || "";
-      const normalized = rawStatus.toLowerCase().replace("_", " ").trim();
-      return !bannedTerms.includes(normalized);
     });
 
-    const areas = areaData as ApiAreaPerCluster[];
-    const clusters = clustersData as ApiCluster[];
-    const customers = customersData as ApiCustomer[];
-    const salesmen = salesmanData as ApiSalesman[];
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Spring Boot API Error: ${response.status} - ${errorText}`);
+      throw new Error(`Spring Boot API returned status ${response.status}`);
+    }
 
-    // Build lookup maps
-    const areaMap = new Map<string, number>();
-    areas.forEach(area => {
-      if (area.city && area.province) {
-        const key = `${area.city.trim().toLowerCase()}|${area.province.trim().toLowerCase()}`;
-        areaMap.set(key, area.cluster_id);
-      }
-    });
+    const ordersData: SpringBootConsolidationOrder[] = await response.json();
 
-    const salesmanMap = new Map<number, string>();
-    salesmen.forEach(s => {
-      const code = s.salesman_code ? ` - ${s.salesman_code}` : "";
-      salesmanMap.set(s.id, `${s.salesman_name}${code}`);
-    });
-
-    const customerMap = new Map<string, { name: string; clusterName: string }>();
-    customers.forEach(c => {
-      let finalClusterId: number | undefined;
-      if (c.city && c.province) {
-        const geoKey = `${c.city.trim().toLowerCase()}|${c.province.trim().toLowerCase()}`;
-        finalClusterId = areaMap.get(geoKey);
-      }
-      if (!finalClusterId) finalClusterId = c.cluster_id;
-
-      const foundCluster = clusters.find(cl => cl.id === finalClusterId);
-      const clusterName = foundCluster ? foundCluster.cluster_name : (c.province || "Unassigned Cluster");
-
-      customerMap.set(c.customer_code, { name: c.customer_name, clusterName });
-    });
-
+    // Grouping logic to match the existing ClusterGroupRaw[] structure for the frontend
     const tempGroups: Record<string, { customers: Record<string, CustomerGroupRaw> }> = {};
 
-    validOrders.forEach(order => {
-      const custDetails = customerMap.get(order.customer_code);
-      const customerName = custDetails ? custDetails.name : `Unknown (${order.customer_code})`;
-      const clusterName = custDetails ? custDetails.clusterName : "Unassigned Cluster";
+    ordersData.forEach(order => {
+      // Use fallback for null clusters
+      const clusterName = order.clusterName || "Unassigned Cluster";
+      const customerName = order.customerName || "Unknown Customer";
+      const salesmanName = order.salesmanName || "Unknown Salesman";
+      
+      // Group by customer + salesman to prevent data loss if a customer has multiple salesmen
+      const customerKey = `${customerName}||${salesmanName}`;
 
       if (!tempGroups[clusterName]) {
         tempGroups[clusterName] = { customers: {} };
       }
 
-      const customerKey = order.customer_code;
       if (!tempGroups[clusterName].customers[customerKey]) {
-        const salesmanName = salesmanMap.get(order.salesman_id) || "Unknown Salesman";
         tempGroups[clusterName].customers[customerKey] = {
           id: customerKey,
           customerName,
           salesmanName,
           orders: [],
-        } as CustomerGroupRaw;
+        };
       }
+      
       tempGroups[clusterName].customers[customerKey].orders.push(order);
     });
 
-    const result: ClusterGroupRaw[] = Object.entries(tempGroups).map(([clusterName, groupData]) => ({
-      clusterId: clusterName,
-      clusterName,
+    const result: ClusterGroupRaw[] = Object.entries(tempGroups).map(([cName, groupData]) => ({
+      clusterId: cName,
+      clusterName: cName,
       customers: Object.values(groupData.customers),
     }));
 
     return NextResponse.json({ data: result });
   } catch (err) {
     console.error("Consolidation Summary API Error:", err);
-    return NextResponse.json({ error: "Failed to load Consolidation Summary" }, { status: 500 });
+    return NextResponse.json({ 
+      error: "Failed to load Consolidation Summary", 
+      details: err instanceof Error ? err.message : String(err) 
+    }, { status: 500 });
   }
 }

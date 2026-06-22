@@ -1,21 +1,23 @@
 // View Model Types
 
-export interface ApiSalesOrder {
-    order_id: number;
-    order_no: string;
-    customer_code: string;
-    order_status: string;
-    allocated_amount?: number;
-    total_amount?: number;
-    order_date: string;
-    salesman_id: number;
+export interface SpringBootConsolidationOrder {
+    orderId: number;
+    orderNo: string;
+    customerName: string;
+    salesmanName: string;
+    orderDate: string;
+    createdDate: string;
+    approvedDate: string;
+    allocatedAmount: number;
+    clusterName: string | null;
+    consolidatorNo: string | null;
 }
 
 export interface CustomerGroupRaw {
     id: string;
     customerName: string;
     salesmanName: string;
-    orders: ApiSalesOrder[];
+    orders: SpringBootConsolidationOrder[];
 }
 
 export interface ClusterGroupRaw {
@@ -33,6 +35,8 @@ export interface TableRow {
     clusterRowSpan: number;
     customerRowSpan: number;
     orderDate: string; // YYYY-MM-DD day key
+    createdDate: string;
+    approvedDate: string;
     status: string;
     amount: number;
     consolidation: number;

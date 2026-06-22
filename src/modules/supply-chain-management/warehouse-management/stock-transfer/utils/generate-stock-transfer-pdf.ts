@@ -10,6 +10,7 @@ export interface StockTransferPDFData {
   leadDate: string;
   scannedItems: ScannedItem[];
   companyData: CompanyData | null;
+  salesmanName?: string;
 }
 
 // ── Corporate Header Helper ────────────────────────────────────
@@ -67,7 +68,7 @@ function drawCorporateHeader(doc: jsPDF, companyData: CompanyData | null, margin
 }
 
 export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
-  const { orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData } = data;
+  const { orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData, salesmanName } = data;
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
 
@@ -92,6 +93,15 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
   }
 
   y += 8;
+
+  if (salesmanName) {
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235);
+    doc.text(`SALESMAN: ${salesmanName.toUpperCase()}`, margin, y - 2);
+    doc.setTextColor(0, 0, 0);
+    y += 4;
+  }
 
   // ── Info grid — outline box only, no fill ─────────────────────
   doc.setDrawColor(200, 200, 200);
@@ -227,7 +237,7 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(160, 160, 160);
   doc.text(
-    `Printed: ${new Date().toLocaleString('en-PH')}  ·  VOS Web Supply Chain Management System`,
+    `Printed: ${new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}  ·  VOS Web Supply Chain Management System`,
     pageW / 2,
     pageH - 6,
     { align: 'center' },
@@ -244,6 +254,10 @@ export interface PicklistPDFData {
   date: string;
   items: OrderGroupItem[]; 
   companyData: CompanyData | null;
+  salesmanName?: string;
+  sourceBranch?: string;
+  targetBranch?: string;
+  requestedDate?: string;
 }
 
 export interface ReceivingPDFData {
@@ -254,6 +268,8 @@ export interface ReceivingPDFData {
   companyData: CompanyData | null;
   sourceBranch?: string;
   targetBranch?: string;
+  salesmanName?: string;
+  requestedDate?: string;
 }
 
 /**
@@ -261,7 +277,7 @@ export interface ReceivingPDFData {
  * Grouped by Supplier/Brand and includes checkboxes.
  */
 export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
-  const { orderNo, pickerName, date, items, companyData } = data;
+  const { orderNo, pickerName, date, requestedDate, items, companyData, salesmanName, sourceBranch, targetBranch } = data;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
 
   const pageW = doc.internal.pageSize.getWidth();
@@ -302,13 +318,36 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(120, 120, 120);
-  doc.text(`Date: ${date}`, pageW - margin, y, { align: 'right' });
+  doc.text(`Printed: ${date}`, pageW - margin, y, { align: 'right' });
+  
+  if (requestedDate) {
+    y += 4;
+    doc.text(`Requested At: ${requestedDate}`, pageW - margin, y, { align: 'right' });
+  }
   
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('helvetica', 'normal');
   doc.setTextColor(0, 0, 0);
   doc.text(`Picker: ${pickerName.toUpperCase()}`, margin, y);
-  y += 10;
+  y += 5;
+
+  if (salesmanName) {
+    doc.setTextColor(0, 0, 0); // Changed from blue to black
+    doc.text(`Salesman: ${salesmanName.toUpperCase()}`, margin, y);
+    y += 5;
+  }
+
+  // Branch Info
+  if (sourceBranch || targetBranch) {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal'); // Changed from bold to normal
+    doc.setTextColor(100, 100, 100);
+    const branchText = `Source: ${sourceBranch || 'N/A'}   |   Target: ${targetBranch || 'N/A'}`;
+    doc.text(branchText, margin, y);
+    y += 5;
+  }
+
+  y += 2;
 
   // ── Table Header ──────────────────────────────────────────────
   doc.setDrawColor(0, 0, 0);
@@ -502,7 +541,7 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
  * Generates a Receiving Checklist PDF.
  */
 export function generateStockTransferReceivingPDF(data: ReceivingPDFData): jsPDF {
-  const { orderNo, checkedBy, date, items, companyData, sourceBranch, targetBranch } = data;
+  const { orderNo, checkedBy, date, items, companyData, sourceBranch, targetBranch, salesmanName } = data;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
 
   const pageW = doc.internal.pageSize.getWidth();
@@ -517,14 +556,20 @@ export function generateStockTransferReceivingPDF(data: ReceivingPDFData): jsPDF
   
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text(date, pageW - margin, y, { align: 'right' });
+   doc.text(`Checked By: ${checkedBy.toUpperCase()}`, pageW - margin, y, { align: 'right' });
   y += 6;
 
   // Secondary Info
   doc.setFontSize(9);
   doc.text(`TR#: ${orderNo}`, margin, y);
-  doc.text(`Checked By: ${checkedBy.toUpperCase()}`, pageW - margin, y, { align: 'right' });
+   doc.text(`Received At: ${date}`, pageW - margin, y, { align: 'right' });
   y += 5;
+
+  if (salesmanName) {
+    doc.setTextColor(0, 0, 0); // Changed from blue to black
+    doc.text(`Salesman: ${salesmanName.toUpperCase()}`, margin, y);
+    y += 5;
+  }
 
   if (sourceBranch || targetBranch) {
     doc.text(`Source: ${sourceBranch || 'N/A'}`, margin, y);

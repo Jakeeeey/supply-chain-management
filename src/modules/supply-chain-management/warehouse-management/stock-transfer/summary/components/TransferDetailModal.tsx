@@ -66,6 +66,7 @@ export function TransferDetailModal({
         month: 'short',
         day: '2-digit',
         year: 'numeric',
+        timeZone: 'Asia/Manila',
       }).format(new Date(dateString));
     } catch {
       return dateString;
@@ -243,6 +244,7 @@ export function TransferDetailModal({
         getBranchName={getBranchName}
         getUserName={getUserName}
         getUnitName={getUnitName}
+        salesmanName={getUserName(group.encoderId)}
       />
     </Dialog>
   );

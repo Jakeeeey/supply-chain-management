@@ -24,7 +24,6 @@ export const formatCardCurrency = (amount: number) => {
 };
 
 export const formatNumberForPDF = (amount: number) => {
-    if (amount === 0) return "-";
     return amount.toLocaleString("en-US", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
@@ -32,7 +31,6 @@ export const formatNumberForPDF = (amount: number) => {
 };
 
 export const formatTotalForPDF = (amount: number) => {
-    if (amount === 0) return "-";
     return amount.toLocaleString("en-US", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
@@ -49,9 +47,16 @@ export const formatDatePrinted = (d: Date) => {
     });
 };
 
+export const parseLocalDate = (dateString: string) => {
+    if (!dateString) return new Date(NaN);
+    const datePart = dateString.includes(" ") ? dateString.split(" ")[0] : dateString;
+    const [y, m, d] = datePart.split("-").map(Number);
+    return new Date(y, (m || 1) - 1, d || 1);
+};
+
 export const toLocalDayKey = (dateString: string) => {
     if (!dateString) return "";
-    const d = new Date(dateString);
+    const d = parseLocalDate(dateString);
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
@@ -60,8 +65,7 @@ export const toLocalDayKey = (dateString: string) => {
 
 export const formatDate = (dateString: string) => {
     if (!dateString) return "-";
-    const [y, m, d] = dateString.split("-").map((x) => Number(x));
-    const local = new Date(y, (m || 1) - 1, d || 1);
+    const local = parseLocalDate(dateString);
     return local.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
@@ -70,7 +74,7 @@ export const formatDate = (dateString: string) => {
 };
 
 export const checkDateRange = (dateString: string, range: DateRange, customFrom?: string, customTo?: string) => {
-    const date = new Date(dateString);
+    const date = parseLocalDate(dateString);
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -111,12 +115,53 @@ export const checkDateRange = (dateString: string, range: DateRange, customFrom?
     return true;
 };
 
-export const statusToBucket = (statusRaw: string) => {
-    const s = (statusRaw || "").toLowerCase();
-    return {
-        consolidation: s.includes("conso") || s.includes("consolidation"),
+export const getDateRangeBounds = (range: DateRange, customFrom?: string, customTo?: string): { start: string, end: string } => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const d = now.getDate();
+    
+    const formatDateObj = (dateObj: Date) => {
+        const yy = dateObj.getFullYear();
+        const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
+        const dd = String(dateObj.getDate()).padStart(2, "0");
+        return `${yy}-${mm}-${dd}`;
     };
+
+    if (range === "custom") {
+        return { start: customFrom || "", end: customTo || "" };
+    }
+    if (range === "today") {
+        const str = formatDateObj(now);
+        return { start: str, end: str };
+    }
+    if (range === "yesterday") {
+        const yest = new Date(y, m, d - 1);
+        const str = formatDateObj(yest);
+        return { start: str, end: str };
+    }
+    if (range === "this-week") {
+        const dayOfWeek = now.getDay();
+        const diff = d - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        const startOfWeek = new Date(y, m, diff);
+        const endOfWeek = new Date(y, m, diff + 6);
+        return { start: formatDateObj(startOfWeek), end: formatDateObj(endOfWeek) };
+    }
+    if (range === "this-month") {
+        const startOfMonth = new Date(y, m, 1);
+        const endOfMonth = new Date(y, m + 1, 0);
+        return { start: formatDateObj(startOfMonth), end: formatDateObj(endOfMonth) };
+    }
+    if (range === "this-year") {
+        const startOfYear = new Date(y, 0, 1);
+        const endOfYear = new Date(y, 11, 31);
+        return { start: formatDateObj(startOfYear), end: formatDateObj(endOfYear) };
+    }
+    return { start: "", end: "" };
 };
+
+
+
 
 export function normalizeClusterFilter(v: ClusterFilterValue): { all: boolean; set: Set<string> } {
     if (Array.isArray(v)) {
@@ -142,7 +187,7 @@ export const sortRowsFn = (rows: TableRow[], sortConfig: SortConfig | null) => {
         if (cu !== 0) return cu;
         const s = a.salesmanName.localeCompare(b.salesmanName);
         if (s !== 0) return s;
-        return a.orderDate.localeCompare(b.orderDate);
+        return a.createdDate.localeCompare(b.createdDate);
     });
 
     if (!sortConfig) return base;
@@ -183,7 +228,7 @@ export const sortRowsFn = (rows: TableRow[], sortConfig: SortConfig | null) => {
         }
 
         // 3. Order Level Comparison
-        if (sortConfig.key === "consolidation" || sortConfig.key === "orderDate") {
+        if (sortConfig.key === "consolidation" || sortConfig.key === "orderDate" || sortConfig.key === "createdDate" || sortConfig.key === "approvedDate") {
             const av = a[sortConfig.key];
             const bv = b[sortConfig.key];
             if (typeof av === "number" && typeof bv === "number") cmp = av - bv;
@@ -192,6 +237,6 @@ export const sortRowsFn = (rows: TableRow[], sortConfig: SortConfig | null) => {
             if (cmp !== 0) return sortConfig.direction === "asc" ? cmp : -cmp;
         }
 
-        return a.orderDate.localeCompare(b.orderDate);
+        return a.createdDate.localeCompare(b.createdDate);
     });
 };

@@ -1111,6 +1111,17 @@ export async function POST(req: NextRequest) {
         const poId = toNum(id);
         if (!poId) return bad("Invalid id.", 400);
 
+        if (body?.action === "reject") {
+            const patch = {
+                inventory_status: 8, // Rejected
+                date_approved: nowPH(), // Mark processed so it leaves the pending list
+                approver_id: body?.approver_id ?? body?.approverId ?? null,
+            };
+            const url = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}`;
+            await fetchJson(url, { method: "PATCH", body: JSON.stringify(patch) });
+            return ok({ ok: true });
+        }
+
         const patch: Record<string, unknown> = { 
             date_approved: nowPH(),
             receiving_type: 1, // ✅ Always 1 for PO

@@ -183,9 +183,14 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const searchParams = useSearchParams();
   const fromClearance = searchParams.get("fromClearance");
   // --- 1. FORM STATE ---
-  const [returnDate, setReturnDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
+  const [returnDate, setReturnDate] = useState(() => {
+    const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
+    const d = new Date(manilaMs);
+    const year = d.getUTCFullYear();
+    const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  });
 
   const [selectedSalesmanId, setSelectedSalesmanId] = useState("");
   const [salesmanCode, setSalesmanCode] = useState("");
@@ -532,7 +537,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   // --- RESET FUNCTION ---
   const resetForm = () => {
     setItems([]);
-    setReturnDate(new Date().toISOString().split("T")[0]);
+    const manilaMs = Date.now() + 8 * 60 * 60 * 1000;
+    const d = new Date(manilaMs);
+    const year = d.getUTCFullYear();
+    const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    setReturnDate(`${year}-${month}-${day}`);
     setSelectedSalesmanId("");
     setSalesmanSearch("");
     setSalesmanCode("");
@@ -797,11 +807,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const totalNet = Math.round(items.reduce((sum, item) => sum + item.totalAmount, 0) * 100) / 100;
 
   const filteredInvoices = invoiceOptions.filter((inv) =>
-    inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
+    !inv.isPosted && inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
   );
 
   const filteredOrders = invoiceOptions.filter((inv) =>
-    inv.order_id.toLowerCase().includes(orderSearch.toLowerCase()),
+    !inv.isPosted && inv.order_id.toLowerCase().includes(orderSearch.toLowerCase()),
   );
 
   if (!isOpen) return null;

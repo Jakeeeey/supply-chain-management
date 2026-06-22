@@ -64,6 +64,7 @@ export interface RawDispatchPlan {
   branch_id?: number;
   total_amount: number;
   status: string;
+  created_at?: string;
 }
 
 /** Row from the `sales_order` collection. */

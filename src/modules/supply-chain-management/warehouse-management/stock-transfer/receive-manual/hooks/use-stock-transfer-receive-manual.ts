@@ -50,10 +50,14 @@ export function useStockTransferReceiveManual() {
 
     base.setProcessing(true);
     try {
-      await stockTransferLifecycleService.submitManualReceive(
-        group.items.map((i: OrderGroupItem) => i.id),
-        'Received'
-      );
+      await stockTransferLifecycleService.submitStatusUpdate({
+        items: group.items.map((i: OrderGroupItem) => ({
+          id: i.id,
+          status: 'Received',
+          received_quantity: receivedQtys[i.id] ?? Math.max(0, i.scanned_quantity ?? i.picked_quantity ?? i.allocated_quantity ?? 0)
+        })),
+        status: 'Received'
+      });
 
       toast.success(`Order ${orderNo} successfully received manually.`);
       base.setSelectedOrderNo(null);
