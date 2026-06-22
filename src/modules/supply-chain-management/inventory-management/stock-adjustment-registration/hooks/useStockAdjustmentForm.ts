@@ -215,6 +215,7 @@ export function useStockAdjustmentForm() {
             (acc, item) => acc + item.quantity * (item.cost_per_unit || 0),
             0
           ),
+          stock_adjustment_attachment: values.stock_adjustment_attachment,
         },
         items: values.items,
       }),
@@ -239,6 +240,7 @@ export function useStockAdjustmentForm() {
             (acc, item) => acc + item.quantity * (item.cost_per_unit || 0),
             0
           ),
+          stock_adjustment_attachment: values.stock_adjustment_attachment,
         },
         items: values.items,
       }),

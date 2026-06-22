@@ -1,9 +1,7 @@
-"use client";
-
+import React from "react";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
-  Plus,
   Eye,
-  Pencil,
   ArrowUpCircle,
   ArrowDownCircle,
   ChevronLeft,
@@ -38,8 +36,6 @@ interface StockAdjustmentManualListProps {
   pageSize: number;
   setPageSize: (v: number) => void;
   resetFilters: () => void;
-  onCreate: () => void;
-  onEdit: (id: number) => void;
   onDetail: (id: number) => void;
   onReload: () => void;
   branches: { id: number; branch_name: string }[];
@@ -82,8 +78,6 @@ export function StockAdjustmentManualList({
   pageSize,
   setPageSize,
   resetFilters,
-  onCreate,
-  onEdit,
   onDetail,
   onReload,
   branches = [],
@@ -91,6 +85,24 @@ export function StockAdjustmentManualList({
   stats,
   filters
 }: StockAdjustmentManualListProps) {
+  const branchOptions = React.useMemo(() => {
+    const opts = (branches || []).map((b) => ({
+      value: String(b.id),
+      label: b.branch_name
+    }));
+    return [{ value: "all", label: "All Branches" }, ...opts];
+  }, [branches]);
+
+  const supplierOptions = React.useMemo(() => {
+    const opts = (suppliers || []).map((s) => ({
+      value: String(s.id),
+      label: s.supplier_name
+    }));
+    return [{ value: "all", label: "All Suppliers" }, ...opts];
+  }, [suppliers]);
+
+  const currentBranchValue = filters.branchId ? String(filters.branchId) : "all";
+  const currentSupplierValue = filters.supplierId ? String(filters.supplierId) : "all";
   const formattedCurrency = (val: number) => {
     return "₱" + Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
@@ -118,13 +130,6 @@ export function StockAdjustmentManualList({
             <RotateCw className="h-4 w-4" />
             Reload Data
           </Button>
-          <Button
-            onClick={onCreate}
-            className="h-10 gap-2 bg-rose-600 hover:bg-rose-700 text-white shadow-sm font-semibold rounded-full px-6 text-xs"
-          >
-            <Plus className="h-4 w-4" />
-            New Registration
-          </Button>
         </div>
       </div>
 
@@ -143,33 +148,31 @@ export function StockAdjustmentManualList({
           </div>
 
           {/* BRANCH */}
-          <div className="flex flex-col gap-1.5 min-w-[150px]">
+          <div className="flex flex-col gap-1.5 min-w-[180px] flex-1">
             <span className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-wider">BRANCH</span>
-            <select
-              value={filters.branchId || ""}
-              onChange={(e) => filters.setBranchId(e.target.value ? Number(e.target.value) : undefined)}
-              className="h-10 border border-border bg-background rounded-md text-xs font-semibold px-3 focus:outline-none w-full"
-            >
-              <option value="">All Branches</option>
-              {branches.map(b => (
-                <option key={b.id} value={b.id}>{b.branch_name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={branchOptions}
+              value={currentBranchValue}
+              placeholder="Select Branch"
+              className="h-10 text-xs font-semibold rounded-md bg-background border-border text-foreground/80 text-left justify-between w-full"
+              onValueChange={(val) => {
+                filters.setBranchId(val === "all" ? undefined : Number(val));
+              }}
+            />
           </div>
 
           {/* SUPPLIER */}
-          <div className="flex flex-col gap-1.5 min-w-[150px]">
+          <div className="flex flex-col gap-1.5 min-w-[180px] flex-1">
             <span className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-wider">SUPPLIER</span>
-            <select
-              value={filters.supplierId || ""}
-              onChange={(e) => filters.setSupplierId(e.target.value ? Number(e.target.value) : undefined)}
-              className="h-10 border border-border bg-background rounded-md text-xs font-semibold px-3 focus:outline-none w-full"
-            >
-              <option value="">All Suppliers</option>
-              {suppliers.map(s => (
-                <option key={s.id} value={s.id}>{s.supplier_name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={supplierOptions}
+              value={currentSupplierValue}
+              placeholder="Select Supplier"
+              className="h-10 text-xs font-semibold rounded-md bg-background border-border text-foreground/80 text-left justify-between w-full"
+              onValueChange={(val) => {
+                filters.setSupplierId(val === "all" ? undefined : Number(val));
+              }}
+            />
           </div>
 
           {/* TYPE */}
@@ -360,7 +363,7 @@ export function StockAdjustmentManualList({
         {data.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-xl opacity-60">
             <p className="text-lg font-medium">No adjustments found</p>
-            <p className="text-sm text-muted-foreground">Click &quot;New Adjustment&quot; to create your first entry.</p>
+            <p className="text-sm text-muted-foreground">No records exist for the selected filters.</p>
           </div>
         ) : (
           data.map((item) => {
@@ -457,11 +460,6 @@ export function StockAdjustmentManualList({
                         <Button variant="ghost" size="icon" onClick={() => onDetail(item.id!)} className="text-muted-foreground hover:text-foreground">
                           <Eye className="h-4 w-4 stroke-[1.5]" />
                         </Button>
-                        {!isPosted && (
-                          <Button variant="ghost" size="icon" onClick={() => onEdit(item.id!)} className="text-muted-foreground hover:text-primary">
-                            <Pencil className="h-4 w-4 stroke-[1.5]" />
-                          </Button>
-                        )}
                       </div>
                     </div>
                   </div>

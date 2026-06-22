@@ -18,10 +18,12 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Paperclip
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { RFIDScannerModal } from "../modals/RFIDScannerModal";
+import { AttachmentUpload } from "../AttachmentUpload";
 import { ProductSelectionModal } from "../modals/ProductSelectionModal";
 import {
   StockAdjustmentFormSchema,
@@ -87,13 +89,13 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   const unitName = useWatch({ control, name: `items.${index}.unit_name` });
   const quantity = useWatch({ control, name: `items.${index}.quantity` });
   const costPerUnit = useWatch({ control, name: `items.${index}.cost_per_unit` });
-  const hasRfid = useWatch({ control, name: `items.${index}.has_rfid` });
   const brandName = useWatch({ control, name: `items.${index}.brand_name` });
   const barcode = useWatch({ control, name: `items.${index}.barcode` });
   const unitOrder = useWatch({ control, name: `items.${index}.unit_order` });
+  const hasRfid = unitOrder === 3;
 
   const rfidTags = useWatch({ control, name: `items.${index}.rfid_tags` });
-  const isRfidMissing = (hasRfid || unitOrder === 3) && (!rfidTags || rfidTags.length === 0);
+  const isRfidMissing = hasRfid && (!rfidTags || rfidTags.length === 0);
 
   const { errors } = useFormState({ control });
   const rowError = Array.isArray(errors.items)
@@ -243,7 +245,7 @@ function FormSummary({
       const c = Number(item?.cost_per_unit || 0);
       qty += q;
       amt += q * c;
-      if (item?.has_rfid) rfid++;
+      if (item?.unit_order === 3) rfid++;
     }
     return { totalQuantity: qty, totalAmount: amt, rfidItemsCount: rfid };
   }, [items]);
@@ -310,7 +312,7 @@ function RfidBanner({ control }: { control: Control<StockAdjustmentFormValues> }
   const items = useWatch({ control, name: "items" });
   const rfidItemsCount = useMemo(() => {
     const currentItems = (items || []) as StockAdjustmentItem[];
-    return currentItems.filter((item) => item?.has_rfid).length;
+    return currentItems.filter((item) => item?.unit_order === 3).length;
   }, [items]);
 
   if (rfidItemsCount === 0) return null;
@@ -391,6 +393,7 @@ export function StockAdjustmentForm({
       remarks: "",
       items: [],
       isPosted: false,
+      stock_adjustment_attachment: [],
     },
   });
 
@@ -447,6 +450,7 @@ export function StockAdjustmentForm({
             isPosted: resolvedIsPosted,
             postedAt: data.postedAt || undefined,
             posted_by: data.posted_by || undefined,
+            stock_adjustment_attachment: data.stock_adjustment_attachment || [],
             items: data.items.map((item) => ({
               ...item,
               quantity: Number(item.quantity || 0),
@@ -478,7 +482,7 @@ export function StockAdjustmentForm({
               rfid_tags: item.rfid_tags || [],
               rfid_count: item.rfid_count || 0,
               db_id: Number(item.id || 0),
-              has_rfid: (item.rfid_tags && item.rfid_tags.length > 0) || rfidProductIds.has(Number((item.product_id as { id?: number; product_id?: number })?.product_id || (item.product_id as { id?: number; product_id?: number })?.id || item.product_id)),
+              has_rfid: ((item.product_id as { unit_of_measurement?: { order: number } })?.unit_of_measurement?.order === 3 || item.unit_order === 3),
             })),
           });
         } catch (error) {
@@ -562,7 +566,7 @@ export function StockAdjustmentForm({
       async (values) => {
         // Validate that all items requiring RFID have scanned tags
         const missingRfidItem = values.items.find(
-          (item) => (item.has_rfid || item.unit_order === 3) && (!item.rfid_tags || item.rfid_tags.length === 0)
+          (item) => item.unit_order === 3 && (!item.rfid_tags || item.rfid_tags.length === 0)
         );
 
         if (missingRfidItem) {
@@ -615,7 +619,7 @@ export function StockAdjustmentForm({
     async (values: StockAdjustmentFormValues) => {
       // Validate that all items requiring RFID have scanned tags
       const missingRfidItem = values.items.find(
-        (item) => (item.has_rfid || item.unit_order === 3) && (!item.rfid_tags || item.rfid_tags.length === 0)
+        (item) => item.unit_order === 3 && (!item.rfid_tags || item.rfid_tags.length === 0)
       );
 
       if (missingRfidItem) {
@@ -1227,6 +1231,28 @@ export function StockAdjustmentForm({
               fieldCount={fields.length}
               isRfidLoading={isRfidLoading}
             />
+          </CardContent>
+        </Card>
+
+        {/* Attachments Card */}
+        <Card className="border border-border/50 shadow-sm bg-card border-border/40">
+          <CardHeader className="bg-card border-b border-border/50 py-4 px-6">
+            <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+              <Paperclip className="h-4 w-4 text-primary" />
+              Attachments
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            <AttachmentUpload
+              value={form.watch("stock_adjustment_attachment") || []}
+              onChange={(atts) => form.setValue("stock_adjustment_attachment", atts, { shouldValidate: true })}
+              disabled={isReadOnly}
+            />
+            {form.formState.errors.stock_adjustment_attachment?.message && (
+              <p className="text-xs text-red-500 font-bold mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                {String(form.formState.errors.stock_adjustment_attachment.message)}
+              </p>
+            )}
           </CardContent>
         </Card>
 

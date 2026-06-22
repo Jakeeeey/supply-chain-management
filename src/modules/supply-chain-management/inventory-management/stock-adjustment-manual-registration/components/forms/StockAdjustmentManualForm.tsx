@@ -19,7 +19,10 @@ import {
   ChevronsRight,
   Paperclip,
   AlertCircle,
+  Printer,
 } from "lucide-react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Badge } from "@/components/ui/badge";
 import {
   StockAdjustmentManualFormSchema,
@@ -28,6 +31,7 @@ import {
 } from "../../types/stock-adjustment-manual.schema";
 import { useStockAdjustmentManualForm } from "../../hooks/useStockAdjustmentManualForm";
 import { isPostedStatus } from "../../utils/status-utils";
+import { decodeJwtPayload } from "../../utils/auth-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,6 +67,7 @@ interface StockAdjustmentManualFormProps {
   mode?: "creation" | "posting";
   unpostedList?: { id?: number; doc_no: string }[];
   onSelectId?: (id: number) => void;
+  userFullName?: string;
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
@@ -116,13 +121,18 @@ const ProductTableRow = React.memo(function ProductTableRow({
         </div>
       </td>
       <td className="p-3">
+        <span className="text-[10px] font-bold text-primary bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded uppercase shrink-0">
+          {unitName || "-"}
+        </span>
+      </td>
+      <td className="p-3">
         <span className="text-xs font-bold text-foreground">
           ₱{Number(costPerUnit || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       </td>
       <td className="p-3">
-        <span className="text-[10px] font-bold text-primary bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded uppercase shrink-0">
-          {unitName || "-"}
+        <span className="text-xs font-bold text-primary dark:text-primary/70">
+          ₱{Number(totalCost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       </td>
       <td className="p-3 w-32">
@@ -161,11 +171,6 @@ const ProductTableRow = React.memo(function ProductTableRow({
         {rowError?.quantity && (
           <p className="text-[10px] text-red-500 font-bold mt-1">{rowError.quantity.message}</p>
         )}
-      </td>
-      <td className="p-3">
-        <span className="text-xs font-bold text-primary dark:text-primary/70">
-          ₱{Number(totalCost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </span>
       </td>
       <td className="p-3 text-center w-16">
         {!isReadOnly && (
@@ -252,6 +257,7 @@ export function StockAdjustmentManualForm({
   onSuccess,
   unpostedList,
   onSelectId,
+  userFullName,
 }: StockAdjustmentManualFormProps) {
   const router = useRouter();
   const {
@@ -308,6 +314,187 @@ export function StockAdjustmentManualForm({
     control: form.control,
     name: "items",
   });
+
+  const generatePDF = useCallback(() => {
+    const values = form.getValues();
+    if (!values) return;
+
+    // Retrieve currently logged-in user name from prop or fallback to JWT cookie
+    let currentUserName = userFullName || "System User";
+    if (!userFullName) {
+      try {
+        const getCookie = (name: string): string | null => {
+          if (typeof window === "undefined") return null;
+          const value = `; ${document.cookie}`;
+          const parts = value.split(`; ${name}=`);
+          if (parts.length === 2) return parts.pop()?.split(";").shift() || null;
+          return null;
+        };
+        const token = getCookie("vos_access_token");
+        if (token) {
+          const decoded = decodeJwtPayload(token);
+          if (decoded) {
+            const first = String(decoded.Firstname ?? decoded.FirstName ?? decoded.firstName ?? decoded.firstname ?? decoded.first_name ?? "").trim();
+            const last = String(decoded.LastName ?? decoded.Lastname ?? decoded.lastName ?? decoded.lastname ?? decoded.last_name ?? "").trim();
+            const email = String(decoded.email ?? decoded.Email ?? "").trim();
+            currentUserName = [first, last].filter(Boolean).join(" ") || email || "System User";
+          }
+        }
+      } catch (e) {
+        console.error("Failed to decode token for PDF Prepared By:", e);
+      }
+    }
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // --- Header ---
+    doc.setFontSize(18);
+    doc.setTextColor(37, 99, 235); // enterprise-blue
+    doc.text("STOCK ADJUSTMENT SLIP", pageWidth / 2, 15, { align: "center" });
+
+    doc.setDrawColor(37, 99, 235);
+    doc.setLineWidth(0.5);
+    doc.line(pageWidth / 2 - 12, 18, pageWidth / 2 + 12, 18);
+
+    // --- Metadata Section ---
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+
+    // Left Column
+    doc.setFont("helvetica", "bold");
+    doc.text("Document No:", 20, 30);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(15, 23, 42);
+    doc.text(values.doc_no || "-", 50, 30);
+
+    doc.setTextColor(100, 116, 139);
+    doc.setFont("helvetica", "bold");
+    doc.text("Date Created:", 20, 36);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(15, 23, 42);
+    const dateStr = values.postedAt || new Date().toISOString();
+    doc.text(format(new Date(dateStr), "yyyy-MM-dd h:mm a"), 50, 36);
+
+    // Right Column
+    doc.setTextColor(100, 116, 139);
+    doc.setFont("helvetica", "bold");
+    doc.text("Branch:", 110, 30);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(15, 23, 42);
+    const branchObj = branches.find(b => b.id === Number(values.branch_id));
+    const branchName = branchObj ? branchObj.branch_name : "Main Warehouse";
+    doc.text(String(branchName).toUpperCase(), 145, 30);
+
+    doc.setTextColor(100, 116, 139);
+    doc.setFont("helvetica", "bold");
+    doc.text("Adjustment Type:", 110, 36);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(values.type === "IN" ? 22 : 185, values.type === "IN" ? 101 : 28, values.type === "IN" ? 52 : 28);
+    doc.text(values.type || "-", 145, 36);
+
+    // --- Product Table ---
+    const tableRows = values.items?.map((item, index) => {
+      const price = Number(item.cost_per_unit || 0);
+      const totalAmount = Number(item.quantity || 0) * price;
+      return [
+        index + 1,
+        item.brand_name || "N/A",
+        `${item.product_name || "Unknown"}\n(${item.product_code || "N/A"})`,
+        item.unit_name || "pcs",
+        `P ${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        `P ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        item.quantity || 0
+      ];
+    }) || [];
+
+    autoTable(doc, {
+      startY: 45,
+      head: [["#", "Brand", "Product Name", "UOM", "Price", "Total Amount", "Qty"]],
+      body: tableRows,
+      headStyles: { fillColor: [248, 250, 252], textColor: [71, 85, 105], fontSize: 8, fontStyle: "bold" },
+      bodyStyles: { fontSize: 7, textColor: [30, 41, 59] },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 8 },
+        1: { halign: "center" },
+        2: { cellWidth: 70 },
+        3: { halign: "center" },
+        4: { halign: "right" },
+        5: { halign: "right", fontStyle: "bold" },
+        6: { halign: "center", fontStyle: "bold" }
+      },
+      theme: "grid",
+      styles: { cellPadding: 1.5 }
+    });
+
+    const finalY = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 100) + 8;
+
+    // --- Totals & Remarks Section ---
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.setFont("helvetica", "normal");
+    doc.text("Total Adjusted Amount", pageWidth - 20, finalY, { align: "right" });
+
+    // Remarks on the left
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.setFont("helvetica", "bold");
+    doc.text("REMARKS:", 20, finalY);
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(30, 41, 59);
+    const remarks = values.remarks || "N/A";
+    const splitRemarks = doc.splitTextToSize(remarks.toUpperCase(), 100);
+    doc.text(splitRemarks, 20, finalY + 5);
+
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 58, 138);
+    
+    const totalAmountSum = values.items?.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.cost_per_unit || 0)), 0) || 0;
+    const formattedAmount = totalAmountSum.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+    doc.text(formattedAmount, pageWidth - 20, finalY + 7, { align: "right" });
+
+    // --- Signatures Section ---
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let sigY = finalY + 25;
+
+    if (sigY + 20 > pageHeight) {
+      doc.addPage();
+      sigY = 30;
+    }
+
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.setFont("helvetica", "normal");
+    
+    doc.setLineWidth(0.2);
+    doc.setDrawColor(148, 163, 184);
+    
+    // Prepared By
+    doc.text("PREPARED BY:", 20, sigY);
+    doc.line(20, sigY + 12, 70, sigY + 12);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text(currentUserName, 20, sigY + 10);
+
+    // Approved By
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 116, 139);
+    doc.text("APPROVED BY:", pageWidth / 2 - 25, sigY);
+    doc.line(pageWidth / 2 - 25, sigY + 12, pageWidth / 2 + 25, sigY + 12);
+
+    // Received By
+    doc.text("RECEIVED BY:", pageWidth - 70, sigY);
+    doc.line(pageWidth - 70, sigY + 12, pageWidth - 20, sigY + 12);
+
+    doc.save(`StockAdjustmentManual_${values.doc_no}.pdf`);
+  }, [branches, form, userFullName]);
 
   // ——————————————————————————————————————————————————————————————————————————————
   // Unlock body scroll/pointer-events when save/post loading clears.
@@ -770,6 +957,17 @@ export function StockAdjustmentManualForm({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {id && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={generatePDF}
+              className="gap-2 h-10 border-border bg-card shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg transition-all"
+            >
+              <Printer className="h-4 w-4" />
+              Print
+            </Button>
+          )}
           {onCancel ? (
             <Button
               variant="outline"
@@ -1097,6 +1295,15 @@ export function StockAdjustmentManualForm({
                   className="pl-9 h-9 text-sm border-input"
                 />
               </div>
+              <Button
+                type="button"
+                onClick={generatePDF}
+                className="font-bold h-9 px-4 rounded-full shadow-sm flex items-center gap-2 text-sm transition-all border-primary/20 text-primary/90 bg-primary/10 hover:bg-primary/20"
+                variant="outline"
+              >
+                <Printer className="h-4 w-4" />
+                Print
+              </Button>
               {!isReadOnly && (
                 <Button
                   type="button"
@@ -1152,10 +1359,10 @@ export function StockAdjustmentManualForm({
                       <th className="p-3 text-center w-12 border-r border-border/50">#</th>
                       <th className="p-3">Brand</th>
                       <th className="p-3">Product Name</th>
-                      <th className="p-3">Price</th>
                       <th className="p-3">UOM</th>
-                      <th className="p-3 w-32 text-center">Qty</th>
-                      <th className="p-3">Net Total</th>
+                      <th className="p-3">Price</th>
+                      <th className="p-3">Total Amount</th>
+                      <th className="p-3 w-32 text-center">Quantity</th>
                       <th className="p-3 text-center w-16">Action</th>
                     </tr>
                   </thead>

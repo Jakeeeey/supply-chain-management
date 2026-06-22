@@ -13,8 +13,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Eye,
-  Pencil
+  Eye
 } from "lucide-react";
 import { stockAdjustmentSummaryService } from "../services/stock-adjustment-summary-service";
 import { useRouter } from "next/navigation";
@@ -171,17 +170,6 @@ export function RecentLog() {
                         >
                           <Eye className="h-4.5 w-4.5 stroke-[1.5]" />
                         </Button>
-                        {!isPosted && (
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => router.push(`/scm/inventory-management/stock-adjustment-posting?id=${item.id}`)} 
-                            className="text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg h-9 w-9"
-                            title="Edit Draft"
-                          >
-                            <Pencil className="h-4.5 w-4.5 stroke-[1.5]" />
-                          </Button>
-                        )}
                       </div>
                     </div>
                   </div>

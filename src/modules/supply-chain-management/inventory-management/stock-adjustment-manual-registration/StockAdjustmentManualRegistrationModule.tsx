@@ -3,7 +3,13 @@
 import { useRouter } from "next/navigation";
 import { StockAdjustmentManualForm } from "@/modules/supply-chain-management/inventory-management/stock-adjustment-manual-registration/components/forms/StockAdjustmentManualForm";
 
-export default function StockAdjustmentManualRegistrationModule() {
+interface StockAdjustmentManualRegistrationModuleProps {
+  userFullName?: string;
+}
+
+export default function StockAdjustmentManualRegistrationModule({
+  userFullName
+}: StockAdjustmentManualRegistrationModuleProps) {
   const router = useRouter();
 
   return (
@@ -15,6 +21,7 @@ export default function StockAdjustmentManualRegistrationModule() {
           router.push("/scm/inventory-management/stock-adjustment-manual-summary");
         }}
         mode="creation"
+        userFullName={userFullName}
       />
     </div>
   );
