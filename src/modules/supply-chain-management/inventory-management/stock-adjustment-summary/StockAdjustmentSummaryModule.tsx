@@ -8,12 +8,10 @@ import { RecentLog } from "./components/RecentLog";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 import { Button } from "@/components/ui/button";
-import { BarChart3, RotateCcw, Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { BarChart3, RotateCcw } from "lucide-react";
 
 function StockAdjustmentSummaryInner() {
   const { isLoading, error, refresh, rawData } = useStockAdjustmentSummaryContext();
-  const router = useRouter();
 
   if (isLoading && rawData.length === 0) {
     return <ModuleSkeleton hasTabs={false} rowCount={6} />;
@@ -51,12 +49,6 @@ function StockAdjustmentSummaryInner() {
             className="gap-2 border-border/50 text-xs font-semibold rounded-lg hover:bg-muted/50 h-10 px-4"
           >
             <RotateCcw className="h-3.5 w-3.5" /> Reload Data
-          </Button>
-          <Button
-            onClick={() => router.push("/scm/inventory-management/stock-adjustment-registration")}
-            className="h-10 gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm font-semibold rounded-full px-6 transition-all duration-300 hover:scale-[1.02] text-xs shrink-0"
-          >
-            <Plus className="h-4 w-4" /> New Registration
           </Button>
         </div>
       </div>

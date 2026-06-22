@@ -41,14 +41,6 @@ export default function StockAdjustmentManualSummaryModule() {
     );
   }
 
-  const handleCreate = () => {
-    router.push("/scm/inventory-management/stock-adjustment-manual-registration");
-  };
-
-  const handleEdit = (id: number) => {
-    router.push(`/scm/inventory-management/stock-adjustment-manual-posting?id=${id}`);
-  };
-
   const handleDetail = (id: number) => {
     router.push(`/scm/inventory-management/stock-adjustment-manual-posting?id=${id}`);
   };
@@ -64,8 +56,6 @@ export default function StockAdjustmentManualSummaryModule() {
         pageSize={pageSize}
         setPageSize={setPageSize}
         resetFilters={resetFilters}
-        onCreate={handleCreate}
-        onEdit={handleEdit}
         onDetail={handleDetail}
         branches={branches}
         suppliers={suppliers}

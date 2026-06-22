@@ -73,6 +73,20 @@ export const StockAdjustmentItemSchema = z.object({
 export type StockAdjustmentItem = z.infer<typeof StockAdjustmentItemSchema>;
 
 /**
+ * Stock Adjustment Attachment Schema
+ */
+export const StockAdjustmentAttachmentSchema = z.object({
+  id: z.number().optional(),
+  stock_adjustment_id: z.number().optional(),
+  attachment: z.any(), // UUID string or File object
+  created_at: z.string().nullable().optional(),
+  created_by: z.any().optional(),
+  updated_at: z.string().nullable().optional(),
+  updated_by: z.any().optional(),
+});
+export type StockAdjustmentAttachment = z.infer<typeof StockAdjustmentAttachmentSchema>;
+
+/**
  * Stock Adjustment Header Schema
  */
 export const StockAdjustmentHeaderSchema = z.object({
@@ -89,6 +103,7 @@ export const StockAdjustmentHeaderSchema = z.object({
   posted_by: z.any().optional(),
   postedAt: z.string().optional(),
   items: z.any().optional(), // Expanded items or count
+  stock_adjustment_attachment: z.array(StockAdjustmentAttachmentSchema).optional(),
 });
 export type StockAdjustmentHeader = z.infer<typeof StockAdjustmentHeaderSchema>;
 
@@ -114,6 +129,7 @@ export const StockAdjustmentFormSchema = z.object({
   isPosted: z.boolean(),
   postedAt: z.string().optional(),
   posted_by: z.any().optional(),
+  stock_adjustment_attachment: z.array(StockAdjustmentAttachmentSchema).min(1, "At least one attachment is required"),
 });
 export type StockAdjustmentFormValues = z.infer<typeof StockAdjustmentFormSchema>;
 
