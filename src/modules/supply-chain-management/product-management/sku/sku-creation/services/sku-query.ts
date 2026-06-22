@@ -119,11 +119,14 @@ export const skuQueryService = {
         if (supplierLinks?.length) {
           const supplierMap = new Map<number, number>();
           for (const link of supplierLinks) {
-            supplierMap.set(link.product_id, link.supplier_id);
+            // If filtering by a specific supplier, prioritize it
+            if (!supplierMap.has(link.product_id) || (supplierId && link.supplier_id === supplierId)) {
+              supplierMap.set(link.product_id, link.supplier_id);
+            }
           }
           for (const p of products) {
             const pid = (p.product_id || p.id) as number;
-            const sId = supplierMap.get(pid);
+            const sId = supplierId || supplierMap.get(pid);
             if (sId) {
               p.product_supplier = sId;
             }

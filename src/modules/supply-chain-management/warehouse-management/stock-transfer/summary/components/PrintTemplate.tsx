@@ -28,6 +28,7 @@ export const PrintTemplate = React.forwardRef<HTMLDivElement, PrintTemplateProps
         month: 'short',
         day: '2-digit',
         year: 'numeric',
+        timeZone: 'Asia/Manila',
       }).format(new Date(dateString));
     } catch {
       return dateString;
@@ -174,7 +175,7 @@ export const PrintTemplate = React.forwardRef<HTMLDivElement, PrintTemplateProps
 
       {/* Footer */}
       <div style={{ position: 'absolute', bottom: '10mm', left: '15mm', right: '15mm', borderTop: '1px solid #eee', paddingTop: '5mm', textAlign: 'center', fontSize: '9px', color: '#999' }}>
-        Printed: {new Date().toLocaleString('en-PH')} · VOS Web Supply Chain Management System
+        Printed: {new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' })} · VOS Web Supply Chain Management System
       </div>
     </div>
   );

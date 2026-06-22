@@ -85,6 +85,26 @@ export interface DispatchPlanGroup {
   invoices: ForArrivalInvoice[];
 }
 
+/** Grouped invoices by customer within a dispatch plan column */
+export interface GroupedArrivalInvoice {
+  /** Aggregation key (customerName) */
+  groupKey: string;
+  /** Customer name shared by all invoices in this group */
+  customerName: string;
+  /** Sequence number (from the first invoice in the group) */
+  sequence: number;
+  /** All individual invoices belonging to this customer group */
+  invoices: ForArrivalInvoice[];
+  /** Summed net amount across all invoices */
+  totalNetAmount: number;
+  /** Summed total amount across all invoices */
+  totalAmount: number;
+  /** Address from the first invoice */
+  brgy: string;
+  city: string;
+  province: string;
+}
+
 // ─── Directus Row Interfaces (Backend use only) ────────────────
 
 export interface PostDispatchPlanRow {
