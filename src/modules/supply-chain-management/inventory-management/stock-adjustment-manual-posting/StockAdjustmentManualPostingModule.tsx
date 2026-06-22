@@ -10,11 +10,13 @@ import ErrorPage from "@/components/shared/ErrorPage";
 interface StockAdjustmentManualPostingModuleProps {
   mode?: "creation" | "posting";
   initialId?: number | null;
+  userFullName?: string;
 }
 
 export default function StockAdjustmentManualPostingModule({ 
   mode = "posting", 
-  initialId = null 
+  initialId = null,
+  userFullName
 }: StockAdjustmentManualPostingModuleProps) {
   const router = useRouter();
   const { unfilteredData: data = [], isLoading, error, refresh } = useStockAdjustmentManual("Unposted");
@@ -70,6 +72,7 @@ export default function StockAdjustmentManualPostingModule({
           mode={mode}
           unpostedList={data}
           onSelectId={setSelectedId}
+          userFullName={userFullName}
         />
       )}
     </div>

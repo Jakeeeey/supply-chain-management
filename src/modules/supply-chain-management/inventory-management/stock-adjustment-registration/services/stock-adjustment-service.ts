@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { directusFetch, getDirectusBase } from "@/modules/supply-chain-management/inventory-management/stock-adjustment-registration/utils/directus";
 import {
   StockAdjustmentHeader,
@@ -344,12 +345,49 @@ export const stockAdjustmentService = {
       };
     });
 
+    // Fetch attachments — FK references stock_adjustment.id (items), not the header id.
+    // We use the item IDs belonging to this doc_no to look up attachments.
+    let attachments: any[] = [];
+    try {
+      const docItemIdsRes = await directusFetch<{ data: { id: number }[] }>(
+        `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${header.doc_no}"}}&fields=id&limit=-1`
+      );
+      const docItemIds = (docItemIdsRes.data || []).map((i) => i.id);
+      if (docItemIds.length > 0) {
+        const attachmentsRes = await directusFetch<{ data: any[] }>(
+          `${DIRECTUS_URL}/items/stock_adjustment_attachment?filter={"stock_adjustment_id":{"_in":${JSON.stringify(docItemIds)}}}&limit=-1`
+        );
+        attachments = attachmentsRes.data || [];
+
+        // Since `attachment` is a string in DB (not a true relational field),
+        // we manually fetch the file metadata from directus_files to populate it.
+        const fileIds = attachments.map(a => typeof a.attachment === 'string' ? a.attachment : null).filter(Boolean);
+        if (fileIds.length > 0) {
+          try {
+            const filesRes = await directusFetch<{ data: any[] }>(
+              `${DIRECTUS_URL}/files?filter={"id":{"_in":${JSON.stringify(fileIds)}}}&fields=id,type,filename_download,filesize`
+            );
+            const filesMap = new Map((filesRes.data || []).map(f => [f.id, f]));
+            attachments = attachments.map(a => ({
+              ...a,
+              attachment: filesMap.get(a.attachment) || a.attachment
+            }));
+          } catch (fileErr) {
+            console.warn("Failed to fetch file metadata:", fileErr);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch stock adjustment attachments:", err);
+    }
+
     return {
       ...header,
       remarks: cleanedRemarks,
       items: itemsWithTags,
       amount: totalAmount > 0 ? totalAmount : (Number(header.amount) || 0),
       supplier_id: resolvedSupplier as unknown,
+      stock_adjustment_attachment: attachments,
     } as unknown as StockAdjustmentDetail;
   },
 
@@ -554,6 +592,23 @@ export const stockAdjustmentService = {
       });
     }
 
+    if (header.stock_adjustment_attachment && Array.isArray(header.stock_adjustment_attachment) && (header.stock_adjustment_attachment as any[]).length > 0) {
+      const firstItemId = createdItems[0]?.id;
+      if (firstItemId) {
+        const atts = (header.stock_adjustment_attachment as any[]).map((att: any) => ({
+          stock_adjustment_id: firstItemId,
+          attachment: typeof att.attachment === 'object' ? (att.attachment as any).id : att.attachment,
+          created_by: payload.userId
+        }));
+        await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment_attachment`, {
+          method: "POST",
+          body: JSON.stringify(atts),
+        }).catch(err => console.error("Failed to save attachments:", err));
+      } else {
+        console.warn("No item id returned — attachments could not be linked.");
+      }
+    }
+
     return headerRes.data;
   },
 
@@ -581,11 +636,31 @@ export const stockAdjustmentService = {
       body: JSON.stringify(headerPayload),
     });
 
+    // 1. Fetch existing item IDs so we can delete their attachments first (FK cascade)
     const existingItemsRes = await directusFetch<{ data: { id: number }[] }>(
-      `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${payload.header.doc_no}"}}&fields=id`
+      `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${payload.header.doc_no}"}}&fields=id&limit=-1`
     );
     const itemIds = existingItemsRes.data.map((i: { id: number }) => i.id);
 
+    // 2. Delete old attachments using old item IDs (before items are deleted)
+    if (itemIds.length > 0) {
+      try {
+        const existingAttRes = await directusFetch<{ data: { id: number }[] }>(
+          `${DIRECTUS_URL}/items/stock_adjustment_attachment?filter={"stock_adjustment_id":{"_in":${JSON.stringify(itemIds)}}}&fields=id&limit=-1`
+        );
+        const attIds = existingAttRes.data.map(a => a.id);
+        if (attIds.length > 0) {
+          await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment_attachment`, {
+            method: "DELETE",
+            body: JSON.stringify(attIds),
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to delete old attachments during update:", err);
+      }
+    }
+
+    // 3. Delete old items
     if (itemIds.length > 0) {
       await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment`, {
         method: "DELETE",
@@ -632,6 +707,24 @@ export const stockAdjustmentService = {
       });
     }
 
+    // Save new attachments linked to first new item's id
+    if (payload.header.stock_adjustment_attachment && Array.isArray(payload.header.stock_adjustment_attachment) && (payload.header.stock_adjustment_attachment as any[]).length > 0) {
+      const firstItemId = createdItems[0]?.id;
+      if (firstItemId) {
+        const atts = (payload.header.stock_adjustment_attachment as any[]).map((att: any) => ({
+          stock_adjustment_id: firstItemId,
+          attachment: typeof att.attachment === 'object' ? (att.attachment as any).id : att.attachment,
+          created_by: payload.userId
+        }));
+        await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment_attachment`, {
+          method: "POST",
+          body: JSON.stringify(atts),
+        }).catch(err => console.error("Failed to update attachments:", err));
+      } else {
+        console.warn("No item id returned on update — attachments could not be linked.");
+      }
+    }
+
     return { success: true };
   },
 
@@ -658,9 +751,28 @@ export const stockAdjustmentService = {
     const docNo = headerRes.data.doc_no;
 
     const itemsRes = await directusFetch<{ data: { id: number }[] }>(
-      `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${docNo}"}}&fields=id`
+      `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${docNo}"}}&fields=id&limit=-1`
     );
     const itemIds = itemsRes.data.map((i: { id: number }) => i.id);
+
+    // Delete attachments using item IDs (FK references stock_adjustment.id)
+    if (itemIds.length > 0) {
+      try {
+        const attRes = await directusFetch<{ data: { id: number }[] }>(
+          `${DIRECTUS_URL}/items/stock_adjustment_attachment?filter={"stock_adjustment_id":{"_in":${JSON.stringify(itemIds)}}}&fields=id&limit=-1`
+        );
+        const attIds = attRes.data.map(a => a.id);
+        if (attIds.length > 0) {
+          await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment_attachment`, {
+            method: "DELETE",
+            body: JSON.stringify(attIds),
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to delete attachments during stock adjustment deletion:", err);
+      }
+    }
+
     if (itemIds.length > 0) {
       await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment`, {
         method: "DELETE",

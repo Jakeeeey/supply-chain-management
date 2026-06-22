@@ -118,7 +118,7 @@ export default async function Page(props: {
             </header>
 
             <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4">
-                <StockAdjustmentManualPostingModule mode="posting" initialId={initialId} />
+                <StockAdjustmentManualPostingModule mode="posting" initialId={initialId} userFullName={headerUser.name} />
             </main>
         </div>
     );

@@ -9,7 +9,6 @@ import {
   Trash2,
   Save,
   AlertCircle,
-  Tag,
   ArrowLeft,
   Package,
   Send,
@@ -21,7 +20,6 @@ import {
   ChevronsRight
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { RFIDScannerModal } from "../modals/RFIDScannerModal";
 import { ProductSelectionModal } from "../modals/ProductSelectionModal";
 import {
   StockAdjustmentFormSchema,
@@ -73,7 +71,6 @@ interface ItemRowProps {
   control: Control<StockAdjustmentFormValues>;
   onRemove: (index: number) => void;
   setValue: UseFormSetValue<StockAdjustmentFormValues>;
-  onOpenScanner: (index: number) => void;
   isReadOnly?: boolean;
 }
 
@@ -82,20 +79,14 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   control,
   onRemove,
   setValue,
-  onOpenScanner,
   isReadOnly = false,
 }: ItemRowProps) {
   const product_name = useWatch({ control, name: `items.${index}.product_name` });
   const unitName = useWatch({ control, name: `items.${index}.unit_name` });
   const quantity = useWatch({ control, name: `items.${index}.quantity` });
   const costPerUnit = useWatch({ control, name: `items.${index}.cost_per_unit` });
-  const hasRfid = useWatch({ control, name: `items.${index}.has_rfid` });
   const brandName = useWatch({ control, name: `items.${index}.brand_name` });
   const barcode = useWatch({ control, name: `items.${index}.barcode` });
-  const unitOrder = useWatch({ control, name: `items.${index}.unit_order` });
-
-  const rfidTags = useWatch({ control, name: `items.${index}.rfid_tags` });
-  const isRfidMissing = (hasRfid || unitOrder === 3) && (!rfidTags || rfidTags.length === 0);
 
   const { errors } = useFormState({ control });
   const rowError = Array.isArray(errors.items)
@@ -126,46 +117,11 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
           <span className="text-[10px] font-bold text-primary bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded uppercase shrink-0">
             {unitName || "-"}
           </span>
-          {hasRfid && (
-            <span className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded uppercase shrink-0 flex items-center gap-1">
-              <Tag className="h-2.5 w-2.5 fill-amber-500" />
-              RFID
-            </span>
-          )}
         </div>
       </td>
       <td className="p-3 w-40">
         {isReadOnly ? (
           <span className="text-xs font-bold px-3 py-1 bg-muted rounded-md border border-border/50">{quantity}</span>
-        ) : hasRfid || unitOrder === 3 ? (
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold px-3 py-1 rounded-md border min-w-10 text-center select-none ${
-                isRfidMissing 
-                  ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400"
-                  : "bg-muted/50 border-border/50"
-              }`}>{isRfidMissing ? 0 : quantity}</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onOpenScanner(index)}
-                className={`h-8 font-bold gap-1 px-2 transition-all duration-200 shadow-sm rounded-lg text-[10px] ${
-                  isRfidMissing
-                    ? "border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 hover:bg-red-100 hover:border-red-300 dark:hover:bg-red-900/40"
-                    : "border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700"
-                }`}
-              >
-                <Tag className={`h-3 w-3 ${isRfidMissing ? "text-red-500 animate-pulse" : "text-blue-500"}`} />
-                SCAN
-              </Button>
-            </div>
-            {isRfidMissing && (
-              <span className="text-[9px] text-red-500 font-black animate-pulse leading-none mt-1 uppercase tracking-wider pl-1 block">
-                Scan Required
-              </span>
-            )}
-          </div>
         ) : (
           <div className="flex items-center gap-0 w-min bg-background border border-border rounded-md overflow-hidden">
             <button 
@@ -227,27 +183,23 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
 function FormSummary({
   control,
   fieldCount,
-  isRfidLoading,
 }: {
   control: Control<StockAdjustmentFormValues>;
   fieldCount: number;
-  isRfidLoading: boolean;
 }) {
   const items = useWatch({ control, name: "items" });
 
-  const { totalQuantity, totalAmount, rfidItemsCount } = useMemo(() => {
+  const { totalQuantity, totalAmount } = useMemo(() => {
     const currentItems = items || [];
     let qty = 0;
     let amt = 0;
-    let rfid = 0;
     for (const item of currentItems) {
       const q = Number(item?.quantity || 0);
       const c = Number(item?.cost_per_unit || 0);
       qty += q;
       amt += q * c;
-      if (item?.has_rfid) rfid++;
     }
-    return { totalQuantity: qty, totalAmount: amt, rfidItemsCount: rfid };
+    return { totalQuantity: qty, totalAmount: amt };
   }, [items]);
 
   return (
@@ -279,57 +231,6 @@ function FormSummary({
             })}
           </span>
         </div>
-
-        {(rfidItemsCount > 0 || isRfidLoading) && (
-          <>
-            <div className="h-px bg-border w-full" />
-            <div className="flex justify-between items-center text-sm">
-              <span className="font-bold text-amber-600 dark:text-amber-400">
-                Items with RFID:
-              </span>
-              {isRfidLoading ? (
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-4 w-16 bg-amber-100/20 dark:bg-amber-900/20 animate-pulse" />
-                  <span className="text-[10px] text-amber-400 animate-pulse">
-                    Checking...
-                  </span>
-                </div>
-              ) : (
-                <span className="font-bold text-amber-700 dark:text-amber-400">
-                  {rfidItemsCount} product(s)
-                </span>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ——————————————————————————————————————————————————————————————————————————————
-function RfidBanner({ control }: { control: Control<StockAdjustmentFormValues> }) {
-  const items = useWatch({ control, name: "items" });
-  const rfidItemsCount = useMemo(() => {
-    const currentItems = (items || []) as StockAdjustmentItem[];
-    return currentItems.filter((item) => item?.has_rfid).length;
-  }, [items]);
-
-  if (rfidItemsCount === 0) return null;
-
-  return (
-    <div className="bg-amber-500/5 border border-amber-200/30 px-6 py-4 rounded-xl flex items-start gap-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
-      <div className="p-2 bg-amber-500/10 rounded-lg">
-        <AlertCircle className="h-5 w-5 text-amber-500" />
-      </div>
-      <div>
-        <h4 className="font-bold text-amber-600">
-          RFID Tracked Items Detected
-        </h4>
-        <p className="text-xs text-amber-700/80 dark:text-amber-500/80 font-semibold mt-1">
-          {rfidItemsCount} item(s) in this adjustment have RFID tags in
-          inventory. Please ensure proper RFID tag scanning.
-        </p>
       </div>
     </div>
   );
@@ -354,7 +255,6 @@ export function StockAdjustmentForm({
     suppliers = [],
     isProductsLoading,
     isSuppliersLoading,
-    isRfidLoading,
     branches,
     fetchInventory,
     fetchBranchRfidData,
@@ -363,16 +263,12 @@ export function StockAdjustmentForm({
     inventoryMap,
     fetchNextDocNo,
     postAdjustment,
-    validateRFIDAvailability,
     deleteAdjustment,
   } = useStockAdjustmentForm();
 
   const [loading, setLoading] = useState(false);
-  const [showRFIDScanner, setShowRFIDScanner] = useState(false);
   const [showPostConfirmation, setShowPostConfirmation] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [scannerContext, setScannerContext] = useState<{ index: number; productName: string } | null>(null);
-  const [isScannerPreparing, setIsScannerPreparing] = useState(false);
   const [branchInputValue, setBranchInputValue] = useState("");
   const [supplierInputValue, setSupplierInputValue] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
@@ -633,19 +529,6 @@ export function StockAdjustmentForm({
 
     form.handleSubmit(
       async (values) => {
-        // Validate that all items requiring RFID have scanned tags
-        const missingRfidItem = values.items.find(
-          (item) => (item.has_rfid || item.unit_order === 3) && (!item.rfid_tags || item.rfid_tags.length === 0)
-        );
-
-        if (missingRfidItem) {
-          toast.error("RFID Scan Required", {
-            description: `Product "${missingRfidItem.product_name || "Unknown"}" is tracked via RFID. Please complete scanning tags before saving.`,
-            duration: 5000,
-          });
-          return;
-        }
-
         setLoading(true);
         try {
           // 1. Save/update the adjustment with current form values (e.g. added products)
@@ -686,19 +569,6 @@ export function StockAdjustmentForm({
 
   const onSubmit = useCallback(
     async (values: StockAdjustmentFormValues) => {
-      // Validate that all items requiring RFID have scanned tags
-      const missingRfidItem = values.items.find(
-        (item) => (item.has_rfid || item.unit_order === 3) && (!item.rfid_tags || item.rfid_tags.length === 0)
-      );
-
-      if (missingRfidItem) {
-        toast.error("RFID Scan Required", {
-          description: `Product "${missingRfidItem.product_name || "Unknown"}" is tracked via RFID. Please complete scanning tags before saving.`,
-          duration: 5000,
-        });
-        return;
-      }
-
       setLoading(true);
       try {
         if (id) {
@@ -727,19 +597,6 @@ export function StockAdjustmentForm({
     setShowUnsavedChangesModal(false);
     await form.handleSubmit(
       async (values: StockAdjustmentFormValues) => {
-        // Validate that all items requiring RFID have scanned tags
-        const missingRfidItem = values.items.find(
-          (item) => (item.has_rfid || item.unit_order === 3) && (!item.rfid_tags || item.rfid_tags.length === 0)
-        );
-
-        if (missingRfidItem) {
-          toast.error("RFID Scan Required", {
-            description: `Product "${missingRfidItem.product_name || "Unknown"}" is tracked via RFID. Please complete scanning tags before saving.`,
-            duration: 5000,
-          });
-          return;
-        }
-
         setLoading(true);
         try {
           if (id) {
@@ -798,32 +655,7 @@ export function StockAdjustmentForm({
     [form, fetchInventory, inventoryMap]
   );
 
-  const handleRFIDSave = useCallback((tags: string[]) => {
-    if (scannerContext) {
-      const { index } = scannerContext;
-      form.setValue(`items.${index}.rfid_tags`, tags);
-      form.setValue(`items.${index}.quantity`, tags.length, { shouldValidate: true });
-      form.setValue(`items.${index}.rfid_count`, tags.length);
-      setScannerContext(null);
-    }
-  }, [scannerContext, form]);
 
-
-  const handleOpenScanner = useCallback((index: number) => {
-    const productName = form.getValues(`items.${index}.product_name`) ?? "Product";
-    setScannerContext({ index, productName });
-
-    setIsScannerPreparing(true);
-    toast.info(`Opening RFID Scanner`, {
-      description: `Preparing scanner for ${productName}...`,
-      duration: 1500,
-    });
-
-    setTimeout(() => {
-      setIsScannerPreparing(false);
-      setShowRFIDScanner(true);
-    }, 600);
-  }, [form]);
 
   const watchedBranchIdForSelect = useWatch({ control: form.control, name: "branch_id" });
   const watchedSupplierIdForSelect = useWatch({ control: form.control, name: "supplier_id" });
@@ -938,27 +770,7 @@ export function StockAdjustmentForm({
         )}
       </div>
 
-      <RfidBanner control={form.control} />
 
-      {isScannerPreparing && (
-        <div className="fixed inset-0 bg-background/40 backdrop-blur-[1px] z-[100] flex items-center justify-center animate-in fade-in duration-300">
-          <Card className="w-full max-w-sm border-none shadow-2xl bg-card/90 overflow-hidden p-0 backdrop-blur-md">
-            <div className="bg-primary h-1.5 w-full">
-              <div className="bg-blue-400 h-full animate-[loading_1.5s_infinite_linear]" style={{ width: '40%' }} />
-            </div>
-            <CardContent className="p-8 flex flex-col items-center gap-4">
-              <div className="relative">
-                <div className="h-16 w-16 rounded-full border-4 border-muted border-t-blue-500 animate-spin" />
-                <Tag className="h-6 w-6 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-              </div>
-              <div className="text-center space-y-1">
-                <h3 className="font-bold text-foreground">Preparing RFID Scanner</h3>
-                <p className="text-sm text-muted-foreground">Please wait a moment...</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
         <Card className="border-border shadow-sm bg-card border border-border/40">
@@ -1295,7 +1107,6 @@ export function StockAdjustmentForm({
                           control={form.control}
                           onRemove={(idx) => setDeletingIndex(idx)}
                           setValue={form.setValue}
-                          onOpenScanner={handleOpenScanner}
                           isReadOnly={isReadOnly}
                         />
                       ))
@@ -1374,7 +1185,6 @@ export function StockAdjustmentForm({
             <FormSummary
               control={form.control}
               fieldCount={fields.length}
-              isRfidLoading={isRfidLoading}
             />
           </CardContent>
         </Card>
@@ -1445,18 +1255,7 @@ export function StockAdjustmentForm({
         </div>
       </form>
 
-      {scannerContext && (
-        <RFIDScannerModal
-          open={showRFIDScanner}
-          onOpenChange={setShowRFIDScanner}
-          productName={scannerContext.productName}
-          onSave={handleRFIDSave}
-          type={form.getValues("type")}
-          initialTags={form.getValues(`items.${scannerContext.index}.rfid_tags`) || []}
-          branchId={Number(form.getValues("branch_id"))}
-          validateRFID={validateRFIDAvailability}
-        />
-      )}
+
 
       {isModalOpen && (
         <ProductSelectionModal
