@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { StockAdjustmentDetailModal } from "./StockAdjustmentDetailModal";
 import { stockAdjustmentSummaryService } from "../services/stock-adjustment-summary-service";
-import { useRouter } from "next/navigation";
 
 export function RecentLog() {
   const { filteredData } = useStockAdjustmentSummary();
