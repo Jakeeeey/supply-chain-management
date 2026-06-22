@@ -16,7 +16,7 @@ export default function StockAdjustmentManualRegistrationModule({
     <div className="stock-adjustment-manual-registration-module">
       <StockAdjustmentManualForm
         id={null}
-        onCancel={undefined} // Hides back-to-list, shows "Clear Form"
+        onCancel={undefined}
         onSuccess={() => {
           router.push("/scm/inventory-management/stock-adjustment-summary");
         }}
