@@ -799,7 +799,7 @@ export function StockAdjustmentManualForm({
       } else if (typeof action === "string") {
         router.push(action);
       } else {
-        router.push("/scm/inventory-management/stock-adjustment-manual-summary");
+        router.push("/scm/inventory-management/stock-adjustment-summary");
       }
     }
   }, [isFormModified, router]);
@@ -811,7 +811,7 @@ export function StockAdjustmentManualForm({
     } else if (typeof pendingExitAction === "string") {
       router.push(pendingExitAction);
     } else {
-      router.push("/scm/inventory-management/stock-adjustment-manual-summary");
+      router.push("/scm/inventory-management/stock-adjustment-summary");
     }
     setPendingExitAction(null);
   }, [pendingExitAction, router]);
@@ -836,7 +836,7 @@ export function StockAdjustmentManualForm({
           } else if (typeof pendingExitAction === "string") {
             router.push(pendingExitAction);
           } else {
-            router.push("/scm/inventory-management/stock-adjustment-manual-summary");
+            router.push("/scm/inventory-management/stock-adjustment-summary");
           }
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : "Failed to save adjustment";
@@ -980,7 +980,7 @@ export function StockAdjustmentManualForm({
           ) : (
             <Button
               variant="outline"
-              onClick={() => handleCancelOrExit("/scm/inventory-management/stock-adjustment-manual-summary")}
+              onClick={() => handleCancelOrExit("/scm/inventory-management/stock-adjustment-summary")}
               className="gap-2 h-10 border-border bg-card shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg"
             >
               <ArrowLeft className="h-4 w-4" />

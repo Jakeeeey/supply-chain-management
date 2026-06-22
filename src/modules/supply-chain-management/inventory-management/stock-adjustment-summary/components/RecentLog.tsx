@@ -13,14 +13,17 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Eye
+  Eye,
+  Wifi,
+  ClipboardList,
+  Hash
 } from "lucide-react";
+import { StockAdjustmentDetailModal } from "./StockAdjustmentDetailModal";
 import { stockAdjustmentSummaryService } from "../services/stock-adjustment-summary-service";
-import { useRouter } from "next/navigation";
 
 export function RecentLog() {
   const { filteredData } = useStockAdjustmentSummary();
-  const router = useRouter();
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -35,6 +38,7 @@ export function RecentLog() {
   const paginatedData = filteredData.slice(startIndex, startIndex + pageSize);
 
   return (
+    <>
     <Card className="border border-border/40 rounded-xl shadow-sm bg-card flex flex-col gap-4 p-4">
       <div className="flex flex-col gap-1">
         <h2 className="text-lg font-bold text-foreground">Recent Adjustments Log</h2>
@@ -92,6 +96,28 @@ export function RecentLog() {
                           >
                             {isPosted ? "Posted" : "Unposted"}
                           </Badge>
+                          {/* Source-type badge */}
+                          {(() => {
+                            const src = (item as unknown as { source_type?: string }).source_type;
+                            if (src === "RFID") return (
+                              <Badge variant="secondary" className="bg-violet-500/10 text-violet-500 font-bold uppercase tracking-wider text-[10px] rounded-full px-2 py-0.5 border-none shadow-none flex items-center gap-1">
+                                <Wifi className="h-2.5 w-2.5" />
+                                RFID
+                              </Badge>
+                            );
+                            if (src === "MANUAL") return (
+                              <Badge variant="secondary" className="bg-orange-500/10 text-orange-500 font-bold uppercase tracking-wider text-[10px] rounded-full px-2 py-0.5 border-none shadow-none flex items-center gap-1">
+                                <ClipboardList className="h-2.5 w-2.5" />
+                                Manual
+                              </Badge>
+                            );
+                            return (
+                              <Badge variant="secondary" className="bg-cyan-500/10 text-cyan-500 font-bold uppercase tracking-wider text-[10px] rounded-full px-2 py-0.5 border-none shadow-none flex items-center gap-1">
+                                <Hash className="h-2.5 w-2.5" />
+                                Serial
+                              </Badge>
+                            );
+                          })()}
                         </div>
                         
                         {/* Visual Metadata Alignment */}
@@ -164,7 +190,7 @@ export function RecentLog() {
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          onClick={() => router.push(`/scm/inventory-management/stock-adjustment-posting?id=${item.id}`)} 
+                          onClick={() => setSelectedId(Number(item.id))} 
                           className="text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg h-9 w-9"
                           title="View Details"
                         >
@@ -270,5 +296,12 @@ export function RecentLog() {
         </div>
       </div>
     </Card>
+
+    {/* Detail Modal — opens when Eye button is clicked */}
+    <StockAdjustmentDetailModal
+      id={selectedId}
+      onClose={() => setSelectedId(null)}
+    />
+    </>
   );
 }

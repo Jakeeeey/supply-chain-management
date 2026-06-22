@@ -42,9 +42,10 @@ interface StockAdjustmentDetailProps {
   id: number;
   onBack: () => void;
   mode?: "creation" | "posting";
+  isModal?: boolean;
 }
 
-export function StockAdjustmentDetailView({ id, onBack, mode = "creation" }: StockAdjustmentDetailProps) {
+export function StockAdjustmentDetailView({ id, onBack, mode = "creation", isModal = false }: StockAdjustmentDetailProps) {
   const { fetchById } = useStockAdjustmentForm();
   const [data, setData] = useState<DetailType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -230,7 +231,7 @@ export function StockAdjustmentDetailView({ id, onBack, mode = "creation" }: Sto
   };
 
   return (
-    <div className="flex flex-col gap-6 p-8 max-w-7xl mx-auto w-full overflow-y-auto bg-background min-h-screen relative">
+    <div className={`flex flex-col gap-6 p-6 md:p-8 max-w-7xl mx-auto w-full relative ${isModal ? "bg-transparent min-h-0" : "bg-background min-h-screen overflow-y-auto"}`}>
       <div className="print:hidden flex flex-col gap-6">
         {/* Module Header */}
         <div className="flex items-center justify-between mb-2">
