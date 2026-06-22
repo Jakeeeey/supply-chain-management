@@ -635,11 +635,26 @@ export function StockAdjustmentForm({
         if (id) {
           await updateAdjustment(id, values);
           toast.success("Adjustment Updated Successfully");
+          onSuccess();
         } else {
           await createAdjustment(values);
-          toast.success("Adjustment Created Successfully");
+          toast.success("Stock Adjustment Registered Successfully", {
+            description: `Document ${values.doc_no} has been saved as a draft.`,
+            duration: 4000,
+          });
+          // Stay on the page — reset the form for the next entry
+          const nextDocNo = await fetchNextDocNo(values.type);
+          form.reset({
+            doc_no: nextDocNo,
+            branch_id: 0,
+            supplier_id: 0,
+            type: values.type,
+            remarks: "",
+            items: [],
+            isPosted: false,
+            stock_adjustment_attachment: [],
+          });
         }
-        onSuccess();
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to save adjustment";
         toast.error(message);
@@ -647,7 +662,7 @@ export function StockAdjustmentForm({
         setLoading(false);
       }
     },
-    [id, createAdjustment, updateAdjustment, onSuccess]
+    [id, createAdjustment, updateAdjustment, fetchNextDocNo, form, onSuccess]
   );
 
   const handleConfirmModalItems = useCallback(

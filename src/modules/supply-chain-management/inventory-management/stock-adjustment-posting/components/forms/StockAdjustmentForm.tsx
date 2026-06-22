@@ -47,6 +47,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Combobox,
   ComboboxInput,
+  ComboboxTrigger,
   ComboboxContent,
   ComboboxList,
   ComboboxItem,
@@ -273,6 +274,7 @@ export function StockAdjustmentForm({
   const [supplierInputValue, setSupplierInputValue] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
+  const [docSearch, setDocSearch] = useState("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [tableSearch, setTableSearch] = useState("");
@@ -401,6 +403,7 @@ export function StockAdjustmentForm({
 
   const watchedBranchId = useWatch({ control: form.control, name: "branch_id" });
   const watchedSupplierId = useWatch({ control: form.control, name: "supplier_id" });
+  const watchedDocNo = useWatch({ control: form.control, name: "doc_no" });
 
   useEffect(() => {
     if (watchedBranchId && branches.length > 0) {
@@ -706,7 +709,7 @@ export function StockAdjustmentForm({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {onCancel ? (
+          {onCancel && (
             <Button
               variant="outline"
               onClick={() => handleCancelOrExit(onCancel)}
@@ -714,15 +717,6 @@ export function StockAdjustmentForm({
             >
               <ArrowLeft className="h-4 w-4" />
               Back to List
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              onClick={() => handleCancelOrExit("/scm/inventory-management/stock-adjustment-summary")}
-              className="gap-2 h-10 border-border bg-card shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg transition-all"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Summary
             </Button>
           )}
         </div>
@@ -789,23 +783,39 @@ export function StockAdjustmentForm({
                   <Combobox
                     value={id ? String(id) : ""}
                     onValueChange={(v: string | null) => {
-                      if (v) onSelectId(Number(v));
+                      if (v) {
+                        onSelectId(Number(v));
+                        setDocSearch("");
+                      }
                     }}
-                    inputValue={form.watch("doc_no") || ""}
-                    onInputValueChange={() => {}}
                   >
-                    <ComboboxInput
-                      placeholder="Select Document"
-                      className="text-xs h-11 border-input font-bold"
-                      showTrigger={true}
-                    />
-                    <ComboboxContent>
+                    <ComboboxTrigger className="flex h-11 w-full items-center justify-between rounded-md border border-input bg-card px-3 py-2 text-xs font-bold shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring select-none text-left">
+                      <span>{watchedDocNo || "Select Document"}</span>
+                    </ComboboxTrigger>
+                    <ComboboxContent className="min-w-[240px]">
+                      <div className="p-2 border-b border-border/50">
+                        <Input
+                          placeholder="Search document..."
+                          value={docSearch}
+                          onChange={(e) => setDocSearch(e.target.value)}
+                          className="h-8 text-xs bg-muted/30"
+                          autoFocus
+                        />
+                      </div>
                       <ComboboxList>
-                        {unpostedList.map((item) => (
-                          <ComboboxItem key={item.id} value={String(item.id)}>
-                            <span className="font-bold text-xs">{item.doc_no}</span>
-                          </ComboboxItem>
-                        ))}
+                        {(() => {
+                          const filtered = unpostedList.filter((item) =>
+                            item.doc_no.toLowerCase().includes(docSearch.toLowerCase())
+                          );
+                          if (filtered.length === 0) {
+                            return <ComboboxEmpty>No documents found.</ComboboxEmpty>;
+                          }
+                          return filtered.map((item) => (
+                            <ComboboxItem key={item.id} value={String(item.id)}>
+                              <span className="font-bold text-xs">{item.doc_no}</span>
+                            </ComboboxItem>
+                          ));
+                        })()}
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>

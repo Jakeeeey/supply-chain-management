@@ -104,6 +104,8 @@ export const StockAdjustmentHeaderSchema = z.object({
   postedAt: z.string().optional(),
   items: z.any().optional(), // Expanded items or count
   stock_adjustment_attachment: z.array(StockAdjustmentAttachmentSchema).optional(),
+  /** Computed at query time – never stored in Directus */
+  source_type: z.enum(["RFID", "MANUAL", "SERIAL"]).optional(),
 });
 export type StockAdjustmentHeader = z.infer<typeof StockAdjustmentHeaderSchema>;
 
