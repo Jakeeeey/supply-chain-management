@@ -237,7 +237,7 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(160, 160, 160);
   doc.text(
-    `Printed: ${new Date().toLocaleString('en-PH')}  ·  VOS Web Supply Chain Management System`,
+    `Printed: ${new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}  ·  VOS Web Supply Chain Management System`,
     pageW / 2,
     pageH - 6,
     { align: 'center' },

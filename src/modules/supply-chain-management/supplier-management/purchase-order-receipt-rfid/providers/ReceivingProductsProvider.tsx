@@ -385,9 +385,11 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
     const clearEditingReceiptId = React.useCallback(() => {
         if (selectedPO?.id) {
             localStorage.removeItem(`editing_receipt_${selectedPO.id}`);
+            clearDraft(selectedPO.id); // ✅ Prevent draft values from bleeding into next receipt
         }
         setEditingReceiptId(null);
         setReceiptNo("");
+        setReceiptType(""); // ✅ Also reset receipt type
         setReceiptDate("");
         setActivity([]);
         setLocalScannedRfids([]);
@@ -570,7 +572,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
 
                 if (!silent) {
                     setPoBarcode(detail?.poNumber ?? "");
-                    
+
                     const storedEditingId = detail?.id ? localStorage.getItem(`editing_receipt_${detail.id}`) : null;
 
                     if (storedEditingId) {
@@ -580,7 +582,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                             localStorage.removeItem(`editing_receipt_${detail.id}`);
                             clearDraft(detail.id); // Clear local draft to prevent data bleed into a new receipt
                         }
-                        
+
                         setLocalScannedRfids([]);
                         setActivity([]);
                         setScannedCountByPorId({});
@@ -590,7 +592,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                         setReceiptNo("");
                         setReceiptType("");
                         setEditingReceiptId(null);
-                        
+
                         toast.info("Previous edit session cleared. You can start a new receipt or click 'Edit' in history to resume.");
                     } else {
                         // Do not automatically restore server draft/reverted receipt. User must select explicitly from history.
@@ -706,7 +708,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
 
                 if (!silent) {
                     setPoBarcode(code);
-                    
+
                     const storedEditingId = detail?.id ? localStorage.getItem(`editing_receipt_${detail.id}`) : null;
 
                     if (storedEditingId) {
@@ -716,7 +718,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                             localStorage.removeItem(`editing_receipt_${detail.id}`);
                             clearDraft(detail.id); // Clear local draft to prevent data bleed into a new receipt
                         }
-                        
+
                         setLocalScannedRfids([]);
                         setActivity([]);
                         setScannedCountByPorId({});
@@ -726,7 +728,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                         setReceiptNo("");
                         setReceiptType("");
                         setEditingReceiptId(null);
-                        
+
                         toast.info("Previous edit session cleared. You can start a new receipt or click 'Edit' in history to resume.");
                     } else {
                         // Do not automatically restore server draft/reverted receipt. User must select explicitly from history.
@@ -944,7 +946,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 const isTagged = data.status === "tagged";
                 const realPorId = String(data.porId || "");
                 const porIdToUse = realPorId ? realPorId : targetPorId;
-                
+
                 // Mismatch Check for tagged items (only if the tag belongs to a completely different product, not just resolving a temporary ID)
                 if (isTagged && realPorId && targetPorId && realPorId !== targetPorId && !targetPorId.includes("-")) {
                     playBeep("error");
@@ -1164,7 +1166,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         setEditingReceiptId(rNo);
         setReceiptNo(rNo);
         localStorage.setItem(`editing_receipt_${selectedPO.id}`, rNo);
-        
+
         const hist = selectedPO.history?.find(h => h.receiptNo === rNo);
         if (hist?.receiptDate) setReceiptDate(hist.receiptDate.split("T")[0]);
         // Restore receiptType from history if available (will be overwritten by API response if present)
@@ -1177,7 +1179,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
             });
             const j = await asJson(r);
             const rfids = j?.data?.rfids || [];
-            
+
             const newActivity: ActivityRow[] = [];
             const newLocalRfids: typeof localScannedRfids = [];
             const newCounts: Record<string, number> = {};
@@ -1221,7 +1223,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 newCounts[porId] = (newCounts[porId] || 0) + 1;
                 if (!newVerifiedIds.includes(porId)) newVerifiedIds.push(porId);
             });
-            
+
             // ✅ Restore Metadata from POR items
             const meta: Record<string, { lotId?: string; batchNo?: string; expiryDate?: string }> = {};
             const items = j?.data?.items || [];
@@ -1249,7 +1251,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
             // Determine if all expected items in PO have RFID tags
             const poItems = selectedPO.allocations?.flatMap(a => a.items) || [];
             const expectedItems = poItems.filter(i => Number(i.expectedQty || 0) > 0);
-            
+
             const allHaveRfid = expectedItems.length > 0 && expectedItems.every(i => {
                 const porId = String(i.porId || i.id);
                 return (newCounts[porId] || 0) > 0;
@@ -1260,7 +1262,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 toast.success("Receipt loaded. All items have RFID tags—proceeding directly to Details & Finalization.");
             } else {
                 setStep(1); // Go to tagging screen
-                toast.success("Receipt loaded. Untagged items are ready for scanning.");
+                toast.success("Receipt loaded.");
             }
         } catch (e: unknown) {
             toast.error("Failed to load receipt.", { description: (e as Error).message });

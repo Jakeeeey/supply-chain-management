@@ -86,3 +86,21 @@ export async function listTransferGroups(params: {
 }) {
   return await repo.fetchStockTransferGroups(params);
 }
+
+/**
+ * Verifies a serial number against dispatched items for receiving.
+ */
+export async function verifyReceiveSerial(serialNumber: string, transferIds: number[]): Promise<{ stockTransferId: number, serialNumber: string }> {
+  const recordedSerials = await repo.fetchRecordedSerials(transferIds);
+  
+  const match = recordedSerials.find(s => 
+    s.serial_number.trim().toUpperCase() === serialNumber.trim().toUpperCase() && 
+    s.scan_type === 'DISPATCH'
+  );
+
+  if (!match) {
+    throw new Error(`Serial number ${serialNumber} was not dispatched for this order.`);
+  }
+
+  return { stockTransferId: match.stock_transfer_id, serialNumber: match.serial_number };
+}
