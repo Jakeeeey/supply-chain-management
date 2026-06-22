@@ -38,6 +38,7 @@ interface Props {
   priceType: string; // 🟢 NEW
   customerCode?: string; // 🟢 NEW: Pass selected customer code
   lineDiscounts?: API_LineDiscount[]; // 🟢 NEW
+  includeInactive?: boolean; // 🟢 NEW
 }
 
 export function ProductLookupModal({
@@ -46,6 +47,7 @@ export function ProductLookupModal({
   onConfirm,
   priceType = "A", // 🟢 NEW
   customerCode,
+  includeInactive = false,
 }: Props) {
   // --- STATES ---
   const [searchCode, setSearchCode] = useState("");
@@ -90,7 +92,7 @@ export function ProductLookupModal({
       const loadData = async () => {
         setIsLoading(true);
         try {
-          const catalog = await SalesReturnProvider.getFullCatalog(customerCode);
+          const catalog = await SalesReturnProvider.getFullCatalog(customerCode, includeInactive);
           setBrandsList(Array.isArray(catalog.brands) ? catalog.brands : []);
           setCategoriesList(Array.isArray(catalog.categories) ? catalog.categories : []);
           setSuppliersList(Array.isArray(catalog.suppliers) ? catalog.suppliers : []);
@@ -105,7 +107,7 @@ export function ProductLookupModal({
       };
       loadData();
     }
-  }, [isOpen, customerCode]);
+  }, [isOpen, customerCode, includeInactive]);
 
   // --- 2. CLICK OUTSIDE HANDLERS ---
   useEffect(() => {

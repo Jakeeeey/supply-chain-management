@@ -69,6 +69,7 @@ export interface StockTransferRow {
   ordered_quantity: number;
   received_quantity: number;
   allocated_quantity?: number;
+  picked_quantity?: number;
   scanned_quantity?: number;
   amount: number;
   status: string;
@@ -223,6 +224,7 @@ export interface UpdateTransferItem {
   id: number;
   status: string;
   allocated_quantity?: number;
+  picked_quantity?: number;
   scanned_quantity?: number;
   date_received?: string | null;
 }
@@ -258,6 +260,7 @@ export interface StockTransferInsertPayload {
   product_id: number;
   ordered_quantity: number;
   received_quantity: number;
+  picked_quantity?: number;
   amount: number;
   status: string;
   remarks: string;

@@ -375,7 +375,7 @@ export default function ConsolidationSummaryModule() {
         drawCard(startX + (cardWidth + gap) * 2, "Total Consolidation Amount", moneyTotalCard(grandTotalPrinted), [220, 252, 231]);
 
         const tableStartY = Math.max(cardsY + cardHeight + 12, afterPrintedY + 5 + filterLines.length * 3.8 + 8);
-        const tableHeader = ["Cluster", "Customer", "Salesman", "Order Date", "Created Date", "Approved Date", "For Conso"];
+        const tableHeader = ["Cluster", "Customer", "Salesman", "Order Date", "CLDTO Creation Date", "Approved Date", "For Conso"];
 
         const tableRowsData = printRows.map((row) => {
             const rowData: (string | number)[] = [
@@ -685,7 +685,7 @@ export default function ConsolidationSummaryModule() {
                                 <SortableHeader label="Customer" sortKey="customerName" sortConfig={sortConfig} onSort={handleSort} className="border-r" />
                                 <SortableHeader label="Salesman" sortKey="salesmanName" sortConfig={sortConfig} onSort={handleSort} className="border-r" />
                                 <SortableHeader label="Order Date" sortKey="orderDate" sortConfig={sortConfig} onSort={handleSort} align="center" className="border-r" />
-                                <SortableHeader label="Created Date" sortKey="createdDate" sortConfig={sortConfig} onSort={handleSort} align="center" className="border-r" />
+                                <SortableHeader label="CLDTO Creation Date" sortKey="createdDate" sortConfig={sortConfig} onSort={handleSort} align="center" className="border-r" />
                                 <SortableHeader label="Approved Date" sortKey="approvedDate" sortConfig={sortConfig} onSort={handleSort} align="center" className="border-r" />
                                 <SortableHeader label="For Conso" sortKey="consolidation" sortConfig={sortConfig} onSort={handleSort} align="right" className="text-blue-700 bg-blue-50/80 border-l" />
 

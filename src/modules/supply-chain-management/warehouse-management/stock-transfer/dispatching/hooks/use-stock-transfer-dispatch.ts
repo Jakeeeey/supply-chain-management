@@ -91,31 +91,50 @@ export function useStockTransferDispatch() {
   }, [base.baseOrderGroups]);
 
   // Group logical items with scan data
+  // Group logical items with scan data — distributes scans across line items by capacity
   const orderGroups = useMemo(() => {
     return base.baseOrderGroups.map((group: OrderGroup) => {
+      const scanLogs = scannedItemsState[group.orderNo] || [];
+
+      // Group successful scans by productId for proper distribution
+      const scansByProduct = new Map<number, ScanLog[]>();
+      for (const s of scanLogs) {
+        if (s.status === 'SUCCESS' && s.productId != null) {
+          const existing = scansByProduct.get(s.productId) || [];
+          existing.push(s);
+          scansByProduct.set(s.productId, existing);
+        }
+      }
+
+      // Track how many scans have been distributed per product
+      const distributedPerProduct = new Map<number, number>();
+
       const enrichedItems = group.items.map((st: OrderGroupItem) => {
         const product = st.product_id as ProductRow;
-        const pid = product?.product_id || st.product_id;
-        
-        const scanLogs = scannedItemsState[group.orderNo] || [];
-        const itemScans = scanLogs.filter(s => s.status === 'SUCCESS' && s.productId === pid);
-        const rfids = itemScans.map(s => s.rfid);
-        
+        const pid = (product?.product_id || st.product_id) as number;
+
         const uom = typeof product?.unit_of_measurement === 'object' ? product.unit_of_measurement : null;
         const unitName = (uom?.unit_name || '').toLowerCase();
         const unitId = Number(uom?.unit_id || 0);
 
         // Mark as loose pack if unit is pieces, tie, pcs, or loose (these don't need RFID scanning)
         const loosePack = unitName.includes('loose') || unitName.includes('pieces') || unitName.includes('pcs') || unitName.includes('tie') || unitId === 4;
-        
-        const rawAvailable = scannedInventory[pid as number] ?? (st as OrderGroupItem).qtyAvailable ?? 0;
-        
-        const manualQty = (manualQtysState[group.orderNo] || {})[pid as number] || 0;
+
+        const rawAvailable = scannedInventory[pid] ?? (st as OrderGroupItem).qtyAvailable ?? 0;
+        const manualQty = (manualQtysState[group.orderNo] || {})[pid] || 0;
+
+        // Distribute scans across line items: assign up to allocated_quantity to each item
+        const productScans = scansByProduct.get(pid) || [];
+        const alreadyDistributed = distributedPerProduct.get(pid) || 0;
+        const targetQty = Math.max(0, st.allocated_quantity ?? 0);
+        const canAssign = Math.max(0, Math.min(targetQty, productScans.length - alreadyDistributed));
+        const itemRfids = productScans.slice(alreadyDistributed, alreadyDistributed + canAssign).map(s => s.rfid);
+        distributedPerProduct.set(pid, alreadyDistributed + itemRfids.length);
 
         return {
           ...st,
-          scannedQty: loosePack ? manualQty : rfids.length,
-          scannedRfids: rfids,
+          scannedQty: loosePack ? manualQty : itemRfids.length,
+          scannedRfids: itemRfids,
           qtyAvailable: Math.max(0, rawAvailable),
           isLoosePack: loosePack,
         };
@@ -224,20 +243,30 @@ export function useStockTransferDispatch() {
     base.setProcessing(true);
     try {
       const scanLogs = (scannedItemsState[orderNo] || []).filter(s => s.status === 'SUCCESS');
-      const rfidsPayload = scanLogs.map(s => ({ 
-        stock_transfer_id: group.items.find(i => {
+
+      // Distribute RFIDs across line items by capacity to ensure correct per-BOX assignment
+      const dispatchAssigned: Record<number, number> = {};
+      const rfidsPayload = scanLogs.map(s => {
+        const lineItem = group.items.find(i => {
           const p = i.product_id as ProductRow;
           const pid = p?.product_id || i.product_id;
-          return pid === s.productId;
-        })?.id || 0,
-        rfid_tag: s.rfid,
-        scan_type: 'DISPATCH' as const
-      })).filter(p => p.stock_transfer_id > 0);
+          if (pid !== s.productId) return false;
+          const targetQty = Math.max(0, i.allocated_quantity ?? 0);
+          return (dispatchAssigned[i.id] || 0) < targetQty;
+        });
+        if (!lineItem) return null;
+        dispatchAssigned[lineItem.id] = (dispatchAssigned[lineItem.id] || 0) + 1;
+        return {
+          stock_transfer_id: lineItem.id,
+          rfid_tag: s.rfid,
+          scan_type: 'DISPATCH' as const
+        };
+      }).filter((p): p is NonNullable<typeof p> => p !== null);
 
       const itemsPayload = group.items.map(i => ({
         id: i.id,
         status: 'For Loading',
-        allocated_quantity: i.scannedQty
+        picked_quantity: i.scannedQty
       }));
 
       await stockTransferLifecycleService.submitStatusUpdate({ 
@@ -350,19 +379,25 @@ export function useStockTransferDispatch() {
       const match = await stockTransferLifecycleService.lookupRfid(rfid, selectedGroup.sourceBranch!);
       const productId = match.productId;
 
-      const itemInOrder = selectedGroup.items.find(i => {
+      // Find all line items matching this product
+      const matchingItems = selectedGroup.items.filter(i => {
         const itemProduct = i.product_id as ProductRow;
         const itemPid = itemProduct?.product_id || i.product_id;
         return itemPid === productId;
       });
 
-      if (!itemInOrder) {
+      if (matchingItems.length === 0) {
         pushError(`Product is not part of this order!`, 'Mismatch');
         return;
       }
-      
-      const targetQty = Math.max(0, itemInOrder.allocated_quantity ?? 0);
-      if (itemInOrder.scannedQty >= targetQty) {
+
+      // Pick the first line item that still has remaining capacity
+      const itemInOrder = matchingItems.find(i => {
+        const targetQty = Math.max(0, i.allocated_quantity ?? 0);
+        return (i.scannedQty || 0) < targetQty;
+      });
+
+      if (!itemInOrder) {
         pushError(`Required quantity already reached for ${match.productName}`, 'Over-scan');
         return;
       }

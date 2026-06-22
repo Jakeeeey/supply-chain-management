@@ -220,6 +220,32 @@ const ReadOnlyField = ({
   </div>
 );
 
+const RFID_HEX_LENGTH = 24;
+
+function extractHexCharacters(value: string): string {
+    return value.toUpperCase().replace(/[^0-9A-F]/g, "");
+}
+
+function finalizeHexTag(rawValue: string): string {
+    const hex = extractHexCharacters(rawValue);
+
+    if (hex.length < RFID_HEX_LENGTH) {
+        return "";
+    }
+
+    if (hex.length === RFID_HEX_LENGTH) {
+        return hex;
+    }
+
+    return hex.slice(-RFID_HEX_LENGTH);
+}
+
+function sameTag(a: string, b: string): boolean {
+    return finalizeHexTag(a) === finalizeHexTag(b);
+}
+
+
+
 export function UpdateSalesReturnModal({
   returnId,
   initialData,
@@ -433,9 +459,6 @@ export function UpdateSalesReturnModal({
   // RFID Scanner Ref
   const rfidInputRef = useRef<HTMLInputElement>(null);
 
-  /**
-   * RFID Scan Handler — looks up the product and auto-adds to details table.
-   */
   const handleRfidScan = async (tag: string) => {
     if (!tag.trim()) return;
     if (!canEditAll) {
@@ -453,6 +476,21 @@ export function UpdateSalesReturnModal({
       return;
     }
 
+    const cleanedTag = finalizeHexTag(tag);
+    if (!cleanedTag) {
+      toast.error(`Invalid RFID Tag: "${tag}" must be a 24-character hexadecimal string.`);
+      return;
+    }
+
+    // Check for duplicate RFID already in items
+    const isDuplicate = details.some(
+      (item) => item.rfidTags && item.rfidTags.some(existingTag => sameTag(existingTag, cleanedTag)),
+    );
+    if (isDuplicate) {
+      toast.error(`RFID tag "${cleanedTag}" is already in the list.`);
+      return;
+    }
+
     if (selectedRowIndex === null) {
       toast.warning("Please select a product row from the table before scanning.");
       return;
@@ -465,31 +503,40 @@ export function UpdateSalesReturnModal({
     }
 
     setRfidScanning(true);
-    setLastScannedRfid(tag);
+    setLastScannedRfid(cleanedTag);
 
     try {
       // 1. Global Duplicate Check
-      const dupCheck = await SalesReturnProvider.checkRfidDuplicate(tag);
+      const dupCheck = await SalesReturnProvider.checkRfidDuplicate(cleanedTag);
       if (dupCheck.isDuplicate && dupCheck.returnNo !== headerData.returnNo) {
         setLastScannedRfid("");
-        toast.error(`Tag "${tag}" already returned in SR #${dupCheck.returnNo}`);
+        toast.error(`Tag "${cleanedTag}" already returned in SR #${dupCheck.returnNo}`);
         return;
       }
 
       // 2. Inventory Check
-      const result = await SalesReturnProvider.lookupRfid(tag, branchId);
+      const result = await SalesReturnProvider.lookupRfid(cleanedTag, branchId);
 
       if (result?.isOnInventory) {
-        setLastScannedRfid("");
-        toast.error("Already in Stock", {
-          description: "This item is already in the branch's inventory. Sales Return is not allowed for on-hand items.",
-          duration: 5000,
-        });
-        return;
+        if (Number(result.currentBranchId) === Number(branchId)) {
+          setLastScannedRfid("");
+          toast.error("Already in Stock", {
+            description: "This item is already in the branch's inventory. Sales Return is not allowed for on-hand items.",
+            duration: 5000,
+          });
+          return;
+        } else {
+          setLastScannedRfid("");
+          toast.error("Invalid Branch Location", {
+            description: `This product belongs to ${result.currentBranchName || 'another branch'}. It cannot be returned to the selected salesman's branch.`,
+            duration: 5000,
+          });
+          return;
+        }
       }
 
       // 3. Local Duplicate Check
-      if (details.some((i) => i.rfidTags?.includes(tag))) {
+      if (details.some((i) => i.rfidTags?.some(existingTag => sameTag(existingTag, cleanedTag)))) {
         setLastScannedRfid("");
         toast.warning("Tag already scanned in this session.");
         return;
@@ -501,7 +548,7 @@ export function UpdateSalesReturnModal({
         const row = next[selectedRowIndex];
         if (!row) return prev;
 
-        const newTags = [...(row.rfidTags || []), tag];
+        const newTags = [...(row.rfidTags || []), cleanedTag];
         const newQty = newTags.length;
 
         // Recalculate amounts for this row
@@ -901,7 +948,7 @@ export function UpdateSalesReturnModal({
 
             <ReadOnlyField label="Branch" value={getSalesmanBranch(headerData.salesmanId)} isLoading={loading} />
             <ReadOnlyField label="Return Date" value={headerData.returnDate} />
-            <ReadOnlyField label="Received Date" value={headerData.createdAt} />
+            <ReadOnlyField label="Received Date" value={headerData.status === "Received" && headerData.receivedAt ? headerData.receivedAt : "-"} />
             <ReadOnlyField label="Price Type" value={headerData.priceType} />
 
             <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4">
@@ -1628,6 +1675,7 @@ export function UpdateSalesReturnModal({
         priceType={headerData.priceType || "A"}
         customerCode={headerData.customerCode}
         lineDiscounts={discountOptions}
+        includeInactive={true}
       />
 
       {/* CONFIRM DIALOGS (Update, Success, Receive) remain same structure */}
