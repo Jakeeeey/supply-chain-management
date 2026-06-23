@@ -150,11 +150,35 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
         onContinue();
     };
 
+    const activeItem = React.useMemo(() => {
+        if (!activePorId) return null;
+        return allItems.find((p) => p.porId === activePorId);
+    }, [activePorId, allItems]);
+
     // Pagination — filtered to current product
     const filteredActivity = React.useMemo(() => {
-        if (!activePorId) return activity || [];
-        return (activity || []).filter((a: ActivityRow) => a.porId === activePorId);
-    }, [activity, activePorId]);
+        if (!activePorId || !activeItem) return [];
+        
+        // Current session scans
+        const currentScans = (activity || []).filter((a: ActivityRow) => a.porId === activePorId);
+        const currentRfidSet = new Set(currentScans.map(a => a.rfid));
+        
+        // Historical scans
+        const historicalScans: (ActivityRow & { isHistorical?: boolean })[] = (activeItem.rfids || [])
+            .filter((rfid: string) => !currentRfidSet.has(rfid))
+            .map((rfid: string) => ({
+                id: `hist-${rfid}`,
+                rfid,
+                productName: activeItem.name,
+                productId: activeItem.productId,
+                porId: activePorId,
+                time: "Previous Batch",
+                status: "ok",
+                isHistorical: true
+            }));
+            
+        return [...currentScans, ...historicalScans];
+    }, [activity, activePorId, activeItem]);
 
     const activityPaginated = React.useMemo(() => {
         const start = (activityPage - 1) * ITEMS_PER_PAGE;
@@ -162,11 +186,6 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
     }, [filteredActivity, activityPage]);
 
     const totalActivityPages = Math.ceil(filteredActivity.length / ITEMS_PER_PAGE);
-
-    const activeItem = React.useMemo(() => {
-        if (!activePorId) return null;
-        return allItems.find((p) => p.porId === activePorId);
-    }, [activePorId, allItems]);
 
     // ========== NO PRODUCT SELECTED: Product List View ==========
     if (!activeProductId) {
@@ -531,15 +550,19 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
                                     <Badge variant="outline" className={a.status === "ok" ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/20" : "bg-amber-500/15 text-amber-600 border-amber-500/20"}>
                                         {a.status.toUpperCase()}
                                     </Badge>
-                                    <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                        onClick={() => removeActivity(a.id)}
-                                        title="Remove scanned tag"
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
+                                    {!(a as any).isHistorical ? (
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                            onClick={() => removeActivity(a.id)}
+                                            title="Remove scanned tag"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                    ) : (
+                                        <span className="text-[10px] text-muted-foreground font-semibold px-2">Saved</span>
+                                    )}
                                 </div>
                             </div>
                         ))
