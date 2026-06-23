@@ -1,7 +1,7 @@
 "use client"
 
 import { type MouseEvent as ReactMouseEvent, useMemo, useState, useEffect } from "react"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -49,19 +49,22 @@ function SortableHeader({
     const width = columnWidths[sortKey] || 100
 
     const isSortable = sortKey !== "abcClass" && sortKey !== "category_name"
+    const isCentered = className?.includes("text-center")
+    const isRightAligned = className?.includes("text-right")
 
     const stickyCellClass = () => {
-        if (!isSticky) return ""
+        if (!isSticky) return "sticky top-0 z-[30] bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-md"
         return cn(
-            "sticky z-[40] bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-md",
+            "sticky top-0 z-[40] bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-md",
             isLastSticky && "border-r border-slate-200 dark:border-slate-800 shadow-[2px_0_5px_rgba(0,0,0,0.05)]"
         )
     }
 
     const headerText = (
         <span className={cn(
-            isActive ? "text-blue-600 dark:text-blue-400" : isBlue ? "text-blue-600 dark:text-blue-400 font-bold" : "",
-            tooltip && "underline decoration-dotted cursor-help"
+            isActive ? "text-blue-600 dark:text-blue-400" : isBlue ? "text-blue-600 dark:text-blue-400 font-bold" : "text-slate-700 dark:text-slate-200",
+            tooltip && "underline decoration-dotted cursor-help",
+            "block max-w-full"
         )}>
             {title}
         </span>
@@ -70,7 +73,7 @@ function SortableHeader({
     return (
         <TableHead
             className={cn(
-                "p-0 relative font-black uppercase text-[10px] tracking-widest text-slate-400 group transition-all",
+                "p-0 relative font-black uppercase text-[10px] tracking-widest text-slate-700 dark:text-slate-200 group transition-all",
                 stickyCellClass(),
                 className
             )}
@@ -81,12 +84,16 @@ function SortableHeader({
                 left: leftOffset !== undefined ? `${leftOffset}px` : undefined
             }}
         >
-            <div className="flex items-center justify-between w-full h-full px-4 py-3">
+            <div className={cn(
+                "flex items-center w-full h-full px-2 py-3 relative gap-1 justify-between"
+            )}>
                 <div
                     onClick={() => isSortable && setSortConfig({ key: sortKey, direction: direction === "asc" ? "desc" : direction === "desc" ? null : "asc" })}
                     className={cn(
-                        "flex items-center gap-1.5 min-w-0 select-none",
-                        isSortable ? "cursor-pointer hover:text-blue-500" : ""
+                        "flex items-center gap-1 min-w-0 select-none",
+                        isSortable ? "cursor-pointer hover:text-blue-500" : "",
+                        isRightAligned ? "flex-row-reverse" : "",
+                        isCentered ? "mx-auto" : ""
                     )}
                 >
                     {tooltip ? (
@@ -117,7 +124,7 @@ function SortableHeader({
                 {hasFilter && (
                     <Popover>
                         <PopoverTrigger asChild>
-                            <button className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md outline-none">
+                            <button className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md outline-none shrink-0">
                                 <Filter className={cn("w-3 h-3", (filterType === "category" ? categoryFilters.length : classFilters.length) > 0 ? "text-blue-500 opacity-100" : "")} />
                             </button>
                         </PopoverTrigger>
@@ -255,20 +262,21 @@ export default function HistoricalPlanningTable({
     const [columnWidths, setColumnWidths] = useState<{ [key: string]: number }>({
         brandName: 90,
         category_name: 110,
-        abcClass: 55,
+        abcClass: 75,
         productName: 200,
         orderQty: 80,
-        suggestedQty: 80,
-        projectedStockBoxes: 80,
-        targetStock: 80,
-        daysToLast: 80,
+        suggestedQty: 90,
+        projectedStockBoxes: 100,
+        targetStock: 90,
+        daysToLast: 110,
+        mav: 100,
         mavValue: 70,
-        currentStockBoxes: 80,
-        inTransitBoxes: 80,
-        dailyUsage: 80,
-        totalAmount: 100,
-        unitPrice: 90,
-        expectedSelloutBoxes: 85,
+        currentStockBoxes: 105,
+        inTransitBoxes: 100,
+        dailyUsage: 100,
+        totalAmount: 110,
+        unitPrice: 100,
+        expectedSelloutBoxes: 105,
         inventoryStatus: 90,
     })
 
@@ -290,8 +298,8 @@ export default function HistoricalPlanningTable({
         brandName: 0,
         category_name: getW("brandName", 90),
         abcClass: getW("brandName", 90) + getW("category_name", 110),
-        productName: getW("brandName", 90) + getW("category_name", 110) + getW("abcClass", 55),
-        orderQty: getW("brandName", 90) + getW("category_name", 110) + getW("abcClass", 55) + getW("productName", 200),
+        productName: getW("brandName", 90) + getW("category_name", 110) + getW("abcClass", 75),
+        orderQty: getW("brandName", 90) + getW("category_name", 110) + getW("abcClass", 75) + getW("productName", 200),
     };
 
     const headerProps = {
@@ -347,28 +355,28 @@ export default function HistoricalPlanningTable({
 
                 {/* 🚀 Vertical + Horizontal Scroll Container */}
                 <div className="overflow-auto max-h-[calc(100vh-320px)] min-h-[400px] relative">
-                    <Table className="w-full table-fixed border-collapse">
+                    <table className="w-full table-fixed border-collapse text-sm">
                         <TableHeader>
                             <TableRow className="hover:bg-transparent border-b-2 border-slate-200 dark:border-slate-800">
-                                <SortableHeader title="Brand" sortKey="brandName" className="px-6" isSticky leftOffset={leftOffsets.brandName} {...headerProps} />
-                                <SortableHeader title="Category" sortKey="category_name" className="px-4" hasFilter filterType="category" isSticky leftOffset={leftOffsets.category_name} {...headerProps} />
-                                <SortableHeader title="Class" sortKey="abcClass" className="text-center" hasFilter filterType="class" isSticky leftOffset={leftOffsets.abcClass} {...headerProps} />
-                                <SortableHeader title="Product" sortKey="productName" className="px-4" isSticky leftOffset={leftOffsets.productName} {...headerProps} />
-                                <SortableHeader title="Order" sortKey="orderQty" className="text-center" isBlue isSticky leftOffset={leftOffsets.orderQty} isLastSticky {...headerProps} />
+                                <SortableHeader title="Brand" sortKey="brandName" className="pl-3 pr-2" isSticky leftOffset={leftOffsets.brandName} {...headerProps} />
+                                <SortableHeader title="Category" sortKey="category_name" className="px-2" hasFilter filterType="category" isSticky leftOffset={leftOffsets.category_name} {...headerProps} />
+                                <SortableHeader title="Class" sortKey="abcClass" className="text-center px-1" hasFilter filterType="class" isSticky leftOffset={leftOffsets.abcClass} {...headerProps} />
+                                <SortableHeader title="Product" sortKey="productName" className="px-2" isSticky leftOffset={leftOffsets.productName} {...headerProps} />
+                                <SortableHeader title="Order" sortKey="orderQty" className="text-center px-2" isBlue isSticky leftOffset={leftOffsets.orderQty} isLastSticky {...headerProps} />
 
                                 {/* Standard Columns */}
-                                <SortableHeader title="Sugg. Qty" sortKey="suggestedQty" className="text-right text-slate-500 px-4" {...headerProps} />
-                                <SortableHeader title="Proj Stock" sortKey="projectedStockBoxes" className="text-right text-amber-600 bg-amber-50/50 dark:bg-amber-900/10 px-4" tooltip="PROJECTED POSITION (STOCK + TRANSIT - SELLOUT)" {...headerProps} />
-                                <SortableHeader title="Req. Inv" sortKey="targetStock" className="text-right text-emerald-600 px-4" tooltip="REQUIRED INVENTORY (DAU x TARGET DAYS)" {...headerProps} />
-                                <SortableHeader title="Days to Last" sortKey="daysToLast" className="text-right text-purple-600 px-4" tooltip="DAYS OF STOCK COVERAGE (PROJECTED / DAU)" {...headerProps} />
-                                <SortableHeader title="MAV (Avg Boxes)" sortKey="mav" className="text-right text-purple-500 px-4" tooltip="Monthly Average Volume (Boxes/Month)" {...headerProps} />
-                                <SortableHeader title="Inventory" sortKey="currentStockBoxes" className="text-right text-blue-800 dark:text-blue-300 bg-blue-100/80 dark:bg-blue-900/40 px-4 border-x border-blue-200 dark:border-blue-800" tooltip="On-hand stock in boxes" {...headerProps} />
-                                <SortableHeader title="In-Transit" sortKey="inTransitBoxes" className="text-right text-indigo-500 px-4" {...headerProps} />
-                                <SortableHeader title="DAU (Boxes)" sortKey="dailyUsage" className="text-right text-slate-400 px-4" tooltip="Daily Average Usage in Boxes" {...headerProps} />
-                                <SortableHeader title="Total Value" sortKey="totalAmount" className="text-right text-slate-500 px-4" {...headerProps} />
-                                <SortableHeader title="Box Price" sortKey="unitPrice" className="text-right px-4" tooltip="Price per BOX. Formula: (Piece Cost × Box Multiplier)" {...headerProps} />
-                                <SortableHeader title="Exp Sellout" sortKey="expectedSelloutBoxes" className="text-right text-red-500 bg-red-50/50 dark:bg-red-900/10 px-4" {...headerProps} />
-                                <SortableHeader title="Status" sortKey="inventoryStatus" className="text-center px-6" {...headerProps} />
+                                <SortableHeader title="Sugg. Qty" sortKey="suggestedQty" className="text-right text-slate-500 px-2" {...headerProps} />
+                                <SortableHeader title="Proj Stock" sortKey="projectedStockBoxes" className="text-right text-amber-600 bg-amber-50/50 dark:bg-amber-900/10 px-2" tooltip="PROJECTED POSITION (STOCK + TRANSIT - SELLOUT)" {...headerProps} />
+                                <SortableHeader title="Req. Inv" sortKey="targetStock" className="text-right text-emerald-600 px-2" tooltip="REQUIRED INVENTORY (DAU x TARGET DAYS)" {...headerProps} />
+                                <SortableHeader title="Days to Last" sortKey="daysToLast" className="text-right text-purple-600 px-2" tooltip="DAYS OF STOCK COVERAGE (PROJECTED / DAU)" {...headerProps} />
+                                <SortableHeader title="MAV (Boxes)" sortKey="mav" className="text-right text-purple-500 px-2" tooltip="Monthly Average Volume (Boxes/Month)" {...headerProps} />
+                                <SortableHeader title="Inventory" sortKey="currentStockBoxes" className="text-right text-blue-800 dark:text-blue-300 bg-blue-100/80 dark:bg-blue-900/40 px-2 border-x border-blue-200 dark:border-blue-800" tooltip="On-hand stock in boxes" {...headerProps} />
+                                <SortableHeader title="In-Transit" sortKey="inTransitBoxes" className="text-right text-indigo-500 px-2" {...headerProps} />
+                                <SortableHeader title="DAU (Boxes)" sortKey="dailyUsage" className="text-right text-slate-400 px-2" tooltip="Daily Average Usage in Boxes" {...headerProps} />
+                                <SortableHeader title="Total Value" sortKey="totalAmount" className="text-right text-slate-500 px-2" {...headerProps} />
+                                <SortableHeader title="Box Price" sortKey="unitPrice" className="text-right px-2" tooltip="Price per BOX. Formula: (Piece Cost × Box Multiplier)" {...headerProps} />
+                                <SortableHeader title="Exp Sellout" sortKey="expectedSelloutBoxes" className="text-right text-red-500 bg-red-50/50 dark:bg-red-900/10 px-2" {...headerProps} />
+                                <SortableHeader title="Status" sortKey="inventoryStatus" className="text-center px-2" {...headerProps} />
                             </TableRow>
                         </TableHeader>
 
@@ -454,7 +462,46 @@ export default function HistoricalPlanningTable({
                                         </TableCell>
                                         <TableCell className="text-right font-mono font-black text-purple-700 dark:text-purple-400 text-[11px] px-2">{(Number(row.mav) || 0).toFixed(2)}</TableCell>
                                         <TableCell className="text-right font-mono font-black text-blue-800 dark:text-blue-300 text-[11px] px-2 bg-blue-50/40 dark:bg-blue-900/20 border-x border-blue-100 dark:border-blue-900/30">{(Number(row.currentStockBoxes) || 0).toFixed(2)}</TableCell>
-                                        <TableCell className="text-right font-mono font-black text-indigo-600 dark:text-indigo-400 text-[11px] px-2">{(row.inTransitBoxes || 0).toFixed(1)}</TableCell>
+                                        <TableCell className="text-right font-mono font-black text-indigo-600 dark:text-indigo-400 text-[11px] px-2">
+                                            {(() => {
+                                                const transitList = row.inTransitDetails
+                                                    ? row.inTransitDetails.split(";").filter(Boolean).map((item) => {
+                                                          const [poNo, qty] = item.split(":");
+                                                          return { poNo, quantity: parseFloat(qty) || 0 };
+                                                      })
+                                                    : [];
+
+                                                return (row.inTransitBoxes || 0) > 0 && transitList.length > 0 ? (
+                                                    <TooltipProvider>
+                                                        <Tooltip delayDuration={100}>
+                                                            <TooltipTrigger asChild>
+                                                                <span className="cursor-help underline decoration-dotted decoration-indigo-400/60 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors">
+                                                                    {(row.inTransitBoxes || 0).toFixed(1)}
+                                                                </span>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent className="bg-slate-900 text-white p-3 rounded-xl border border-slate-800 shadow-2xl min-w-[200px]">
+                                                                <div className="space-y-2">
+                                                                    <div className="text-[10px] font-black uppercase text-indigo-400 tracking-wider border-b border-slate-800 pb-1.5 flex justify-between">
+                                                                        <span>PO Number</span>
+                                                                        <span>Qty</span>
+                                                                    </div>
+                                                                    <div className="space-y-1.5 max-h-[150px] overflow-y-auto custom-scrollbar">
+                                                                        {transitList.map((po, idx) => (
+                                                                            <div key={idx} className="flex justify-between items-center text-[10px] font-bold uppercase gap-4">
+                                                                                <span className="text-slate-300">{po.poNo}</span>
+                                                                                <span className="text-indigo-400 font-mono font-black">{po.quantity.toFixed(1)}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                ) : (
+                                                    (row.inTransitBoxes || 0).toFixed(1)
+                                                );
+                                            })()}
+                                        </TableCell>
                                         <TableCell className="text-right font-mono font-black text-slate-500 dark:text-slate-400 text-[10px] px-2 italic">{(row.dailyUsage || 0).toFixed(2)}</TableCell>
                                         <TableCell className="text-right font-mono font-black text-slate-900 dark:text-slate-100 px-2 text-[11px]">₱{(row.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
 
@@ -486,7 +533,7 @@ export default function HistoricalPlanningTable({
                                 )
                             })}
                         </TableBody>
-                    </Table>
+                    </table>
                 </div>
 
                 {/* Pagination */}

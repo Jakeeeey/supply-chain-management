@@ -7,9 +7,6 @@ export async function GET() {
     const cookieStore = await cookies();
     const token = cookieStore.get("vos_access_token")?.value;
 
-    // 👇 Print the token to the server console
-    console.log("Access Token:", token);
-
     if (!token) {
         return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
     }
