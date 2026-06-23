@@ -526,7 +526,7 @@ async function fetchPOProductsByPOId(base: string, poId: number) {
     const url =
         `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
         `&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}` +
-        `&fields=*,product_id.*,branch_id.*`;
+        `&fields=*,product_id.*,branch_id.*,discount_type.*`;
 
     const j = await fetchJson(url) as { data: PoProductRow[] };
     return (j?.data ?? []) as PoProductRow[];
@@ -634,7 +634,6 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
     const productLinksMap = await fetchProductSupplierLinks(base, productIds);
     const discountMap = await fetchDiscountTypesMap(base);
 
-    // ##### Helper to extract name/percent from expanded or ID lookup #####
     const getDiscInfo = (dtRaw: unknown) => {
         if (!dtRaw) return null;
         
@@ -648,6 +647,13 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         const id = typeof dtRaw === "object" && dtRaw !== null ? String((dtRaw as { id: unknown }).id) : String(dtRaw);
         const info = discountMap.get(id);
         if (info) return info;
+
+        // 3) Try Name/Code lookup if ID lookup fails (e.g. "L3")
+        for (const val of discountMap.values()) {
+            if (val.name && val.name.toUpperCase() === id.toUpperCase()) {
+                return val;
+            }
+        }
 
         return null;
     };
@@ -918,8 +924,14 @@ async function syncPoProductFinancialsOnApproval(base: string, poId: number, isI
         const unitPrice = toNum(l.unit_price);
         
         // Financial Calculations (VAT-Inclusive Logic)
-        const dtId = (l.discount_type ? String(l.discount_type) : null) || headerDtId;
-        const discPercent = dtId ? (discountMap.get(dtId)?.pct ?? 0) : 0;
+        const rawDt = l.discount_type;
+        const dtId = rawDt 
+            ? (typeof rawDt === "object" && rawDt !== null && "id" in rawDt 
+                ? String((rawDt as { id: unknown }).id) 
+                : String(rawDt)) 
+            : null;
+        const finalDtId = dtId || headerDtId;
+        const discPercent = finalDtId ? (discountMap.get(finalDtId)?.pct ?? 0) : 0;
         
         const lineGross = qty * unitPrice;
         const discAmtTotal = Number((lineGross * (discPercent / 100)).toFixed(2));
@@ -938,7 +950,7 @@ async function syncPoProductFinancialsOnApproval(base: string, poId: number, isI
             vat_amount: toStr(toFixedMoney(vatAmt)),
             withholding_amount: toStr(toFixedMoney(ewtAmt)),
             total_amount: toStr(toFixedMoney(lineNet)), 
-            discount_type: dtId, 
+            discount_type: finalDtId, 
             received: 0, 
         });
     }
