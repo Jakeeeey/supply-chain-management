@@ -9,7 +9,6 @@ import React, {
     useCallback,
 } from "react"
 import {
-    Table,
     TableBody,
     TableCell,
     TableHead,
@@ -31,7 +30,7 @@ import {
     BarChart3,
 } from "lucide-react"
 import {cn} from "@/lib/utils"
-import {TooltipProvider} from "@/components/ui/tooltip"
+import {TooltipProvider, Tooltip, TooltipTrigger, TooltipContent} from "@/components/ui/tooltip"
 import {Button} from "@/components/ui/button"
 import {
     Select,
@@ -67,6 +66,7 @@ export interface ForecastItem {
     inTransitBoxes?: number
     suggestedQty?: number
     computedPricePerBox?: number
+    inTransitDetails?: string
 
     orderQty: number
     abcClass?: string
@@ -103,11 +103,17 @@ interface ForecastHeaderProps {
 }
 
 function ForecastHeader({label, sKey, className, sortConfig, setSortConfig}: ForecastHeaderProps) {
+    const isCentered = className?.includes("text-center");
+    const isRightAligned = className?.includes("text-right");
+
     return (
         <TableHead className={cn("px-4 py-4 whitespace-nowrap", className)}>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <div className="flex items-center gap-2 cursor-pointer group select-none">
+                    <div className={cn(
+                        "flex items-center gap-2 cursor-pointer group select-none w-full",
+                        isCentered ? "justify-center" : isRightAligned ? "justify-end flex-row-reverse" : "justify-start"
+                    )}>
                         <span
                             className={cn(
                                 "text-[11px] font-black uppercase tracking-widest",
@@ -285,8 +291,8 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <Table className="w-full">
+                    <div className="overflow-auto max-h-[calc(100vh-320px)] min-h-[400px] relative">
+                        <table className="w-full text-sm">
                             <TableHeader
                                 className="bg-slate-50/90 dark:bg-slate-900/60 sticky top-0 z-10 backdrop-blur-md">
                                 <TableRow>
@@ -397,9 +403,45 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
                                                 {Number.isFinite(onHand) ? onHand.toFixed(1) : "0.0"}
                                             </TableCell>
 
-                                            <TableCell
-                                                className="text-center font-mono font-black text-[11px] text-blue-700 dark:text-blue-300">
-                                                {Number.isFinite(inTransit) ? inTransit.toFixed(1) : "0.0"}
+                                            <TableCell className="text-center font-mono font-black text-[11px] text-blue-700 dark:text-blue-300">
+                                                {(() => {
+                                                    const transitList = item.inTransitDetails
+                                                        ? item.inTransitDetails.split(";").filter(Boolean).map((tItem) => {
+                                                              const [poNo, qty] = tItem.split(":");
+                                                              return { poNo, quantity: parseFloat(qty) || 0 };
+                                                          })
+                                                        : [];
+
+                                                    return inTransit > 0 && transitList.length > 0 ? (
+                                                        <TooltipProvider>
+                                                            <Tooltip delayDuration={100}>
+                                                                <TooltipTrigger asChild>
+                                                                    <span className="cursor-help underline decoration-dotted decoration-blue-500/60 hover:text-blue-800 dark:hover:text-blue-200 transition-colors">
+                                                                        {inTransit.toFixed(1)}
+                                                                    </span>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent className="bg-slate-900 text-white p-3 rounded-xl border border-slate-800 shadow-2xl min-w-[200px] text-left">
+                                                                    <div className="space-y-2">
+                                                                        <div className="text-[10px] font-black uppercase text-blue-400 tracking-wider border-b border-slate-800 pb-1.5 flex justify-between">
+                                                                            <span>PO Number</span>
+                                                                            <span>Qty</span>
+                                                                        </div>
+                                                                        <div className="space-y-1.5 max-h-[150px] overflow-y-auto custom-scrollbar">
+                                                                            {transitList.map((po, idx) => (
+                                                                                <div key={idx} className="flex justify-between items-center text-[10px] font-bold uppercase gap-4">
+                                                                                    <span className="text-slate-350">{po.poNo}</span>
+                                                                                    <span className="text-blue-400 font-mono font-black">{po.quantity.toFixed(1)}</span>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+                                                    ) : (
+                                                        Number.isFinite(inTransit) ? inTransit.toFixed(1) : "0.0"
+                                                    );
+                                                })()}
                                             </TableCell>
 
                                             <TableCell
@@ -461,8 +503,8 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
                                         </TableRow>
                                     )
                                 })}
-                            </TableBody>
-                        </Table>
+                        </TableBody>
+                        </table>
                     </div>
 
                     <div
