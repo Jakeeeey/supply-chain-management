@@ -9,7 +9,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Edit2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Edit2, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -25,6 +25,7 @@ import type { DriverWithDetails } from "../types";
 interface DriverTableProps {
     drivers: DriverWithDetails[];
     loading: boolean;
+    onView: (driver: DriverWithDetails) => void;
     onEdit: (driver: DriverWithDetails) => void;
     currentPage: number;
     totalPages: number;
@@ -83,6 +84,7 @@ function EmptyValue() {
 export function DriverTable({
     drivers,
     loading,
+    onView,
     onEdit,
     currentPage,
     totalPages,
@@ -208,11 +210,23 @@ export function DriverTable({
                                         </div>
                                     </TableCell>
                                     <TableCell className="py-4 text-center">
-                                        <div className="flex justify-center">
+                                        <div className="flex justify-center gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => onView(driver)}
+                                                title="View driver details"
+                                                aria-label={`View details for ${driverName}`}
+                                                className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
+                                            >
+                                                <Eye className="h-4 w-4" />
+                                            </Button>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
                                                 onClick={() => onEdit(driver)}
+                                                title="Edit driver"
+                                                aria-label={`Edit ${driverName}`}
                                                 className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
                                             >
                                                 <Edit2 className="h-4 w-4" />

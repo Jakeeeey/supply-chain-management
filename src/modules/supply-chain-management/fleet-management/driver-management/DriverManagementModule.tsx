@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useDriverManagement } from "./hooks/useDriverManagement";
 import { DriverTable } from "./components/DriverTable";
 import { DriverModal } from "./components/DriverModal";
+import { DriverDetailsModal } from "./components/DriverDetailsModal";
 import {
     Command,
     CommandEmpty,
@@ -82,6 +83,7 @@ export default function DriverManagementModule() {
 
     const [isModalOpen, setIsModalOpen] = React.useState(false);
     const [editingDriver, setEditingDriver] = React.useState<DriverWithDetails | null>(null);
+    const [viewingDriver, setViewingDriver] = React.useState<DriverWithDetails | null>(null);
 
     const [openGood, setOpenGood] = React.useState(false);
     const [openBad, setOpenBad] = React.useState(false);
@@ -94,6 +96,10 @@ export default function DriverManagementModule() {
     const handleEdit = (driver: DriverWithDetails) => {
         setEditingDriver(driver);
         setIsModalOpen(true);
+    };
+
+    const handleView = (driver: DriverWithDetails) => {
+        setViewingDriver(driver);
     };
 
     return (
@@ -249,6 +255,7 @@ export default function DriverManagementModule() {
                     <DriverTable
                         drivers={slicedDrivers}
                         loading={loading}
+                        onView={handleView}
                         onEdit={handleEdit}
                         currentPage={currentPage}
                         totalPages={totalPages}
@@ -276,6 +283,13 @@ export default function DriverManagementModule() {
                 branches={branches}
                 drivers={drivers}
                 onSuccess={refresh}
+                driverContactFieldsSupported={driverContactFieldsSupported}
+            />
+
+            <DriverDetailsModal
+                isOpen={viewingDriver !== null}
+                onClose={() => setViewingDriver(null)}
+                driver={viewingDriver}
                 driverContactFieldsSupported={driverContactFieldsSupported}
             />
         </div>
