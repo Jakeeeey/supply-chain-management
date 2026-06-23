@@ -78,7 +78,7 @@ export function ConsolidatorDetailSheet({consolidator, isOpen, onClose, onStatus
             const manifestRes = await fetch(`/api/scm/warehouse-management/consolidation/delivery-picking/manifest/${consolidator.consolidatorNo}`);
             if (manifestRes.ok) {
                 const data = await manifestRes.json();
-                generatePickerPDF(data, consolidator.consolidatorNo);
+                generatePickerPDF(data, consolidator.consolidatorNo, consolidator.totalSalesOrderAmount);
             }
         } catch (err) {
             console.error("VOS: PDF Generation Failed", err);
@@ -102,7 +102,7 @@ export function ConsolidatorDetailSheet({consolidator, isOpen, onClose, onStatus
                 const manifestRes = await fetch(`/api/scm/warehouse-management/consolidation/delivery-picking/manifest/${consolidator.consolidatorNo}`);
                 const data = await manifestRes.json();
 
-                generatePickerPDF(data, consolidator.consolidatorNo);
+                generatePickerPDF(data, consolidator.consolidatorNo, consolidator.totalSalesOrderAmount);
 
                 setIsStartPickingOpen(false);
                 onStatusUpdate?.();
