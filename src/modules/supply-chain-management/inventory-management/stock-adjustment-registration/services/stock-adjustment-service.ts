@@ -101,7 +101,7 @@ export const stockAdjustmentService = {
 
     if (headers.length === 0) return [];
 
-    // Pre-parse remarks metadata for each header to resolve exact supplier
+    // Pre-parse remarks metadata for each header to resolve exact supplier & source type
     const parsedHeaders = headers.map(header => {
       let supplierId: number | null = null;
       let cleanedRemarks = String(header.remarks || "").trim();
@@ -110,14 +110,26 @@ export const stockAdjustmentService = {
         supplierId = Number(match[1]);
         cleanedRemarks = cleanedRemarks.replace(/\s*\[SUPPLIER_ID:\s*(\d+)\]/g, "").trim();
       }
+
+      // Parse optional source type marker
+      let parsedSourceType: "MANUAL" | null = null;
+      const sourceMatch = cleanedRemarks.match(/\[SOURCE:\s*([A-Z]+)\]/);
+      if (sourceMatch) {
+        if (sourceMatch[1] === "MANUAL") parsedSourceType = "MANUAL";
+        cleanedRemarks = cleanedRemarks.replace(/\s*\[SOURCE:\s*[A-Z]+\]/g, "").trim();
+      }
+
       return {
         ...header,
         remarks: cleanedRemarks,
-        parsed_supplier_id: supplierId
+        parsed_supplier_id: supplierId,
+        parsed_source_type: parsedSourceType,
       };
     });
 
+
     const docNos = parsedHeaders.map(h => h.doc_no);
+
     const itemsRes = await directusFetch<{ data: RawItem[] }>(
       `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_in":${JSON.stringify(docNos)}}}&fields=doc_no,quantity,product_id.product_id,product_id.price_per_unit,product_id.cost_per_unit,unit_id.unit_name&limit=-1`
     );
@@ -209,11 +221,23 @@ export const stockAdjustmentService = {
         }
       }
 
+      // ── Source type detection (priority order) ──────────────────────────
+      // 1. MANUAL  → [SOURCE: MANUAL] tag in remarks (stock-adjustment-manual-registration)
+      // 2. SERIAL  → doc_no contains "-SERIAL-" (IDS stock-adjustment-serial-registration)
+      // 3. RFID    → everything else (standard stock-adjustment-registration)
+      const sourceType: "RFID" | "MANUAL" | "SERIAL" =
+        header.parsed_source_type === "MANUAL"
+          ? "MANUAL"
+          : /-(SERIAL)-/i.test(header.doc_no)
+          ? "SERIAL"
+          : "RFID";
+
       return {
         ...header,
         items: headerItems,
         amount: totalAmount > 0 ? totalAmount : (Number(header.amount) || 0),
-        supplier_id: resolvedSupplier as unknown
+        supplier_id: resolvedSupplier as unknown,
+        source_type: sourceType,
       };
     });
   },
