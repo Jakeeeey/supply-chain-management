@@ -81,7 +81,6 @@ export function TagRFIDStep() {
 
     // Construct all products in PO allocations (excluding expectedQty <= 0)
     const allItems = React.useMemo(() => {
-        const isNewReceipt = !editingReceiptId;
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
         return allocs.flatMap((a) => {
             const items = Array.isArray(a?.items) ? a.items : [];
@@ -91,18 +90,9 @@ export function TagRFIDStep() {
                     porId: String(it.porId || it.id),
                     branchName: a?.branch?.name ?? "Unassigned",
                 }))
-                .filter((it) => Number(it.expectedQty || 0) > 0 || it.isExtra)
-                .filter((it) => {
-                    // For new receipts, exclude items that are already fully tagged
-                    if (isNewReceipt && !it.isExtra) {
-                        const tagged = Number(it.taggedQty || 0);
-                        const expected = Number(it.expectedQty || 0);
-                        if (expected > 0 && tagged >= expected) return false;
-                    }
-                    return it.isExtra || (Number(it.taggedQty || 0) < Number(it.expectedQty));
-                });
+                .filter((it) => Number(it.expectedQty || 0) > 0 || it.isExtra);
         });
-    }, [selectedPO, editingReceiptId]);
+    }, [selectedPO]);
 
     const safeCounts: Record<string, number> = React.useMemo(() =>
         scannedCountByPorId && typeof scannedCountByPorId === "object" ? scannedCountByPorId : {}, [scannedCountByPorId]);
@@ -147,11 +137,35 @@ export function TagRFIDStep() {
     }, [overReceivedProducts]);
 
 
+    const activeItem = React.useMemo(() => {
+        if (!activePorId) return null;
+        return allItems.find((p) => p.porId === activePorId);
+    }, [activePorId, allItems]);
+
     // Pagination — filtered to current product
     const filteredActivity = React.useMemo(() => {
-        if (!activePorId) return activity || [];
-        return (activity || []).filter((a: ActivityRow) => a.porId === activePorId);
-    }, [activity, activePorId]);
+        if (!activePorId || !activeItem) return [];
+        
+        // Current session scans
+        const currentScans = (activity || []).filter((a: ActivityRow) => a.porId === activePorId);
+        const currentRfidSet = new Set(currentScans.map(a => a.rfid));
+        
+        // Historical scans
+        const historicalScans: (ActivityRow & { isHistorical?: boolean })[] = (activeItem.rfids || [])
+            .filter((rfid: string) => !currentRfidSet.has(rfid))
+            .map((rfid: string) => ({
+                id: `hist-${rfid}`,
+                rfid,
+                productName: activeItem.name,
+                productId: activeItem.productId,
+                porId: activePorId,
+                time: "Previous Batch",
+                status: "ok",
+                isHistorical: true
+            }));
+            
+        return [...currentScans, ...historicalScans];
+    }, [activity, activePorId, activeItem]);
 
     const activityPaginated = React.useMemo(() => {
         const start = (activityPage - 1) * ITEMS_PER_PAGE;
@@ -159,11 +173,6 @@ export function TagRFIDStep() {
     }, [filteredActivity, activityPage]);
 
     const totalActivityPages = Math.ceil(filteredActivity.length / ITEMS_PER_PAGE);
-
-    const activeItem = React.useMemo(() => {
-        if (!activePorId) return null;
-        return allItems.find((p) => p.porId === activePorId);
-    }, [activePorId, allItems]);
 
     // ========== NO PRODUCT SELECTED: Product List View ==========
     if (!activeProductId) {
@@ -339,7 +348,7 @@ export function TagRFIDStep() {
                                                                 : "border-border"
                                                         )}
                                                     >
-                                                        {scanned} / {target}
+                                                        {p.isExtra ? scanned : `${scanned} / ${target}`}
                                                     </Badge>
                                                 </td>
                                                 <td className="px-4 py-3 text-right">
@@ -453,7 +462,11 @@ export function TagRFIDStep() {
                             Now Tagging: {activeItem?.name}
                         </div>
                         <div className="text-sm font-medium text-foreground bg-card px-3 py-1 rounded shadow-sm inline-block border">
-                            Scanned: <span className={activeDone ? (activeIsOver ? "text-destructive font-bold" : "text-emerald-600 font-bold") : "font-bold"}>{activeScanned}</span> of {activeTarget}
+                            {activeItem?.isExtra ? (
+                                <>Scanned: <span className="text-emerald-600 font-bold">{activeScanned}</span></>
+                            ) : (
+                                <>Scanned: <span className={activeDone ? (activeIsOver ? "text-destructive font-bold" : "text-emerald-600 font-bold") : "font-bold"}>{activeScanned}</span> of {activeTarget}</>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -489,15 +502,19 @@ export function TagRFIDStep() {
                                     <Badge variant="outline" className={a.status === "ok" ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/20" : "bg-amber-500/15 text-amber-600 border-amber-500/20"}>
                                         {a.status.toUpperCase()}
                                     </Badge>
-                                    <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                        onClick={() => removeActivity(a.id)}
-                                        title="Remove scanned tag"
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
+                                    {!(a as ActivityRow & { isHistorical?: boolean }).isHistorical ? (
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                            onClick={() => removeActivity(a.id)}
+                                            title="Remove scanned tag"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                    ) : (
+                                        <span className="text-[10px] text-muted-foreground font-semibold px-2">Saved</span>
+                                    )}
                                 </div>
                             </div>
                         ))

@@ -258,7 +258,7 @@ async function fetchPORByPOIds(base: string, poIds: number[]) {
 }
 
 async function fetchPOProductsByPOId(base: string, poId: number): Promise<POProductRow[]> {
-    const url = `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount`;
+    const url = `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount,discount_type.*`;
     const j = await fetchJson<{ data: POProductRow[] }>(url);
     return (j?.data ?? []);
 }
