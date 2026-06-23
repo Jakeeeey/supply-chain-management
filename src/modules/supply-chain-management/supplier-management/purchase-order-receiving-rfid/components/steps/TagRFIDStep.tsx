@@ -339,7 +339,7 @@ export function TagRFIDStep() {
                                                                 : "border-border"
                                                         )}
                                                     >
-                                                        {scanned} / {target}
+                                                        {p.isExtra ? scanned : `${scanned} / ${target}`}
                                                     </Badge>
                                                 </td>
                                                 <td className="px-4 py-3 text-right">
@@ -453,7 +453,11 @@ export function TagRFIDStep() {
                             Now Tagging: {activeItem?.name}
                         </div>
                         <div className="text-sm font-medium text-foreground bg-card px-3 py-1 rounded shadow-sm inline-block border">
-                            Scanned: <span className={activeDone ? (activeIsOver ? "text-destructive font-bold" : "text-emerald-600 font-bold") : "font-bold"}>{activeScanned}</span> of {activeTarget}
+                            {activeItem?.isExtra ? (
+                                <>Scanned: <span className="text-emerald-600 font-bold">{activeScanned}</span></>
+                            ) : (
+                                <>Scanned: <span className={activeDone ? (activeIsOver ? "text-destructive font-bold" : "text-emerald-600 font-bold") : "font-bold"}>{activeScanned}</span> of {activeTarget}</>
+                            )}
                         </div>
                     </div>
                 </div>
