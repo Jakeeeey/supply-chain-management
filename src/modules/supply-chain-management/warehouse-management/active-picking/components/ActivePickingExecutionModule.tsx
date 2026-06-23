@@ -53,6 +53,7 @@ export default function ActivePickingExecution({
                     setActiveDetailId={pickingState.setActiveDetailId}
                     onOpenManualModal={() => pickingState.setIsManualModalOpen(true)}
                     onFinalizeBatch={onBatchComplete}
+                    onAdjustQuantity={pickingState.handleAdjustQuantity}
                 />
                 <ActivePickingLiveFeed
                     scanLogs={pickingState.scanLogs}
