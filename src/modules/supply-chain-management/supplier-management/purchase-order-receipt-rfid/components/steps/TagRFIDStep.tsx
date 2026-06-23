@@ -550,7 +550,7 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
                                     <Badge variant="outline" className={a.status === "ok" ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/20" : "bg-amber-500/15 text-amber-600 border-amber-500/20"}>
                                         {a.status.toUpperCase()}
                                     </Badge>
-                                    {!(a as any).isHistorical ? (
+                                    {!(a as ActivityRow & { isHistorical?: boolean }).isHistorical ? (
                                         <Button
                                             size="icon"
                                             variant="ghost"
