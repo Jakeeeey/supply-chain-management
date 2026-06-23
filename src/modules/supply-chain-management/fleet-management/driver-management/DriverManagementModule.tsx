@@ -45,6 +45,7 @@ export default function DriverManagementModule() {
         totalPages,
         itemsPerPage,
         setItemsPerPage,
+        driverContactFieldsSupported,
     } = useDriverManagement();
 
     const slicedDrivers = React.useMemo(() => {
@@ -119,7 +120,7 @@ export default function DriverManagementModule() {
             <div className="bg-card/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-center gap-6">
                 <div className="relative flex-1 w-full flex gap-2">
                     <Input
-                        placeholder="Search Drivers (ID or Name)..."
+                        placeholder="Search drivers by ID, name, phone, or email..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="flex-1 h-12 bg-background border-input rounded-xl transition-all outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 focus-visible:border-ring"
@@ -253,6 +254,7 @@ export default function DriverManagementModule() {
                             setItemsPerPage(value);
                             setCurrentPage(1);
                         }}
+                        driverContactFieldsSupported={driverContactFieldsSupported}
                     />
                 )}
             </div>
@@ -269,6 +271,7 @@ export default function DriverManagementModule() {
                 branches={branches}
                 drivers={drivers}
                 onSuccess={refresh}
+                driverContactFieldsSupported={driverContactFieldsSupported}
             />
         </div>
     );

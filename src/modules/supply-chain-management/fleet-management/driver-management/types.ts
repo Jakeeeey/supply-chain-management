@@ -3,6 +3,13 @@ export interface Driver {
     user_id: number;
     branch_id: number;
     bad_branch_id: number | null;
+    contact_phone?: string | null;
+    contact_email?: string | null;
+    contact_address?: string | null;
+    emergency_contact_name?: string | null;
+    emergency_contact_relationship?: string | null;
+    emergency_contact_phone?: string | null;
+    emergency_contact_address?: string | null;
     created_by: number | null;
     updated_by: number | null;
     created_at: string;
@@ -13,6 +20,10 @@ export interface DriverWithDetails extends Driver {
     user?: User;
     good_branch?: Branch;
     bad_branch?: Branch;
+}
+
+export interface DriverManagementCapabilities {
+    driverContactFields: boolean;
 }
 
 export interface User {
