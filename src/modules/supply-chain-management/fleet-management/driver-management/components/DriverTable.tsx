@@ -32,6 +32,7 @@ interface DriverTableProps {
     itemsPerPage: number;
     onItemsPerPageChange: (value: number) => void;
     driverContactFieldsSupported: boolean;
+    emptyMessage: string;
 }
 
 function DriverTableSkeleton({ driverContactFieldsSupported }: { driverContactFieldsSupported: boolean }) {
@@ -89,6 +90,7 @@ export function DriverTable({
     itemsPerPage,
     onItemsPerPageChange,
     driverContactFieldsSupported,
+    emptyMessage,
 }: DriverTableProps) {
 
     if (loading) {
@@ -96,7 +98,7 @@ export function DriverTable({
     }
 
     if (drivers.length === 0) {
-        return <div className="p-12 text-center text-muted-foreground text-sm font-medium">No drivers found.</div>;
+        return <div className="p-12 text-center text-muted-foreground text-sm font-medium">{emptyMessage}</div>;
     }
 
     const startIndex = (currentPage - 1) * itemsPerPage + 1;
