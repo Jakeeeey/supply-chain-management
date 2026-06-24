@@ -23,7 +23,15 @@ interface RFIDScannerModalProps {
   initialTags?: string[];
   type: "IN" | "OUT";
   branchId?: number;
-  validateRFID?: (rfid: string, branchId?: number) => Promise<{ exists: boolean; location?: string }>;
+  supplierId?: number;
+  productId?: number;
+  validateRFID?: (
+    rfid: string,
+    branchId?: number,
+    type?: "IN" | "OUT",
+    supplierId?: number,
+    productId?: number
+  ) => Promise<{ exists: boolean; location?: string }>;
 }
 
 export function RFIDScannerModal({
@@ -34,6 +42,8 @@ export function RFIDScannerModal({
   initialTags = [],
   type,
   branchId,
+  supplierId,
+  productId,
   validateRFID,
 }: RFIDScannerModalProps) {
   const [tags, setTags] = useState<string[]>(initialTags);
@@ -92,11 +102,11 @@ export function RFIDScannerModal({
       return;
     }
 
-    // --- Backend Validation for EXISTING tags during Stock In ---
+    // --- Backend Validation for Stock IN: block tags that already exist ---
     if (type === "IN" && validateRFID) {
       setIsValidating(true);
       try {
-        const { exists, location } = await validateRFID(rawTag, branchId);
+        const { exists, location } = await validateRFID(rawTag, branchId, "IN");
         if (exists) {
           toast.error("Process Blocked", {
             description: `RFID tag ${rawTag} already exists (${location || "Unknown Location"}).`,
@@ -107,6 +117,32 @@ export function RFIDScannerModal({
         }
       } catch (err) {
         console.error("RFID Validation failed:", err);
+      } finally {
+        setIsValidating(false);
+      }
+    }
+
+    // --- Backend Validation for Stock OUT: tag must come from a registered Stock IN ---
+    if (type === "OUT" && validateRFID) {
+      setIsValidating(true);
+      try {
+        const { exists: isBlocked, location: reason } = await validateRFID(
+          rawTag,
+          branchId,
+          "OUT",
+          supplierId,
+          productId
+        );
+        if (isBlocked) {
+          toast.error("RFID Tag Not Allowed", {
+            description: reason || `RFID tag ${rawTag} is not registered in a Stock IN for this branch, supplier, and product.`,
+            duration: 6000,
+          });
+          setCurrentInput("");
+          return;
+        }
+      } catch (err) {
+        console.error("RFID Stock OUT Validation failed:", err);
       } finally {
         setIsValidating(false);
       }

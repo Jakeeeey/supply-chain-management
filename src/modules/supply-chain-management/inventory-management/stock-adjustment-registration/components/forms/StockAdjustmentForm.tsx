@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+
 import { useForm, useFieldArray, useWatch, Control, UseFormSetValue, useFormState, FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -342,7 +342,7 @@ export function StockAdjustmentForm({
   onSuccess,
   mode = "creation",
 }: StockAdjustmentFormProps) {
-  const router = useRouter();
+
   const {
     fetchById,
     createAdjustment,
@@ -770,7 +770,7 @@ export function StockAdjustmentForm({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {onCancel ? (
+          {onCancel && (
             <Button
               variant="outline"
               onClick={onCancel}
@@ -778,15 +778,6 @@ export function StockAdjustmentForm({
             >
               <ArrowLeft className="h-4 w-4" />
               Back to List
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              onClick={() => router.push("/scm/inventory-management/stock-adjustment-summary")}
-              className="gap-2 h-10 border-border bg-card shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg transition-all"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Summary
             </Button>
           )}
         </div>
@@ -1350,6 +1341,8 @@ export function StockAdjustmentForm({
           type={form.getValues("type")}
           initialTags={form.getValues(`items.${scannerContext.index}.rfid_tags`) || []}
           branchId={Number(form.getValues("branch_id"))}
+          supplierId={Number(form.getValues("supplier_id"))}
+          productId={Number(form.getValues(`items.${scannerContext.index}.product_id`))}
           validateRFID={validateRFIDAvailability}
         />
       )}
