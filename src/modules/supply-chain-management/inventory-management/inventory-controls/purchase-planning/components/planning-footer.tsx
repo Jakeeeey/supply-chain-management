@@ -2,10 +2,11 @@
 
 import {useState, useMemo} from "react"
 import {Button} from "@/components/ui/button"
-import {Calculator, TrendingUp, History, Download} from "lucide-react"
+import {Calculator, TrendingUp, History, Download, FileSpreadsheet} from "lucide-react"
 import {cn} from "@/lib/utils"
 import {PurchaseRequestSuccessModal} from "./purchase-request-success-modal"
 import {PlanningRow} from "../types"
+import * as XLSX from "xlsx"
 
 // jsPDF and autoTable
 import jsPDF from "jspdf"
@@ -59,7 +60,7 @@ export function PlanningFooter({
             const suggestedQty = Number(row.suggestedQty || 0)
             const mavQty = Number(row.mav || 0)
             const sohQty = Number(row.currentStockBoxes || 0)
-            const abcClass = row.abcClass || "C"
+            const abcClass = row.abcClass?.toUpperCase() || "C"
 
             const rowOrderValue = orderQty * pricePerBox
 
@@ -167,127 +168,174 @@ export function PlanningFooter({
         }
     }
 
+    const generateExcel = () => {
+        try {
+            const rows = (data as PlanningRow[]).map((row: PlanningRow) => {
+                const price = Number(row.computedPricePerBox || 0)
+                const orderQty = Number(row.orderQty || 0)
+                return {
+                    "SKU": row.sku || "N/A",
+                    "Product Name": row.productName || "Unknown Product",
+                    "ABC Class": row.abcClass || "-",
+                    "Category": row.category_name || "OTHERS",
+                    "SOH (Boxes)": Number(row.currentStockBoxes || 0),
+                    "MAV (Boxes/Month)": Number(row.mav || 0),
+                    "Suggested Qty (Boxes)": row.suggestedQty || 0,
+                    "Order Qty (Boxes)": orderQty,
+                    "Price Per Box (PHP)": price,
+                    "Total Value (PHP)": orderQty * price
+                }
+            })
+
+            const worksheet = XLSX.utils.json_to_sheet(rows)
+            const workbook = XLSX.utils.book_new()
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Planning Report")
+            XLSX.writeFile(workbook, `Planning_Report_${supplierId || "N/A"}_${new Date().getTime()}.xlsx`)
+        } catch (error) {
+            console.error("Failed to generate Excel:", error)
+        }
+    }
+
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-[60] animate-in fade-in slide-in-from-bottom-8 duration-500 print:hidden">
-            <div className="w-full bg-[#0a0f1c]/95 backdrop-blur-2xl border-t border-slate-800/60 shadow-[0_-10px_40px_rgba(0,0,0,0.3)] px-6 py-4">
-                <div className="max-w-[1800px] mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+        <div className="fixed bottom-0 left-0 right-0 z-[60] animate-in fade-in slide-in-from-bottom-8 duration-300 print:hidden">
+            <div className="w-full bg-white/95 dark:bg-[#0a0f1c]/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 shadow-[0_-5px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_-5px_20px_rgba(0,0,0,0.3)] px-4 py-2">
+                <div className="max-w-[1800px] mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-3">
 
                     {/* 📊 LEFT: Metadata & SKUs */}
-                    <div className="flex items-center gap-6 shrink-0">
+                    <div className="flex items-center gap-4 shrink-0">
                         {/* Logic Mode Badge */}
                         <div className={cn(
-                            "flex flex-col items-center justify-center w-16 h-16 rounded-2xl border bg-slate-900/50 shadow-inner",
-                            isForecast ? "border-emerald-500/30 text-emerald-400" : "border-blue-500/30 text-blue-400"
+                            "flex flex-col items-center justify-center w-11 h-11 rounded-md border shadow-inner",
+                            "bg-slate-50 dark:bg-slate-900/50",
+                            isForecast
+                                ? "border-emerald-500/20 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                                : "border-blue-500/20 dark:border-blue-500/30 text-blue-600 dark:text-blue-400"
                         )}>
-                            {isForecast ? <TrendingUp className="w-6 h-6 mb-1"/> : <History className="w-6 h-6 mb-1"/>}
-                            <span className="text-[8px] font-black uppercase tracking-widest leading-none">
+                            {isForecast ? <TrendingUp className="w-4 h-4 mb-0.5"/> : <History className="w-4 h-4 mb-0.5"/>}
+                            <span className="text-[7px] font-black uppercase tracking-widest leading-none">
                                 {isForecast ? "Forecast" : "History"}
                             </span>
                         </div>
 
                         {/* Counts */}
-                        <div className="flex flex-col gap-1 pr-6 border-r border-slate-800">
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-3xl font-black text-white tabular-nums leading-none tracking-tight">
+                        <div className="flex flex-col gap-0.5 pr-4 border-r border-slate-200 dark:border-slate-800">
+                            <div className="flex items-baseline gap-1">
+                                <span className="text-xl font-black text-slate-900 dark:text-white tabular-nums leading-none tracking-tight">
                                     {stats.totalSkus}
                                 </span>
-                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">SKUs</span>
+                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">SKUs</span>
                             </div>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-sm font-bold text-slate-300 tabular-nums leading-none">
+                            <div className="flex items-baseline gap-1">
+                                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 tabular-nums leading-none">
                                     {stats.totalOrderQty.toLocaleString()}
                                 </span>
-                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Boxes</span>
+                                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Boxes</span>
                             </div>
                         </div>
                     </div>
 
                     {/* 💸 MIDDLE: Financial Insights */}
-                    <div className="hidden lg:flex items-center gap-8 xl:gap-12 flex-1">
-                        <div className="space-y-1.5">
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                    <div className="hidden lg:flex items-center gap-6 xl:gap-8 flex-1">
+                        <div className="space-y-0.5">
+                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Inventory Value
                             </p>
-                            <p className="text-lg font-black text-white tabular-nums leading-none">
-                                <span className="text-slate-500 pr-0.5 text-sm font-bold">₱</span>{formatCurrency(stats.totalInventoryValue)}
+                            <p className="text-sm font-black text-slate-900 dark:text-white tabular-nums leading-none">
+                                <span className="text-slate-500 pr-0.5 text-xs font-bold">₱</span>{formatCurrency(stats.totalInventoryValue)}
                             </p>
-                            <p className="text-[10px] font-medium text-slate-400 tabular-nums">
+                            <p className="text-[9px] font-medium text-slate-650 dark:text-slate-400 tabular-nums">
                                 {stats.totalInventoryBoxes.toLocaleString(undefined, {maximumFractionDigits: 1})} Boxes
                             </p>
                         </div>
 
-                        <div className="space-y-1.5 pl-8 xl:pl-12 border-l border-slate-800">
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Suggested</p>
-                            <p className="text-lg font-black text-white tabular-nums leading-none">
-                                <span className="text-slate-500 pr-0.5 text-sm font-bold">₱</span>{formatCurrency(stats.totalSuggestedValue)}
+                        <div className="space-y-0.5 pl-6 xl:pl-8 border-l border-slate-200 dark:border-slate-800">
+                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Suggested</p>
+                            <p className="text-sm font-black text-slate-900 dark:text-white tabular-nums leading-none">
+                                <span className="text-slate-500 pr-0.5 text-xs font-bold">₱</span>{formatCurrency(stats.totalSuggestedValue)}
                             </p>
-                            <div className="h-3"></div> {/* Spacer to match Inventory Boxes text */}
+                            <div className="h-2"></div>
                         </div>
 
-                        <div className="space-y-1.5 pl-8 xl:pl-12 border-l border-slate-800">
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">MAV Value</p>
-                            <p className="text-lg font-black text-white tabular-nums leading-none">
-                                <span className="text-slate-500 pr-0.5 text-sm font-bold">₱</span>{formatCurrency(stats.totalMavValue)}
+                        <div className="space-y-0.5 pl-6 xl:pl-8 border-l border-slate-200 dark:border-slate-800">
+                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">MAV Value</p>
+                            <p className="text-sm font-black text-slate-900 dark:text-white tabular-nums leading-none">
+                                <span className="text-slate-500 pr-0.5 text-xs font-bold">₱</span>{formatCurrency(stats.totalMavValue)}
                             </p>
-                            <div className="h-3"></div> {/* Spacer */}
+                            <div className="h-2"></div>
                         </div>
                     </div>
 
                     {/* 🎯 RIGHT: ABC Totals, Grand Total & Actions */}
-                    <div className="flex items-center justify-between xl:justify-end gap-6 w-full xl:w-auto shrink-0">
+                    <div className="flex items-center justify-between xl:justify-end gap-4 w-full xl:w-auto shrink-0">
 
                         {/* 🚀 FIXED: Strict Grid ABC Breakdown (Now visible on laptops) */}
-                        <div className="hidden lg:grid grid-cols-[auto_auto_auto] gap-x-4 xl:gap-x-6 gap-y-1.5 border-l border-slate-800 pl-6 xl:pl-8 pr-4 items-center text-[10px] xl:text-[11px]">
+                        <div className="hidden lg:grid grid-cols-[auto_auto_auto] gap-x-3 xl:gap-x-4 gap-y-0.5 border-l border-slate-200 dark:border-slate-800 pl-4 xl:pl-6 pr-2 items-center text-[9px] xl:text-[9.5px]">
                             {/* Class A */}
-                            <span className="text-emerald-400 font-black uppercase tracking-wider">A-Class</span>
-                            <span className="text-slate-400 font-medium tabular-nums text-right">{stats.totalAQty.toLocaleString()} bx</span>
-                            <span className="text-slate-200 font-bold tabular-nums text-right"><span className="text-slate-600 pr-0.5 font-normal">₱</span>{formatCurrency(stats.totalAValue)}</span>
+                            <span className="text-emerald-600 dark:text-emerald-400 font-black uppercase tracking-wider">A-Class</span>
+                            <span className="text-slate-600 dark:text-slate-400 font-medium tabular-nums text-right">{stats.totalAQty.toLocaleString()} bx</span>
+                            <span className="text-slate-800 dark:text-slate-200 font-bold tabular-nums text-right"><span className="text-slate-600 pr-0.5 font-normal">₱</span>{formatCurrency(stats.totalAValue)}</span>
 
                             {/* Class B */}
-                            <span className="text-blue-400 font-black uppercase tracking-wider">B-Class</span>
-                            <span className="text-slate-400 font-medium tabular-nums text-right">{stats.totalBQty.toLocaleString()} bx</span>
-                            <span className="text-slate-200 font-bold tabular-nums text-right"><span className="text-slate-600 pr-0.5 font-normal">₱</span>{formatCurrency(stats.totalBValue)}</span>
+                            <span className="text-blue-600 dark:text-blue-400 font-black uppercase tracking-wider">B-Class</span>
+                            <span className="text-slate-600 dark:text-slate-400 font-medium tabular-nums text-right">{stats.totalBQty.toLocaleString()} bx</span>
+                            <span className="text-slate-800 dark:text-slate-200 font-bold tabular-nums text-right"><span className="text-slate-600 pr-0.5 font-normal">₱</span>{formatCurrency(stats.totalBValue)}</span>
 
                             {/* Class C */}
-                            <span className="text-amber-500 font-black uppercase tracking-wider">C-Class</span>
-                            <span className="text-slate-400 font-medium tabular-nums text-right">{stats.totalCQty.toLocaleString()} bx</span>
-                            <span className="text-slate-200 font-bold tabular-nums text-right"><span className="text-slate-600 pr-0.5 font-normal">₱</span>{formatCurrency(stats.totalCValue)}</span>
+                            <span className="text-amber-600 dark:text-amber-500 font-black uppercase tracking-wider">C-Class</span>
+                            <span className="text-slate-600 dark:text-slate-400 font-medium tabular-nums text-right">{stats.totalCQty.toLocaleString()} bx</span>
+                            <span className="text-slate-800 dark:text-slate-200 font-bold tabular-nums text-right"><span className="text-slate-600 pr-0.5 font-normal">₱</span>{formatCurrency(stats.totalCValue)}</span>
                         </div>
 
                         {/* Grand Total */}
-                        <div className="flex flex-col items-end border-l border-slate-800 pl-6 xl:pl-8">
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Grand Total Order</span>
-                            <span className="text-3xl sm:text-4xl font-black text-white tabular-nums leading-none tracking-tight">
-                                <span className="text-slate-500 pr-1 text-2xl font-bold">₱</span>{formatCurrency(stats.grandTotalOrderValue)}
+                        <div className="flex flex-col items-end border-l border-slate-200 dark:border-slate-800 pl-4 xl:pl-6">
+                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Grand Total Order</span>
+                            <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tabular-nums leading-none tracking-tight">
+                                <span className="text-slate-500 pr-0.5 text-lg font-bold">₱</span>{formatCurrency(stats.grandTotalOrderValue)}
                             </span>
                         </div>
 
                         {/* Buttons Group */}
-                        <div className="flex items-center gap-3 ml-2">
+                        <div className="flex items-center gap-2 ml-1">
                             <Button
                                 variant="outline"
+                                id="download-pdf-btn"
                                 onClick={generatePDF}
                                 disabled={isExporting || stats.totalSkus === 0}
-                                className="h-14 px-4 rounded-xl border-slate-700 bg-slate-800/50 hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
+                                className="h-9 px-3 rounded-md border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-650 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
                             >
-                                <Download className="w-5 h-5" />
-                                <span className="hidden sm:inline-block ml-2 text-xs font-bold uppercase tracking-wider">
+                                <Download className="w-4 h-4" />
+                                <span className="hidden sm:inline-block ml-1.5 text-[10px] font-bold uppercase tracking-wider">
                                     {isExporting ? "..." : "PDF"}
                                 </span>
                             </Button>
 
                             <Button
+                                variant="outline"
+                                id="download-excel-btn"
+                                onClick={generateExcel}
+                                disabled={stats.totalSkus === 0}
+                                className="h-9 px-3 rounded-md border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-650 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+                                title="Export to Excel"
+                            >
+                                <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-500" />
+                                <span className="hidden sm:inline-block ml-1.5 text-[10px] font-bold uppercase tracking-wider">
+                                    Excel
+                                </span>
+                            </Button>
+
+                            <Button
+                                id="generate-pr-btn"
                                 onClick={() => setShowSuccess(true)}
                                 disabled={stats.grandTotalOrderValue === 0}
                                 className={cn(
-                                    "h-14 px-6 sm:px-8 rounded-xl font-black uppercase tracking-wider text-xs transition-all flex gap-3 shadow-xl",
+                                    "h-9 px-4 sm:px-6 rounded-md font-black uppercase tracking-wider text-[10px] transition-all flex gap-2 shadow-md",
                                     isForecast
-                                        ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20"
-                                        : "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20",
+                                        ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/20"
+                                        : "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-950/20",
                                     "disabled:opacity-30 disabled:grayscale"
                                 )}
                             >
-                                <Calculator className="w-5 h-5" />
+                                <Calculator className="w-4 h-4" />
                                 <span className="hidden sm:inline-block">Generate PR</span>
                             </Button>
                         </div>

@@ -24,6 +24,7 @@ interface Branch {
     branchName: string;
     branchCode: string;
     city?: string;
+    isActive?: number;
 }
 
 interface BranchSelectorProps {
@@ -62,8 +63,17 @@ export function BranchSelector({
                                 <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 leading-none mb-1">
                                     Branch Selection
                                 </span>
-                                <span className="font-bold text-sm truncate">
-                                    {selectedBranch ? selectedBranch.branchName : "Select Branch..."}
+                                <span className="font-bold text-sm truncate flex items-center gap-1.5">
+                                    {selectedBranch ? (
+                                        <>
+                                            <span className="truncate">{selectedBranch.branchName}</span>
+                                            {selectedBranch.isActive === 0 && (
+                                                <Badge variant="destructive" className="text-[8px] h-4 px-1 bg-red-500/10 hover:bg-red-500/10 text-red-500 border-none shrink-0 font-black uppercase tracking-widest">
+                                                    Inactive
+                                                </Badge>
+                                            )}
+                                        </>
+                                    ) : "Select Branch..."}
                                 </span>
                             </div>
                         </div>
@@ -95,7 +105,10 @@ export function BranchSelector({
                                             onBranchChange(branch.id);
                                             setOpen(false);
                                         }}
-                                        className="rounded-lg py-3 px-4 mb-1 last:mb-0 cursor-pointer flex items-center justify-between"
+                                        className={cn(
+                                            "rounded-lg py-3 px-4 mb-1 last:mb-0 cursor-pointer flex items-center justify-between",
+                                            branch.isActive === 0 && "opacity-60 hover:opacity-85 transition-opacity"
+                                        )}
                                     >
                                         <div className="flex flex-col gap-0.5">
                                             <div className="flex items-center gap-2">
@@ -105,6 +118,11 @@ export function BranchSelector({
                                                 <Badge variant="outline" className="text-[8px] h-4 px-1 border-primary/20 text-primary font-mono uppercase">
                                                     {branch.branchCode}
                                                 </Badge>
+                                                {branch.isActive === 0 && (
+                                                    <Badge variant="destructive" className="text-[8px] h-4 px-1 bg-red-500/10 hover:bg-red-500/10 text-red-500 border-none font-black uppercase tracking-widest">
+                                                        Inactive
+                                                    </Badge>
+                                                )}
                                             </div>
                                             {branch.city && (
                                                 <div className="flex items-center gap-1 text-[9px] text-muted-foreground font-bold uppercase opacity-60">

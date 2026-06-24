@@ -1,16 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     const cookieStore = await cookies();
     const token = cookieStore.get("vos_access_token")?.value;
 
     if (!token) {
         return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
     }
+
+    const { searchParams } = new URL(request.url);
+    const branchId = searchParams.get("branchId");
 
     // 🚀 THE FIX: Defensively strip trailing slashes AND any trailing "/api" to prevent double /api/api calls to Spring Boot!
     const rawBaseUrl = process.env.SPRING_API_BASE_URL || "";
@@ -22,6 +25,9 @@ export async function GET() {
 
     // Now this will correctly resolve to http://localhost:8080/api/consolidators/summary every single time!
     const targetUrl = new URL(`${springBaseUrl}/api/consolidators/summary`);
+    if (branchId) {
+        targetUrl.searchParams.append("branchId", branchId);
+    }
 
     try {
         const springRes = await fetch(targetUrl.toString(), {

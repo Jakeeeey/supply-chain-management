@@ -52,21 +52,21 @@ export default function DeliveryPickingModule() {
     const [totalPages, setTotalPages] = useState(0);
     const [totalElements, setTotalElements] = useState(0);
 
-    // INITIALIZE BRANCHES
+    // INITIALIZE BRANCHES ONCE ON MOUNT (Optimization)
     useEffect(() => {
         const loadBranches = async () => {
             const activeBranches = await fetchActiveBranches();
             if (activeBranches) {
                 setBranches(activeBranches);
-                if (activeBranches.length > 0 && !selectedBranchId) {
-                    setSelectedBranchId(activeBranches[0].id);
+                if (activeBranches.length > 0) {
+                    setSelectedBranchId(prev => prev !== undefined ? prev : activeBranches[0].id);
                 }
             } else {
                 setBranches([]);
             }
         };
         loadBranches();
-    }, [selectedBranchId]);
+    }, []);
 
     // DEBOUNCE SEARCH
     useEffect(() => {
@@ -78,9 +78,9 @@ export default function DeliveryPickingModule() {
     }, [searchQuery]);
 
     const loadSummary = useCallback(async () => {
-        const summary = await fetchConsolidatorSummary();
+        const summary = await fetchConsolidatorSummary(selectedBranchId);
         if (summary) setGlobalCounts(summary as Record<string, number>);
-    }, []);
+    }, [selectedBranchId]);
 
     const loadTableData = useCallback(async () => {
         if (!selectedBranchId) return;
