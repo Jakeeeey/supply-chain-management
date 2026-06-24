@@ -327,7 +327,8 @@ export default function HistoricalPlanningTable({
                         <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mt-1">Live Simulation Engine</span>
                     </div>
                 </div>
-            </div>            <div className="w-full overflow-hidden border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-950 shadow-md transition-all">
+            </div>
+            <div className="w-full overflow-hidden border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-950 shadow-md transition-all">
                 <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-900 bg-white/70 dark:bg-slate-950/70">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                         <div className="flex items-center gap-2 w-full md:max-w-[360px]">
