@@ -402,6 +402,34 @@ export function StockAdjustmentForm({
     name: "items",
   });
 
+  const handleClearForm = useCallback(async () => {
+    // Clear visual input displays for comboboxes
+    setBranchInputValue("");
+    setSupplierInputValue("");
+    setBranchSearch("");
+    setSupplierSearch("");
+
+    // Stay on the page — reset the form for the next entry with default "IN" type
+    const nextDocNo = await fetchNextDocNo("IN");
+    form.reset({
+      doc_no: nextDocNo,
+      branch_id: 0,
+      supplier_id: 0,
+      type: "IN",
+      remarks: "",
+      items: [],
+      isPosted: false,
+      stock_adjustment_attachment: [],
+    });
+  }, [
+    form,
+    fetchNextDocNo,
+    setBranchInputValue,
+    setSupplierInputValue,
+    setBranchSearch,
+    setSupplierSearch,
+  ]);
+
   useEffect(() => {
     const unlock = () => {
       if (document.body.style.overflow === 'hidden') {
@@ -611,8 +639,18 @@ export function StockAdjustmentForm({
     }
   };
 
-  const onInvalid = () => {
-    toast.error("Please fill in all required fields correctly.");
+  const onInvalid = (errors: FieldErrors<StockAdjustmentFormValues>) => {
+    console.warn("Validation failed errors:", errors);
+    const errorDetails = Object.entries(errors)
+      .map(([key, value]) => {
+        const msg = (value as { message?: string })?.message || "Invalid field value";
+        return `${key}: ${msg}`;
+      })
+      .join(", ");
+    toast.error("Please fill in all required fields correctly.", {
+      description: errorDetails || undefined,
+      duration: 6000,
+    });
   };
 
   const onSubmit = useCallback(
@@ -642,18 +680,8 @@ export function StockAdjustmentForm({
             description: `Document ${values.doc_no} has been saved as a draft.`,
             duration: 4000,
           });
-          // Stay on the page — reset the form for the next entry
-          const nextDocNo = await fetchNextDocNo(values.type);
-          form.reset({
-            doc_no: nextDocNo,
-            branch_id: 0,
-            supplier_id: 0,
-            type: values.type,
-            remarks: "",
-            items: [],
-            isPosted: false,
-            stock_adjustment_attachment: [],
-          });
+          
+          await handleClearForm();
         }
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to save adjustment";
@@ -662,7 +690,13 @@ export function StockAdjustmentForm({
         setLoading(false);
       }
     },
-    [id, createAdjustment, updateAdjustment, fetchNextDocNo, form, onSuccess]
+    [
+      id,
+      createAdjustment,
+      updateAdjustment,
+      onSuccess,
+      handleClearForm,
+    ]
   );
 
   const handleConfirmModalItems = useCallback(
@@ -1277,9 +1311,9 @@ export function StockAdjustmentForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
+              onClick={async () => {
                 if (window.confirm("Are you sure you want to clear all fields and start over?")) {
-                  onSuccess();
+                  await handleClearForm();
                 }
               }}
               className="h-10 px-8 font-bold border-border text-muted-foreground hover:bg-card rounded-lg transition-colors text-xs"

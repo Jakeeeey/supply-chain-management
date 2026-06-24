@@ -315,6 +315,37 @@ export function StockAdjustmentManualForm({
     name: "items",
   });
 
+  const handleClearForm = useCallback(async () => {
+    form.reset({
+      doc_no: "",
+      branch_id: 0,
+      supplier_id: 0,
+      type: "IN",
+      remarks: "",
+      items: [],
+      isPosted: false,
+      stock_adjustment_attachment: [],
+    });
+    setBranchInputValue("");
+    setSupplierInputValue("");
+
+    // Fetch and set the new doc_no for type "IN"
+    const nextDocNo = await fetchNextDocNo("IN");
+    form.setValue("doc_no", nextDocNo);
+
+    // Update initial values ref to match the reset state
+    initialValuesRef.current = JSON.stringify({
+      doc_no: nextDocNo,
+      branch_id: 0,
+      supplier_id: 0,
+      type: "IN",
+      remarks: "",
+      items: [],
+      isPosted: false,
+      stock_adjustment_attachment: [],
+    });
+  }, [form, fetchNextDocNo]);
+
   const generatePDF = useCallback(() => {
     const values = form.getValues();
     if (!values) return;
@@ -743,8 +774,18 @@ export function StockAdjustmentManualForm({
     }
   };
 
-  const onInvalid = () => {
-    toast.error("Please fill in all required fields correctly.");
+  const onInvalid = (errors: FieldErrors<StockAdjustmentManualFormValues>) => {
+    console.warn("Validation failed errors:", errors);
+    const errorDetails = Object.entries(errors)
+      .map(([key, value]) => {
+        const msg = (value as { message?: string })?.message || "Invalid field value";
+        return `${key}: ${msg}`;
+      })
+      .join(", ");
+    toast.error("Please fill in all required fields correctly.", {
+      description: errorDetails || undefined,
+      duration: 6000,
+    });
   };
 
   const isFormModified = useCallback(() => {
@@ -863,36 +904,7 @@ export function StockAdjustmentManualForm({
         } else {
           await createAdjustment(values);
           toast.success("Adjustment Created Successfully");
-
-          // Reset the form so user stays on page and can register a new one
-          form.reset({
-            doc_no: "",
-            branch_id: 0,
-            supplier_id: 0,
-            type: "IN",
-            remarks: "",
-            items: [],
-            isPosted: false,
-            stock_adjustment_attachment: [],
-          });
-          setBranchInputValue("");
-          setSupplierInputValue("");
-
-          // Fetch and set the new doc_no for type "IN"
-          const nextDocNo = await fetchNextDocNo("IN");
-          form.setValue("doc_no", nextDocNo);
-
-          // Update initial values ref to match the reset state
-          initialValuesRef.current = JSON.stringify({
-            doc_no: nextDocNo,
-            branch_id: 0,
-            supplier_id: 0,
-            type: "IN",
-            remarks: "",
-            items: [],
-            isPosted: false,
-            stock_adjustment_attachment: [],
-          });
+          await handleClearForm();
         }
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to save adjustment";
@@ -901,7 +913,7 @@ export function StockAdjustmentManualForm({
         setLoading(false);
       }
     },
-    [id, createAdjustment, updateAdjustment, onSuccess, form, fetchNextDocNo]
+    [id, createAdjustment, updateAdjustment, onSuccess, handleClearForm]
   );
 
   // ——————————————————————————————————————————————————————————————————————————————
@@ -1535,10 +1547,10 @@ export function StockAdjustmentManualForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() => handleCancelOrExit("/scm/inventory-management/stock-adjustment-summary")}
+              onClick={() => handleCancelOrExit(handleClearForm)}
               className="h-10 px-8 font-bold border-border text-muted-foreground hover:bg-card rounded-lg"
             >
-              Back to Summary
+              Clear Form
             </Button>
           )}
           {!isReadOnly && (
