@@ -858,12 +858,42 @@ export function StockAdjustmentManualForm({
         if (id) {
           await updateAdjustment(id, values);
           toast.success("Adjustment Updated Successfully");
+          initialValuesRef.current = JSON.stringify(values);
+          onSuccess?.();
         } else {
           await createAdjustment(values);
           toast.success("Adjustment Created Successfully");
+
+          // Reset the form so user stays on page and can register a new one
+          form.reset({
+            doc_no: "",
+            branch_id: 0,
+            supplier_id: 0,
+            type: "IN",
+            remarks: "",
+            items: [],
+            isPosted: false,
+            stock_adjustment_attachment: [],
+          });
+          setBranchInputValue("");
+          setSupplierInputValue("");
+
+          // Fetch and set the new doc_no for type "IN"
+          const nextDocNo = await fetchNextDocNo("IN");
+          form.setValue("doc_no", nextDocNo);
+
+          // Update initial values ref to match the reset state
+          initialValuesRef.current = JSON.stringify({
+            doc_no: nextDocNo,
+            branch_id: 0,
+            supplier_id: 0,
+            type: "IN",
+            remarks: "",
+            items: [],
+            isPosted: false,
+            stock_adjustment_attachment: [],
+          });
         }
-        initialValuesRef.current = JSON.stringify(values);
-        onSuccess?.();
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to save adjustment";
         toast.error(message);
@@ -871,7 +901,7 @@ export function StockAdjustmentManualForm({
         setLoading(false);
       }
     },
-    [id, createAdjustment, updateAdjustment, onSuccess]
+    [id, createAdjustment, updateAdjustment, onSuccess, form, fetchNextDocNo]
   );
 
   // ——————————————————————————————————————————————————————————————————————————————
@@ -968,7 +998,7 @@ export function StockAdjustmentManualForm({
               Print
             </Button>
           )}
-          {onCancel ? (
+          {onCancel && (
             <Button
               variant="outline"
               onClick={() => handleCancelOrExit(onCancel)}
@@ -976,15 +1006,6 @@ export function StockAdjustmentManualForm({
             >
               <ArrowLeft className="h-4 w-4" />
               Back to List
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              onClick={() => handleCancelOrExit("/scm/inventory-management/stock-adjustment-summary")}
-              className="gap-2 h-10 border-border bg-card shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Summary
             </Button>
           )}
         </div>
@@ -1514,10 +1535,10 @@ export function StockAdjustmentManualForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() => handleCancelOrExit(onSuccess)}
+              onClick={() => handleCancelOrExit("/scm/inventory-management/stock-adjustment-summary")}
               className="h-10 px-8 font-bold border-border text-muted-foreground hover:bg-card rounded-lg"
             >
-              Cancel
+              Back to Summary
             </Button>
           )}
           {!isReadOnly && (

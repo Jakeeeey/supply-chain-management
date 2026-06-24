@@ -550,6 +550,166 @@ export const stockAdjustmentService = {
   },
 
   /**
+   * Validate an RFID tag for Stock OUT.
+   * The tag must:
+   *  1. Be currently on-hand at the specified branch (Spring API).
+   *  2. Have originally been registered in a Stock IN for the same branch,
+   *     supplier, and product (Directus historical records).
+   */
+  async validateRFIDForStockOut(
+    rfid: string,
+    branchId: number,
+    supplierId: number,
+    productId: number,
+    token: string
+  ): Promise<{ valid: boolean; reason?: string }> {
+    try {
+      // ── Step 1: Is the RFID currently on-hand at this branch? ──────────
+      const springUrl = new URL(`${SPRING_API_URL}/api/view-rfid-onhand`);
+      springUrl.searchParams.set("rfid", rfid);
+      springUrl.searchParams.set("branchId", String(branchId));
+
+      const springRes = await fetch(springUrl.toString(), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (springRes.ok) {
+        const data = await springRes.json();
+        const isOnHand = Array.isArray(data)
+          ? data.length > 0
+          : data && typeof data === "object" && ("productId" in data || "id" in data);
+
+        if (!isOnHand) {
+          return {
+            valid: false,
+            reason: "RFID tag is not currently on-hand at the selected branch.",
+          };
+        }
+      }
+
+      // ── Step 2: Was this RFID registered in a Stock IN for this branch,
+      //            supplier, and product? ───────────────────────────────────
+      // Find the rfid record in stock_adjustment_rfid and expand to the
+      // linked stock_adjustment item (product_id, branch_id, doc_no).
+      const rfidRes = await directusFetch<{
+        data: {
+          id: number;
+          rfid_tag: string;
+          stock_adjustment_id: {
+            id: number;
+            product_id: number | { id?: number; product_id?: number };
+            branch_id: number | { id?: number };
+            doc_no: string;
+          };
+        }[];
+      }>(
+        `${DIRECTUS_URL}/items/stock_adjustment_rfid?filter={"rfid_tag":{"_eq":"${rfid}"}}&fields=id,rfid_tag,stock_adjustment_id.id,stock_adjustment_id.product_id,stock_adjustment_id.branch_id,stock_adjustment_id.doc_no&limit=1`
+      );
+
+      const rfidRecords = rfidRes.data || [];
+
+      if (rfidRecords.length === 0) {
+        return {
+          valid: false,
+          reason: "RFID tag has not been registered in any Stock IN record.",
+        };
+      }
+
+      const rfidRecord = rfidRecords[0];
+      const item = rfidRecord.stock_adjustment_id;
+
+      // Resolve product_id from the linked item
+      const itemProductId =
+        typeof item.product_id === "object"
+          ? Number(item.product_id?.id ?? item.product_id?.product_id ?? 0)
+          : Number(item.product_id ?? 0);
+
+      // Resolve branch_id from the linked item
+      const itemBranchId =
+        typeof item.branch_id === "object"
+          ? Number(item.branch_id?.id ?? 0)
+          : Number(item.branch_id ?? 0);
+
+      // ── Check product match ──────────────────────────────────────────────
+      if (itemProductId !== productId) {
+        return {
+          valid: false,
+          reason: `RFID tag belongs to a different product (expected product ID ${productId}, found ${itemProductId}).`,
+        };
+      }
+
+      // ── Check branch match ───────────────────────────────────────────────
+      if (itemBranchId !== branchId) {
+        return {
+          valid: false,
+          reason: "RFID tag was registered under a different branch.",
+        };
+      }
+
+      // ── Check supplier and type via the header (doc_no) ─────────────────
+      const docNo = item.doc_no;
+      const headerRes = await directusFetch<{
+        data: {
+          id: number;
+          type: string;
+          supplier_id: number | { id?: number } | null;
+          remarks?: string;
+        }[];
+      }>(
+        `${DIRECTUS_URL}/items/stock_adjustment_header?filter={"doc_no":{"_eq":"${docNo}"}}&fields=id,type,supplier_id,remarks&limit=1`
+      );
+
+      const headers = headerRes.data || [];
+
+      if (headers.length === 0) {
+        return {
+          valid: false,
+          reason: "Could not find the original Stock IN header for this RFID.",
+        };
+      }
+
+      const header = headers[0];
+
+      // Must be a Stock IN
+      if ((header.type || "").toUpperCase() !== "IN") {
+        return {
+          valid: false,
+          reason: "RFID tag was not registered via a Stock IN transaction.",
+        };
+      }
+
+      // Resolve supplier_id – could be embedded in remarks as [SUPPLIER_ID: X]
+      let resolvedSupplierId: number | null = null;
+
+      const remarksMatch = String(header.remarks || "").match(
+        /\[SUPPLIER_ID:\s*(\d+)\]/
+      );
+      if (remarksMatch) {
+        resolvedSupplierId = Number(remarksMatch[1]);
+      } else if (header.supplier_id) {
+        resolvedSupplierId =
+          typeof header.supplier_id === "object"
+            ? Number(header.supplier_id?.id ?? 0)
+            : Number(header.supplier_id);
+      }
+
+      if (resolvedSupplierId !== supplierId) {
+        return {
+          valid: false,
+          reason: "RFID tag was registered under a different supplier.",
+        };
+      }
+
+      // All checks passed
+      return { valid: true };
+    } catch (error) {
+      console.error("Failed to validate RFID for Stock OUT:", error);
+      // Fail open to avoid blocking users due to network errors
+      return { valid: true };
+    }
+  },
+
+  /**
    * Create a new Stock Adjustment (Header + Items)
    */
   async create(payload: { header: Record<string, unknown>; items: StockAdjustmentItem[]; userId?: number }) {
