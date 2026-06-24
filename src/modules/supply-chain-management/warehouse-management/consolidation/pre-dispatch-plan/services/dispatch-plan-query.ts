@@ -616,6 +616,40 @@ export const dispatchPlanQueryService = {
       customerMap = new Map(customers.map((c) => [c.customer_code?.trim().toUpperCase(), c]));
     }
 
+    // Step 5.2: Resolve cluster names for each customer
+    const [clustersRes, allAreasRes] = await Promise.all([
+      fetchItems<{ id: number; cluster_name: string }>("/items/cluster", { fields: "id,cluster_name", limit: -1 }),
+      fetchItems<{ cluster_id: number; province: string; city: string; baranggay: string | null }>("/items/area_per_cluster", { fields: "cluster_id,province,city,baranggay", limit: -1 }),
+    ]);
+
+    const clusterNameMap = new Map<number, string>();
+    (clustersRes.data || []).forEach(c => clusterNameMap.set(c.id, c.cluster_name));
+    const allAreas = allAreasRes.data || [];
+
+    const getCustomerClusterName = (customer: CustomerInfo | undefined) => {
+      if (!customer) return undefined;
+      const match = allAreas.find((area) => {
+        const cProv = customer.province?.trim().toUpperCase() || "";
+        const aProv = area.province?.trim().toUpperCase() || "";
+        if (cProv !== aProv) return false;
+
+        const aCity = area.city?.trim().toUpperCase() || "";
+        if (aCity !== "") {
+          const cCity = customer.city?.trim().toUpperCase() || "";
+          if (aCity !== cCity) return false;
+        }
+
+        const aBrgy = area.baranggay?.trim().toUpperCase() || "";
+        if (aBrgy !== "") {
+          const cBrgy = customer.brgy?.trim().toUpperCase() || "";
+          if (aBrgy !== cBrgy) return false;
+        }
+
+        return true;
+      });
+      return match ? clusterNameMap.get(match.cluster_id) : undefined;
+    };
+
     // Step 5.5: Filter "Not Fulfilled" by Clearance Status
     const notFulfilledOrderNos = orderList
       .filter((o) => o.order_status === "Not Fulfilled")
@@ -731,6 +765,7 @@ export const dispatchPlanQueryService = {
           po_no: o.po_no,
           order_status: o.order_status,
           total_weight: o.total_weight,
+          cluster_name: getCustomerClusterName(customer),
         };
       });
   },

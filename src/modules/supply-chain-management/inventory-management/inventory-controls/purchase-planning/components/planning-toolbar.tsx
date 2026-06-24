@@ -277,8 +277,9 @@ export function PlanningToolbar({onLoad, onBranchChange}: PlanningToolbarProps) 
 
                     {/* Branch Locations */}
                     <div className="xl:col-span-4 flex flex-col gap-2 relative" ref={branchDropdownRef}>
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Active
-                            Branches</label>
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">
+                            Branches
+                        </label>
                         <div
                             ref={branchTriggerRef}
                             onClick={openBranch}

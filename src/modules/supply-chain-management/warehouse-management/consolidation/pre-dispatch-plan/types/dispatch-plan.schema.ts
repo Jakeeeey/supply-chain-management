@@ -82,6 +82,7 @@ export const salesOrderOptionSchema = z.object({
   po_no: z.string().nullable().optional(),
   total_weight: z.number().optional(), // Computed from products.weight via sales_order_details
   order_status: z.string().optional(),
+  cluster_name: z.string().optional(),
 });
 export type SalesOrderOption = z.infer<typeof salesOrderOptionSchema>;
 
@@ -137,7 +138,7 @@ export type DispatchPlanDetail = z.infer<typeof dispatchPlanDetailSchema>;
 // Schema for creating a new Pre Dispatch Plan
 export const dispatchPlanFormSchema = z.object({
   driver_id: z.number().min(1, "Driver is required"),
-  cluster_id: z.number().min(1, "Cluster is required"),
+  cluster_id: z.number().nullable().optional(),
   branch_id: z.number().min(1, "Branch is required"),
   vehicle_id: z.number().min(1, "Vehicle is required"),
   dispatch_date: z.string().min(1, "Dispatch date is required"),
