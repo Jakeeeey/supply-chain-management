@@ -152,6 +152,21 @@ export function RecentLog() {
                               {item.created_at ? format(new Date(item.created_at), "MMM d, yyyy, hh:mm a") : "-"}
                             </span>
                           </div>
+
+                          <div className="flex flex-col">
+                            <span className="text-[10px] uppercase font-bold text-muted-foreground/60 mb-0.5">Created By</span>
+                            <span className="font-medium text-foreground/80">
+                              {(() => {
+                                const cb = (item as unknown as { created_by?: { user_fname?: string; user_lname?: string } | string }).created_by;
+                                if (!cb) return "-";
+                                if (typeof cb === "object") {
+                                  const full = `${cb.user_fname || ""} ${cb.user_lname || ""}`.trim();
+                                  return full || "-";
+                                }
+                                return String(cb);
+                              })()}
+                            </span>
+                          </div>
                           
                           {/* Live Audit Trail */}
                           {isPosted && (
