@@ -327,7 +327,8 @@ export default function HistoricalPlanningTable({
                         <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mt-1">Live Simulation Engine</span>
                     </div>
                 </div>
-            </div>            <div className="w-full overflow-hidden border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-950 shadow-md transition-all">
+            </div>
+            <div className="w-full overflow-hidden border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-950 shadow-md transition-all">
                 <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-900 bg-white/70 dark:bg-slate-950/70">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                         <div className="flex items-center gap-2 w-full md:max-w-[360px]">
@@ -368,14 +369,14 @@ export default function HistoricalPlanningTable({
                                 <SortableHeader title="Sugg. Qty" sortKey="suggestedQty" className="text-right text-slate-500 px-2" {...headerProps} />
                                 <SortableHeader title="Proj Stock" sortKey="projectedStockBoxes" className="text-right text-amber-600 bg-amber-50/50 dark:bg-amber-900/10 px-2" tooltip="PROJECTED POSITION (STOCK + TRANSIT - SELLOUT)" {...headerProps} />
                                 <SortableHeader title="Req. Inv" sortKey="targetStock" className="text-right text-emerald-600 px-2" tooltip="REQUIRED INVENTORY (DAU x TARGET DAYS)" {...headerProps} />
-                                <SortableHeader title="Days to Last" sortKey="daysToLast" className="text-right text-purple-600 px-2" tooltip="DAYS OF STOCK COVERAGE (PROJECTED / DAU)" {...headerProps} />
                                 <SortableHeader title="MAV (Boxes)" sortKey="mav" className="text-right text-purple-500 px-2" tooltip="Monthly Average Volume (Boxes/Month)" {...headerProps} />
                                 <SortableHeader title="Inventory" sortKey="currentStockBoxes" className="text-right text-blue-800 dark:text-blue-300 bg-blue-100/80 dark:bg-blue-900/40 px-2 border-x border-blue-200 dark:border-blue-800" tooltip="On-hand stock in boxes" {...headerProps} />
                                 <SortableHeader title="In-Transit" sortKey="inTransitBoxes" className="text-right text-indigo-500 px-2" {...headerProps} />
+                                <SortableHeader title="Days to Last" sortKey="daysToLast" className="text-right text-purple-600 px-2" tooltip="DAYS OF STOCK COVERAGE (PROJECTED / DAU)" {...headerProps} />
                                 <SortableHeader title="DAU (Boxes)" sortKey="dailyUsage" className="text-right text-slate-400 px-2" tooltip="Daily Average Usage in Boxes" {...headerProps} />
-                                <SortableHeader title="Total Value" sortKey="totalAmount" className="text-right text-slate-500 px-2" {...headerProps} />
                                 <SortableHeader title="Box Price" sortKey="unitPrice" className="text-right px-2" tooltip="Price per BOX. Formula: (Piece Cost × Box Multiplier)" {...headerProps} />
                                 <SortableHeader title="Exp Sellout" sortKey="expectedSelloutBoxes" className="text-right text-red-500 bg-red-50/50 dark:bg-red-900/10 px-2" {...headerProps} />
+                                <SortableHeader title="Total Value" sortKey="totalAmount" className="text-right text-slate-500 px-2" {...headerProps} />
                                 <SortableHeader title="Status" sortKey="inventoryStatus" className="text-center px-2" {...headerProps} />
                             </TableRow>
                         </TableHeader>
@@ -457,9 +458,6 @@ export default function HistoricalPlanningTable({
                                         <TableCell className="text-right font-mono font-black text-slate-800 dark:text-slate-200 px-2 text-[11px]">{(Number(row.suggestedQty) || 0).toFixed(1)}</TableCell>
                                         <TableCell className="text-right font-mono font-black text-amber-700 dark:text-amber-400 text-[11px] px-2 bg-amber-500/5">{(Number(row.projectedStockBoxes) || 0).toFixed(1)}</TableCell>
                                         <TableCell className="text-right font-mono font-black text-emerald-700 dark:text-emerald-400 px-2 text-[11px] bg-emerald-500/5">{(Number(row.targetStock) || 0).toFixed(1)}</TableCell>
-                                        <TableCell className="text-right font-mono font-black text-purple-700 dark:text-purple-400 px-2 text-[11px]">
-                                            {row.daysToLast && row.daysToLast > 0 ? `${row.daysToLast.toFixed(1)}d` : "0.0d"}
-                                        </TableCell>
                                         <TableCell className="text-right font-mono font-black text-purple-700 dark:text-purple-400 text-[11px] px-2">{(Number(row.mav) || 0).toFixed(2)}</TableCell>
                                         <TableCell className="text-right font-mono font-black text-blue-800 dark:text-blue-300 text-[11px] px-2 bg-blue-50/40 dark:bg-blue-900/20 border-x border-blue-100 dark:border-blue-900/30">{(Number(row.currentStockBoxes) || 0).toFixed(2)}</TableCell>
                                         <TableCell className="text-right font-mono font-black text-indigo-600 dark:text-indigo-400 text-[11px] px-2">
@@ -488,7 +486,7 @@ export default function HistoricalPlanningTable({
                                                                     <div className="space-y-1.5 max-h-[150px] overflow-y-auto custom-scrollbar">
                                                                         {transitList.map((po, idx) => (
                                                                             <div key={idx} className="flex justify-between items-center text-[10px] font-bold uppercase gap-4">
-                                                                                <span className="text-slate-300">{po.poNo}</span>
+                                                                                <span className="text-slate-350">{po.poNo}</span>
                                                                                 <span className="text-indigo-400 font-mono font-black">{po.quantity.toFixed(1)}</span>
                                                                             </div>
                                                                         ))}
@@ -502,8 +500,10 @@ export default function HistoricalPlanningTable({
                                                 );
                                             })()}
                                         </TableCell>
+                                        <TableCell className="text-right font-mono font-black text-purple-700 dark:text-purple-400 px-2 text-[11px]">
+                                            {row.daysToLast && row.daysToLast > 0 ? `${row.daysToLast.toFixed(1)}d` : "0.0d"}
+                                        </TableCell>
                                         <TableCell className="text-right font-mono font-black text-slate-500 dark:text-slate-400 text-[10px] px-2 italic">{(row.dailyUsage || 0).toFixed(2)}</TableCell>
-                                        <TableCell className="text-right font-mono font-black text-slate-900 dark:text-slate-100 px-2 text-[11px]">₱{(row.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
 
                                         <TableCell className="text-right font-mono font-black text-slate-600 dark:text-slate-300 text-[11px] px-2">
                                             <TooltipProvider>
@@ -523,6 +523,7 @@ export default function HistoricalPlanningTable({
                                         <TableCell className="text-right text-red-600 font-mono font-black text-[11px] px-2">
                                             {Math.abs(row.expectedSelloutBoxes || 0).toFixed(1)}
                                         </TableCell>
+                                        <TableCell className="text-right font-mono font-black text-slate-900 dark:text-slate-100 px-2 text-[11px]">₱{(row.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
 
                                         <TableCell className="px-2 text-center">
                                             <div className={cn("px-1.5 py-0.5 rounded text-[9px] font-black uppercase inline-flex items-center gap-1 shadow-sm border", statusStyles)}>
