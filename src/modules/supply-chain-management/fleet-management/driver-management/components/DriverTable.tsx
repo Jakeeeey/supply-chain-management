@@ -9,7 +9,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Edit2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Edit2, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -25,15 +25,18 @@ import type { DriverWithDetails } from "../types";
 interface DriverTableProps {
     drivers: DriverWithDetails[];
     loading: boolean;
+    onView: (driver: DriverWithDetails) => void;
     onEdit: (driver: DriverWithDetails) => void;
     currentPage: number;
     totalPages: number;
     onPageChange: (page: number) => void;
     itemsPerPage: number;
     onItemsPerPageChange: (value: number) => void;
+    driverContactFieldsSupported: boolean;
+    emptyMessage: string;
 }
 
-function DriverTableSkeleton() {
+function DriverTableSkeleton({ driverContactFieldsSupported }: { driverContactFieldsSupported: boolean }) {
     return (
         <div className="rounded-xl border bg-card/30 backdrop-blur-md border-white/10 shadow-lg overflow-hidden animate-pulse">
             <Table>
@@ -41,9 +44,14 @@ function DriverTableSkeleton() {
                     <TableRow className="hover:bg-transparent border-white/10 bg-muted/40 font-bold uppercase tracking-widest text-[10px]">
                         <TableHead className="py-4 text-primary/90">No.</TableHead>
                         <TableHead className="py-4 text-foreground/70">Driver</TableHead>
+                        {driverContactFieldsSupported && (
+                            <>
+                                <TableHead className="py-4 text-foreground/70">Contact</TableHead>
+                                <TableHead className="py-4 text-foreground/70">Emergency Contact</TableHead>
+                            </>
+                        )}
                         <TableHead className="py-4 text-foreground/70">Good Branch</TableHead>
                         <TableHead className="py-4 text-foreground/70">Bad Branch</TableHead>
-                        <TableHead className="py-4 text-foreground/70">Last Updated</TableHead>
                         <TableHead className="py-4 text-foreground/70 text-center">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -52,6 +60,12 @@ function DriverTableSkeleton() {
                         <TableRow key={i} className="border-white/5">
                             <TableCell className="py-4"><Skeleton className="h-4 w-8" /></TableCell>
                             <TableCell className="py-4"><Skeleton className="h-4 w-40" /></TableCell>
+                            {driverContactFieldsSupported && (
+                                <>
+                                    <TableCell className="py-4"><Skeleton className="h-4 w-32" /></TableCell>
+                                    <TableCell className="py-4"><Skeleton className="h-4 w-36" /></TableCell>
+                                </>
+                            )}
                             <TableCell className="py-4"><Skeleton className="h-4 w-32" /></TableCell>
                             <TableCell className="py-4"><Skeleton className="h-4 w-32" /></TableCell>
                             <TableCell className="py-4"><div className="flex justify-center gap-2"><Skeleton className="h-8 w-8 rounded" /><Skeleton className="h-8 w-8 rounded" /></div></TableCell>
@@ -63,26 +77,33 @@ function DriverTableSkeleton() {
     );
 }
 
+function EmptyValue() {
+    return <span className="text-xs italic text-muted-foreground/45">Not provided</span>;
+}
+
 export function DriverTable({
     drivers,
     loading,
+    onView,
     onEdit,
     currentPage,
     totalPages,
     onPageChange,
     itemsPerPage,
-    onItemsPerPageChange
+    onItemsPerPageChange,
+    driverContactFieldsSupported,
+    emptyMessage,
 }: DriverTableProps) {
 
     if (loading) {
-        return <DriverTableSkeleton />;
+        return <DriverTableSkeleton driverContactFieldsSupported={driverContactFieldsSupported} />;
     }
 
     if (drivers.length === 0) {
-        return <div className="p-12 text-center text-muted-foreground text-sm font-medium">No drivers found.</div>;
+        return <div className="p-12 text-center text-muted-foreground text-sm font-medium">{emptyMessage}</div>;
     }
 
-    const startIndex = (currentPage - 1) * 10 + 1;
+    const startIndex = (currentPage - 1) * itemsPerPage + 1;
 
     return (
         <div className="flex flex-col gap-4">
@@ -92,6 +113,12 @@ export function DriverTable({
                         <TableRow className="hover:bg-transparent border-white/10 bg-muted/40">
                             <TableHead className="py-4 font-bold text-[10px] uppercase tracking-widest text-primary/90 w-12">No.</TableHead>
                             <TableHead className="py-4 font-bold text-[10px] uppercase tracking-widest text-foreground/70">Driver</TableHead>
+                            {driverContactFieldsSupported && (
+                                <>
+                                    <TableHead className="py-4 font-bold text-[10px] uppercase tracking-widest text-foreground/70">Contact</TableHead>
+                                    <TableHead className="py-4 font-bold text-[10px] uppercase tracking-widest text-foreground/70">Emergency Contact</TableHead>
+                                </>
+                            )}
                             <TableHead className="py-4 font-bold text-[10px] uppercase tracking-widest text-foreground/70">Good Branch</TableHead>
                             <TableHead className="py-4 font-bold text-[10px] uppercase tracking-widest text-foreground/70">Bad Branch</TableHead>
                             <TableHead className="py-4 font-bold text-[10px] uppercase tracking-widest text-foreground/70 text-center">Actions</TableHead>
@@ -118,6 +145,50 @@ export function DriverTable({
                                             </span>
                                         </div>
                                     </TableCell>
+                                    {driverContactFieldsSupported && (
+                                        <>
+                                            <TableCell className="py-4">
+                                                <div className="flex flex-col gap-0.5 max-w-[180px]">
+                                                    {driver.contact_phone || driver.contact_email ? (
+                                                        <>
+                                                            {driver.contact_phone && (
+                                                                <span className="text-sm font-medium text-foreground/80">
+                                                                    {driver.contact_phone}
+                                                                </span>
+                                                            )}
+                                                            {driver.contact_email && (
+                                                                <span className="text-xs text-muted-foreground truncate">
+                                                                    {driver.contact_email}
+                                                                </span>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <EmptyValue />
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="py-4">
+                                                <div className="flex flex-col gap-0.5 max-w-[180px]">
+                                                    {driver.emergency_contact_name || driver.emergency_contact_phone ? (
+                                                        <>
+                                                            {driver.emergency_contact_name && (
+                                                                <span className="text-sm font-medium text-foreground/80 truncate">
+                                                                    {driver.emergency_contact_name}
+                                                                </span>
+                                                            )}
+                                                            {driver.emergency_contact_phone && (
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {driver.emergency_contact_phone}
+                                                                </span>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <EmptyValue />
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        </>
+                                    )}
                                     <TableCell className="py-4">
                                         <div className="flex flex-col gap-1">
                                             <Badge variant="outline" className="text-[9px] w-fit bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
@@ -139,11 +210,23 @@ export function DriverTable({
                                         </div>
                                     </TableCell>
                                     <TableCell className="py-4 text-center">
-                                        <div className="flex justify-center">
+                                        <div className="flex justify-center gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => onView(driver)}
+                                                title="View driver details"
+                                                aria-label={`View details for ${driverName}`}
+                                                className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
+                                            >
+                                                <Eye className="h-4 w-4" />
+                                            </Button>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
                                                 onClick={() => onEdit(driver)}
+                                                title="Edit driver"
+                                                aria-label={`Edit ${driverName}`}
                                                 className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
                                             >
                                                 <Edit2 className="h-4 w-4" />
