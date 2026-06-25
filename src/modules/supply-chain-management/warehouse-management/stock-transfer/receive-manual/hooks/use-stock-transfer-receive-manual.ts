@@ -54,7 +54,7 @@ export function useStockTransferReceiveManual() {
         items: group.items.map((i: OrderGroupItem) => ({
           id: i.id,
           status: 'Received',
-          received_quantity: receivedQtys[i.id] ?? Math.max(0, i.scanned_quantity ?? i.allocated_quantity ?? 0)
+          received_quantity: receivedQtys[i.id] ?? Math.max(0, i.scanned_quantity ?? i.picked_quantity ?? i.allocated_quantity ?? 0)
         })),
         status: 'Received'
       });

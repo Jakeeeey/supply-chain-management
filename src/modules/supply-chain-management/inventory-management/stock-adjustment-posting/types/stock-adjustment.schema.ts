@@ -89,6 +89,7 @@ export const StockAdjustmentHeaderSchema = z.object({
   posted_by: z.any().optional(),
   postedAt: z.string().optional(),
   items: z.any().optional(), // Expanded items or count
+  stock_adjustment_attachment: z.any().optional(),
 });
 export type StockAdjustmentHeader = z.infer<typeof StockAdjustmentHeaderSchema>;
 
@@ -114,6 +115,7 @@ export const StockAdjustmentFormSchema = z.object({
   isPosted: z.boolean(),
   postedAt: z.string().optional(),
   posted_by: z.any().optional(),
+  stock_adjustment_attachment: z.array(z.any()).optional(),
 });
 export type StockAdjustmentFormValues = z.infer<typeof StockAdjustmentFormSchema>;
 

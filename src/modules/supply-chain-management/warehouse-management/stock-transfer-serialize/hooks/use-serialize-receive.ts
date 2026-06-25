@@ -120,31 +120,33 @@ export function useSerializeReceive() {
       }
 
       // In the Receive phase, we match against the Dispatched serials.
-      // We'll perform a lookup to see which product this serial belongs to.
-      const match = await serializeLifecycleService.lookupSerial(serialTrimmed);
+      // We'll perform a lookup to see if this serial was dispatched for this order.
+      const transferIds = selectedGroup.items.map(i => i.id).filter(id => id !== undefined);
+      const match = await serializeLifecycleService.lookupReceiveSerial(serialTrimmed, transferIds);
       
-      const itemInOrder = selectedGroup.items.find(i => {
-        const pid = (typeof i.product_id === 'object' ? i.product_id.product_id : i.product_id) as number;
-        return pid === match.productId;
-      });
+      const itemInOrder = selectedGroup.items.find(i => i.id === match.stockTransferId);
 
       if (!itemInOrder) {
-        throw new Error(`Product ${match.productName} is not in this order.`);
+        throw new Error(`Serial ${serialTrimmed} does not belong to this order.`);
       }
 
-      if ((itemInOrder.product_id as ProductRow)?.is_serialized === 0) {
-        throw new Error(`Product ${match.productName} is not serialized. Use manual input.`);
+      const product = itemInOrder.product_id as ProductRow;
+      const pid = typeof product === 'object' ? product.product_id : product as number;
+      const productName = typeof product === 'object' ? product.product_name : `Product ${pid}`;
+
+      if (product?.is_serialized === 0) {
+        throw new Error(`Product ${productName} is not serialized. Use manual input.`);
       }
 
       const targetQty = itemInOrder.allocated_quantity || 0;
       if ((itemInOrder as SerialOrderGroupItem).receivedSerialQty! >= targetQty) {
-        throw new Error(`Quantity limit reached for ${match.productName}.`);
+        throw new Error(`Quantity limit reached for ${productName}.`);
       }
 
       const newScan: SerialScanLog = {
-        serialNumber: serialTrimmed,
-        productId: match.productId,
-        productName: match.productName,
+        serialNumber: match.serialNumber,
+        productId: pid,
+        productName: productName,
         timestamp: Date.now(),
         status: 'SUCCESS'
       };

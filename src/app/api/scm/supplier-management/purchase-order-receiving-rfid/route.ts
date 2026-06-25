@@ -293,7 +293,7 @@ async function fetchPORByPOIds(base: string, poIds: number[]) {
 
 
 async function fetchPOProductsByPOId(base: string, poId: number) {
-    const url = `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount`;
+    const url = `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount,discount_type.*`;
     const j = await fetchJson<{ data: POProductRow[] }>(url);
     return (j?.data ?? []);
 }
@@ -719,7 +719,7 @@ export async function POST(req: NextRequest) {
                 const pors = porIdsByKey.get(k) || [];
                 const receivedQty = pors.reduce((sum, id) => sum + effectiveReceivedQty(porRows.find(r => toNum(r.purchase_order_product_id) === id)!), 0);
 
-                const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1));
+                const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && !toStr(r.receipt_no) && toNum(r.is_reverted) !== 1);
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
 
                 let lineDiscountTypeStr = "No Discount";
@@ -789,7 +789,7 @@ export async function POST(req: NextRequest) {
                 const p = productsMap.get(pid);
                 const pors = porIdsByKey.get(k) || [];
                 const receivedQty = pors.reduce((sum, id) => sum + effectiveReceivedQty(porRows.find(r => toNum(r.purchase_order_product_id) === id)!), 0);
-                const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1));
+                const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && !toStr(r.receipt_no) && toNum(r.is_reverted) !== 1);
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
 
                 let lineDiscountTypeStr = "No Discount";
@@ -1068,6 +1068,31 @@ export async function POST(req: NextRequest) {
                 created: ensured.created,
                 isExtra: !matchingLine
             });
+        }
+
+        // -------------------------
+        // delete_rfid — remove a single RFID tag from the database
+        // -------------------------
+        if (action === "delete_rfid") {
+            const rawRfid = toStr(body.rfid);
+            const rfid = normalizeRfid(rawRfid);
+            if (!rfid || rfid.length !== RFID_LEN) {
+                return bad(`Invalid RFID. Must be exactly ${RFID_LEN} hex characters.`, 400);
+            }
+
+            // Find the receiving item by rfid_code
+            const findUrl = `${base}/items/${POR_ITEMS_COLLECTION}?limit=1&filter[rfid_code][_eq]=${encodeURIComponent(rfid)}&fields=receiving_item_id`;
+            const found = await fetchJson<{ data: Array<{ receiving_item_id: number }> }>(findUrl);
+            const row = found?.data?.[0];
+            if (!row?.receiving_item_id) {
+                // Tag not found in DB — already deleted or never persisted; treat as success
+                return ok({ deleted: false, message: "Tag not found in database." });
+            }
+
+            // Delete the receiving item
+            await fetchJson(`${base}/items/${POR_ITEMS_COLLECTION}/${row.receiving_item_id}`, { method: "DELETE" });
+
+            return ok({ deleted: true, rfid, receivingItemId: row.receiving_item_id });
         }
 
         if (action === "save_receipt") {

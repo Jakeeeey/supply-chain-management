@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Trash2, AlertTriangle, Plus, X, Pencil } from "lucide-react";
+import { Trash2, AlertTriangle, Plus, X } from "lucide-react";
 import { useReceivingProducts, ReceivingPOItem, ActivityRow } from "../../providers/ReceivingProductsProvider";
 import { useKeyboardScanner } from "../../hooks/useKeyboardScanner";
 import { toast } from "sonner";
@@ -31,7 +31,6 @@ export function TagRFIDStep() {
         editingReceiptId,
         clearEditingReceiptId,
         removeExtraProductLocally,
-        loadReceipt,
         saveRFIDTagging,
     } = useReceivingProducts();
 
@@ -91,8 +90,7 @@ export function TagRFIDStep() {
                     porId: String(it.porId || it.id),
                     branchName: a?.branch?.name ?? "Unassigned",
                 }))
-                .filter((it) => Number(it.expectedQty || 0) > 0 || it.isExtra)
-                .filter((it) => it.isExtra || (Number(it.taggedQty || 0) < Number(it.expectedQty)));
+                .filter((it) => Number(it.expectedQty || 0) > 0 || it.isExtra);
         });
     }, [selectedPO]);
 
@@ -139,11 +137,35 @@ export function TagRFIDStep() {
     }, [overReceivedProducts]);
 
 
+    const activeItem = React.useMemo(() => {
+        if (!activePorId) return null;
+        return allItems.find((p) => p.porId === activePorId);
+    }, [activePorId, allItems]);
+
     // Pagination — filtered to current product
     const filteredActivity = React.useMemo(() => {
-        if (!activePorId) return activity || [];
-        return (activity || []).filter((a: ActivityRow) => a.porId === activePorId);
-    }, [activity, activePorId]);
+        if (!activePorId || !activeItem) return [];
+        
+        // Current session scans
+        const currentScans = (activity || []).filter((a: ActivityRow) => a.porId === activePorId);
+        const currentRfidSet = new Set(currentScans.map(a => a.rfid));
+        
+        // Historical scans
+        const historicalScans: (ActivityRow & { isHistorical?: boolean })[] = (activeItem.rfids || [])
+            .filter((rfid: string) => !currentRfidSet.has(rfid))
+            .map((rfid: string) => ({
+                id: `hist-${rfid}`,
+                rfid,
+                productName: activeItem.name,
+                productId: activeItem.productId,
+                porId: activePorId,
+                time: "Previous Batch",
+                status: "ok",
+                isHistorical: true
+            }));
+            
+        return [...currentScans, ...historicalScans];
+    }, [activity, activePorId, activeItem]);
 
     const activityPaginated = React.useMemo(() => {
         const start = (activityPage - 1) * ITEMS_PER_PAGE;
@@ -151,11 +173,6 @@ export function TagRFIDStep() {
     }, [filteredActivity, activityPage]);
 
     const totalActivityPages = Math.ceil(filteredActivity.length / ITEMS_PER_PAGE);
-
-    const activeItem = React.useMemo(() => {
-        if (!activePorId) return null;
-        return allItems.find((p) => p.porId === activePorId);
-    }, [activePorId, allItems]);
 
     // ========== NO PRODUCT SELECTED: Product List View ==========
     if (!activeProductId) {
@@ -212,18 +229,7 @@ export function TagRFIDStep() {
                                                 >
                                                     Reverted
                                                 </Badge>
-                                                {editingReceiptId !== h.receiptNo && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-5 px-1.5 text-[10px] text-orange-600 dark:text-orange-400 hover:bg-orange-500/10 gap-1"
-                                                        onClick={() => loadReceipt(h.receiptNo)}
-                                                        disabled={!!editingReceiptId}
-                                                    >
-                                                        <Pencil className="h-3 w-3" />
-                                                        Edit
-                                                    </Button>
-                                                )}
+                                                {/* Edit disabled in receiving RFID */}
                                             </>
                                         ) : (
                                             <Badge
@@ -342,7 +348,7 @@ export function TagRFIDStep() {
                                                                 : "border-border"
                                                         )}
                                                     >
-                                                        {scanned} / {target}
+                                                        {p.isExtra ? scanned : `${scanned} / ${target}`}
                                                     </Badge>
                                                 </td>
                                                 <td className="px-4 py-3 text-right">
@@ -456,7 +462,11 @@ export function TagRFIDStep() {
                             Now Tagging: {activeItem?.name}
                         </div>
                         <div className="text-sm font-medium text-foreground bg-card px-3 py-1 rounded shadow-sm inline-block border">
-                            Scanned: <span className={activeDone ? (activeIsOver ? "text-destructive font-bold" : "text-emerald-600 font-bold") : "font-bold"}>{activeScanned}</span> of {activeTarget}
+                            {activeItem?.isExtra ? (
+                                <>Scanned: <span className="text-emerald-600 font-bold">{activeScanned}</span></>
+                            ) : (
+                                <>Scanned: <span className={activeDone ? (activeIsOver ? "text-destructive font-bold" : "text-emerald-600 font-bold") : "font-bold"}>{activeScanned}</span> of {activeTarget}</>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -492,15 +502,19 @@ export function TagRFIDStep() {
                                     <Badge variant="outline" className={a.status === "ok" ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/20" : "bg-amber-500/15 text-amber-600 border-amber-500/20"}>
                                         {a.status.toUpperCase()}
                                     </Badge>
-                                    <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                        onClick={() => removeActivity(a.id)}
-                                        title="Remove scanned tag"
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
+                                    {!(a as ActivityRow & { isHistorical?: boolean }).isHistorical ? (
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                            onClick={() => removeActivity(a.id)}
+                                            title="Remove scanned tag"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                    ) : (
+                                        <span className="text-[10px] text-muted-foreground font-semibold px-2">Saved</span>
+                                    )}
                                 </div>
                             </div>
                         ))

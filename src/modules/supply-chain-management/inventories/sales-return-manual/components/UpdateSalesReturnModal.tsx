@@ -796,7 +796,7 @@ export function UpdateSalesReturnModal({
             
             <ReadOnlyField label="Branch" value={getSalesmanBranch(headerData.salesmanId)} isLoading={loading} />
             <ReadOnlyField label="Return Date" value={headerData.returnDate} />
-            <ReadOnlyField label="Received Date" value={headerData.createdAt} />
+            <ReadOnlyField label="Received Date" value={headerData.status === "Received" && headerData.receivedAt ? headerData.receivedAt : "-"} />
             <ReadOnlyField label="Price Type" value={headerData.priceType} />
             
             <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4">
@@ -1766,6 +1766,7 @@ export function UpdateSalesReturnModal({
         priceType={headerData.priceType || "A"}
         customerCode={headerData.customerCode}
         lineDiscounts={discountOptions}
+        includeInactive={true}
       />
 
       <Dialog

@@ -539,88 +539,6 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         });
     }, [selectedPO?.id, selectedPO?.allocations, localScannedRfids, activity, scannedCountByPorId, verifiedPorIds, receiptNo, receiptType, receiptDate, metaDataByPorId]);
 
-    const restoreServerDraft = React.useCallback((detail: ReceivingPODetail) => {
-        const draftData = detail.draftData || [];
-        const hasServerDraft = draftData.length > 0;
-
-        if (hasServerDraft && detail.id) {
-            clearDraft(detail.id);
-
-            const newCounts: Record<string, number> = {};
-            const newVerifiedIds: string[] = [];
-            const newLocalRfids: Array<{
-                rfid: string;
-                productId: string;
-                branchId: string;
-                status: "unknown" | "known";
-                porId?: string;
-                productName: string;
-            }> = [];
-            const newActivity: ActivityRow[] = [];
-            const meta: Record<string, { batchNo?: string; lotId?: string; expiryDate?: string }> = {};
-
-            const draftRfids = detail.draftRfids || [];
-
-            draftRfids.forEach((it) => {
-                const rfid = String(it.rfid_code);
-                const porId = String(it.purchase_order_product_id);
-                const pid = String(it.product_id);
-
-                let productName = `Product #${pid}`;
-                let branchId = "";
-                detail.allocations.forEach(a => {
-                    a.items.forEach(i => {
-                        if (i.porId === porId || i.id === porId) {
-                            productName = i.name;
-                            branchId = a.branch.id;
-                        }
-                    });
-                });
-
-                newLocalRfids.push({ rfid, productId: pid, branchId, status: "known", porId, productName });
-                newActivity.unshift({
-                    id: rfid, rfid, productName, productId: pid, porId,
-                    time: it.created_at ? new Date(it.created_at).toLocaleTimeString() : new Date().toLocaleTimeString(),
-                    status: "ok"
-                });
-
-                newCounts[porId] = (newCounts[porId] || 0) + 1;
-                if (!newVerifiedIds.includes(porId)) newVerifiedIds.push(porId);
-            });
-
-            draftData.forEach((d) => {
-                const porId = String(d.porId);
-                if (d.batchNo || d.expiryDate || d.lotId) {
-                    meta[porId] = {
-                        batchNo: d.batchNo || undefined,
-                        expiryDate: d.expiryDate || undefined,
-                        lotId: d.lotId ? String(d.lotId) : undefined
-                    };
-                }
-                if (!newVerifiedIds.includes(porId)) newVerifiedIds.push(porId);
-            });
-
-            setLocalScannedRfids(newLocalRfids);
-            setActivity(newActivity);
-            setScannedCountByPorId(newCounts);
-            setVerifiedPorIds(newVerifiedIds);
-            setMetaDataByPorId(meta);
-
-            const firstDraft = draftData[0];
-            const rNo = firstDraft?.receiptNo || "";
-            setReceiptNo(rNo);
-            setReceiptDate(firstDraft?.receiptDate ? firstDraft.receiptDate.split("T")[0] : todayYMD());
-            setReceiptType(firstDraft?.receiptType || "");
-            setEditingReceiptId(rNo);
-            if (rNo) {
-                localStorage.setItem(`editing_receipt_${detail.id}`, rNo);
-            }
-
-            toast.info("Reverted receipt data restored.");
-            return true;
-        }
-        return false;
-    }, []);
 
     const openPOById = React.useCallback(
         async (poId: string, options?: { silent?: boolean }) => {
@@ -674,8 +592,8 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                         
                         toast.info("Previous edit session cleared. You can start a new receipt or click 'Edit' in history to resume.");
                     } else {
-                        // ✅ PERSISTENCE: Check server reverted draft first
-                        const restoredDraft = detail ? restoreServerDraft(detail) : false;
+                        // ✅ Do NOT auto-restore reverted receipts. User must explicitly click 'Edit' in history.
+                        const restoredDraft = false;
 
                         if (!restoredDraft) {
                             // Fallback to local draft
@@ -752,7 +670,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 }
             }
         },
-        [resetSession, restoreServerDraft]
+        [resetSession]
     );
 
     const openPOByBarcode = React.useCallback(
@@ -810,8 +728,8 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                         
                         toast.info("Previous edit session cleared. You can start a new receipt or click 'Edit' in history to resume.");
                     } else {
-                        // ✅ PERSISTENCE: Check server reverted draft first
-                        const restoredDraft = detail ? restoreServerDraft(detail) : false;
+                        // ✅ Do NOT auto-restore reverted receipts. User must explicitly click 'Edit' in history.
+                        const restoredDraft = false;
 
                         if (!restoredDraft) {
                             // Fallback to local draft
@@ -888,7 +806,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 }
             }
         },
-        [resetSession, restoreServerDraft]
+        [resetSession]
     );
 
     const openPO = React.useCallback(
@@ -959,6 +877,15 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         setLocalScannedRfids((buffer) => buffer.filter(b => b.rfid !== row.rfid));
 
         setActivity((prev) => prev.filter((a) => a.id !== id));
+
+        // ✅ Delete RFID tag from the database (fire-and-forget)
+        if (row.rfid) {
+            fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "delete_rfid", rfid: row.rfid }),
+            }).catch(() => { /* silent — UI already removed the tag */ });
+        }
     }, [activity]);
 
     const scanRFID = React.useCallback(async (rfidOverride?: string) => {

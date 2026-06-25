@@ -10,7 +10,8 @@ export interface PickerItem {
     orderedQuantity?: number;
     unitOrder?: number;
     dispatchNos?: string[] | string;
-    drivers?: string[] | string; // 🚀 ADDED DRIVERS
+    drivers?: string[] | string;
+    totalAmount?: number;
 }
 
 // Type definitions to replace `any` in autoTable configurations
@@ -36,7 +37,11 @@ interface AutoTablePageData {
     pageNumber: number;
 }
 
-export const generatePickerPDF = async (groupedManifest: Record<string, PickerItem[]>, batchNo: string) => {
+export const generatePickerPDF = async (
+    groupedManifest: Record<string, PickerItem[]>,
+    batchNo: string,
+    totalSalesOrderAmount?: number
+) => {
 
     // ✅ Dynamically import libraries and use strict type casting
     const jsPDFModule = await import("jspdf");
@@ -58,7 +63,7 @@ export const generatePickerPDF = async (groupedManifest: Record<string, PickerIt
         // 🚀 1. PRE-CALCULATE DATA FOR THE HEADER
         const uomTotals: Record<string, number> = {};
         const uniquePdps = new Set<string>();
-        const uniqueDrivers = new Set<string>(); // 🚀 NEW
+        const uniqueDrivers = new Set<string>();
 
         items.forEach(item => {
             // Aggregate UOMs
@@ -77,7 +82,7 @@ export const generatePickerPDF = async (groupedManifest: Record<string, PickerIt
                 }
             }
 
-            // 🚀 Aggregate unique Drivers
+            // Aggregate unique Drivers
             if (item.drivers) {
                 const driverString = Array.isArray(item.drivers)
                     ? item.drivers.join(", ")
@@ -119,7 +124,7 @@ export const generatePickerPDF = async (groupedManifest: Record<string, PickerIt
         // Calculate next Y position based on how many lines the PDPs took
         let nextY = 20 + (splitPdps.length * 3.5);
 
-        // 🚀 Render Drivers in Header
+        // Render Drivers in Header
         doc.setFont("helvetica", "bold").setTextColor(80, 80, 80);
         doc.text(`Drivers:`, 14, nextY);
         doc.setFont("helvetica", "normal");
@@ -135,77 +140,86 @@ export const generatePickerPDF = async (groupedManifest: Record<string, PickerIt
         const splitSummary = doc.splitTextToSize(summaryString || "N/A", 160);
         doc.text(splitSummary, 25, nextY);
 
+        nextY += (splitSummary.length * 3.5);
+
+        // Render Total Sales Order Amount in Header
+        if (totalSalesOrderAmount !== undefined) {
+            doc.setFont("helvetica", "bold").setTextColor(0, 0, 0);
+            doc.text(`Consolidation Total:`, 14, nextY);
+            doc.setFont("helvetica", "normal");
+            const formattedTotal = `PHP ${totalSalesOrderAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            doc.text(formattedTotal, 45, nextY);
+            nextY += 4;
+        }
+
         // Calculate dynamic start Y for the table so it doesn't overlap the header
-        const tableStartY = nextY + (splitSummary.length * 3.5) + 2;
+        const tableStartY = nextY + 2;
 
 
-        // --- 3. HIERARCHICAL DATA PROCESSING ---
+        // --- 3. FLAT DATA PROCESSING WITH SPACE OPTIMIZATIONS ---
         const tableRows: TableCell[][] = [];
-        const supplierGroups = items.reduce((acc: Record<string, Record<string, PickerItem[]>>, item: PickerItem) => {
-            const sKey = (item.supplierName || 'DIRECT').toUpperCase();
-            const bKey = (item.brandName || 'NO BRAND').toUpperCase();
-            const fullKey = `${sKey} | ${bKey}`;
 
-            if (!acc[fullKey]) acc[fullKey] = {};
-            const cKey = (item.categoryName || 'GENERAL').toUpperCase();
-            if (!acc[fullKey][cKey]) acc[fullKey][cKey] = [];
+        // Sort items by Category, Brand, and Name for organized picking
+        const sortedItems = [...items].sort((a, b) => {
+            const catA = (a.categoryName || "").toUpperCase();
+            const catB = (b.categoryName || "").toUpperCase();
+            if (catA !== catB) return catA.localeCompare(catB);
 
-            acc[fullKey][cKey].push(item);
-            return acc;
-        }, {});
+            const brandA = (a.brandName || "").toUpperCase();
+            const brandB = (b.brandName || "").toUpperCase();
+            if (brandA !== brandB) return brandA.localeCompare(brandB);
 
-        Object.entries(supplierGroups).forEach(([mainHeader, categories]) => {
-            tableRows.push([
-                { content: mainHeader, colSpan: 4, styles: { fillColor: false, textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 7.5, cellPadding: { top: 3, bottom: 1, left: 1, right: 1 } } }
-            ]);
-
-            Object.entries(categories).forEach(([catName, catItems]) => {
-                tableRows.push([
-                    { content: `   CAT: ${catName}`, colSpan: 4, styles: { fillColor: false, textColor: [50, 50, 50], fontStyle: 'italic', fontSize: 6.5, cellPadding: 1 } }
-                ]);
-
-                catItems.forEach((item: PickerItem) => {
-                    let unitStyle: Record<string, unknown> = { fontStyle: 'normal', textColor: [0, 0, 0] };
-
-                    switch (item.unitOrder) {
-                        case 1: unitStyle = { fontStyle: 'bold', textColor: [0, 0, 0] }; break;
-                        case 2: unitStyle = { fontStyle: 'italic', textColor: [80, 80, 80] }; break;
-                        case 3: unitStyle = { fontStyle: 'bolditalic', textColor: [50, 50, 50] }; break;
-                        default: unitStyle = { fontStyle: 'normal', textColor: [100, 100, 100] }; break;
-                    }
-
-                    // Product description with PDPs appended below it
-                    const productDesc = item.productName.toUpperCase();
-                    tableRows.push([
-                        "", // Checkbox
-                        { content: productDesc, styles: { overflow: 'linebreak' } },
-                        { content: item.unit || item.unitName || "-", styles: unitStyle },
-                        item.quantity || item.orderedQuantity || 0
-                    ]);
-                });
-            });
+            return (a.productName || "").toUpperCase().localeCompare((b.productName || "").toUpperCase());
         });
 
-        // --- 4. INK-EFFICIENT TABLE RENDER ---
+        sortedItems.forEach((item: PickerItem) => {
+            let unitStyle: Record<string, unknown> = { fontStyle: 'normal', textColor: [0, 0, 0] };
+
+            switch (item.unitOrder) {
+                case 1: unitStyle = { fontStyle: 'bold', textColor: [0, 0, 0] }; break;
+                case 2: unitStyle = { fontStyle: 'italic', textColor: [80, 80, 80] }; break;
+                case 3: unitStyle = { fontStyle: 'bolditalic', textColor: [50, 50, 50] }; break;
+                default: unitStyle = { fontStyle: 'normal', textColor: [100, 100, 100] }; break;
+            }
+
+            const qty = item.quantity || item.orderedQuantity || 0;
+            const amt = item.totalAmount || 0;
+            const formattedAmt = `PHP ${amt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+            tableRows.push([
+                "", // Checkbox
+                (item.categoryName || "GENERAL").toUpperCase(),
+                (item.brandName || "NO BRAND").toUpperCase(),
+                item.productName.toUpperCase(),
+                { content: item.unit || item.unitName || "-", styles: unitStyle },
+                qty,
+                formattedAmt
+            ]);
+        });
+
+        // --- 4. TIGHT SPACE-OPTIMIZED TABLE RENDER ---
         autoTable(doc, {
             startY: tableStartY, // Starts dynamically below the extended header
-            head: [["", "PRODUCT DESCRIPTION", "UNIT", "QTY"]],
+            head: [["", "CATEGORY", "BRAND", "DESCRIPTION", "UNIT", "QTY", "TOTAL AMOUNT"]],
             body: tableRows,
             theme: "plain",
-            headStyles: { textColor: [0, 0, 0], fontStyle: "bold", fontSize: 7, cellPadding: 1, lineWidth: { bottom: 0.2 }, lineColor: [0, 0, 0] },
+            headStyles: { textColor: [0, 0, 0], fontStyle: "bold", fontSize: 6.5, cellPadding: 0.6, lineWidth: { bottom: 0.2 }, lineColor: [0, 0, 0] },
             styles: {
-                fontSize: 7.5,
-                cellPadding: 1,
+                fontSize: 6.5,
+                cellPadding: 0.6,
                 textColor: [0, 0, 0],
-                lineColor: [200, 200, 200],
+                lineColor: [220, 220, 220],
                 lineWidth: { bottom: 0.1 },
                 overflow: 'linebreak'
             },
             columnStyles: {
-                0: { cellWidth: 8 },
-                1: { cellWidth: 'auto' },
-                2: { cellWidth: 18, halign: 'center' },
-                3: { cellWidth: 12, halign: 'center', fontStyle: 'bold' }
+                0: { cellWidth: 6 },
+                1: { cellWidth: 20 },
+                2: { cellWidth: 20 },
+                3: { cellWidth: 'auto' },
+                4: { cellWidth: 12, halign: 'center' },
+                5: { cellWidth: 10, halign: 'center', fontStyle: 'bold' },
+                6: { cellWidth: 25, halign: 'right', fontStyle: 'bold' }
             },
             didDrawCell: (data: AutoTableCellData) => {
                 if (data.column.index === 0 && data.cell.section === 'body' && data.cell.raw === "") {

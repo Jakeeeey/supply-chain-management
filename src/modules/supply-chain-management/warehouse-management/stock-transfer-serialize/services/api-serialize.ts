@@ -28,6 +28,28 @@ export const serializeLifecycleService = {
   },
 
   /**
+   * Verifies a serial number against dispatched items for receiving.
+   */
+  async lookupReceiveSerial(serialNumber: string, transferIds: number[]): Promise<{ stockTransferId: number, serialNumber: string }> {
+    const params = new URLSearchParams({
+      action: "verify_receive_serial",
+      serial: serialNumber,
+      transferIds: transferIds.join(","),
+    });
+
+    const res = await fetch(`/api/scm/warehouse-management/stock-transfer-serialize?${params.toString()}`, {
+      cache: "no-store"
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Serial verification failed (${res.status})`);
+    }
+
+    return res.json();
+  },
+
+  /**
    * Updates transfer status and records serial tracking.
    */
   async submitStatusUpdate(payload: UpdateSerializeTransferValues): Promise<{ success: boolean }> {

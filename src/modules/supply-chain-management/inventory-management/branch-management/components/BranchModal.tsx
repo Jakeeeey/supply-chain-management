@@ -327,7 +327,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch, 
                                         render={({ field }) => (
                                             <FormItem className="space-y-1.5">
                                                 <FormLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                                                    Branch Name
+                                                    Branch Name <span className="text-destructive">*</span>
                                                 </FormLabel>
                                                 <FormControl>
                                                     <Input
@@ -347,7 +347,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch, 
                                         render={({ field }) => (
                                             <FormItem className="space-y-1.5">
                                                 <FormLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                                                    Branch Code
+                                                    Branch Code <span className="text-destructive">*</span>
                                                 </FormLabel>
                                                 <FormControl>
                                                     <Input
@@ -367,7 +367,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch, 
                                         render={({ field }) => (
                                             <FormItem className="space-y-1.5">
                                                 <FormLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                                                    Branch Head
+                                                    Branch Head <span className="text-destructive">*</span>
                                                 </FormLabel>
                                                 <FormControl>
                                                     {(() => {
@@ -427,7 +427,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch, 
                                         render={({ field }) => (
                                             <FormItem className="space-y-1.5">
                                                 <FormLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                                                    Contact Number
+                                                    Contact Number <span className="text-destructive">*</span>
                                                 </FormLabel>
                                                 <FormControl>
                                                     <Input
@@ -448,7 +448,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch, 
                                             render={({ field }) => (
                                                 <FormItem className="space-y-1.5">
                                                     <FormLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                                                        Branch Description
+                                                        Branch Description <span className="text-destructive">*</span>
                                                     </FormLabel>
                                                     <FormControl>
                                                         <Textarea
@@ -480,7 +480,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch, 
                                         render={({ field }) => (
                                             <FormItem className="space-y-1.5">
                                                 <FormLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                                                    Province
+                                                    Province <span className="text-destructive">*</span>
                                                 </FormLabel>
                                                 <FormControl>
                                                     <Combobox
@@ -530,7 +530,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch, 
                                         render={({ field }) => (
                                             <FormItem className="space-y-1.5">
                                                 <FormLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                                                    City / Municipality
+                                                    City / Municipality <span className="text-destructive">*</span>
                                                 </FormLabel>
                                                 <FormControl>
                                                     <Combobox
@@ -581,7 +581,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch, 
                                         render={({ field }) => (
                                             <FormItem className="space-y-1.5">
                                                 <FormLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                                                    Barangay
+                                                    Barangay <span className="text-destructive">*</span>
                                                 </FormLabel>
                                                 <FormControl>
                                                     <Combobox
@@ -632,7 +632,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch, 
                                         render={({ field }) => (
                                             <FormItem className="space-y-1.5">
                                                 <FormLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                                                    Zip Code
+                                                    Zip Code <span className="text-destructive">*</span>
                                                 </FormLabel>
                                                 <FormControl>
                                                     <Input

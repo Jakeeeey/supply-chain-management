@@ -9,7 +9,6 @@ import React, {
     useCallback,
 } from "react"
 import {
-    Table,
     TableBody,
     TableCell,
     TableHead,
@@ -28,9 +27,10 @@ import {
     Search,
     FilterX,
     Layers,
+    BarChart3,
 } from "lucide-react"
 import {cn} from "@/lib/utils"
-import {TooltipProvider} from "@/components/ui/tooltip"
+import {TooltipProvider, Tooltip, TooltipTrigger, TooltipContent} from "@/components/ui/tooltip"
 import {Button} from "@/components/ui/button"
 import {
     Select,
@@ -46,6 +46,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { PlanningRow } from "../types"
 
 export interface ForecastItem {
     product_id: string
@@ -65,6 +66,7 @@ export interface ForecastItem {
     inTransitBoxes?: number
     suggestedQty?: number
     computedPricePerBox?: number
+    inTransitDetails?: string
 
     orderQty: number
     abcClass?: string
@@ -78,6 +80,8 @@ interface Props {
     data: ForecastItem[]
     selectedMonths: string[]
     onQuantityChange?: (id: string, qty: number) => void
+    onFilteredDataChange?: (filteredData: ForecastItem[]) => void
+    onShowTrend?: (row: PlanningRow) => void
 }
 
 type SortKey = keyof ForecastItem | "subtotal"
@@ -99,11 +103,17 @@ interface ForecastHeaderProps {
 }
 
 function ForecastHeader({label, sKey, className, sortConfig, setSortConfig}: ForecastHeaderProps) {
+    const isCentered = className?.includes("text-center");
+    const isRightAligned = className?.includes("text-right");
+
     return (
         <TableHead className={cn("px-4 py-4 whitespace-nowrap", className)}>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <div className="flex items-center gap-2 cursor-pointer group select-none">
+                    <div className={cn(
+                        "flex items-center gap-2 cursor-pointer group select-none w-full",
+                        isCentered ? "justify-center" : isRightAligned ? "justify-end flex-row-reverse" : "justify-start"
+                    )}>
                         <span
                             className={cn(
                                 "text-[11px] font-black uppercase tracking-widest",
@@ -159,7 +169,7 @@ function ForecastHeader({label, sKey, className, sortConfig, setSortConfig}: For
 }
 
 export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Props>(
-    ({data, selectedMonths, onQuantityChange}, ref) => {
+    ({data, selectedMonths, onQuantityChange, onFilteredDataChange, onShowTrend}, ref) => {
         // 🚀 FIX 1: We only store manual overrides in state now. No more duplicated data!
         const [manualOrderQtys, setManualOrderQtys] = useState<Record<string, number>>({})
         const [searchQuery, setSearchQuery] = useState("")
@@ -216,6 +226,10 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
             return filtered
         }, [searchQuery, sortConfig, getMergedData])
 
+        useEffect(() => {
+            onFilteredDataChange?.(processedItems)
+        }, [processedItems, onFilteredDataChange])
+
         const totalPages = Math.max(1, Math.ceil(processedItems.length / pageSize))
         const safePage = Math.min(currentPage, totalPages)
         const visibleItems = processedItems.slice((safePage - 1) * pageSize, safePage * pageSize)
@@ -250,25 +264,26 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
                                 <h2 className="text-[16px] font-black uppercase tracking-widest text-slate-900 dark:text-slate-100">
                                     Forecast Planning
                                 </h2>
-                                <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase flex items-center gap-2">
+                                <p className="text-[9px] font-bold text-slate-600 dark:text-slate-400 uppercase flex items-center gap-1.5">
                                     <TrendingUp className="w-3 h-3"/>
                                     Forecast Months + Historical Engine Columns
                                 </p>
                             </div>
                         </div>
 
-                        <div className="relative w-full md:w-72">
+                        <div className="relative w-full md:w-60">
                             <Search
-                                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 dark:text-slate-300"/>
+                                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600 dark:text-slate-300"/>
                             <Input
+                                id="table-search-input"
                                 placeholder="Search Brand / Product / Category..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className={cn(
-                                    "pl-10 h-10 rounded-full",
+                                    "pl-8.5 h-7.5 rounded-md",
                                     "bg-white dark:bg-slate-950",
                                     "border-slate-200 dark:border-slate-800",
-                                    "text-[12px] font-bold",
+                                    "text-[11px] font-bold",
                                     "text-slate-900 dark:text-slate-100",
                                     "placeholder:text-slate-400 dark:placeholder:text-slate-600"
                                 )}
@@ -276,8 +291,8 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <Table className="w-full">
+                    <div className="overflow-auto max-h-[calc(100vh-320px)] min-h-[400px] relative">
+                        <table className="w-full text-sm">
                             <TableHeader
                                 className="bg-slate-50/90 dark:bg-slate-900/60 sticky top-0 z-10 backdrop-blur-md">
                                 <TableRow>
@@ -313,7 +328,7 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
                             </TableHeader>
 
                             <TableBody>
-                                {visibleItems.map((item: ForecastItem) => {
+                                {visibleItems.map((item: ForecastItem, idx) => {
                                     const pricePerBox =
                                         Number(item.computedPricePerBox) ||
                                         Number(item.lastCost || 0) * Number(item.boxMultiplier || 1)
@@ -326,20 +341,20 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
                                     return (
                                         <TableRow
                                             key={item.product_id}
-                                            className="hover:bg-slate-50/60 dark:hover:bg-slate-900/40 transition-all border-b border-slate-200/50 dark:border-slate-800/50"
+                                            className="hover:bg-slate-50/60 dark:hover:bg-slate-900/40 transition-all border-b border-slate-200/50 dark:border-slate-800/50 h-10"
                                         >
-                                            <TableCell className="pl-6 sm:pl-8 py-4 whitespace-nowrap">
+                                            <TableCell className="pl-3 py-1 whitespace-nowrap">
                                                 <span
-                                                    className="text-[13px] font-black uppercase text-slate-800 dark:text-slate-200">
+                                                    className="text-[11px] font-black uppercase text-slate-800 dark:text-slate-200">
                                                     {item.brandName}
                                                 </span>
                                             </TableCell>
 
-                                            <TableCell className="px-4">
+                                            <TableCell className="px-2 py-1">
                                                 <div
                                                     className={cn(
-                                                        "inline-flex items-center gap-1 w-fit max-w-[220px]",
-                                                        "text-[10px] font-black uppercase px-2 py-1 rounded-xl border",
+                                                        "inline-flex items-center gap-1 w-fit max-w-[150px]",
+                                                        "text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md border",
                                                         "border-slate-200 dark:border-slate-800",
                                                         "bg-slate-50 dark:bg-slate-900",
                                                         "text-slate-800 dark:text-slate-200 truncate"
@@ -347,65 +362,129 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
                                                     title={item.category_name || "OTHERS"}
                                                 >
                                                     <Layers
-                                                        className="w-3 h-3 text-blue-600 dark:text-blue-300 shrink-0"/>
+                                                        className="w-2.5 h-2.5 text-blue-600 dark:text-blue-300 shrink-0"/>
                                                     <span className="truncate">{item.category_name || "OTHERS"}</span>
                                                 </div>
                                             </TableCell>
 
-                                            <TableCell className="px-4 min-w-[260px]">
-                                                <div className="flex flex-col">
-                                                    <span
-                                                        className="text-[14px] font-black uppercase text-slate-900 dark:text-slate-100">
-                                                        {item.productName}
-                                                    </span>
-                                                    <div className="flex gap-2 mt-1">
-                                                        {item.abcClass && (
-                                                            <span
-                                                                className="text-[9px] font-black bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md uppercase">
-                                                                Class {item.abcClass}
-                                                            </span>
-                                                        )}
+                                            <TableCell className="px-2 py-1 min-w-[200px]">
+                                                <div className="flex items-center justify-between min-w-0 gap-1.5">
+                                                    <div className="flex flex-col min-w-0">
+                                                        <span className="text-[11px] font-black uppercase text-slate-900 dark:text-slate-100 truncate max-w-[150px]">
+                                                            {item.productName}
+                                                        </span>
+                                                        <div className="flex gap-2 mt-0.5">
+                                                            {item.abcClass && (
+                                                                <span className="text-[8px] font-black bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded uppercase">
+                                                                    Class {item.abcClass}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
+                                                    {onShowTrend && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => onShowTrend(item as unknown as PlanningRow)}
+                                                            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-blue-500 transition-colors shrink-0 outline-none"
+                                                            title="View Inventory Position Chart"
+                                                        >
+                                                            <BarChart3 className="w-3 h-3" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </TableCell>
 
                                             <TableCell
                                                 className={cn(
-                                                    "text-center font-mono font-black text-[14px]",
+                                                    "text-center font-mono font-black text-[11px]",
                                                     isCritical ? "text-rose-600" : "text-orange-600"
                                                 )}
                                             >
                                                 {Number.isFinite(onHand) ? onHand.toFixed(1) : "0.0"}
                                             </TableCell>
 
-                                            <TableCell
-                                                className="text-center font-mono font-black text-[14px] text-blue-700 dark:text-blue-300">
-                                                {Number.isFinite(inTransit) ? inTransit.toFixed(1) : "0.0"}
+                                            <TableCell className="text-center font-mono font-black text-[11px] text-blue-700 dark:text-blue-300">
+                                                {(() => {
+                                                    const transitList = item.inTransitDetails
+                                                        ? item.inTransitDetails.split(";").filter(Boolean).map((tItem) => {
+                                                              const [poNo, qty] = tItem.split(":");
+                                                              return { poNo, quantity: parseFloat(qty) || 0 };
+                                                          })
+                                                        : [];
+
+                                                    return inTransit > 0 && transitList.length > 0 ? (
+                                                        <TooltipProvider>
+                                                            <Tooltip delayDuration={100}>
+                                                                <TooltipTrigger asChild>
+                                                                    <span className="cursor-help underline decoration-dotted decoration-blue-500/60 hover:text-blue-800 dark:hover:text-blue-200 transition-colors">
+                                                                        {inTransit.toFixed(1)}
+                                                                    </span>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent className="bg-slate-900 text-white p-3 rounded-xl border border-slate-800 shadow-2xl min-w-[200px] text-left">
+                                                                    <div className="space-y-2">
+                                                                        <div className="text-[10px] font-black uppercase text-blue-400 tracking-wider border-b border-slate-800 pb-1.5 flex justify-between">
+                                                                            <span>PO Number</span>
+                                                                            <span>Qty</span>
+                                                                        </div>
+                                                                        <div className="space-y-1.5 max-h-[150px] overflow-y-auto custom-scrollbar">
+                                                                            {transitList.map((po, idx) => (
+                                                                                <div key={idx} className="flex justify-between items-center text-[10px] font-bold uppercase gap-4">
+                                                                                    <span className="text-slate-350">{po.poNo}</span>
+                                                                                    <span className="text-blue-400 font-mono font-black">{po.quantity.toFixed(1)}</span>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+                                                    ) : (
+                                                        Number.isFinite(inTransit) ? inTransit.toFixed(1) : "0.0"
+                                                    );
+                                                })()}
                                             </TableCell>
 
                                             <TableCell
-                                                className="text-center font-mono font-black text-[14px] text-emerald-700 dark:text-emerald-300">
+                                                className="text-center font-mono font-black text-[11px] text-emerald-700 dark:text-emerald-300">
                                                 {Number.isFinite(suggested) ? suggested.toFixed(0) : "0"}
                                             </TableCell>
 
-                                            <TableCell className="px-4">
+                                            <TableCell className="px-2 py-1">
                                                 <Input
                                                     type="number"
                                                     value={item.orderQty || ""}
                                                     onChange={(e) => updateQty(item.product_id, e.target.value)}
+                                                    data-row-index={idx}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === "ArrowDown" || e.key === "Enter") {
+                                                            e.preventDefault();
+                                                            const target = document.querySelector(`input[data-row-index="${idx + 1}"]`) as HTMLInputElement | null;
+                                                            if (target) {
+                                                                target.focus();
+                                                                target.select();
+                                                            }
+                                                        } else if (e.key === "ArrowUp") {
+                                                            e.preventDefault();
+                                                            const target = document.querySelector(`input[data-row-index="${idx - 1}"]`) as HTMLInputElement | null;
+                                                            if (target) {
+                                                                target.focus();
+                                                                target.select();
+                                                            }
+                                                        }
+                                                    }}
                                                     className={cn(
-                                                        "h-9 w-24 mx-auto text-center font-black rounded-xl shadow-sm",
+                                                        "h-6.5 w-20 mx-auto text-center font-black rounded-md shadow-sm p-0",
                                                         "bg-white dark:bg-slate-950",
                                                         "border-slate-200 dark:border-slate-800",
-                                                        "text-slate-900 dark:text-slate-100",
+                                                        "text-slate-900 dark:text-slate-100 text-[12px]",
                                                         "placeholder:text-slate-400 dark:placeholder:text-slate-600",
-                                                        "focus-visible:ring-2 focus-visible:ring-emerald-500/20"
+                                                        "focus-visible:ring-1 focus-visible:ring-emerald-500"
                                                     )}
                                                 />
                                             </TableCell>
 
                                             <TableCell
-                                                className="pr-6 sm:pr-8 text-right font-mono font-black text-[15px] text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                                                className="pr-3 text-right font-mono font-black text-[11px] text-slate-900 dark:text-slate-100 whitespace-nowrap">
                                                 ₱{(Number(item.orderQty || 0) * pricePerBox).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                             </TableCell>
 
@@ -415,7 +494,7 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
                                                 return (
                                                     <TableCell
                                                         key={m}
-                                                        className="px-6 text-center font-mono text-[13px] font-bold text-slate-800 dark:text-slate-200 border-l border-slate-200/70 dark:border-slate-800/70"
+                                                        className="px-2 text-center font-mono text-[11px] font-bold text-slate-800 dark:text-slate-200 border-l border-slate-200/70 dark:border-slate-800/70"
                                                     >
                                                         {Math.ceil(Number(val)).toLocaleString()}
                                                     </TableCell>
@@ -424,13 +503,13 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
                                         </TableRow>
                                     )
                                 })}
-                            </TableBody>
-                        </Table>
+                        </TableBody>
+                        </table>
                     </div>
 
                     <div
-                        className="px-6 sm:px-8 py-5 lg:py-7 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 flex flex-col lg:flex-row lg:justify-between lg:items-center gap-6 w-full">
-                        <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                        className="px-3 py-1.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 flex flex-col lg:flex-row lg:justify-between lg:items-center gap-3 w-full">
+                        <div className="flex flex-wrap items-center gap-4">
                             <Select
                                 value={pageSize.toString()}
                                 onValueChange={(v) => {
@@ -440,7 +519,7 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
                             >
                                 <SelectTrigger
                                     className={cn(
-                                        "h-9 w-[96px] rounded-xl font-black text-[12px]",
+                                        "h-7.5 w-[80px] rounded-md font-black text-[11px]",
                                         "bg-white dark:bg-slate-950",
                                         "border-slate-200 dark:border-slate-800",
                                         "text-slate-900 dark:text-slate-100"
@@ -451,7 +530,7 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
 
                                 <SelectContent
                                     className={cn(
-                                        "rounded-xl",
+                                        "rounded-md",
                                         "bg-white dark:bg-slate-950",
                                         "border-slate-200 dark:border-slate-800",
                                         "text-slate-900 dark:text-slate-100"
@@ -470,18 +549,18 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
                             </Select>
 
                             <span
-                                className="text-[11px] font-black uppercase text-slate-800 dark:text-slate-200 tracking-widest min-w-[150px]">
+                                className="text-[10px] font-black uppercase text-slate-800 dark:text-slate-200 tracking-widest min-w-[120px]">
                                 Showing {Math.min(visibleItems.length, pageSize)} of {processedItems.length}
                             </span>
                         </div>
 
                         <div
-                            className="flex items-center justify-between sm:justify-end gap-2 bg-white dark:bg-slate-950 p-2 lg:p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm w-full lg:w-auto">
+                            className="flex items-center justify-between sm:justify-end gap-1 bg-white dark:bg-slate-950 p-1 rounded-md border border-slate-100 dark:border-slate-800 shadow-sm w-full lg:w-auto">
                             <Button
                                 variant="outline"
                                 size="icon"
                                 className={cn(
-                                    "rounded-xl",
+                                    "h-7.5 w-7.5 rounded-md",
                                     "bg-white dark:bg-slate-950",
                                     "border-slate-200 dark:border-slate-800",
                                     "text-slate-900 dark:text-slate-100",
@@ -490,14 +569,14 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
                                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                                 disabled={safePage === 1}
                             >
-                                <ChevronLeft className="w-4 h-4"/>
+                                <ChevronLeft className="w-3.5 h-3.5"/>
                             </Button>
 
                             <div
                                 className={cn(
-                                    "flex items-center justify-center px-4 sm:px-6 h-10 rounded-xl border",
+                                    "flex items-center justify-center px-3 h-7.5 rounded-md border",
                                     "border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/50",
-                                    "text-[12px] font-black uppercase tracking-tighter whitespace-nowrap min-w-[100px]",
+                                    "text-[10px] font-black uppercase tracking-tighter whitespace-nowrap min-w-[80px]",
                                     "text-slate-900 dark:text-slate-100"
                                 )}
                             >
@@ -508,7 +587,7 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
                                 variant="outline"
                                 size="icon"
                                 className={cn(
-                                    "rounded-xl",
+                                    "h-7.5 w-7.5 rounded-md",
                                     "bg-white dark:bg-slate-950",
                                     "border-slate-200 dark:border-slate-800",
                                     "text-slate-900 dark:text-slate-100",
@@ -517,7 +596,7 @@ export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Pro
                                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                                 disabled={safePage === totalPages}
                             >
-                                <ChevronRight className="w-4 h-4"/>
+                                <ChevronRight className="w-3.5 h-3.5"/>
                             </Button>
                         </div>
                     </div>

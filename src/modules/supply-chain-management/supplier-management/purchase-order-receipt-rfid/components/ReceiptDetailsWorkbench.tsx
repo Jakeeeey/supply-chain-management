@@ -7,7 +7,7 @@ import { ReviewReceiptStep } from "./steps";
 import { Card } from "@/components/ui/card";
 
 export function ReceiptDetailsWorkbench({ receiverName }: { receiverName?: string }) {
-    const { selectedPO } = useReceivingProducts();
+    const { selectedPO, editingReceiptId } = useReceivingProducts();
 
     if (!selectedPO) {
         return (
@@ -43,7 +43,7 @@ export function ReceiptDetailsWorkbench({ receiverName }: { receiverName?: strin
             </div>
 
             <div className="mt-4">
-                <ReviewReceiptStep receiverName={receiverName} />
+                <ReviewReceiptStep key={editingReceiptId || "new"} receiverName={receiverName} />
             </div>
         </Card>
     );
