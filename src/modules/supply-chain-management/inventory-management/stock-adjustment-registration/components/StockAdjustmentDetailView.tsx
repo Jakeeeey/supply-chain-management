@@ -14,7 +14,8 @@ import {
   ArrowDownCircle,
   Clock,
   UserCheck,
-  Tag
+  Tag,
+  Image as ImageIcon
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -126,37 +127,36 @@ export function StockAdjustmentDetailView({ id, onBack, mode = "creation", isMod
     doc.text("Adjustment Type:", 110, 36);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(data.type === 'IN' ? 22 : 185, data.type === 'IN' ? 101 : 28, data.type === 'IN' ? 52 : 28);
-    doc.text(data.type || "-", 145, 36);
+    const adjTypeFull = data.type === 'IN' ? 'Stock In' : data.type === 'OUT' ? 'Stock Out' : (data.type || "-");
+    doc.text(adjTypeFull, 145, 36);
 
     // --- Product Table ---
-    const tableRows = data.items?.map((item, index) => {
+    const tableRows = data.items?.map((item) => {
       const product = (item.product_id as unknown as StockAdjustmentProduct) || {};
-      const rfidLabel = item.rfid_tags && item.rfid_tags.length > 0 
-        ? `\nRFIDs: ${item.rfid_tags.join(", ")}`
-        : "";
+      const unitPrice = item.cost_per_unit || product.price_per_unit || 0;
+      const totalAmount = (item.quantity || 0) * unitPrice;
+      
       return [
-        index + 1,
-        `${product.product_name || "Unknown"}\n(${product.product_code || "N/A"})${rfidLabel}`,
         item.brand_name || "N/A",
-        item.category_name || "N/A",
-        item.unit_name || product.unit_name || "pcs",
-        item.quantity || 0
+        `${product.product_name || "Unknown"}\n(${product.product_code || "N/A"})`,
+        item.quantity || 0,
+        `PHP ${unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        `PHP ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       ];
     }) || [];
 
     autoTable(doc, {
       startY: 45,
-      head: [["#", "Product Information", "Brand", "Category", "Unit", "Qty"]],
+      head: [["Brand", "Product Name", "Qty", "Unit Price", "Total Amount"]],
       body: tableRows,
       headStyles: { fillColor: [248, 250, 252], textColor: [71, 85, 105], fontSize: 8, fontStyle: 'bold' },
       bodyStyles: { fontSize: 7, textColor: [30, 41, 59] },
       columnStyles: {
-        0: { halign: 'center', cellWidth: 8 },
-        1: { cellWidth: 75 },
-        2: { halign: 'center' },
-        3: { halign: 'center' },
-        4: { halign: 'center' },
-        5: { halign: 'center', fontStyle: 'bold' }
+        0: { halign: 'left', cellWidth: 35 },
+        1: { cellWidth: 60 },
+        2: { halign: 'center', cellWidth: 20 },
+        3: { halign: 'right', cellWidth: 25 },
+        4: { halign: 'right', fontStyle: 'bold', cellWidth: 30 }
       },
       theme: 'grid',
       styles: { cellPadding: 1.5 }
@@ -246,7 +246,7 @@ export function StockAdjustmentDetailView({ id, onBack, mode = "creation", isMod
               <p className="text-xs text-muted-foreground font-medium">Inventory Management System</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 print:hidden">
+          <div className={`flex items-center gap-2 print:hidden ${isModal ? "mr-10" : ""}`}>
             <Button
               variant="outline"
               onClick={generatePDF}
@@ -337,13 +337,69 @@ export function StockAdjustmentDetailView({ id, onBack, mode = "creation", isMod
 
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-foreground">
-                  <FileText className="h-4 w-4 text-primary" />
-                  <h3 className="font-bold">Remarks & Notes</h3>
+                <div>
+                  <div className="flex items-center gap-2 text-foreground mb-2">
+                    <FileText className="h-4 w-4 text-primary" />
+                    <h3 className="font-bold">Remarks & Notes</h3>
+                  </div>
+                  <div className="p-4 bg-muted/30 rounded-xl border border-border text-sm text-muted-foreground min-h-[60px]">
+                    {data.remarks || "No additional remarks provided."}
+                  </div>
                 </div>
-                <div className="p-4 bg-muted/30 rounded-xl border border-border text-sm text-muted-foreground min-h-[60px]">
-                  {data.remarks || "No additional remarks provided."}
-                </div>
+
+                {data.stock_adjustment_attachment && data.stock_adjustment_attachment.length > 0 && (
+                  <div className="space-y-3 mt-6">
+                    <div className="flex items-center gap-2 text-foreground">
+                      <ImageIcon className="h-4 w-4 text-primary" />
+                      <h3 className="font-bold">Attachments ({data.stock_adjustment_attachment.length})</h3>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {data.stock_adjustment_attachment.map((att, idx) => {
+                        const file = att.attachment;
+                        if (!file) return null;
+                        const fileId = typeof file === 'object' ? file.id : file;
+                        const isImage = typeof file === 'object' && file.type?.startsWith('image');
+                        const filename = typeof file === 'object' ? file.filename_download : `Attachment ${idx + 1}`;
+                        const sizeInMb = typeof file === 'object' && file.filesize 
+                          ? (Number(file.filesize) / (1024 * 1024)).toFixed(2)
+                          : null;
+
+                        const directusBase = process.env.NEXT_PUBLIC_DIRECTUS_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "";
+                        const cleanBase = directusBase.trim().replace(/\/$/, "");
+                        const fileUrl = `${cleanBase}/assets/${fileId}`;
+
+                        return (
+                          <div key={idx} className="flex items-center justify-between p-3 bg-muted/10 border border-border/40 rounded-xl shadow-xs hover:bg-muted/20 transition-colors">
+                            <a
+                              href={fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-3 flex-1 min-w-0 text-left bg-transparent border-none p-0 focus:outline-none"
+                              title="Click to view file in new tab"
+                            >
+                              <div className="h-9 w-9 shrink-0 bg-primary/5 rounded-lg flex items-center justify-center text-primary">
+                                {isImage ? <ImageIcon className="h-4.5 w-4.5" /> : <FileText className="h-4.5 w-4.5" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold truncate text-foreground hover:text-primary transition-colors">{filename}</p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  {sizeInMb && (
+                                    <span className="text-[9px] text-muted-foreground font-semibold">
+                                      {sizeInMb} MB
+                                    </span>
+                                  )}
+                                  <span className="text-[9px] text-primary font-bold uppercase tracking-wider">
+                                    View File
+                                  </span>
+                                </div>
+                              </div>
+                            </a>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-4 grid-cols-2">
