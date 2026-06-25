@@ -4,8 +4,8 @@ import { cookies } from "next/headers";
 export const runtime = "nodejs";
 
 /**
- * 🚀 GET: Fetch Branches from Directus
- * Bypasses Spring Boot to fetch all branches (including inactive).
+ * 🚀 GET: Fetch Real Branches from Spring Boot
+ * Proxies the request and attaches the 'vos_access_token' for authorization.
  */
 export async function GET() {
     const cookieStore = await cookies();
@@ -16,30 +16,28 @@ export async function GET() {
         return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
     }
 
-    const directusBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
-    const directusToken = process.env.DIRECTUS_STATIC_TOKEN ?? "";
-    const targetUrl = `${directusBaseUrl}/items/branches`;
+    const springBaseUrl = process.env.SPRING_API_BASE_URL?.replace(/\/$/, "");
+    const targetUrl = `${springBaseUrl}/api/branches`;
 
     try {
-        const directusRes = await fetch(targetUrl, {
+        const springRes = await fetch(targetUrl, {
             method: "GET",
             headers: {
-                "Authorization": `Bearer ${directusToken}`,
+                "Authorization": `Bearer ${token}`,
                 "Content-Type": "application/json"
             },
-            cache: "no-store",
+            cache: "no-store", // ⚡ Always get fresh branch data
         });
 
-        if (!directusRes.ok) {
-            console.error(`Directus Branch Fetch Failed: ${directusRes.status}`);
-            return NextResponse.json([], { status: directusRes.status });
+        if (!springRes.ok) {
+            console.error(`Spring Boot Branch Fetch Failed: ${springRes.status}`);
+            return NextResponse.json([], { status: springRes.status });
         }
 
-        const json = await directusRes.json();
-        // Return json.data to match the array format expected by the frontend
-        return NextResponse.json(json.data || []);
+        const data = await springRes.json();
+        return NextResponse.json(data);
     } catch (err) {
-        console.error("BFF Directus Branch Route Error:", err);
+        console.error("BFF Branch Route Error:", err);
         return NextResponse.json([], { status: 502 });
     }
 }
