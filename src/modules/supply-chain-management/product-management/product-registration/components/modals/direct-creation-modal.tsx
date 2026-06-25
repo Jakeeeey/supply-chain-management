@@ -45,7 +45,7 @@ export function DirectCreationModal({
               : "Enter product information to register a new product directly into the masterlist."}
           </DialogDescription>
         </DialogHeader>
-        <div className="px-4">
+        <div className="px-4 max-h-[75vh] overflow-y-auto pb-4">
           <SKUForm
             initialData={initialData}
             masterData={masterData}

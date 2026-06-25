@@ -60,7 +60,6 @@ export default function ProductRegistrationPage() {
   const [editingSKU, setEditingSKU] = useState<SKU | null>(null);
   const [updatingImageSKU, setUpdatingImageSKU] = useState<SKU | null>(null);
   const [viewingGallerySKU, setViewingGallerySKU] = useState<SKU | null>(null);
-  const [pendingSearch, setPendingSearch] = useState(search);
 
   // Creation modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -200,8 +199,9 @@ export default function ProductRegistrationPage() {
     brand: string;
     supplier: string;
     status: string;
+    search?: string;
   }) => {
-    setSearch(pendingSearch);
+    setSearch(values.search || "");
     setCategoryFilter(values.category);
     setClassFilter(values.class);
     setSegmentFilter(values.segment);
@@ -213,7 +213,6 @@ export default function ProductRegistrationPage() {
   };
 
   const handleClearFilters = () => {
-    setPendingSearch("");
     setSearch("");
     setCategoryFilter("");
     setClassFilter("");
@@ -275,18 +274,13 @@ export default function ProductRegistrationPage() {
       </div>
 
       <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-2 max-w-sm">
-          <input
-            type="text"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            placeholder="Search products..."
-            value={pendingSearch}
-            onChange={(e) => setPendingSearch(e.target.value)}
-          />
-        </div>
+
         <FacetFilters
-          masterData={masterData}
-          filters={currentFilters}
+          masterData={masterData ? {
+            ...masterData,
+            suppliers: masterData.suppliers.filter((s: any) => s.supplier_type === "TRADE"),
+          } : null}
+          filters={{ ...currentFilters, search: search }}
           onApply={handleApplyFilters}
           onClear={handleClearFilters}
           isLoading={isLoading}
@@ -302,6 +296,7 @@ export default function ProductRegistrationPage() {
         onPaginationChange={handlePagination}
         sorting={sorting}
         onSortingChange={setSorting}
+        hideSearch={true}
         masterData={masterData}
         parentImages={parentImages}
         pendingEditIds={new Set<number>()}
@@ -318,7 +313,10 @@ export default function ProductRegistrationPage() {
       <DirectCreationModal
         open={isCreateModalOpen}
         setOpen={setIsCreateModalOpen}
-        masterData={masterData}
+        masterData={masterData ? {
+          ...masterData,
+          suppliers: masterData.suppliers.filter((s: any) => s.supplier_type === "TRADE"),
+        } : null}
         onSubmit={handleCreateSubmit}
         loading={saving}
       />
@@ -330,7 +328,10 @@ export default function ProductRegistrationPage() {
         onClose={() => setEditingSKU(null)}
         onSave={handleSaveProduct}
         isLoading={isUpdating}
-        masterData={masterData}
+        masterData={masterData ? {
+          ...masterData,
+          suppliers: masterData.suppliers.filter((s: any) => s.supplier_type === "TRADE"),
+        } : null}
       />
 
       {/* Image Update Modal */}

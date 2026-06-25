@@ -322,19 +322,19 @@ export const getMasterlistColumns = (
                 );
               })()
             )}
-            {isParent && onUpdateImage && (
+            {onUpdateImage && (
               <DropdownMenuItem onClick={() => onUpdateImage(sku)}>
                 <ImageIcon className="h-4 w-4 mr-2" />
                 Update Image
               </DropdownMenuItem>
             )}
-            {isParent && onViewGallery && (
+            {onViewGallery && (
               <DropdownMenuItem onClick={() => onViewGallery(sku)}>
                 <Images className="h-4 w-4 mr-2" />
                 View Gallery
               </DropdownMenuItem>
             )}
-            {isParent && (onUpdateImage || onViewGallery) && (
+            {(onUpdateImage || onViewGallery) && (
               <DropdownMenuSeparator />
             )}
             <DropdownMenuItem
