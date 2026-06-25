@@ -98,9 +98,15 @@ export const fetchConsolidators = async (
     }
 };
 
-export const fetchConsolidatorSummary = async (): Promise<Record<string, number> | null> => {
+export const fetchConsolidatorSummary = async (branchId?: number): Promise<Record<string, number> | null> => {
     try {
-        const url = `/api/scm/warehouse-management/consolidation/delivery-picking/summary?_t=${Date.now()}`;
+        const queryParams = new URLSearchParams();
+        if (branchId !== undefined && branchId !== null) {
+            queryParams.append("branchId", branchId.toString());
+        }
+        queryParams.append("_t", Date.now().toString());
+
+        const url = `/api/scm/warehouse-management/consolidation/delivery-picking/summary?${queryParams.toString()}`;
         const response = await fetch(url, {
             headers: getHeaders(),
             cache: "no-store"

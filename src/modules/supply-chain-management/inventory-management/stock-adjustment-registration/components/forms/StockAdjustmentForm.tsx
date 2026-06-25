@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+
 import { useForm, useFieldArray, useWatch, Control, UseFormSetValue, useFormState, FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -18,10 +18,12 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Paperclip
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { RFIDScannerModal } from "../modals/RFIDScannerModal";
+import { AttachmentUpload } from "../AttachmentUpload";
 import { ProductSelectionModal } from "../modals/ProductSelectionModal";
 import {
   StockAdjustmentFormSchema,
@@ -87,13 +89,13 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   const unitName = useWatch({ control, name: `items.${index}.unit_name` });
   const quantity = useWatch({ control, name: `items.${index}.quantity` });
   const costPerUnit = useWatch({ control, name: `items.${index}.cost_per_unit` });
-  const hasRfid = useWatch({ control, name: `items.${index}.has_rfid` });
   const brandName = useWatch({ control, name: `items.${index}.brand_name` });
   const barcode = useWatch({ control, name: `items.${index}.barcode` });
   const unitOrder = useWatch({ control, name: `items.${index}.unit_order` });
+  const hasRfid = unitOrder === 3;
 
   const rfidTags = useWatch({ control, name: `items.${index}.rfid_tags` });
-  const isRfidMissing = (hasRfid || unitOrder === 3) && (!rfidTags || rfidTags.length === 0);
+  const isRfidMissing = hasRfid && (!rfidTags || rfidTags.length === 0);
 
   const { errors } = useFormState({ control });
   const rowError = Array.isArray(errors.items)
@@ -243,7 +245,7 @@ function FormSummary({
       const c = Number(item?.cost_per_unit || 0);
       qty += q;
       amt += q * c;
-      if (item?.has_rfid) rfid++;
+      if (item?.unit_order === 3) rfid++;
     }
     return { totalQuantity: qty, totalAmount: amt, rfidItemsCount: rfid };
   }, [items]);
@@ -310,7 +312,7 @@ function RfidBanner({ control }: { control: Control<StockAdjustmentFormValues> }
   const items = useWatch({ control, name: "items" });
   const rfidItemsCount = useMemo(() => {
     const currentItems = (items || []) as StockAdjustmentItem[];
-    return currentItems.filter((item) => item?.has_rfid).length;
+    return currentItems.filter((item) => item?.unit_order === 3).length;
   }, [items]);
 
   if (rfidItemsCount === 0) return null;
@@ -340,7 +342,7 @@ export function StockAdjustmentForm({
   onSuccess,
   mode = "creation",
 }: StockAdjustmentFormProps) {
-  const router = useRouter();
+
   const {
     fetchById,
     createAdjustment,
@@ -391,6 +393,7 @@ export function StockAdjustmentForm({
       remarks: "",
       items: [],
       isPosted: false,
+      stock_adjustment_attachment: [],
     },
   });
 
@@ -398,6 +401,34 @@ export function StockAdjustmentForm({
     control: form.control,
     name: "items",
   });
+
+  const handleClearForm = useCallback(async () => {
+    // Clear visual input displays for comboboxes
+    setBranchInputValue("");
+    setSupplierInputValue("");
+    setBranchSearch("");
+    setSupplierSearch("");
+
+    // Stay on the page — reset the form for the next entry with default "IN" type
+    const nextDocNo = await fetchNextDocNo("IN");
+    form.reset({
+      doc_no: nextDocNo,
+      branch_id: 0,
+      supplier_id: 0,
+      type: "IN",
+      remarks: "",
+      items: [],
+      isPosted: false,
+      stock_adjustment_attachment: [],
+    });
+  }, [
+    form,
+    fetchNextDocNo,
+    setBranchInputValue,
+    setSupplierInputValue,
+    setBranchSearch,
+    setSupplierSearch,
+  ]);
 
   useEffect(() => {
     const unlock = () => {
@@ -447,6 +478,7 @@ export function StockAdjustmentForm({
             isPosted: resolvedIsPosted,
             postedAt: data.postedAt || undefined,
             posted_by: data.posted_by || undefined,
+            stock_adjustment_attachment: data.stock_adjustment_attachment || [],
             items: data.items.map((item) => ({
               ...item,
               quantity: Number(item.quantity || 0),
@@ -478,7 +510,7 @@ export function StockAdjustmentForm({
               rfid_tags: item.rfid_tags || [],
               rfid_count: item.rfid_count || 0,
               db_id: Number(item.id || 0),
-              has_rfid: (item.rfid_tags && item.rfid_tags.length > 0) || rfidProductIds.has(Number((item.product_id as { id?: number; product_id?: number })?.product_id || (item.product_id as { id?: number; product_id?: number })?.id || item.product_id)),
+              has_rfid: ((item.product_id as { unit_of_measurement?: { order: number } })?.unit_of_measurement?.order === 3 || item.unit_order === 3),
             })),
           });
         } catch (error) {
@@ -562,7 +594,7 @@ export function StockAdjustmentForm({
       async (values) => {
         // Validate that all items requiring RFID have scanned tags
         const missingRfidItem = values.items.find(
-          (item) => (item.has_rfid || item.unit_order === 3) && (!item.rfid_tags || item.rfid_tags.length === 0)
+          (item) => item.unit_order === 3 && (!item.rfid_tags || item.rfid_tags.length === 0)
         );
 
         if (missingRfidItem) {
@@ -607,15 +639,25 @@ export function StockAdjustmentForm({
     }
   };
 
-  const onInvalid = () => {
-    toast.error("Please fill in all required fields correctly.");
+  const onInvalid = (errors: FieldErrors<StockAdjustmentFormValues>) => {
+    console.warn("Validation failed errors:", errors);
+    const errorDetails = Object.entries(errors)
+      .map(([key, value]) => {
+        const msg = (value as { message?: string })?.message || "Invalid field value";
+        return `${key}: ${msg}`;
+      })
+      .join(", ");
+    toast.error("Please fill in all required fields correctly.", {
+      description: errorDetails || undefined,
+      duration: 6000,
+    });
   };
 
   const onSubmit = useCallback(
     async (values: StockAdjustmentFormValues) => {
       // Validate that all items requiring RFID have scanned tags
       const missingRfidItem = values.items.find(
-        (item) => (item.has_rfid || item.unit_order === 3) && (!item.rfid_tags || item.rfid_tags.length === 0)
+        (item) => item.unit_order === 3 && (!item.rfid_tags || item.rfid_tags.length === 0)
       );
 
       if (missingRfidItem) {
@@ -631,11 +673,16 @@ export function StockAdjustmentForm({
         if (id) {
           await updateAdjustment(id, values);
           toast.success("Adjustment Updated Successfully");
+          onSuccess();
         } else {
           await createAdjustment(values);
-          toast.success("Adjustment Created Successfully");
+          toast.success("Stock Adjustment Registered Successfully", {
+            description: `Document ${values.doc_no} has been saved as a draft.`,
+            duration: 4000,
+          });
+          
+          await handleClearForm();
         }
-        onSuccess();
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to save adjustment";
         toast.error(message);
@@ -643,7 +690,13 @@ export function StockAdjustmentForm({
         setLoading(false);
       }
     },
-    [id, createAdjustment, updateAdjustment, onSuccess]
+    [
+      id,
+      createAdjustment,
+      updateAdjustment,
+      onSuccess,
+      handleClearForm,
+    ]
   );
 
   const handleConfirmModalItems = useCallback(
@@ -751,7 +804,7 @@ export function StockAdjustmentForm({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {onCancel ? (
+          {onCancel && (
             <Button
               variant="outline"
               onClick={onCancel}
@@ -759,15 +812,6 @@ export function StockAdjustmentForm({
             >
               <ArrowLeft className="h-4 w-4" />
               Back to List
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              onClick={() => router.push("/scm/inventory-management/stock-adjustment-summary")}
-              className="gap-2 h-10 border-border bg-card shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg transition-all"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Summary
             </Button>
           )}
         </div>
@@ -1230,6 +1274,28 @@ export function StockAdjustmentForm({
           </CardContent>
         </Card>
 
+        {/* Attachments Card */}
+        <Card className="border border-border/50 shadow-sm bg-card border-border/40">
+          <CardHeader className="bg-card border-b border-border/50 py-4 px-6">
+            <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+              <Paperclip className="h-4 w-4 text-primary" />
+              Attachments
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            <AttachmentUpload
+              value={form.watch("stock_adjustment_attachment") || []}
+              onChange={(atts) => form.setValue("stock_adjustment_attachment", atts, { shouldValidate: true })}
+              disabled={isReadOnly}
+            />
+            {form.formState.errors.stock_adjustment_attachment?.message && (
+              <p className="text-xs text-red-500 font-bold mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                {String(form.formState.errors.stock_adjustment_attachment.message)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Action Workspace buttons */}
         <div className="flex items-center justify-end gap-3 pb-8">
           {onCancel ? (
@@ -1245,9 +1311,9 @@ export function StockAdjustmentForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
+              onClick={async () => {
                 if (window.confirm("Are you sure you want to clear all fields and start over?")) {
-                  onSuccess();
+                  await handleClearForm();
                 }
               }}
               className="h-10 px-8 font-bold border-border text-muted-foreground hover:bg-card rounded-lg transition-colors text-xs"
@@ -1309,6 +1375,8 @@ export function StockAdjustmentForm({
           type={form.getValues("type")}
           initialTags={form.getValues(`items.${scannerContext.index}.rfid_tags`) || []}
           branchId={Number(form.getValues("branch_id"))}
+          supplierId={Number(form.getValues("supplier_id"))}
+          productId={Number(form.getValues(`items.${scannerContext.index}.product_id`))}
           validateRFID={validateRFIDAvailability}
         />
       )}

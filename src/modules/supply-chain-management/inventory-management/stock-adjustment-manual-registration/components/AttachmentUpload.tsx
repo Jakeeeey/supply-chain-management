@@ -26,11 +26,31 @@ export function AttachmentUpload({
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    // Validate size (e.g., 10MB max per file)
-    const invalidFiles = files.filter(f => f.size > 10 * 1024 * 1024);
-    if (invalidFiles.length > 0) {
-      toast.error("File too large", {
-        description: "Maximum file size is 10MB per file.",
+    const maxSingleSize = 10 * 1024 * 1024; // 10MB
+    const maxCumulativeSize = 15 * 1024 * 1024; // 15MB
+
+    // Calculate current total size of already staged files
+    const currentTotalSize = (value || []).reduce((sum, att) => {
+      if (typeof att.attachment === 'object' && att.attachment !== null) {
+        return sum + Number(att.attachment.filesize || 0);
+      }
+      return sum;
+    }, 0);
+
+    let pendingSize = 0;
+    for (const file of files) {
+      if (file.size > maxSingleSize) {
+        toast.error(`File "${file.name}" is too large`, {
+          description: "Maximum file size is 10MB per file.",
+        });
+        return;
+      }
+      pendingSize += file.size;
+    }
+
+    if (currentTotalSize + pendingSize > maxCumulativeSize) {
+      toast.error("Cumulative size limit exceeded", {
+        description: `Staging these files would exceed the total limit of 15MB (Current: ${(currentTotalSize / (1024 * 1024)).toFixed(2)}MB, Attempted: ${(pendingSize / (1024 * 1024)).toFixed(2)}MB).`,
       });
       return;
     }
@@ -55,7 +75,8 @@ export function AttachmentUpload({
         }
 
         const data = await res.json();
-        newAttachments.push({ attachment: data.data.id });
+        // Store the full metadata object to keep track of filesize and name
+        newAttachments.push({ attachment: data.data });
       }
 
       onChange([...(value || []), ...newAttachments]);
@@ -117,19 +138,36 @@ export function AttachmentUpload({
         )}
       </div>
 
+      {value.length > 0 && (
+        <div className="flex justify-between items-center text-xs font-bold text-muted-foreground px-1 mt-2">
+          <span>Staged Attachments: {value.length} file(s)</span>
+          <span>
+            Total Size: {(value.reduce((sum, att) => {
+              if (typeof att.attachment === 'object' && att.attachment !== null) {
+                return sum + Number(att.attachment.filesize || 0);
+              }
+              return sum;
+            }, 0) / (1024 * 1024)).toFixed(2)} MB / 15.00 MB
+          </span>
+        </div>
+      )}
+
       {(value && value.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
           {value.map((att, index) => {
             const uuid = typeof att.attachment === 'object' ? att.attachment.id : att.attachment;
             const isImage = typeof att.attachment === 'object' && att.attachment.type?.startsWith('image');
             const filename = typeof att.attachment === 'object' ? att.attachment.filename_download : uuid;
+            const sizeInMb = typeof att.attachment === 'object' && att.attachment.filesize 
+              ? (Number(att.attachment.filesize) / (1024 * 1024)).toFixed(2)
+              : null;
             
             const directusBase = process.env.NEXT_PUBLIC_DIRECTUS_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "";
             const cleanBase = directusBase.trim().replace(/\/$/, "");
             const fileUrl = `${cleanBase}/assets/${uuid}`;
             
             return (
-              <div key={index} className="flex items-center gap-3 p-3 bg-card border rounded-md shadow-sm relative group">
+              <div key={index} className="flex items-center justify-between gap-3 p-3 bg-card border rounded-md shadow-sm relative">
                 <button
                   type="button"
                   onClick={() => setPreviewFile({
@@ -138,7 +176,7 @@ export function AttachmentUpload({
                     isImage: !!isImage,
                     type: typeof att.attachment === 'object' ? att.attachment.type : undefined
                   })}
-                  className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity cursor-pointer text-left bg-transparent border-none p-0 focus:outline-none w-full"
+                  className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity cursor-pointer text-left bg-transparent border-none p-0 focus:outline-none"
                   title="Click to preview file"
                 >
                   <div className="h-10 w-10 shrink-0 bg-muted rounded flex items-center justify-center text-muted-foreground">
@@ -146,7 +184,16 @@ export function AttachmentUpload({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate text-foreground hover:text-primary transition-colors">{filename}</p>
-                    <p className="text-[9px] text-muted-foreground uppercase font-bold">Click to view</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {sizeInMb && (
+                        <span className="text-[9px] text-muted-foreground font-semibold">
+                          {sizeInMb} MB
+                        </span>
+                      )}
+                      <span className="text-[9px] text-primary font-bold uppercase tracking-wider">
+                        Click to view
+                      </span>
+                    </div>
                   </div>
                 </button>
                 {!disabled && (
@@ -154,11 +201,12 @@ export function AttachmentUpload({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 bg-background hover:bg-destructive/10"
+                    className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive bg-card border border-destructive/20 rounded-md transition-all shrink-0"
                     onClick={(e) => {
                       e.stopPropagation();
                       removeAttachment(index);
                     }}
+                    title="Remove attachment"
                   >
                     <X className="h-4 w-4" />
                   </Button>

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { directusFetch, getDirectusBase } from "@/modules/supply-chain-management/inventory-management/stock-adjustment-registration/utils/directus";
 import {
   StockAdjustmentHeader,
@@ -100,7 +101,7 @@ export const stockAdjustmentService = {
 
     if (headers.length === 0) return [];
 
-    // Pre-parse remarks metadata for each header to resolve exact supplier
+    // Pre-parse remarks metadata for each header to resolve exact supplier & source type
     const parsedHeaders = headers.map(header => {
       let supplierId: number | null = null;
       let cleanedRemarks = String(header.remarks || "").trim();
@@ -109,14 +110,26 @@ export const stockAdjustmentService = {
         supplierId = Number(match[1]);
         cleanedRemarks = cleanedRemarks.replace(/\s*\[SUPPLIER_ID:\s*(\d+)\]/g, "").trim();
       }
+
+      // Parse optional source type marker
+      let parsedSourceType: "MANUAL" | null = null;
+      const sourceMatch = cleanedRemarks.match(/\[SOURCE:\s*([A-Z]+)\]/);
+      if (sourceMatch) {
+        if (sourceMatch[1] === "MANUAL") parsedSourceType = "MANUAL";
+        cleanedRemarks = cleanedRemarks.replace(/\s*\[SOURCE:\s*[A-Z]+\]/g, "").trim();
+      }
+
       return {
         ...header,
         remarks: cleanedRemarks,
-        parsed_supplier_id: supplierId
+        parsed_supplier_id: supplierId,
+        parsed_source_type: parsedSourceType,
       };
     });
 
+
     const docNos = parsedHeaders.map(h => h.doc_no);
+
     const itemsRes = await directusFetch<{ data: RawItem[] }>(
       `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_in":${JSON.stringify(docNos)}}}&fields=doc_no,quantity,product_id.product_id,product_id.price_per_unit,product_id.cost_per_unit,unit_id.unit_name&limit=-1`
     );
@@ -208,11 +221,23 @@ export const stockAdjustmentService = {
         }
       }
 
+      // ── Source type detection (priority order) ──────────────────────────
+      // 1. MANUAL  → [SOURCE: MANUAL] tag in remarks (stock-adjustment-manual-registration)
+      // 2. SERIAL  → doc_no contains "-SERIAL-" (IDS stock-adjustment-serial-registration)
+      // 3. RFID    → everything else (standard stock-adjustment-registration)
+      const sourceType: "RFID" | "MANUAL" | "SERIAL" =
+        header.parsed_source_type === "MANUAL"
+          ? "MANUAL"
+          : /-(SERIAL)-/i.test(header.doc_no)
+          ? "SERIAL"
+          : "RFID";
+
       return {
         ...header,
         items: headerItems,
         amount: totalAmount > 0 ? totalAmount : (Number(header.amount) || 0),
-        supplier_id: resolvedSupplier as unknown
+        supplier_id: resolvedSupplier as unknown,
+        source_type: sourceType,
       };
     });
   },
@@ -344,12 +369,49 @@ export const stockAdjustmentService = {
       };
     });
 
+    // Fetch attachments — FK references stock_adjustment.id (items), not the header id.
+    // We use the item IDs belonging to this doc_no to look up attachments.
+    let attachments: any[] = [];
+    try {
+      const docItemIdsRes = await directusFetch<{ data: { id: number }[] }>(
+        `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${header.doc_no}"}}&fields=id&limit=-1`
+      );
+      const docItemIds = (docItemIdsRes.data || []).map((i) => i.id);
+      if (docItemIds.length > 0) {
+        const attachmentsRes = await directusFetch<{ data: any[] }>(
+          `${DIRECTUS_URL}/items/stock_adjustment_attachment?filter={"stock_adjustment_id":{"_in":${JSON.stringify(docItemIds)}}}&limit=-1`
+        );
+        attachments = attachmentsRes.data || [];
+
+        // Since `attachment` is a string in DB (not a true relational field),
+        // we manually fetch the file metadata from directus_files to populate it.
+        const fileIds = attachments.map(a => typeof a.attachment === 'string' ? a.attachment : null).filter(Boolean);
+        if (fileIds.length > 0) {
+          try {
+            const filesRes = await directusFetch<{ data: any[] }>(
+              `${DIRECTUS_URL}/files?filter={"id":{"_in":${JSON.stringify(fileIds)}}}&fields=id,type,filename_download,filesize`
+            );
+            const filesMap = new Map((filesRes.data || []).map(f => [f.id, f]));
+            attachments = attachments.map(a => ({
+              ...a,
+              attachment: filesMap.get(a.attachment) || a.attachment
+            }));
+          } catch (fileErr) {
+            console.warn("Failed to fetch file metadata:", fileErr);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch stock adjustment attachments:", err);
+    }
+
     return {
       ...header,
       remarks: cleanedRemarks,
       items: itemsWithTags,
       amount: totalAmount > 0 ? totalAmount : (Number(header.amount) || 0),
       supplier_id: resolvedSupplier as unknown,
+      stock_adjustment_attachment: attachments,
     } as unknown as StockAdjustmentDetail;
   },
 
@@ -488,6 +550,166 @@ export const stockAdjustmentService = {
   },
 
   /**
+   * Validate an RFID tag for Stock OUT.
+   * The tag must:
+   *  1. Be currently on-hand at the specified branch (Spring API).
+   *  2. Have originally been registered in a Stock IN for the same branch,
+   *     supplier, and product (Directus historical records).
+   */
+  async validateRFIDForStockOut(
+    rfid: string,
+    branchId: number,
+    supplierId: number,
+    productId: number,
+    token: string
+  ): Promise<{ valid: boolean; reason?: string }> {
+    try {
+      // ── Step 1: Is the RFID currently on-hand at this branch? ──────────
+      const springUrl = new URL(`${SPRING_API_URL}/api/view-rfid-onhand`);
+      springUrl.searchParams.set("rfid", rfid);
+      springUrl.searchParams.set("branchId", String(branchId));
+
+      const springRes = await fetch(springUrl.toString(), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (springRes.ok) {
+        const data = await springRes.json();
+        const isOnHand = Array.isArray(data)
+          ? data.length > 0
+          : data && typeof data === "object" && ("productId" in data || "id" in data);
+
+        if (!isOnHand) {
+          return {
+            valid: false,
+            reason: "RFID tag is not currently on-hand at the selected branch.",
+          };
+        }
+      }
+
+      // ── Step 2: Was this RFID registered in a Stock IN for this branch,
+      //            supplier, and product? ───────────────────────────────────
+      // Find the rfid record in stock_adjustment_rfid and expand to the
+      // linked stock_adjustment item (product_id, branch_id, doc_no).
+      const rfidRes = await directusFetch<{
+        data: {
+          id: number;
+          rfid_tag: string;
+          stock_adjustment_id: {
+            id: number;
+            product_id: number | { id?: number; product_id?: number };
+            branch_id: number | { id?: number };
+            doc_no: string;
+          };
+        }[];
+      }>(
+        `${DIRECTUS_URL}/items/stock_adjustment_rfid?filter={"rfid_tag":{"_eq":"${rfid}"}}&fields=id,rfid_tag,stock_adjustment_id.id,stock_adjustment_id.product_id,stock_adjustment_id.branch_id,stock_adjustment_id.doc_no&limit=1`
+      );
+
+      const rfidRecords = rfidRes.data || [];
+
+      if (rfidRecords.length === 0) {
+        return {
+          valid: false,
+          reason: "RFID tag has not been registered in any Stock IN record.",
+        };
+      }
+
+      const rfidRecord = rfidRecords[0];
+      const item = rfidRecord.stock_adjustment_id;
+
+      // Resolve product_id from the linked item
+      const itemProductId =
+        typeof item.product_id === "object"
+          ? Number(item.product_id?.id ?? item.product_id?.product_id ?? 0)
+          : Number(item.product_id ?? 0);
+
+      // Resolve branch_id from the linked item
+      const itemBranchId =
+        typeof item.branch_id === "object"
+          ? Number(item.branch_id?.id ?? 0)
+          : Number(item.branch_id ?? 0);
+
+      // ── Check product match ──────────────────────────────────────────────
+      if (itemProductId !== productId) {
+        return {
+          valid: false,
+          reason: `RFID tag belongs to a different product (expected product ID ${productId}, found ${itemProductId}).`,
+        };
+      }
+
+      // ── Check branch match ───────────────────────────────────────────────
+      if (itemBranchId !== branchId) {
+        return {
+          valid: false,
+          reason: "RFID tag was registered under a different branch.",
+        };
+      }
+
+      // ── Check supplier and type via the header (doc_no) ─────────────────
+      const docNo = item.doc_no;
+      const headerRes = await directusFetch<{
+        data: {
+          id: number;
+          type: string;
+          supplier_id: number | { id?: number } | null;
+          remarks?: string;
+        }[];
+      }>(
+        `${DIRECTUS_URL}/items/stock_adjustment_header?filter={"doc_no":{"_eq":"${docNo}"}}&fields=id,type,supplier_id,remarks&limit=1`
+      );
+
+      const headers = headerRes.data || [];
+
+      if (headers.length === 0) {
+        return {
+          valid: false,
+          reason: "Could not find the original Stock IN header for this RFID.",
+        };
+      }
+
+      const header = headers[0];
+
+      // Must be a Stock IN
+      if ((header.type || "").toUpperCase() !== "IN") {
+        return {
+          valid: false,
+          reason: "RFID tag was not registered via a Stock IN transaction.",
+        };
+      }
+
+      // Resolve supplier_id – could be embedded in remarks as [SUPPLIER_ID: X]
+      let resolvedSupplierId: number | null = null;
+
+      const remarksMatch = String(header.remarks || "").match(
+        /\[SUPPLIER_ID:\s*(\d+)\]/
+      );
+      if (remarksMatch) {
+        resolvedSupplierId = Number(remarksMatch[1]);
+      } else if (header.supplier_id) {
+        resolvedSupplierId =
+          typeof header.supplier_id === "object"
+            ? Number(header.supplier_id?.id ?? 0)
+            : Number(header.supplier_id);
+      }
+
+      if (resolvedSupplierId !== supplierId) {
+        return {
+          valid: false,
+          reason: "RFID tag was registered under a different supplier.",
+        };
+      }
+
+      // All checks passed
+      return { valid: true };
+    } catch (error) {
+      console.error("Failed to validate RFID for Stock OUT:", error);
+      // Fail open to avoid blocking users due to network errors
+      return { valid: true };
+    }
+  },
+
+  /**
    * Create a new Stock Adjustment (Header + Items)
    */
   async create(payload: { header: Record<string, unknown>; items: StockAdjustmentItem[]; userId?: number }) {
@@ -554,6 +776,23 @@ export const stockAdjustmentService = {
       });
     }
 
+    if (header.stock_adjustment_attachment && Array.isArray(header.stock_adjustment_attachment) && (header.stock_adjustment_attachment as any[]).length > 0) {
+      const firstItemId = createdItems[0]?.id;
+      if (firstItemId) {
+        const atts = (header.stock_adjustment_attachment as any[]).map((att: any) => ({
+          stock_adjustment_id: firstItemId,
+          attachment: typeof att.attachment === 'object' ? (att.attachment as any).id : att.attachment,
+          created_by: payload.userId
+        }));
+        await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment_attachment`, {
+          method: "POST",
+          body: JSON.stringify(atts),
+        }).catch(err => console.error("Failed to save attachments:", err));
+      } else {
+        console.warn("No item id returned — attachments could not be linked.");
+      }
+    }
+
     return headerRes.data;
   },
 
@@ -581,11 +820,31 @@ export const stockAdjustmentService = {
       body: JSON.stringify(headerPayload),
     });
 
+    // 1. Fetch existing item IDs so we can delete their attachments first (FK cascade)
     const existingItemsRes = await directusFetch<{ data: { id: number }[] }>(
-      `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${payload.header.doc_no}"}}&fields=id`
+      `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${payload.header.doc_no}"}}&fields=id&limit=-1`
     );
     const itemIds = existingItemsRes.data.map((i: { id: number }) => i.id);
 
+    // 2. Delete old attachments using old item IDs (before items are deleted)
+    if (itemIds.length > 0) {
+      try {
+        const existingAttRes = await directusFetch<{ data: { id: number }[] }>(
+          `${DIRECTUS_URL}/items/stock_adjustment_attachment?filter={"stock_adjustment_id":{"_in":${JSON.stringify(itemIds)}}}&fields=id&limit=-1`
+        );
+        const attIds = existingAttRes.data.map(a => a.id);
+        if (attIds.length > 0) {
+          await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment_attachment`, {
+            method: "DELETE",
+            body: JSON.stringify(attIds),
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to delete old attachments during update:", err);
+      }
+    }
+
+    // 3. Delete old items
     if (itemIds.length > 0) {
       await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment`, {
         method: "DELETE",
@@ -632,6 +891,24 @@ export const stockAdjustmentService = {
       });
     }
 
+    // Save new attachments linked to first new item's id
+    if (payload.header.stock_adjustment_attachment && Array.isArray(payload.header.stock_adjustment_attachment) && (payload.header.stock_adjustment_attachment as any[]).length > 0) {
+      const firstItemId = createdItems[0]?.id;
+      if (firstItemId) {
+        const atts = (payload.header.stock_adjustment_attachment as any[]).map((att: any) => ({
+          stock_adjustment_id: firstItemId,
+          attachment: typeof att.attachment === 'object' ? (att.attachment as any).id : att.attachment,
+          created_by: payload.userId
+        }));
+        await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment_attachment`, {
+          method: "POST",
+          body: JSON.stringify(atts),
+        }).catch(err => console.error("Failed to update attachments:", err));
+      } else {
+        console.warn("No item id returned on update — attachments could not be linked.");
+      }
+    }
+
     return { success: true };
   },
 
@@ -658,9 +935,28 @@ export const stockAdjustmentService = {
     const docNo = headerRes.data.doc_no;
 
     const itemsRes = await directusFetch<{ data: { id: number }[] }>(
-      `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${docNo}"}}&fields=id`
+      `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${docNo}"}}&fields=id&limit=-1`
     );
     const itemIds = itemsRes.data.map((i: { id: number }) => i.id);
+
+    // Delete attachments using item IDs (FK references stock_adjustment.id)
+    if (itemIds.length > 0) {
+      try {
+        const attRes = await directusFetch<{ data: { id: number }[] }>(
+          `${DIRECTUS_URL}/items/stock_adjustment_attachment?filter={"stock_adjustment_id":{"_in":${JSON.stringify(itemIds)}}}&fields=id&limit=-1`
+        );
+        const attIds = attRes.data.map(a => a.id);
+        if (attIds.length > 0) {
+          await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment_attachment`, {
+            method: "DELETE",
+            body: JSON.stringify(attIds),
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to delete attachments during stock adjustment deletion:", err);
+      }
+    }
+
     if (itemIds.length > 0) {
       await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment`, {
         method: "DELETE",

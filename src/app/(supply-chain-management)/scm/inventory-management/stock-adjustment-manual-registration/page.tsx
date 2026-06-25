@@ -117,7 +117,7 @@ export default async function Page(props: {
             </header>
 
             <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4">
-                <StockAdjustmentManualRegistrationModule />
+                <StockAdjustmentManualRegistrationModule userFullName={headerUser.name} />
             </main>
         </div>
     );
