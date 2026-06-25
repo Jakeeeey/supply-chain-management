@@ -293,8 +293,21 @@ export const productRegistrationService = {
   /**
    * Check if a product name already exists in the master table.
    */
-  async checkDuplicateName(name: string): Promise<boolean> {
-    return skuQueryService.checkDuplicateName(name);
+  async checkDuplicateName(name: string, excludeId?: number | string): Promise<boolean> {
+    const filter = `filter[product_name][_eq]=${encodeURIComponent(name)}&limit=10`;
+    const [approved, drafts] = await Promise.all([
+      request<{ data: SKU[] }>(`${API_BASE_URL}/items/products?${filter}`),
+      request<{ data: SKU[] }>(`${API_BASE_URL}/items/product_draft?${filter}`),
+    ]);
+
+    const hasDuplicateInProducts = (approved.data || []).some(
+      (p) => String(p.id) !== String(excludeId)
+    );
+    const hasDuplicateInDrafts = (drafts.data || []).some(
+      (p) => String(p.id) !== String(excludeId) && String(p.product_id) !== String(excludeId)
+    );
+
+    return hasDuplicateInProducts || hasDuplicateInDrafts;
   },
 
   /**

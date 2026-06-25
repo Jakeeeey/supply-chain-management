@@ -33,6 +33,7 @@ export default function ProductRegistrationPage() {
     setPage,
     limit,
     setLimit,
+    search,
     setSearch,
     supplierFilter,
     setSupplierFilter,
@@ -69,6 +70,7 @@ export default function ProductRegistrationPage() {
   const [editingSKU, setEditingSKU] = useState<SKU | null>(null);
   const [updatingImageSKU, setUpdatingImageSKU] = useState<SKU | null>(null);
   const [viewingGallerySKU, setViewingGallerySKU] = useState<SKU | null>(null);
+  const [pendingSearch, setPendingSearch] = useState(search);
 
   // Creation modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -127,7 +129,7 @@ export default function ProductRegistrationPage() {
   const handleCreateSubmit = async (sku: SKU) => {
     const isDuplicate = await checkDuplicate(sku.product_name);
     if (isDuplicate) {
-      setDuplicateWarning({ open: true, sku });
+      toast.error("Product name already exists. Please choose a unique name.");
       return;
     }
     await processCreate(sku);
@@ -139,6 +141,13 @@ export default function ProductRegistrationPage() {
     id: number | string,
     productData: Partial<SKU>,
   ) => {
+    if (productData.product_name) {
+      const isDuplicate = await checkDuplicate(productData.product_name, id);
+      if (isDuplicate) {
+        toast.error("Product name already exists. Please choose a unique name.");
+        return;
+      }
+    }
     await updateProduct(id, productData);
     setEditingSKU(null);
   };
@@ -215,6 +224,7 @@ export default function ProductRegistrationPage() {
     supplier: string;
     status: string;
   }) => {
+    setSearch(pendingSearch);
     setCategoryFilter(values.category);
     setClassFilter(values.class);
     setSegmentFilter(values.segment);
@@ -226,6 +236,8 @@ export default function ProductRegistrationPage() {
   };
 
   const handleClearFilters = () => {
+    setPendingSearch("");
+    setSearch("");
     setCategoryFilter("");
     setClassFilter("");
     setSegmentFilter("");
@@ -285,13 +297,24 @@ export default function ProductRegistrationPage() {
         </Button>
       </div>
 
-      <FacetFilters
-        masterData={masterData}
-        filters={currentFilters}
-        onApply={handleApplyFilters}
-        onClear={handleClearFilters}
-        isLoading={isLoading}
-      />
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-2 max-w-sm">
+          <input
+            type="text"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            placeholder="Search products..."
+            value={pendingSearch}
+            onChange={(e) => setPendingSearch(e.target.value)}
+          />
+        </div>
+        <FacetFilters
+          masterData={masterData}
+          filters={currentFilters}
+          onApply={handleApplyFilters}
+          onClear={handleClearFilters}
+          isLoading={isLoading}
+        />
+      </div>
 
       <MasterlistTable
         title="Product Registry"
@@ -306,7 +329,6 @@ export default function ProductRegistrationPage() {
         parentImages={parentImages}
         pendingEditIds={new Set<number>()}
         isLoading={isLoading}
-        onSearch={handleSearch}
         onSelectionChange={setSelectedRows}
         onToggleStatus={(id, current) => toggleStatus(id, !current)}
         onEdit={setEditingSKU}
@@ -323,38 +345,6 @@ export default function ProductRegistrationPage() {
         onSubmit={handleCreateSubmit}
         loading={saving}
       />
-
-      {/* Duplicate Warning */}
-      <AlertDialog
-        open={duplicateWarning.open}
-        onOpenChange={(open) =>
-          setDuplicateWarning((prev) => ({ ...prev, open }))
-        }
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Duplicate Name Warning
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              A product with the name {duplicateWarning.sku?.product_name}{" "}
-              already exists in the system. Are you sure you want to create a
-              duplicate product?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() =>
-                duplicateWarning.sku && processCreate(duplicateWarning.sku)
-              }
-            >
-              Yes, Create Product
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Edit Product Modal */}
       <DirectEditModal

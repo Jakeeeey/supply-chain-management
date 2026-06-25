@@ -234,10 +234,10 @@ export function useProductRegistration() {
     }
   };
 
-  const checkDuplicate = async (name: string): Promise<boolean> => {
-    const response = await fetch(
-      `${API_PATH}?type=duplicate-check&name=${encodeURIComponent(name)}`,
-    );
+  const checkDuplicate = async (name: string, excludeId?: number | string): Promise<boolean> => {
+    let url = `${API_PATH}?type=duplicate-check&name=${encodeURIComponent(name)}`;
+    if (excludeId) url += `&excludeId=${excludeId}`;
+    const response = await fetch(url);
     const result = await response.json();
     if (result.error) throw new Error(result.error);
     return result.isDuplicate as boolean;

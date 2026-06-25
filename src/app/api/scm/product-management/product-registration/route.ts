@@ -16,7 +16,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     if (type === "duplicate-check") {
       const name = searchParams.get("name") || "";
-      const isDuplicate = await productRegistrationService.checkDuplicateName(name);
+      const excludeId = searchParams.get("excludeId") || undefined;
+      const isDuplicate = await productRegistrationService.checkDuplicateName(name, excludeId);
       return NextResponse.json({ isDuplicate });
     }
 
