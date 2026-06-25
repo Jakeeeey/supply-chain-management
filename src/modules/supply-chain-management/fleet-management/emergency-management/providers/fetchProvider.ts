@@ -3,6 +3,7 @@ import type {
   EmergencyReport,
   EmergencyReportPayload,
   EmergencyStatus,
+  DriverProfileResponse,
 } from "../types";
 
 export type EmergencyReportFilters = {
@@ -64,4 +65,10 @@ export async function updateEmergencyReportStatus(
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Failed to update emergency report");
   return data.report;
+}
+
+export async function fetchDriverProfile(): Promise<DriverProfileResponse> {
+  const res = await fetch("/api/scm/fleet-management/emergency-management/driver-profile");
+  if (!res.ok) throw new Error("Failed to load driver profile details");
+  return res.json();
 }

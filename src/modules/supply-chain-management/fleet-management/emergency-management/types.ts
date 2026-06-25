@@ -87,3 +87,29 @@ export type EmergencyReportPayload = {
   contact_name?: string | null;
   contact_phone?: string | null;
 };
+
+export type DriverProfileResponse = {
+  isDriver: boolean;
+  user: {
+    user_id: number;
+    user_fname?: string | null;
+    user_mname?: string | null;
+    user_lname?: string | null;
+    user_contact?: string | null;
+    user_email?: string | null;
+    name: string;
+  } | null;
+  driver: {
+    id: number;
+    user_id: number;
+    branch_id?: number | null;
+    bad_branch_id?: number | null;
+  } | null;
+  activeTrip: {
+    id: number;
+    doc_no: string;
+    status: string | null;
+    vehicle_id: number | null;
+    vehicle_plate: string | null;
+  } | null;
+};
