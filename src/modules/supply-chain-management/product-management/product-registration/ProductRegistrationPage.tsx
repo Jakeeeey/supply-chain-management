@@ -13,17 +13,7 @@ import { DirectEditModal } from "@/modules/supply-chain-management/product-manag
 import { SKUImageModal } from "@/modules/supply-chain-management/product-management/sku/sku-masterlist/components/modals/sku-image-modal";
 import { SKUGalleryModal } from "@/modules/supply-chain-management/product-management/sku/sku-masterlist/components/modals/sku-gallery-modal";
 import { FacetFilters } from "@/modules/supply-chain-management/product-management/sku/sku-masterlist/components/filters/FacetFilters";
-import { AlertTriangle, Plus, RefreshCcw } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { Plus, RefreshCcw } from "lucide-react";
 
 export default function ProductRegistrationPage() {
   const {
@@ -75,10 +65,6 @@ export default function ProductRegistrationPage() {
   // Creation modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [duplicateWarning, setDuplicateWarning] = useState<{
-    open: boolean;
-    sku: SKU | null;
-  }>({ open: false, sku: null });
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -95,14 +81,6 @@ export default function ProductRegistrationPage() {
     [setPage, setLimit],
   );
 
-  const handleSearch = useCallback(
-    (v: string) => {
-      setSearch(v);
-      setPage(0);
-    },
-    [setSearch, setPage],
-  );
-
   // ─── Creation Handlers ────────────────────────────────────────────────────
 
   const handleAdd = () => {
@@ -117,7 +95,6 @@ export default function ProductRegistrationPage() {
         description: `"${sku.product_name}" has been added to the masterlist.`,
       });
       setIsCreateModalOpen(false);
-      setDuplicateWarning({ open: false, sku: null });
     } catch (err: unknown) {
       toast.error("Creation failed: " + (err instanceof Error ? err.message : String(err)));
       throw err;
