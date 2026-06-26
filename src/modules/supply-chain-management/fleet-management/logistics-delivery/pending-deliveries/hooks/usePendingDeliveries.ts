@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { ClusterGroupRaw, TableRow, DateRange, ClusterFilterValue, SortConfig } from "../types";
 import { fetchPendingDeliveries } from "../providers/fetchProvider";
-import { toLocalDayKey, statusToBucket, checkDateRange, normalizeClusterFilter } from "../utils";
+import { toLocalDayKey, statusToBucket, checkDateRange, normalizeClusterFilter, getDateRangeBounds } from "../utils";
 
 export const usePendingDeliveries = () => {
     const [rawGroups, setRawGroups] = useState<ClusterGroupRaw[]>([]);
@@ -18,9 +18,13 @@ export const usePendingDeliveries = () => {
 
     useEffect(() => {
         const fetchData = async () => {
+            if (dateRange === "custom" && (!customDateFrom || !customDateTo)) {
+                return;
+            }
             setLoading(true);
             try {
-                const data = await fetchPendingDeliveries();
+                const bounds = getDateRangeBounds(dateRange, customDateFrom, customDateTo);
+                const data = await fetchPendingDeliveries(bounds.startDate, bounds.endDate);
                 setRawGroups(data);
             } catch (err) {
                 console.error(err);
@@ -30,7 +34,7 @@ export const usePendingDeliveries = () => {
             }
         };
         fetchData();
-    }, []);
+    }, [dateRange, customDateFrom, customDateTo]);
 
     const getGroupedRows = (
         data: ClusterGroupRaw[],
