@@ -11,6 +11,7 @@ interface FilterValues {
   brand: string;
   supplier: string;
   status: string;
+  uom?: string;
   search?: string;
 }
 
@@ -58,10 +59,11 @@ export const FacetFilters: React.FC<FacetFiltersProps> = ({
       <div className="w-[160px]"><Combobox options={makeOptions(masterData?.classes)} value={pending.class} onValueChange={(v) => handleChange('class', v)} placeholder="Class" disabled={isLoading} /></div>
       <div className="w-[160px]"><Combobox options={makeOptions(masterData?.segments)} value={pending.segment} onValueChange={(v) => handleChange('segment', v)} placeholder="Segment" disabled={isLoading} /></div>
       <div className="w-[140px]"><Combobox options={[{ value: "Regular", label: "Regular" }, { value: "Variant", label: "Variant" }]} value={pending.type} onValueChange={(v) => handleChange('type', v)} placeholder="Type" disabled={isLoading} /></div>
-      <div className="w-[130px]"><Combobox options={[{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }]} value={pending.status} onValueChange={(v) => handleChange('status', v)} placeholder="Status" disabled={isLoading} /></div>
-      <Button variant="default" size="sm" onClick={() => onApply(pending)} disabled={!hasChanges || isLoading} className="h-8">Apply</Button>
-      <Button variant="outline" size="sm" onClick={onClear} disabled={isClearDisabled || isLoading} className="h-8">Clear</Button>
-      </div>
+       <div className="w-[130px]"><Combobox options={[{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }]} value={pending.status} onValueChange={(v) => handleChange('status', v)} placeholder="Status" disabled={isLoading} /></div>
+       <div className="w-[130px]"><Combobox options={makeOptions(masterData?.units)} value={pending.uom || ''} onValueChange={(v) => handleChange('uom', v)} placeholder="UOM" disabled={isLoading} /></div>
+       <Button variant="default" size="sm" onClick={() => onApply(pending)} disabled={!hasChanges || isLoading} className="h-8">Apply</Button>
+       <Button variant="outline" size="sm" onClick={onClear} disabled={isClearDisabled || isLoading} className="h-8">Clear</Button>
+       </div>
       <div className="max-w-sm w-full">
         <input
           type="text"
@@ -69,6 +71,11 @@ export const FacetFilters: React.FC<FacetFiltersProps> = ({
           placeholder="Search product name..."
           value={pending.search || ''}
           onChange={(e) => handleChange('search', e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              onApply(pending);
+            }
+          }}
           disabled={isLoading}
         />
       </div>

@@ -33,6 +33,7 @@ export const productRegistrationService = {
       itemType?: string;
       brandId?: number;
       status?: string;
+      uomId?: number;
     },
   ): Promise<PaginatedSKU> {
     // Delegate to the existing skuQueryService.fetchApproved which already
@@ -100,7 +101,12 @@ export const productRegistrationService = {
       }
     }
 
-    const nowGMT = new Date().toISOString();
+    const getPHTTimeISO = (): string => {
+      const now = new Date();
+      const phtOffset = 8 * 60 * 60 * 1000;
+      return new Date(now.getTime() + phtOffset).toISOString().replace("Z", "+08:00");
+    };
+    const nowPHT = getPHTTimeISO();
 
     const createPayload = (
       u: {
@@ -123,10 +129,10 @@ export const productRegistrationService = {
       cost_per_unit: u.cost,
       barcode: u.barcode,
       product_code: code,
-      date_added: nowGMT,
-      last_updated: nowGMT,
-      created_at: nowGMT,
-      updated_at: nowGMT,
+      date_added: nowPHT,
+      last_updated: nowPHT,
+      created_at: nowPHT,
+      updated_at: nowPHT,
       // Note: created_by and updated_by are merged from baseData
     });
 
@@ -198,12 +204,17 @@ export const productRegistrationService = {
    * Restricted to editable fields: name, supplier, description, taxonomy.
    */
   async updateProduct(id: number | string, data: Partial<SKU>): Promise<SKU> {
-    const nowGMT = new Date().toISOString();
+    const getPHTTimeISO = (): string => {
+      const now = new Date();
+      const phtOffset = 8 * 60 * 60 * 1000;
+      return new Date(now.getTime() + phtOffset).toISOString().replace("Z", "+08:00");
+    };
+    const nowPHT = getPHTTimeISO();
     const { data: updated } = await request<{ data: SKU }>(
       `${API_BASE_URL}/items/products/${id}`,
       {
         method: "PATCH",
-        body: JSON.stringify({ ...data, last_updated: nowGMT }),
+        body: JSON.stringify({ ...data, last_updated: nowPHT }),
       },
     );
 

@@ -107,10 +107,16 @@ export function validateAndBuildPayload(
     }
 
     // 6. Build payload
+    const getPHTTimeISO = (): string => {
+        const now = new Date();
+        const phtOffset = 8 * 60 * 60 * 1000;
+        return new Date(now.getTime() + phtOffset).toISOString().replace("Z", "+08:00");
+    };
+
     const payload: UpdateBarcodeDTO = {
         barcode,
         barcode_type_id: parseInt(selectedBarcodeTypeId),
-        barcode_date: new Date().toISOString(),
+        barcode_date: getPHTTimeISO(),
         weight: parseFloat(dimensions.weight),
         weight_unit_id: parseInt(dimensions.weightUnit),
     };

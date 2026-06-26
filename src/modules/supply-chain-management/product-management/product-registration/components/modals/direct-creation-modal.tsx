@@ -50,8 +50,12 @@ export function DirectCreationModal({
             initialData={initialData}
             masterData={masterData}
             onSubmit={async (data) => {
-              await onSubmit(data);
-              setOpen(false);
+              try {
+                await onSubmit(data);
+                setOpen(false);
+              } catch (err) {
+                // Keep modal open on validation error
+              }
             }}
             loading={loading}
           />

@@ -655,11 +655,16 @@ export const bundleService = {
    * @param id - Draft bundle ID
    */
   async rejectDraft(id: number | string) {
+    const getPHTTimeISO = (): string => {
+      const now = new Date();
+      const phtOffset = 8 * 60 * 60 * 1000;
+      return new Date(now.getTime() + phtOffset).toISOString().replace("Z", "+08:00");
+    };
     await request(`${API_BASE_URL}/items/product_bundles_draft/${id}`, {
       method: "PATCH",
       body: JSON.stringify({
         draft_status: "REJECTED",
-        updated_at: new Date().toISOString(),
+        updated_at: getPHTTimeISO(),
       }),
     });
     return true;

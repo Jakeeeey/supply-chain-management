@@ -271,6 +271,42 @@ export const getMasterlistColumns = (
     },
   },
   {
+    accessorKey: "unit_of_measurement",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="UOM Type" />
+    ),
+    meta: { label: "UOM Type" },
+    cell: ({ row }) => {
+      const sku = row.original;
+      const uomValue = sku.unit_of_measurement;
+      let uomName = "Unassigned";
+      if (uomValue) {
+        if (typeof uomValue === "object" && uomValue !== null) {
+          const obj = uomValue as Record<string, unknown>;
+          uomName = String(obj.name || obj.unit_name || obj.unit_shortcut || "Unassigned");
+        } else {
+          const unit = masterData?.units?.find((u) => u.id === Number(uomValue));
+          uomName = unit?.name || "Unassigned";
+        }
+      }
+      return <span className="text-sm text-muted-foreground">{uomName}</span>;
+    },
+  },
+  {
+    accessorKey: "unit_of_measurement_count",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="UOM Count" />
+    ),
+    meta: { label: "UOM Count" },
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground">
+        {row.original.unit_of_measurement_count ?? "-"}
+      </span>
+    ),
+  },
+  {
     accessorKey: "isActive",
     enableSorting: true,
     header: ({ column }) => (
@@ -295,7 +331,6 @@ export const getMasterlistColumns = (
       const sku = row.original;
       const id = sku.id ?? sku.product_id;
       const active = sku.isActive === 1 || sku.isActive === true;
-      const isParent = !sku.parent_id;
 
       if (!onToggleStatus || id == null) return null;
 

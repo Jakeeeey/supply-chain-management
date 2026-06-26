@@ -39,6 +39,8 @@ export default function ProductRegistrationPage() {
     setBrandFilter,
     statusFilter,
     setStatusFilter,
+    uomFilter,
+    setUomFilter,
     sorting,
     setSorting,
     masterData,
@@ -106,7 +108,7 @@ export default function ProductRegistrationPage() {
     const isDuplicate = await checkDuplicate(sku.product_name);
     if (isDuplicate) {
       toast.error("Product name already exists. Please choose a unique name.");
-      return;
+      throw new Error("Duplicate product name");
     }
     await processCreate(sku);
   };
@@ -121,7 +123,7 @@ export default function ProductRegistrationPage() {
       const isDuplicate = await checkDuplicate(productData.product_name, id);
       if (isDuplicate) {
         toast.error("Product name already exists. Please choose a unique name.");
-        return;
+        throw new Error("Duplicate product name");
       }
     }
     await updateProduct(id, productData);
@@ -189,6 +191,7 @@ export default function ProductRegistrationPage() {
     brand: brandFilter,
     supplier: supplierFilter,
     status: statusFilter,
+    uom: uomFilter,
   };
 
   const handleApplyFilters = (values: {
@@ -199,6 +202,7 @@ export default function ProductRegistrationPage() {
     brand: string;
     supplier: string;
     status: string;
+    uom?: string;
     search?: string;
   }) => {
     setSearch(values.search || "");
@@ -209,6 +213,7 @@ export default function ProductRegistrationPage() {
     setBrandFilter(values.brand);
     setSupplierFilter(values.supplier);
     setStatusFilter(values.status);
+    setUomFilter(values.uom || "");
     setPage(0);
   };
 
@@ -221,6 +226,7 @@ export default function ProductRegistrationPage() {
     setBrandFilter("");
     setSupplierFilter("");
     setStatusFilter("");
+    setUomFilter("");
     setPage(0);
   };
 
@@ -278,7 +284,7 @@ export default function ProductRegistrationPage() {
         <FacetFilters
           masterData={masterData ? {
             ...masterData,
-            suppliers: masterData.suppliers.filter((s: any) => s.supplier_type === "TRADE"),
+            suppliers: masterData.suppliers.filter((s: { id: number; name: string; supplier_type?: string }) => s.supplier_type === "TRADE"),
           } : null}
           filters={{ ...currentFilters, search: search }}
           onApply={handleApplyFilters}
@@ -315,7 +321,7 @@ export default function ProductRegistrationPage() {
         setOpen={setIsCreateModalOpen}
         masterData={masterData ? {
           ...masterData,
-          suppliers: masterData.suppliers.filter((s: any) => s.supplier_type === "TRADE"),
+          suppliers: masterData.suppliers.filter((s: { id: number; name: string; supplier_type?: string }) => s.supplier_type === "TRADE"),
         } : null}
         onSubmit={handleCreateSubmit}
         loading={saving}
@@ -330,7 +336,7 @@ export default function ProductRegistrationPage() {
         isLoading={isUpdating}
         masterData={masterData ? {
           ...masterData,
-          suppliers: masterData.suppliers.filter((s: any) => s.supplier_type === "TRADE"),
+          suppliers: masterData.suppliers.filter((s: { id: number; name: string; supplier_type?: string }) => s.supplier_type === "TRADE"),
         } : null}
       />
 

@@ -65,8 +65,12 @@ export function DirectEditModal({
   const handleSave = async () => {
     if (!sku) return;
     const id = sku.id || sku.product_id;
-    await onSave(id!, formData);
-    onClose();
+    try {
+      await onSave(id!, formData);
+      onClose();
+    } catch (err) {
+      // Keep modal open on validation error
+    }
   };
 
   const isSaveDisabled =

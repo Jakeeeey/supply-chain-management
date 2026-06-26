@@ -30,6 +30,7 @@ export function useProductRegistration() {
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [brandFilter, setBrandFilter] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [uomFilter, setUomFilter] = useState<string>("");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [parentImages, setParentImages] = useState<Record<number, string | null>>({});
@@ -57,6 +58,7 @@ export function useProductRegistration() {
       if (typeFilter) filterParams.set("itemType", typeFilter);
       if (brandFilter) filterParams.set("brand", brandFilter);
       if (statusFilter) filterParams.set("status", statusFilter);
+      if (uomFilter) filterParams.set("uom", uomFilter);
 
       const [productsRes, masterRes] = await Promise.all([
         fetch(`${API_PATH}?${filterParams.toString()}`).then((res) => res.json()),
@@ -117,7 +119,7 @@ export function useProductRegistration() {
     } finally {
       setIsLoading(false);
     }
-  }, [limit, page, search, sorting, supplierFilter, categoryFilter, classFilter, segmentFilter, typeFilter, brandFilter, statusFilter]);
+  }, [limit, page, search, sorting, supplierFilter, categoryFilter, classFilter, segmentFilter, typeFilter, brandFilter, statusFilter, uomFilter]);
 
   // ─── Mutations ──────────────────────────────────────────────────────────────
 
@@ -272,6 +274,8 @@ export function useProductRegistration() {
     setBrandFilter,
     statusFilter,
     setStatusFilter,
+    uomFilter,
+    setUomFilter,
     sorting,
     setSorting,
     masterData,
