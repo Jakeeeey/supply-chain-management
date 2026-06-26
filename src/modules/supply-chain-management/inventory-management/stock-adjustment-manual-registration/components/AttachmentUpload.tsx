@@ -260,14 +260,34 @@ export function AttachmentUpload({
               >
                 Close
               </Button>
-              <a
-                href={previewFile.url}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => {
+                  if (previewFile.isImage) {
+                    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${previewFile.filename}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; background: #18181b; display: flex; align-items: center; justify-content: center; }
+    img { max-width: 95vw; max-height: 95vh; object-fit: contain; border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,0.6); }
+  </style>
+</head>
+<body><img src="${previewFile.url}" alt="${previewFile.filename}" /></body>
+</html>`;
+                    const newTab = window.open("", "_blank");
+                    if (newTab) { newTab.document.write(html); newTab.document.close(); }
+                  } else {
+                    window.open(previewFile.url, "_blank", "noopener,noreferrer");
+                  }
+                }}
                 className="inline-flex items-center justify-center h-9 px-4 rounded-md text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm gap-2"
               >
                 Open in New Tab
-              </a>
+              </button>
             </div>
           </DialogContent>
         </Dialog>

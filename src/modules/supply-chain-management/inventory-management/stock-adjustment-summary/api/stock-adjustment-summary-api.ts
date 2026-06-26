@@ -2,14 +2,14 @@ import { SummaryFilters } from "../types/stock-adjustment-summary.types";
 
 export const stockAdjustmentSummaryApi = {
   async fetchBranches() {
-    const res = await fetch("/api/scm/inventory-management/stock-adjustment-summary/branches");
+    const res = await fetch("/api/scm/inventory-management/stock-adjustment-registration/branches");
     if (!res.ok) throw new Error("Failed to fetch branches");
     const json = await res.json();
     return json.data || [];
   },
 
   async fetchSuppliers() {
-    const res = await fetch("/api/scm/inventory-management/stock-adjustment-summary/suppliers");
+    const res = await fetch("/api/scm/inventory-management/stock-adjustment-registration/suppliers");
     if (!res.ok) throw new Error("Failed to fetch suppliers");
     const json = await res.json();
     return json.data || [];

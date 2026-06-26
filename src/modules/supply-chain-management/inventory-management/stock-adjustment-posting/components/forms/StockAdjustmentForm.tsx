@@ -18,8 +18,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  ClipboardList,
-  Paperclip
+  ClipboardList
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ProductSelectionModal } from "../modals/ProductSelectionModal";
@@ -55,8 +54,6 @@ import {
   ComboboxItem,
   ComboboxEmpty,
 } from "@/components/ui/combobox";
-import { AttachmentUpload } from "@/modules/supply-chain-management/inventory-management/stock-adjustment-registration/components/AttachmentUpload";
-
 
 // ——————————————————————————————————————————————————————————————————————————————
 interface StockAdjustmentFormProps {
@@ -73,7 +70,6 @@ interface StockAdjustmentFormProps {
 interface ItemRowProps {
   index: number;
   control: Control<StockAdjustmentFormValues>;
-  onRemove: (index: number) => void;
   setValue: UseFormSetValue<StockAdjustmentFormValues>;
   isReadOnly?: boolean;
 }
@@ -81,7 +77,6 @@ interface ItemRowProps {
 const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   index,
   control,
-  onRemove,
   setValue,
   isReadOnly = false,
 }: ItemRowProps) {
@@ -123,11 +118,11 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
           </span>
         </div>
       </td>
-      <td className="p-3 w-40">
+      <td className="p-3 w-40 text-center">
         {isReadOnly ? (
-          <span className="text-xs font-bold px-3 py-1 bg-muted rounded-md border border-border/50">{quantity}</span>
+          <span className="text-xs font-bold px-3 py-1 bg-muted rounded-md border border-border/50 inline-block text-center min-w-10">{quantity}</span>
         ) : (
-          <div className="flex items-center gap-0 w-min bg-background border border-border rounded-md overflow-hidden">
+          <div className="flex items-center gap-0 w-min bg-background border border-border rounded-md overflow-hidden mx-auto">
             <button 
               type="button"
               className="w-7 h-7 flex items-center justify-center hover:bg-muted text-muted-foreground disabled:opacity-50 transition-colors"
@@ -157,27 +152,13 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
           </div>
         )}
         {rowError?.quantity && (
-          <p className="text-[10px] text-red-500 font-bold mt-1">{rowError.quantity.message}</p>
+          <p className="text-[10px] text-red-500 font-bold mt-1 text-center">{rowError.quantity.message}</p>
         )}
       </td>
       <td className="p-3">
         <span className="text-xs font-bold text-primary dark:text-primary/70">
           ₱{Number(totalCost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
-      </td>
-      <td className="p-3 text-center w-16">
-        {!isReadOnly && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => onRemove(index)}
-            className="h-7 w-7 rounded-full text-red-400/50 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all mx-auto"
-            title="Remove item"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        )}
       </td>
     </tr>
   );
@@ -1140,13 +1121,12 @@ export function StockAdjustmentForm({
                           <th className="p-3">UOM</th>
                           <th className="p-3 w-40 text-center">Qty</th>
                           <th className="p-3">Net Total</th>
-                          <th className="p-3 text-center w-16">Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {paginatedFields.length === 0 && tableSearch ? (
                           <tr>
-                            <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                            <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
                               No products found matching &quot;{tableSearch}&quot;.
                             </td>
                           </tr>
@@ -1156,7 +1136,6 @@ export function StockAdjustmentForm({
                               key={field.id}
                               index={index}
                               control={form.control}
-                              onRemove={(idx) => setDeletingIndex(idx)}
                               setValue={form.setValue}
                               isReadOnly={isReadOnly}
                             />
@@ -1240,27 +1219,7 @@ export function StockAdjustmentForm({
               </CardContent>
             </Card>
 
-            {/* Attachments Card */}
-            <Card className="border border-border/50 shadow-sm bg-card border-border/40 mb-6">
-              <CardHeader className="bg-card border-b border-border/50 py-4 px-6">
-                <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                  <Paperclip className="h-4 w-4 text-primary" />
-                  Attachments
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <AttachmentUpload
-                  value={form.watch("stock_adjustment_attachment") || []}
-                  onChange={(atts) => form.setValue("stock_adjustment_attachment", atts, { shouldValidate: true })}
-                  disabled={isReadOnly}
-                />
-                {form.formState.errors.stock_adjustment_attachment?.message && (
-                  <p className="text-xs text-red-500 font-bold mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                    {String(form.formState.errors.stock_adjustment_attachment.message)}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+
 
             {/* Action Workspace buttons */}
             <div className="flex items-center justify-end gap-3 pb-8">

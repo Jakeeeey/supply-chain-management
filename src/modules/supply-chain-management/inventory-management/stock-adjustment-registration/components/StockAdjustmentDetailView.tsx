@@ -17,8 +17,13 @@ import {
   Tag,
   Image as ImageIcon
 } from "lucide-react";
+import { AttachmentViewerModal } from "../../stock-adjustment-posting/components/modals/AttachmentViewerModal";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { PdfEngine } from "@/components/pdf-layout-design/PdfEngine";
+import { pdfTemplateService } from "@/components/pdf-layout-design/services/pdf-template";
+import { PAPER_SIZES } from "@/components/pdf-layout-design/constants";
+import { CompanyData } from "@/components/pdf-layout-design/types";
 import { useStockAdjustmentForm } from "../hooks/useStockAdjustmentForm";
 import {
   StockAdjustmentDetail as DetailType,
@@ -46,10 +51,19 @@ interface StockAdjustmentDetailProps {
   isModal?: boolean;
 }
 
+interface ActiveAttachment {
+  fileUrl: string;
+  filename?: string;
+  isImage?: boolean;
+}
+
 export function StockAdjustmentDetailView({ id, onBack, mode = "creation", isModal = false }: StockAdjustmentDetailProps) {
   const { fetchById } = useStockAdjustmentForm();
   const [data, setData] = useState<DetailType | null>(null);
   const [loading, setLoading] = useState(true);
+  const [companyData, setCompanyData] = useState<CompanyData | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [activeAttachment, setActiveAttachment] = useState<ActiveAttachment | null>(null);
 
   useEffect(() => {
     const loadDetails = async () => {
@@ -66,6 +80,22 @@ export function StockAdjustmentDetailView({ id, onBack, mode = "creation", isMod
     loadDetails();
   }, [id, fetchById]);
 
+  useEffect(() => {
+    const fetchCompanyData = async () => {
+      try {
+        const res = await fetch("/api/pdf/company");
+        if (res.ok) {
+          const result = await res.json();
+          const company = result.data?.[0] || (Array.isArray(result.data) ? null : result.data);
+          setCompanyData(company);
+        }
+      } catch (err) {
+        console.error("Error fetching company data:", err);
+      }
+    };
+    fetchCompanyData();
+  }, []);
+
   if (loading) {
     return (
       <div className="p-6 space-y-6 max-w-7xl mx-auto w-full">
@@ -80,152 +110,175 @@ export function StockAdjustmentDetailView({ id, onBack, mode = "creation", isMod
 
   const isPosted = isPostedStatus(data.isPosted);
 
-  const generatePDF = () => {
+  const generatePDF = async () => {
     if (!data) return;
 
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
+    // --- Find Best Match Template (similar to generatePoPdf) ---
+    const templates = await pdfTemplateService.fetchTemplates();
+    const template = templates.find(t => t.name === "MEN2") 
+                 || templates.find(t => t.name.toLowerCase().includes("men2")) 
+                 || templates[0];
+    const templateName = template?.name || "MEN2";
 
-    // --- Header ---
-    doc.setFontSize(18);
-    doc.setTextColor(37, 99, 235); // enterprise-blue
-    doc.text("STOCK ADJUSTMENT SLIP", pageWidth / 2, 15, { align: "center" });
+    const doc = await PdfEngine.generateWithFrame(templateName, companyData, (doc, startY, config) => {
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margins = config.margins || { top: 10, bottom: 10, left: 10, right: 10 };
 
-    doc.setDrawColor(37, 99, 235);
-    doc.setLineWidth(0.5);
-    doc.line(pageWidth / 2 - 12, 18, pageWidth / 2 + 12, 18);
+      // --- Title ---
+      const titleY = startY + 5;
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(37, 99, 235); // enterprise-blue
+      doc.text("STOCK ADJUSTMENT SLIP", pageWidth / 2, titleY, { align: "center" });
 
-    // --- Metadata Section ---
-    doc.setFontSize(9);
-    doc.setTextColor(100, 116, 139);
+      doc.setDrawColor(37, 99, 235);
+      doc.setLineWidth(0.5);
+      doc.line(pageWidth / 2 - 40, titleY + 3, pageWidth / 2 + 40, titleY + 3);
 
-    // Left Column
-    doc.setFont("helvetica", "bold");
-    doc.text("Document No:", 20, 30);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(15, 23, 42);
-    doc.text(data.doc_no || "-", 50, 30);
+      // --- Metadata Section ---
+      const metaY = titleY + 10;
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
 
-    doc.setTextColor(100, 116, 139);
-    doc.setFont("helvetica", "bold");
-    doc.text("Date Created:", 20, 36);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(15, 23, 42);
-    doc.text(data.created_at ? format(new Date(data.created_at), "yyyy-MM-dd h:mm a") : "-", 50, 36);
+      // Left Column
+      doc.setFont("helvetica", "bold");
+      doc.text("Document No:", margins.left, metaY);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(15, 23, 42);
+      doc.text(data.doc_no || "-", margins.left + 30, metaY);
 
-    // Right Column
-    doc.setTextColor(100, 116, 139);
-    doc.setFont("helvetica", "bold");
-    doc.text("Branch:", 110, 30);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(15, 23, 42);
-    const branchName = typeof data.branch_id === 'object' ? data.branch_id?.branch_name : data.branch_id || "Main Warehouse";
-    doc.text(String(branchName).toUpperCase(), 145, 30);
+      doc.setTextColor(100, 116, 139);
+      doc.setFont("helvetica", "bold");
+      doc.text("Date Created:", margins.left, metaY + 6);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(15, 23, 42);
+      doc.text(data.created_at ? format(new Date(data.created_at), "yyyy-MM-dd h:mm a") : "-", margins.left + 30, metaY + 6);
 
-    doc.setTextColor(100, 116, 139);
-    doc.setFont("helvetica", "bold");
-    doc.text("Adjustment Type:", 110, 36);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(data.type === 'IN' ? 22 : 185, data.type === 'IN' ? 101 : 28, data.type === 'IN' ? 52 : 28);
-    const adjTypeFull = data.type === 'IN' ? 'Stock In' : data.type === 'OUT' ? 'Stock Out' : (data.type || "-");
-    doc.text(adjTypeFull, 145, 36);
+      // Right Column
+      const rightColX = pageWidth / 2 + 10;
+      doc.setTextColor(100, 116, 139);
+      doc.setFont("helvetica", "bold");
+      doc.text("Branch:", rightColX, metaY);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(15, 23, 42);
+      const branchName = typeof data.branch_id === 'object' ? data.branch_id?.branch_name : data.branch_id || "Main Warehouse";
+      doc.text(String(branchName).toUpperCase(), rightColX + 35, metaY);
 
-    // --- Product Table ---
-    const tableRows = data.items?.map((item) => {
-      const product = (item.product_id as unknown as StockAdjustmentProduct) || {};
-      const unitPrice = item.cost_per_unit || product.price_per_unit || 0;
-      const totalAmount = (item.quantity || 0) * unitPrice;
+      doc.setTextColor(100, 116, 139);
+      doc.setFont("helvetica", "bold");
+      doc.text("Adjustment Type:", rightColX, metaY + 6);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(data.type === 'IN' ? 22 : 185, data.type === 'IN' ? 101 : 28, data.type === 'IN' ? 52 : 28);
+      const adjTypeFull = data.type === 'IN' ? 'Stock In' : data.type === 'OUT' ? 'Stock Out' : (data.type || "-");
+      doc.text(adjTypeFull, rightColX + 35, metaY + 6);
+
+      // --- Product Table ---
+      const tableRows = data.items?.map((item) => {
+        const product = (item.product_id as unknown as StockAdjustmentProduct) || {};
+        const unitPrice = item.cost_per_unit || product.price_per_unit || 0;
+        const totalAmount = (item.quantity || 0) * unitPrice;
+        
+        return [
+          item.brand_name || "N/A",
+          `${product.product_name || "Unknown"}\n(${product.product_code || "N/A"})`,
+          item.quantity || 0,
+          `PHP ${unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          `PHP ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        ];
+      }) || [];
+
+      // Calculate dynamic bottom margin based on Body End indicator
+      const baseSize = config.paperSize === 'Custom' ? config.customSize : (PAPER_SIZES[config.paperSize] || PAPER_SIZES.A4);
+      const paperHeight = config.orientation === 'landscape' ? baseSize.width : baseSize.height;
+      const bottomMargin = config.bodyEnd ? (paperHeight - config.bodyEnd) : margins.bottom;
+
+      autoTable(doc, {
+        startY: metaY + 12,
+        margin: { ...margins, bottom: bottomMargin },
+        head: [["Brand", "Product Name", "Qty", "Unit Price", "Total Amount"]],
+        body: tableRows,
+        headStyles: { fillColor: [248, 250, 252], textColor: [71, 85, 105], fontSize: 8, fontStyle: 'bold' },
+        bodyStyles: { fontSize: 7, textColor: [30, 41, 59] },
+        columnStyles: {
+          0: { halign: 'left', cellWidth: 35 },
+          1: { halign: 'left' },
+          2: { halign: 'center', cellWidth: 20 },
+          3: { halign: 'right', cellWidth: 25 },
+          4: { halign: 'right', fontStyle: 'bold', cellWidth: 30 }
+        },
+        theme: 'grid',
+        styles: { cellPadding: 1.5 }
+      });
+
+      const finalY = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 100) + 8;
+
+      // --- Totals & Remarks Section ---
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.setFont("helvetica", "normal");
+      doc.text("Total Adjusted Amount", pageWidth - margins.right, finalY, { align: 'right' });
+
+      // Remarks on the left
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.setFont("helvetica", "bold");
+      doc.text("REMARKS:", margins.left, finalY);
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(30, 41, 59);
+      const remarks = data.remarks || "N/A";
+      const splitRemarks = doc.splitTextToSize(remarks.toUpperCase(), 100);
+      doc.text(splitRemarks, margins.left, finalY + 5);
+
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 58, 138);
+      const formattedAmount = Math.abs(data.amount || 0).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+      doc.text(`PHP ${formattedAmount}`, pageWidth - margins.right, finalY + 7, { align: 'right' });
+
+      // --- Signatures Section ---
+      let sigY = finalY + 25;
+
+      if (sigY + 20 > paperHeight) {
+        doc.addPage();
+        sigY = 30;
+      }
+
+      // --- Signatures Section ---
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.3);
+      doc.line(margins.left, sigY - 5, pageWidth - margins.right, sigY - 5);
+
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.setFont("helvetica", "normal");
+
+      doc.setLineWidth(0.2);
+      doc.setDrawColor(148, 163, 184);
       
-      return [
-        item.brand_name || "N/A",
-        `${product.product_name || "Unknown"}\n(${product.product_code || "N/A"})`,
-        item.quantity || 0,
-        `PHP ${unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        `PHP ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-      ];
-    }) || [];
+      // Prepared By
+      doc.text("PREPARED BY:", margins.left, sigY);
+      doc.line(margins.left, sigY + 12, margins.left + 50, sigY + 12);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42);
+      const createdBy = typeof data.created_by === 'object' ? `${data.created_by?.user_fname} ${data.created_by?.user_lname}` : data.created_by || "System";
+      doc.text(createdBy, margins.left, sigY + 10);
 
-    autoTable(doc, {
-      startY: 45,
-      head: [["Brand", "Product Name", "Qty", "Unit Price", "Total Amount"]],
-      body: tableRows,
-      headStyles: { fillColor: [248, 250, 252], textColor: [71, 85, 105], fontSize: 8, fontStyle: 'bold' },
-      bodyStyles: { fontSize: 7, textColor: [30, 41, 59] },
-      columnStyles: {
-        0: { halign: 'left', cellWidth: 35 },
-        1: { cellWidth: 60 },
-        2: { halign: 'center', cellWidth: 20 },
-        3: { halign: 'right', cellWidth: 25 },
-        4: { halign: 'right', fontStyle: 'bold', cellWidth: 30 }
-      },
-      theme: 'grid',
-      styles: { cellPadding: 1.5 }
+      // Approved By
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 116, 139);
+      doc.text("APPROVED BY:", pageWidth / 2 - 25, sigY);
+      doc.line(pageWidth / 2 - 25, sigY + 12, pageWidth / 2 + 25, sigY + 12);
+
+      // Received By
+      doc.text("RECEIVED BY:", pageWidth - margins.right - 50, sigY);
+      doc.line(pageWidth - margins.right - 50, sigY + 12, pageWidth - margins.right, sigY + 12);
     });
-
-    const finalY = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 100) + 8;
-
-    // --- Totals & Remarks Section ---
-    doc.setFontSize(9);
-    doc.setTextColor(100, 116, 139);
-    doc.setFont("helvetica", "normal");
-    doc.text("Total Adjusted Amount", pageWidth - 20, finalY, { align: 'right' });
-
-    // Remarks on the left
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-    doc.setFont("helvetica", "bold");
-    doc.text("REMARKS:", 20, finalY);
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "italic");
-    doc.setTextColor(30, 41, 59);
-    const remarks = data.remarks || "N/A";
-    const splitRemarks = doc.splitTextToSize(remarks.toUpperCase(), 100);
-    doc.text(splitRemarks, 20, finalY + 5);
-
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(30, 58, 138);
-    const formattedAmount = Math.abs(data.amount || 0).toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
-    doc.text(formattedAmount, pageWidth - 20, finalY + 7, { align: 'right' });
-
-    // --- Signatures Section ---
-    const pageHeight = doc.internal.pageSize.getHeight();
-    let sigY = finalY + 25;
-
-    if (sigY + 20 > pageHeight) {
-      doc.addPage();
-      sigY = 30;
-    }
-
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-    doc.setFont("helvetica", "normal");
-    
-    doc.setLineWidth(0.2);
-    doc.setDrawColor(148, 163, 184);
-    
-    // Prepared By
-    doc.text("PREPARED BY:", 20, sigY);
-    doc.line(20, sigY + 12, 70, sigY + 12);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(15, 23, 42);
-    const createdBy = typeof data.created_by === 'object' ? `${data.created_by?.user_fname} ${data.created_by?.user_lname}` : data.created_by || "System";
-    doc.text(createdBy, 20, sigY + 10);
-
-    // Approved By
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(100, 116, 139);
-    doc.text("APPROVED BY:", pageWidth / 2 - 25, sigY);
-    doc.line(pageWidth / 2 - 25, sigY + 12, pageWidth / 2 + 25, sigY + 12);
-
-    // Received By
-    doc.text("RECEIVED BY:", pageWidth - 70, sigY);
-    doc.line(pageWidth - 70, sigY + 12, pageWidth - 20, sigY + 12);
 
     doc.save(`StockAdjustment_${data.doc_no}.pdf`);
   };
@@ -370,12 +423,14 @@ export function StockAdjustmentDetailView({ id, onBack, mode = "creation", isMod
 
                         return (
                           <div key={idx} className="flex items-center justify-between p-3 bg-muted/10 border border-border/40 rounded-xl shadow-xs hover:bg-muted/20 transition-colors">
-                            <a
-                              href={fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-3 flex-1 min-w-0 text-left bg-transparent border-none p-0 focus:outline-none"
-                              title="Click to view file in new tab"
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveAttachment({ fileUrl, filename, isImage });
+                                setViewerOpen(true);
+                              }}
+                              className="flex items-center gap-3 flex-1 min-w-0 text-left bg-transparent border-none p-0 cursor-pointer focus:outline-none"
+                              title="Click to view file"
                             >
                               <div className="h-9 w-9 shrink-0 bg-primary/5 rounded-lg flex items-center justify-center text-primary">
                                 {isImage ? <ImageIcon className="h-4.5 w-4.5" /> : <FileText className="h-4.5 w-4.5" />}
@@ -393,7 +448,7 @@ export function StockAdjustmentDetailView({ id, onBack, mode = "creation", isMod
                                   </span>
                                 </div>
                               </div>
-                            </a>
+                            </button>
                           </div>
                         );
                       })}
@@ -543,6 +598,17 @@ export function StockAdjustmentDetailView({ id, onBack, mode = "creation", isMod
           </div>
         </div>
       </div>
+
+      {/* Attachment Viewer Modal */}
+      {activeAttachment && (
+        <AttachmentViewerModal
+          open={viewerOpen}
+          fileUrl={activeAttachment.fileUrl}
+          filename={activeAttachment.filename}
+          isImage={activeAttachment.isImage}
+          onClose={() => setViewerOpen(false)}
+        />
+      )}
     </div>
   );
 }
