@@ -1,3 +1,5 @@
+import { formatInTimeZone } from "@/modules/supply-chain-management/product-management/utils/timezone";
+
 /**
  * Normalizes raw master data from various Directus collections into a standard format
  */
@@ -34,6 +36,7 @@ export const prepareSKUPayload = (
   draft: Record<string, unknown>,
   pMasterId?: number | null,
   code?: string,
+  dbTime?: string,
 ) => {
   /* eslint-disable @typescript-eslint/no-unused-vars */
   const {
@@ -48,12 +51,7 @@ export const prepareSKUPayload = (
   /* eslint-enable @typescript-eslint/no-unused-vars */
 
   const payload = restPayload as Record<string, unknown>;
-  const getPHTTimeISO = (): string => {
-    const now = new Date();
-    const phtOffset = 8 * 60 * 60 * 1000;
-    return new Date(now.getTime() + phtOffset).toISOString().replace("Z", "+08:00");
-  };
-  const nowPHT = getPHTTimeISO();
+  const nowPHT = dbTime || formatInTimeZone(new Date(), "Asia/Manila");
 
   return {
     ...payload,

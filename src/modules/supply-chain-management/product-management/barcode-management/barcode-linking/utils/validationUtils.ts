@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { Product, RefData, UpdateBarcodeDTO } from "../types";
 import { validateEAN13, validateCode128 } from "./barcodeUtils";
+import { formatInTimeZone } from "../../../utils/timezone";
 
 interface ValidationInput {
     barcode: string;
@@ -18,6 +19,7 @@ interface ValidationInput {
     product: Product | null;
     allBarcodes: { product_id: string; barcode: string; product_name: string }[];
     allProducts: Product[];
+    dbTime?: string;
 }
 
 /**
@@ -37,6 +39,7 @@ export function validateAndBuildPayload(
         product,
         allBarcodes,
         allProducts,
+        dbTime,
     } = input;
 
     // 1. Barcode required
@@ -107,16 +110,10 @@ export function validateAndBuildPayload(
     }
 
     // 6. Build payload
-    const getPHTTimeISO = (): string => {
-        const now = new Date();
-        const phtOffset = 8 * 60 * 60 * 1000;
-        return new Date(now.getTime() + phtOffset).toISOString().replace("Z", "+08:00");
-    };
-
     const payload: UpdateBarcodeDTO = {
         barcode,
         barcode_type_id: parseInt(selectedBarcodeTypeId),
-        barcode_date: getPHTTimeISO(),
+        barcode_date: dbTime || formatInTimeZone(new Date(), "Asia/Manila"),
         weight: parseFloat(dimensions.weight),
         weight_unit_id: parseInt(dimensions.weightUnit),
     };

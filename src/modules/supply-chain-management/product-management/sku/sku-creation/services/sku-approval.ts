@@ -5,6 +5,7 @@ import {
 import { prepareSKUPayload } from "../utils/sku-mapper";
 import { API_BASE_URL, fetchItems, request } from "./sku-api";
 import { generateSKUCode } from "./sku-generator";
+import { getDatabaseTimeISO } from "@/modules/supply-chain-management/product-management/utils/timezone";
 
 /**
  * Private helper: resolves the master product ID of a draft's parent.
@@ -63,7 +64,8 @@ async function upsertMasterProduct(
   const targetId = existing?.[0]?.id || existing?.[0]?.product_id;
   const resolvedPMasterId =
     typeof pMasterId === "string" ? parseInt(pMasterId) : pMasterId;
-  const payload = prepareSKUPayload(draft, resolvedPMasterId, code);
+  const dbTime = await getDatabaseTimeISO();
+  const payload = prepareSKUPayload(draft, resolvedPMasterId, code, dbTime);
 
   if (targetId) {
     await request(`${API_BASE_URL}/items/products/${targetId}`, {

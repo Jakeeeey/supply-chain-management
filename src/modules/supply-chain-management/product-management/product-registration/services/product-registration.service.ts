@@ -3,10 +3,12 @@ import {
   PaginatedSKU,
   SKU,
 } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
+import fs from "fs";
 import { API_BASE_URL, fetchItems, request } from "@/modules/supply-chain-management/product-management/sku/sku-creation/services/sku-api";
 import { generateSKUCode } from "@/modules/supply-chain-management/product-management/sku/sku-creation/services/sku-generator";
 import { skuQueryService } from "@/modules/supply-chain-management/product-management/sku/sku-creation/services/sku-query";
 import { CellHelpers } from "@/modules/supply-chain-management/product-management/sku/sku-creation/utils/sku-helpers";
+import { getDatabaseTimeISO } from "@/modules/supply-chain-management/product-management/utils/timezone";
 
 /**
  * Product Registration Service — Direct master product creation.
@@ -101,12 +103,7 @@ export const productRegistrationService = {
       }
     }
 
-    const getPHTTimeISO = (): string => {
-      const now = new Date();
-      const phtOffset = 8 * 60 * 60 * 1000;
-      return new Date(now.getTime() + phtOffset).toISOString().replace("Z", "+08:00");
-    };
-    const nowPHT = getPHTTimeISO();
+    const nowPHT = await getDatabaseTimeISO();
 
     const createPayload = (
       u: {
@@ -204,12 +201,7 @@ export const productRegistrationService = {
    * Restricted to editable fields: name, supplier, description, taxonomy.
    */
   async updateProduct(id: number | string, data: Partial<SKU>): Promise<SKU> {
-    const getPHTTimeISO = (): string => {
-      const now = new Date();
-      const phtOffset = 8 * 60 * 60 * 1000;
-      return new Date(now.getTime() + phtOffset).toISOString().replace("Z", "+08:00");
-    };
-    const nowPHT = getPHTTimeISO();
+    const nowPHT = await getDatabaseTimeISO();
     const { data: updated } = await request<{ data: SKU }>(
       `${API_BASE_URL}/items/products/${id}`,
       {
@@ -314,20 +306,27 @@ export const productRegistrationService = {
       }),
     ]);
 
+    try {
+      const gs = await fetchItems<any>("/items/general_setting");
+      fs.writeFileSync("c:\\Users\\Eulysis\\Documents\\supply-chain-management\\db-log.txt", JSON.stringify(gs, null, 2));
+    } catch (e) {
+      fs.writeFileSync("c:\\Users\\Eulysis\\Documents\\supply-chain-management\\db-log.txt", "ERROR: " + String(e));
+    }
+
     const approved = approvedRes.data || [];
     const drafts = draftsRes.data || [];
 
     const hasDuplicateInProducts = approved.some(
       (p) => {
         if (excludeId && (String(p.id) === String(excludeId) || String(p.product_id) === String(excludeId))) return false;
-        if (excludeId && p.parent_id && (String(p.parent_id) === String(excludeId) || (typeof p.parent_id === "object" && String((p.parent_id as any).id) === String(excludeId)))) return false;
+        if (excludeId && p.parent_id && (String(p.parent_id) === String(excludeId) || (typeof p.parent_id === "object" && String((p.parent_id as { id?: number | string }).id) === String(excludeId)))) return false;
         return !p.parent_id;
       }
     );
     const hasDuplicateInDrafts = drafts.some(
       (p) => {
         if (excludeId && (String(p.id) === String(excludeId) || String(p.product_id) === String(excludeId))) return false;
-        if (excludeId && p.parent_id && (String(p.parent_id) === String(excludeId) || (typeof p.parent_id === "object" && String((p.parent_id as any).id) === String(excludeId)))) return false;
+        if (excludeId && p.parent_id && (String(p.parent_id) === String(excludeId) || (typeof p.parent_id === "object" && String((p.parent_id as { id?: number | string }).id) === String(excludeId)))) return false;
         return !p.parent_id;
       }
     );
