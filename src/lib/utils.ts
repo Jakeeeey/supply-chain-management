@@ -24,7 +24,6 @@ export function formatDateLong(d: Date, locale: string = "en-PH"): string {
     year: "numeric",
     month: "long",
     day: "2-digit",
-    timeZone: "Asia/Manila",
   }).format(d);
 }
 
@@ -35,7 +34,6 @@ export function formatDateTime(d: Date, locale: string = "en-PH"): string {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "Asia/Manila",
   }).format(d);
 }
 

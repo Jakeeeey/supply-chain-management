@@ -306,12 +306,6 @@ export const productRegistrationService = {
       }),
     ]);
 
-    try {
-      const gs = await fetchItems<any>("/items/general_setting");
-      fs.writeFileSync("c:\\Users\\Eulysis\\Documents\\supply-chain-management\\db-log.txt", JSON.stringify(gs, null, 2));
-    } catch (e) {
-      fs.writeFileSync("c:\\Users\\Eulysis\\Documents\\supply-chain-management\\db-log.txt", "ERROR: " + String(e));
-    }
 
     const approved = approvedRes.data || [];
     const drafts = draftsRes.data || [];
