@@ -54,6 +54,7 @@ import {
   ComboboxItem,
   ComboboxEmpty,
 } from "@/components/ui/combobox";
+import { AttachmentUpload } from "@/modules/supply-chain-management/inventory-management/stock-adjustment-registration/components/AttachmentUpload";
 
 // ——————————————————————————————————————————————————————————————————————————————
 interface StockAdjustmentFormProps {

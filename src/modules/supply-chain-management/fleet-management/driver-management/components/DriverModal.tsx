@@ -22,6 +22,8 @@ import {
     CommandList,
 } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -36,6 +38,33 @@ interface DriverModalProps {
     branches: Branch[];
     drivers: DriverWithDetails[];
     onSuccess: () => void;
+    driverContactFieldsSupported: boolean;
+}
+
+type ContactForm = {
+    contact_phone: string;
+    contact_email: string;
+    contact_address: string;
+    emergency_contact_name: string;
+    emergency_contact_relationship: string;
+    emergency_contact_phone: string;
+    emergency_contact_address: string;
+};
+
+const EMPTY_CONTACT_FORM: ContactForm = {
+    contact_phone: "",
+    contact_email: "",
+    contact_address: "",
+    emergency_contact_name: "",
+    emergency_contact_relationship: "",
+    emergency_contact_phone: "",
+    emergency_contact_address: "",
+};
+
+function hasValidOptionalEmail(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) return true;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
 }
 
 export function DriverModal({
@@ -46,11 +75,13 @@ export function DriverModal({
     branches,
     drivers,
     onSuccess,
+    driverContactFieldsSupported,
 }: DriverModalProps) {
     const [loading, setLoading] = React.useState(false);
     const [selectedUserId, setSelectedUserId] = React.useState<string>("");
     const [selectedGoodBranchId, setSelectedGoodBranchId] = React.useState<string>("");
     const [selectedBadBranchId, setSelectedBadBranchId] = React.useState<string>("");
+    const [contactForm, setContactForm] = React.useState<ContactForm>(EMPTY_CONTACT_FORM);
 
     const [userOpen, setUserOpen] = React.useState(false);
     const [goodBranchOpen, setGoodBranchOpen] = React.useState(false);
@@ -96,12 +127,26 @@ export function DriverModal({
             setSelectedUserId(editingDriver.user_id.toString());
             setSelectedGoodBranchId(editingDriver.branch_id.toString());
             setSelectedBadBranchId(editingDriver.bad_branch_id?.toString() || "none");
+            setContactForm({
+                contact_phone: editingDriver.contact_phone || "",
+                contact_email: editingDriver.contact_email || "",
+                contact_address: editingDriver.contact_address || "",
+                emergency_contact_name: editingDriver.emergency_contact_name || "",
+                emergency_contact_relationship: editingDriver.emergency_contact_relationship || "",
+                emergency_contact_phone: editingDriver.emergency_contact_phone || "",
+                emergency_contact_address: editingDriver.emergency_contact_address || "",
+            });
         } else {
             setSelectedUserId("");
             setSelectedGoodBranchId("");
             setSelectedBadBranchId("none");
+            setContactForm(EMPTY_CONTACT_FORM);
         }
     }, [editingDriver, isOpen]);
+
+    const updateContactField = (field: keyof ContactForm, value: string) => {
+        setContactForm((prev) => ({ ...prev, [field]: value }));
+    };
 
     // Memoize user options - exclude already assigned users unless editing
     const userOptions = React.useMemo((): { value: string; label: string }[] => {
@@ -141,12 +186,18 @@ export function DriverModal({
             return;
         }
 
+        if (driverContactFieldsSupported && !hasValidOptionalEmail(contactForm.contact_email)) {
+            toast.error("Please enter a valid contact email");
+            return;
+        }
+
         setLoading(true);
         try {
             const driverData = {
                 user_id: parseInt(selectedUserId),
                 branch_id: parseInt(selectedGoodBranchId),
                 bad_branch_id: selectedBadBranchId !== "none" ? parseInt(selectedBadBranchId) : null,
+                ...(driverContactFieldsSupported ? contactForm : {}),
             };
 
             if (editingDriver) {
@@ -169,7 +220,7 @@ export function DriverModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-md max-h-[90vh] p-0 flex flex-col rounded-2xl border-white/10 overflow-hidden">
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] p-0 flex flex-col rounded-2xl border-white/10 overflow-hidden">
                 <DialogHeader className="p-6 pb-2 shrink-0 border-b">
                     <DialogTitle className="text-2xl font-bold">
                         {editingDriver ? "Edit Driver" : "Add Driver"}
@@ -321,6 +372,120 @@ export function DriverModal({
                                 {badBranches.length} bad branch(es) available (Optional)
                             </p>
                         </div>
+
+                        {driverContactFieldsSupported && (
+                            <>
+                                {/* Contact Information */}
+                                <div className="space-y-4 rounded-xl border border-border/70 bg-muted/10 p-4">
+                                    <div>
+                                        <h3 className="text-sm font-bold uppercase tracking-wider text-foreground/80">
+                                            Contact Information
+                                        </h3>
+                                        <p className="text-xs text-muted-foreground/60 font-medium">
+                                            Driver-specific contact details for dispatch coordination.
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold uppercase tracking-wider text-foreground/70">
+                                                Phone
+                                            </label>
+                                            <Input
+                                                value={contactForm.contact_phone}
+                                                onChange={(e) => updateContactField("contact_phone", e.target.value)}
+                                                placeholder="Enter phone number"
+                                                className="h-10 rounded-lg"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold uppercase tracking-wider text-foreground/70">
+                                                Email
+                                            </label>
+                                            <Input
+                                                type="email"
+                                                value={contactForm.contact_email}
+                                                onChange={(e) => updateContactField("contact_email", e.target.value)}
+                                                placeholder="Enter email address"
+                                                className="h-10 rounded-lg"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold uppercase tracking-wider text-foreground/70">
+                                            Address
+                                        </label>
+                                        <Textarea
+                                            value={contactForm.contact_address}
+                                            onChange={(e) => updateContactField("contact_address", e.target.value)}
+                                            placeholder="Enter address"
+                                            className="min-h-20 rounded-lg resize-none"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Emergency Contact Information */}
+                                <div className="space-y-4 rounded-xl border border-border/70 bg-muted/10 p-4">
+                                    <div>
+                                        <h3 className="text-sm font-bold uppercase tracking-wider text-foreground/80">
+                                            Emergency Contact Information
+                                        </h3>
+                                        <p className="text-xs text-muted-foreground/60 font-medium">
+                                            Optional emergency details for driver records.
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold uppercase tracking-wider text-foreground/70">
+                                                Contact Name
+                                            </label>
+                                            <Input
+                                                value={contactForm.emergency_contact_name}
+                                                onChange={(e) => updateContactField("emergency_contact_name", e.target.value)}
+                                                placeholder="Enter contact name"
+                                                className="h-10 rounded-lg"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold uppercase tracking-wider text-foreground/70">
+                                                Relationship
+                                            </label>
+                                            <Input
+                                                value={contactForm.emergency_contact_relationship}
+                                                onChange={(e) => updateContactField("emergency_contact_relationship", e.target.value)}
+                                                placeholder="Enter relationship"
+                                                className="h-10 rounded-lg"
+                                            />
+                                        </div>
+                                        <div className="space-y-2 md:col-span-2">
+                                            <label className="text-xs font-bold uppercase tracking-wider text-foreground/70">
+                                                Phone
+                                            </label>
+                                            <Input
+                                                value={contactForm.emergency_contact_phone}
+                                                onChange={(e) => updateContactField("emergency_contact_phone", e.target.value)}
+                                                placeholder="Enter emergency phone number"
+                                                className="h-10 rounded-lg"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold uppercase tracking-wider text-foreground/70">
+                                            Address
+                                        </label>
+                                        <Textarea
+                                            value={contactForm.emergency_contact_address}
+                                            onChange={(e) => updateContactField("emergency_contact_address", e.target.value)}
+                                            placeholder="Enter emergency contact address"
+                                            className="min-h-20 rounded-lg resize-none"
+                                        />
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </form>
                 </div>
 

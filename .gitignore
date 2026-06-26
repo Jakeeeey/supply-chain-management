@@ -42,3 +42,8 @@ next-env.d.ts
 /.idea/
 
 /.agents/
+
+# agents and vaults
+/AGENTS.md
+/backup/
+/scm-vault/

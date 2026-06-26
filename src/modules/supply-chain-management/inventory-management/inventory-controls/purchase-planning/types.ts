@@ -16,6 +16,7 @@ export interface PlanningRow {
     expectedSelloutBoxes?: number;
     currentStockBoxes?: number;
     inTransitBoxes?: number;
+    inTransitDetails?: string;
     computedPricePerBox?: number;
     monthlyForecast?: MonthlyForecast;
     isManual?: boolean;
