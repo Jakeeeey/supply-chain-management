@@ -13,6 +13,7 @@ import { generateEAN13, generateCode128, detectBarcodeType } from "../utils/barc
 import { validateAndBuildPayload } from "../utils/validationUtils";
 import { ProfileStep } from "./ProfileStep";
 import { AssignmentStep } from "./AssignmentStep";
+import { formatInTimeZone } from "../../../utils/timezone";
 
 interface ScannerModalProps {
   open: boolean;
@@ -24,6 +25,7 @@ interface ScannerModalProps {
   cbmUnits: RefData[];
   onClose: () => void;
   onSave: (data: UpdateBarcodeDTO) => Promise<void>;
+  timezone: string;
 }
 
 export function ScannerModal({
@@ -36,6 +38,7 @@ export function ScannerModal({
   cbmUnits,
   onClose,
   onSave,
+  timezone,
 }: ScannerModalProps) {
   const [step, setStep] = useState<"profile" | "assignment">("profile");
   const [barcode, setBarcodeRaw] = useState("");
@@ -131,6 +134,7 @@ export function ScannerModal({
   };
 
   const handleSave = async () => {
+    const currentDbTime = formatInTimeZone(new Date(), timezone);
     const payload = validateAndBuildPayload({
       barcode,
       selectedBarcodeTypeId,
@@ -140,6 +144,7 @@ export function ScannerModal({
       product,
       allBarcodes,
       allProducts,
+      dbTime: currentDbTime,
     });
 
     if (!payload) return;

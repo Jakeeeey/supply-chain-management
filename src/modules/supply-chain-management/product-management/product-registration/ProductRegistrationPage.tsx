@@ -13,17 +13,7 @@ import { DirectEditModal } from "@/modules/supply-chain-management/product-manag
 import { SKUImageModal } from "@/modules/supply-chain-management/product-management/sku/sku-masterlist/components/modals/sku-image-modal";
 import { SKUGalleryModal } from "@/modules/supply-chain-management/product-management/sku/sku-masterlist/components/modals/sku-gallery-modal";
 import { FacetFilters } from "@/modules/supply-chain-management/product-management/sku/sku-masterlist/components/filters/FacetFilters";
-import { AlertTriangle, Plus, RefreshCcw } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { Plus, RefreshCcw } from "lucide-react";
 
 export default function ProductRegistrationPage() {
   const {
@@ -33,6 +23,7 @@ export default function ProductRegistrationPage() {
     setPage,
     limit,
     setLimit,
+    search,
     setSearch,
     supplierFilter,
     setSupplierFilter,
@@ -48,6 +39,8 @@ export default function ProductRegistrationPage() {
     setBrandFilter,
     statusFilter,
     setStatusFilter,
+    uomFilter,
+    setUomFilter,
     sorting,
     setSorting,
     masterData,
@@ -73,10 +66,6 @@ export default function ProductRegistrationPage() {
   // Creation modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [duplicateWarning, setDuplicateWarning] = useState<{
-    open: boolean;
-    sku: SKU | null;
-  }>({ open: false, sku: null });
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -93,14 +82,6 @@ export default function ProductRegistrationPage() {
     [setPage, setLimit],
   );
 
-  const handleSearch = useCallback(
-    (v: string) => {
-      setSearch(v);
-      setPage(0);
-    },
-    [setSearch, setPage],
-  );
-
   // ─── Creation Handlers ────────────────────────────────────────────────────
 
   const handleAdd = () => {
@@ -115,7 +96,6 @@ export default function ProductRegistrationPage() {
         description: `"${sku.product_name}" has been added to the masterlist.`,
       });
       setIsCreateModalOpen(false);
-      setDuplicateWarning({ open: false, sku: null });
     } catch (err: unknown) {
       toast.error("Creation failed: " + (err instanceof Error ? err.message : String(err)));
       throw err;
@@ -127,8 +107,8 @@ export default function ProductRegistrationPage() {
   const handleCreateSubmit = async (sku: SKU) => {
     const isDuplicate = await checkDuplicate(sku.product_name);
     if (isDuplicate) {
-      setDuplicateWarning({ open: true, sku });
-      return;
+      toast.error("Product name already exists. Please choose a unique name.");
+      throw new Error("Duplicate product name");
     }
     await processCreate(sku);
   };
@@ -139,6 +119,13 @@ export default function ProductRegistrationPage() {
     id: number | string,
     productData: Partial<SKU>,
   ) => {
+    if (productData.product_name) {
+      const isDuplicate = await checkDuplicate(productData.product_name, id);
+      if (isDuplicate) {
+        toast.error("Product name already exists. Please choose a unique name.");
+        throw new Error("Duplicate product name");
+      }
+    }
     await updateProduct(id, productData);
     setEditingSKU(null);
   };
@@ -204,6 +191,7 @@ export default function ProductRegistrationPage() {
     brand: brandFilter,
     supplier: supplierFilter,
     status: statusFilter,
+    uom: uomFilter,
   };
 
   const handleApplyFilters = (values: {
@@ -214,7 +202,10 @@ export default function ProductRegistrationPage() {
     brand: string;
     supplier: string;
     status: string;
+    uom?: string;
+    search?: string;
   }) => {
+    setSearch(values.search || "");
     setCategoryFilter(values.category);
     setClassFilter(values.class);
     setSegmentFilter(values.segment);
@@ -222,10 +213,12 @@ export default function ProductRegistrationPage() {
     setBrandFilter(values.brand);
     setSupplierFilter(values.supplier);
     setStatusFilter(values.status);
+    setUomFilter(values.uom || "");
     setPage(0);
   };
 
   const handleClearFilters = () => {
+    setSearch("");
     setCategoryFilter("");
     setClassFilter("");
     setSegmentFilter("");
@@ -233,6 +226,7 @@ export default function ProductRegistrationPage() {
     setBrandFilter("");
     setSupplierFilter("");
     setStatusFilter("");
+    setUomFilter("");
     setPage(0);
   };
 
@@ -285,13 +279,19 @@ export default function ProductRegistrationPage() {
         </Button>
       </div>
 
-      <FacetFilters
-        masterData={masterData}
-        filters={currentFilters}
-        onApply={handleApplyFilters}
-        onClear={handleClearFilters}
-        isLoading={isLoading}
-      />
+      <div className="flex flex-col gap-4">
+
+        <FacetFilters
+          masterData={masterData ? {
+            ...masterData,
+            suppliers: masterData.suppliers.filter((s: { id: number; name: string; supplier_type?: string }) => s.supplier_type === "TRADE"),
+          } : null}
+          filters={{ ...currentFilters, search: search }}
+          onApply={handleApplyFilters}
+          onClear={handleClearFilters}
+          isLoading={isLoading}
+        />
+      </div>
 
       <MasterlistTable
         title="Product Registry"
@@ -302,11 +302,11 @@ export default function ProductRegistrationPage() {
         onPaginationChange={handlePagination}
         sorting={sorting}
         onSortingChange={setSorting}
+        hideSearch={true}
         masterData={masterData}
         parentImages={parentImages}
         pendingEditIds={new Set<number>()}
         isLoading={isLoading}
-        onSearch={handleSearch}
         onSelectionChange={setSelectedRows}
         onToggleStatus={(id, current) => toggleStatus(id, !current)}
         onEdit={setEditingSKU}
@@ -319,42 +319,13 @@ export default function ProductRegistrationPage() {
       <DirectCreationModal
         open={isCreateModalOpen}
         setOpen={setIsCreateModalOpen}
-        masterData={masterData}
+        masterData={masterData ? {
+          ...masterData,
+          suppliers: masterData.suppliers.filter((s: { id: number; name: string; supplier_type?: string }) => s.supplier_type === "TRADE"),
+        } : null}
         onSubmit={handleCreateSubmit}
         loading={saving}
       />
-
-      {/* Duplicate Warning */}
-      <AlertDialog
-        open={duplicateWarning.open}
-        onOpenChange={(open) =>
-          setDuplicateWarning((prev) => ({ ...prev, open }))
-        }
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Duplicate Name Warning
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              A product with the name {duplicateWarning.sku?.product_name}{" "}
-              already exists in the system. Are you sure you want to create a
-              duplicate product?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() =>
-                duplicateWarning.sku && processCreate(duplicateWarning.sku)
-              }
-            >
-              Yes, Create Product
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Edit Product Modal */}
       <DirectEditModal
@@ -363,7 +334,10 @@ export default function ProductRegistrationPage() {
         onClose={() => setEditingSKU(null)}
         onSave={handleSaveProduct}
         isLoading={isUpdating}
-        masterData={masterData}
+        masterData={masterData ? {
+          ...masterData,
+          suppliers: masterData.suppliers.filter((s: { id: number; name: string; supplier_type?: string }) => s.supplier_type === "TRADE"),
+        } : null}
       />
 
       {/* Image Update Modal */}
