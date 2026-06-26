@@ -3,7 +3,6 @@ import {
   PaginatedSKU,
   SKU,
 } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
-import fs from "fs";
 import { API_BASE_URL, fetchItems, request } from "@/modules/supply-chain-management/product-management/sku/sku-creation/services/sku-api";
 import { generateSKUCode } from "@/modules/supply-chain-management/product-management/sku/sku-creation/services/sku-generator";
 import { skuQueryService } from "@/modules/supply-chain-management/product-management/sku/sku-creation/services/sku-query";
