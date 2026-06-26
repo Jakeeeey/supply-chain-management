@@ -301,21 +301,35 @@ export const productRegistrationService = {
     });
   },
 
-  /**
-   * Check if a product name already exists in the master table.
-   */
   async checkDuplicateName(name: string, excludeId?: number | string): Promise<boolean> {
-    const filter = `filter[product_name][_eq]=${encodeURIComponent(name)}&limit=10`;
-    const [approved, drafts] = await Promise.all([
-      request<{ data: SKU[] }>(`${API_BASE_URL}/items/products?${filter}`),
-      request<{ data: SKU[] }>(`${API_BASE_URL}/items/product_draft?${filter}`),
+    const trimmedName = name.trim();
+    const [approvedRes, draftsRes] = await Promise.all([
+      fetchItems<SKU>("/items/products", {
+        filter: JSON.stringify({ product_name: { _eq: trimmedName } }),
+        limit: 100,
+      }),
+      fetchItems<SKU>("/items/product_draft", {
+        filter: JSON.stringify({ product_name: { _eq: trimmedName } }),
+        limit: 100,
+      }),
     ]);
 
-    const hasDuplicateInProducts = (approved.data || []).some(
-      (p) => String(p.id) !== String(excludeId)
+    const approved = approvedRes.data || [];
+    const drafts = draftsRes.data || [];
+
+    const hasDuplicateInProducts = approved.some(
+      (p) => {
+        if (excludeId && (String(p.id) === String(excludeId) || String(p.product_id) === String(excludeId))) return false;
+        if (excludeId && p.parent_id && (String(p.parent_id) === String(excludeId) || (typeof p.parent_id === "object" && String((p.parent_id as any).id) === String(excludeId)))) return false;
+        return !p.parent_id;
+      }
     );
-    const hasDuplicateInDrafts = (drafts.data || []).some(
-      (p) => String(p.id) !== String(excludeId) && String(p.product_id) !== String(excludeId)
+    const hasDuplicateInDrafts = drafts.some(
+      (p) => {
+        if (excludeId && (String(p.id) === String(excludeId) || String(p.product_id) === String(excludeId))) return false;
+        if (excludeId && p.parent_id && (String(p.parent_id) === String(excludeId) || (typeof p.parent_id === "object" && String((p.parent_id as any).id) === String(excludeId)))) return false;
+        return !p.parent_id;
+      }
     );
 
     return hasDuplicateInProducts || hasDuplicateInDrafts;

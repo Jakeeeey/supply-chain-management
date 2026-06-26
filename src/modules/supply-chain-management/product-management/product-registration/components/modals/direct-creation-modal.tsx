@@ -53,7 +53,7 @@ export function DirectCreationModal({
               try {
                 await onSubmit(data);
                 setOpen(false);
-              } catch (err) {
+              } catch {
                 // Keep modal open on validation error
               }
             }}

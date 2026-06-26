@@ -68,7 +68,7 @@ export function DirectEditModal({
     try {
       await onSave(id!, formData);
       onClose();
-    } catch (err) {
+    } catch {
       // Keep modal open on validation error
     }
   };
