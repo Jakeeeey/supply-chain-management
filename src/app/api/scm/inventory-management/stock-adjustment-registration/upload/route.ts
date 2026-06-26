@@ -44,9 +44,22 @@ export async function POST(req: NextRequest) {
     if (folderId) {
       uploadFormData.append("folder", folderId);
     }
-    // Copy all remaining fields from original formData
+    // Copy all remaining fields from original formData, eagerly reading File objects
     for (const [key, value] of formData.entries()) {
-      uploadFormData.append(key, value);
+      if (
+        value &&
+        typeof value === "object" &&
+        "arrayBuffer" in value &&
+        typeof (value as { arrayBuffer: unknown }).arrayBuffer === "function"
+      ) {
+        const file = value as unknown as File;
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const blob = new Blob([buffer], { type: file.type });
+        uploadFormData.append(key, blob, file.name);
+      } else {
+        uploadFormData.append(key, value);
+      }
     }
 
     const response = await fetch(`${DIRECTUS_URL}/files`, {
