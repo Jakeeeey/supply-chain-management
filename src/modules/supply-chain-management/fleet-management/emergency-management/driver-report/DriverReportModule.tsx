@@ -121,7 +121,7 @@ export default function DriverReportModule() {
         vehicle_id: profile.activeTrip?.vehicle_id || null,
         driver_user_id: profile.user?.user_id || null,
         dispatch_plan_id: profile.activeTrip?.id || null,
-        occurred_at: new Date().toISOString(),
+        occurred_at: new Date(new Date().getTime() + 8 * 60 * 60 * 1000).toISOString().replace("Z", ""),
         location_name: locationName,
         latitude: coords.lat,
         longitude: coords.lon,

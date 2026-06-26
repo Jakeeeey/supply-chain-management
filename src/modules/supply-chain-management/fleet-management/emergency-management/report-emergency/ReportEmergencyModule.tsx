@@ -37,7 +37,11 @@ function defaultForm(): FormState {
     vehicle_id: NONE,
     driver_user_id: NONE,
     dispatch_plan_id: NONE,
-    occurred_at: new Date().toISOString().slice(0, 16),
+    occurred_at: (() => {
+      const now = new Date();
+      const offset = now.getTimezoneOffset() * 60000;
+      return new Date(now.getTime() - offset).toISOString().slice(0, 16);
+    })(),
     location_name: "",
     description: "",
     immediate_action_taken: "",
