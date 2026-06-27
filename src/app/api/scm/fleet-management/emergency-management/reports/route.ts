@@ -35,6 +35,7 @@ const REPORT_FIELDS = [
   "resolution_notes",
   "resolved_at",
   "cancelled_reason",
+  "attachments",
   "created_at",
   "updated_at",
 ] as const;
@@ -269,6 +270,7 @@ export async function POST(request: NextRequest) {
       resolution_notes: null,
       resolved_at: null,
       cancelled_reason: null,
+      attachments: asNullableString(body.attachments),
       created_at: now,
       updated_at: now,
     };

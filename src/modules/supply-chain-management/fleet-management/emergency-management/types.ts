@@ -39,6 +39,7 @@ export type EmergencyReport = {
   resolution_notes: string | null;
   resolved_at: string | null;
   cancelled_reason: string | null;
+  attachments: string | null;
   created_at: string;
   updated_at: string | null;
   vehicle?: VehicleOption | null;
