@@ -518,21 +518,22 @@ export function UpdateSalesReturnModal({
       const result = await SalesReturnProvider.lookupRfid(cleanedTag, branchId);
 
       if (result?.isOnInventory) {
-        if (Number(result.currentBranchId) === Number(branchId)) {
+        const itemProductId = selectedRow.product_id || selectedRow.productId;
+        if (Number(result.productId) !== Number(itemProductId)) {
           setLastScannedRfid("");
-          toast.error("Already in Stock", {
-            description: "This item is already in the branch's inventory. Sales Return is not allowed for on-hand items.",
-            duration: 5000,
-          });
-          return;
-        } else {
-          setLastScannedRfid("");
-          toast.error("Invalid Branch Location", {
-            description: `This product belongs to ${result.currentBranchName || 'another branch'}. It cannot be returned to the selected salesman's branch.`,
+          toast.error("Product Mismatch", {
+            description: "This RFID tag belongs to a different product on-hand in inventory.",
             duration: 5000,
           });
           return;
         }
+
+        setLastScannedRfid("");
+        toast.error("Already in Stock", {
+          description: "This item is already in the branch's inventory. Sales Return is not allowed for on-hand items.",
+          duration: 5000,
+        });
+        return;
       }
 
       // 3. Local Duplicate Check
