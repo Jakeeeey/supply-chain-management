@@ -79,7 +79,7 @@ export function TagRFIDStep() {
         return () => clearTimeout(timer);
     }, [scanError, setRfid]);
 
-    // Construct all products in PO allocations (excluding expectedQty <= 0)
+    // Construct all products in PO allocations (keeping all items visible)
     const allItems = React.useMemo(() => {
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
         return allocs.flatMap((a) => {
@@ -89,8 +89,7 @@ export function TagRFIDStep() {
                     ...it,
                     porId: String(it.porId || it.id),
                     branchName: a?.branch?.name ?? "Unassigned",
-                }))
-                .filter((it) => Number(it.expectedQty || 0) > 0 || it.isExtra);
+                }));
         });
     }, [selectedPO]);
 
@@ -310,11 +309,11 @@ export function TagRFIDStep() {
                                     </tr>
                                 ) : (
                                     activeProducts.map((p) => {
-                                        const expected = Number(p.expectedQty || 0);
-                                        const target = expected > 0 ? expected : 1;
-                                        const scanned = safeCounts[p.porId] || 0;
-                                        const isDone = scanned >= target;
-                                        const isOver = expected > 0 && scanned > expected;
+                                        const expected = p.isExtra ? 0 : Number(p.originalOrderedQty ?? p.expectedQty ?? 0);
+                                        const target = expected;
+                                        const scanned = Number(p.taggedQty || 0) + (safeCounts[p.porId] || 0);
+                                        const isDone = p.isExtra ? true : scanned >= target;
+                                        const isOver = !p.isExtra && scanned > target;
 
                                         return (
                                             <tr 

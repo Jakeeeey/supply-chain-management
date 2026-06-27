@@ -25,6 +25,7 @@ export type ReceivingPOItem = {
     uom: string;
     uomCount?: number;
     expectedQty: number;
+    originalOrderedQty?: number;
     receivedQty: number;
     requiresRfid: true;
     taggedQty: number;

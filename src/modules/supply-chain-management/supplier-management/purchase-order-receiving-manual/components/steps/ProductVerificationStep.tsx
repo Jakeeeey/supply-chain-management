@@ -46,27 +46,7 @@ export function ProductVerificationStep({ onContinue, onBack }: { onContinue: ()
             }));
         }).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
-        return all.filter(item => {
-            const ordered = Number(item.originalOrderedQty ?? item.expectedQty ?? 0);
-            const posted = Number(item.postedQty ?? 0);
-            const unposted = Number(item.unpostedQty ?? 0);
-            const trueRemaining = Math.max(0, ordered - posted - unposted);
-
-            if (editingReceiptId) {
-                // Edit mode: show items IN this receipt + items with remaining balance
-                const inThisReceipt = (item.unpostedReceipts || []).some(
-                    (r: { receiptNo: string }) => r.receiptNo === editingReceiptId
-                );
-                const isNewOrInThisReceipt = item.isExtra && (!(item.unpostedReceipts && item.unpostedReceipts.length > 0) || inThisReceipt);
-                return inThisReceipt || trueRemaining > 0 || isNewOrInThisReceipt;
-            } else {
-                // New receipt mode: show items with a true remaining balance, OR newly added extras,
-                // OR items that have existing unposted receipts (allowing for over-delivery in separate receipts)
-                const isNewlyAddedExtra = item.isExtra && !(item.unpostedReceipts && item.unpostedReceipts.length > 0);
-                const hasExistingUnposted = (item.unpostedReceipts || []).length > 0;
-                return trueRemaining > 0 || isNewlyAddedExtra || hasExistingUnposted;
-            }
-        });
+        return all;
     }, [selectedPO, editingReceiptId]);
 
     const allItems = React.useMemo(() => {

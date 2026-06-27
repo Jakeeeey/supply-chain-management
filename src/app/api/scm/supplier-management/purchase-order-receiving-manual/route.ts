@@ -81,11 +81,14 @@ function deriveDiscountPercentFromCode(codeRaw: string): number {
 
 function keyLine(poId: number, productId: number, branchId: number) { return `${poId}::${productId}::${branchId}`; }
 function nowISO() {
-    const date = new Date();
-    const phOffset = 8 * 60; // 8 hours in minutes
-    const localOffset = date.getTimezoneOffset(); // in minutes
-    const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
-    return phTime.toISOString().replace("Z", "");
+    const d = new Date();
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+    });
+    return formatter.format(d).replace(' ', 'T') + 'Z';
 }
 
 interface DiscountLine {
@@ -578,20 +581,17 @@ export async function POST(req: NextRequest) {
 
                 const porIdStr = draftRow ? String(draftRow.purchase_order_product_id) : `${pid}-${bid}`;
 
-                // ✅ Include if there is still a true remaining balance, OR unposted receipts, OR draft data from revert
-                if (trueRemaining > 0 || unpostedReceipts.length > 0 || hasDraftData) {
-                    const existing = allocationsMap.get(bid) || [];
-                    allocationsMap.set(bid, [...existing, {
-                        id: porIdStr, porId: draftRow ? String(draftRow.purchase_order_product_id) : "",
-                        productId: String(pid), branchId: String(bid), name: toStr(p?.product_name, `Product #${pid}`),
-                        barcode: productDisplayCode(p, pid), uom: String(p?.unit_of_measurement?.unit_shortcut ?? "BOX").toUpperCase(),
-                        expectedQty: orderedQty, originalOrderedQty: orderedQty,
-                        postedQty, unpostedQty, unpostedReceipts,
-                        receivedQty: postedQty + unpostedQty, requiresRfid: false,
-                        isReceived: false, unitPrice: toNum(ln.unit_price),
-                        discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: 0
-                    }]);
-                }
+                const existing = allocationsMap.get(bid) || [];
+                allocationsMap.set(bid, [...existing, {
+                    id: porIdStr, porId: draftRow ? String(draftRow.purchase_order_product_id) : "",
+                    productId: String(pid), branchId: String(bid), name: toStr(p?.product_name, `Product #${pid}`),
+                    barcode: productDisplayCode(p, pid), uom: String(p?.unit_of_measurement?.unit_shortcut ?? "BOX").toUpperCase(),
+                    expectedQty: orderedQty, originalOrderedQty: orderedQty,
+                    postedQty, unpostedQty, unpostedReceipts,
+                    receivedQty: postedQty + unpostedQty, requiresRfid: false,
+                    isReceived: false, unitPrice: toNum(ln.unit_price),
+                    discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: 0
+                }]);
             }
 
             const lineKeys = new Set(lines.map(l => keyLine(toNum(po.purchase_order_id), toNum(l.product_id), toNum(l.branch_id ?? 0))));
@@ -1075,7 +1075,7 @@ export async function POST(req: NextRequest) {
                 const ordered = toNum(ln.ordered_quantity);
                 const startingBalance = Math.max(0, ordered - prevRecQty);
 
-                if (currRecQty <= 0 && startingBalance <= 0) continue; // Skip if nothing happened and nothing expected
+
 
                 const lineDiscountTypeId = linksMap.get(pid)?.discount_type;
                 let lineDiscountPercent = poDiscountPercent;

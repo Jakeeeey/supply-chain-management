@@ -63,11 +63,14 @@ function toNum(v: unknown): number {
     return Number.isFinite(n) ? n : 0;
 }
 function nowISO() {
-    const date = new Date();
-    const phOffset = 8 * 60; // 8 hours in minutes
-    const localOffset = date.getTimezoneOffset(); // in minutes
-    const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
-    return phTime.toISOString().replace("Z", "");
+    const d = new Date();
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+    });
+    return formatter.format(d).replace(' ', 'T') + 'Z';
 }
 
 function deriveDiscountPercentFromCode(codeRaw: string): number {
@@ -1397,6 +1400,16 @@ export async function POST(req: NextRequest) {
                 if (isFullyDone) {
                     poUpdate.is_posted = 1;
                     poUpdate.inventory_status = 6; // ✅ Terminal: Fully Received & Fully Posted
+                } else {
+                    const hasUnpostedReceipts = updatedPorRows.some(r => toNum(r.isPosted) === 0 && toStr(r.receipt_no));
+                    const hasAnyPostedReceipts = updatedPorRows.some(r => toNum(r.isPosted) === 1);
+                    if (hasAnyPostedReceipts) {
+                        poUpdate.inventory_status = 9; // Partially Received
+                    } else if (hasUnpostedReceipts) {
+                        poUpdate.inventory_status = 13; // For Posting
+                    } else {
+                        poUpdate.inventory_status = 3; // For Receiving
+                    }
                 }
 
                 await patchPO(base, poId, poUpdate);
@@ -1551,6 +1564,16 @@ export async function POST(req: NextRequest) {
                 if (isFullyDone) {
                     poUpdate.is_posted = 1;
                     poUpdate.inventory_status = 6; // ✅ Terminal: Fully Received & Fully Posted
+                } else {
+                    const hasUnpostedReceipts = updatedPorRows.some(r => toNum(r.isPosted) === 0 && toStr(r.receipt_no));
+                    const hasAnyPostedReceipts = updatedPorRows.some(r => toNum(r.isPosted) === 1);
+                    if (hasAnyPostedReceipts) {
+                        poUpdate.inventory_status = 9; // Partially Received
+                    } else if (hasUnpostedReceipts) {
+                        poUpdate.inventory_status = 13; // For Posting
+                    } else {
+                        poUpdate.inventory_status = 3; // For Receiving
+                    }
                 }
 
                 await patchPO(base, poId, poUpdate);

@@ -48,33 +48,49 @@ interface DirectusResponse {
 }
 
 
-function now() {
-    const date = new Date();
-    const phOffset = 8 * 60; // 8 hours in minutes
-    const localOffset = date.getTimezoneOffset(); // in minutes
-    return new Date(date.getTime() + (phOffset + localOffset) * 60000);
+function nowPHString() {
+    const d = new Date();
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+    });
+    return formatter.format(d).replace(' ', 'T') + 'Z';
 }
 
 function isoDateOnlyFrom(value?: string | Date | number | null) {
-    if (!value) return now().toISOString().replace("Z", "").slice(0, 10);
+    if (!value) return nowPHString().slice(0, 10);
     const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return now().toISOString().replace("Z", "").slice(0, 10);
-    return d.toISOString().slice(0, 10);
+    if (Number.isNaN(d.getTime())) return nowPHString().slice(0, 10);
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+    return formatter.format(d);
 }
 
 function isoDateTimeFrom(value?: string | Date | number | null) {
-    if (!value) return now().toISOString().replace("Z", "");
+    if (!value) return nowPHString();
     const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return now().toISOString().replace("Z", "");
-    return d.toISOString().replace("Z", "");
+    if (Number.isNaN(d.getTime())) return nowPHString();
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+    });
+    return formatter.format(d).replace(' ', 'T') + 'Z';
 }
 
 function timeHHMMSSFrom(value?: string | Date | number | null) {
-    const d = value ? new Date(value) : now();
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    const ss = String(d.getSeconds()).padStart(2, "0");
-    return `${hh}:${mm}:${ss}`;
+    const d = value ? new Date(value) : new Date();
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Manila',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+    });
+    return formatter.format(d);
 }
 
 function numOrZero(v: unknown) {
@@ -493,9 +509,9 @@ export async function POST(req: NextRequest) {
         );
 
         const date = isoDateOnlyFrom(input?.date ?? input?.poDateISO ?? input?.poDate);
-        const date_encoded = isoDateTimeFrom(input?.date_encoded ?? input?.dateEncoded ?? now());
-        const datetime = isoDateTimeFrom(input?.datetime ?? input?.dateTime ?? now());
-        const time = String(input?.time ?? timeHHMMSSFrom(now()));
+        const date_encoded = isoDateTimeFrom(input?.date_encoded ?? input?.dateEncoded);
+        const datetime = isoDateTimeFrom(input?.datetime ?? input?.dateTime);
+        const time = String(input?.time ?? timeHHMMSSFrom(undefined));
 
         const payment_type = intOrDefault(input?.payment_type ?? input?.paymentType, 0);
         const payment_status = intOrDefault(input?.payment_status ?? input?.paymentStatus, 2);

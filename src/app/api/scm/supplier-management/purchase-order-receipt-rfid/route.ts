@@ -93,11 +93,14 @@ function deriveDiscountPercentFromCode(codeRaw: string): number {
     return Number(combined.toFixed(4));
 }
 function nowISO() {
-    const date = new Date();
-    const phOffset = 8 * 60; // 8 hours in minutes
-    const localOffset = date.getTimezoneOffset(); // in minutes
-    const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
-    return phTime.toISOString().replace("Z", "");
+    const d = new Date();
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+    });
+    return formatter.format(d).replace(' ', 'T') + 'Z';
 }
 function keyLine(poId: number, productId: number, branchId: number) {
     return `${poId}::${productId}::${branchId}`;
@@ -163,6 +166,7 @@ type POItem = {
     uom: string;
     uomCount: number;
     expectedQty: number;
+    originalOrderedQty?: number;
     receivedQty: number;
     requiresRfid: true;
     taggedQty: number;
