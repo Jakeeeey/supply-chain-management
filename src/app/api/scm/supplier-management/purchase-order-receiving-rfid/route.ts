@@ -504,13 +504,14 @@ function receivingStatusFrom(poId: number, lines: POProductRow[], porRows: PORow
 function resolveLineDiscount(args: {
     pid: number;
     unitPrice: number;
+    lineDiscountType?: unknown;
     productLinksMap: Map<number, { supplier_id: number; discount_type: unknown }>;
     discountMap: Map<string, { name: string; pct: number }>;
     headerDiscountPercent: number;
     headerDiscountType: POHeaderRow["discount_type"];
 }) {
-    const { pid, unitPrice, productLinksMap, discountMap, headerDiscountPercent, headerDiscountType } = args;
-    const lineDiscountTypeId = productLinksMap.get(pid)?.discount_type;
+    const { pid, unitPrice, lineDiscountType, productLinksMap, discountMap, headerDiscountPercent, headerDiscountType } = args;
+    const lineDiscountTypeId = lineDiscountType ?? productLinksMap.get(pid)?.discount_type;
     let lineDiscountPercent = 0;
     let lineDiscountTypeStr = "No Discount";
 
@@ -737,6 +738,7 @@ export async function POST(req: NextRequest) {
                     const resolved = resolveLineDiscount({
                         pid,
                         unitPrice: toNum(ln.unit_price),
+                        lineDiscountType: ln.discount_type,
                         productLinksMap,
                         discountMap,
                         headerDiscountPercent,
@@ -1011,7 +1013,7 @@ export async function POST(req: NextRequest) {
             const productLinksMap = await fetchProductSupplierLinks(base, [productId], toNum(po?.supplier_name));
             const discountMap = await fetchDiscountTypesMap(base);
 
-            const lineDiscountTypeId = productLinksMap.get(productId)?.discount_type;
+            const lineDiscountTypeId = matchingLine?.discount_type ?? productLinksMap.get(productId)?.discount_type;
             let discountPercent = 0;
             let discountTypeId = null;
 
@@ -1190,9 +1192,12 @@ export async function POST(req: NextRequest) {
                         uPrice = toNum(pj2?.data?.cost_per_unit || 0);
                     }
 
-                    const lineTypeId = linksMap.get(pid)?.discount_type;
+                    const lineTypeId = ml ? ml.discount_type : linksMap.get(pid)?.discount_type;
                     let linePct = poDiscountPercent;
                     let resolvedId = ensureId(lineTypeId);
+                    if (!resolvedId && ml) {
+                        resolvedId = ensureId(linksMap.get(pid)?.discount_type);
+                    }
                     if (resolvedId) {
                         const dt = discountMap.get(String(resolvedId));
                         if (dt) { linePct = dt.pct; }
@@ -1295,7 +1300,8 @@ export async function POST(req: NextRequest) {
                 const uPrice = toNum(pr.unit_price || 0);
                 const pId = toNum(pr.product_id);
 
-                let linePct = poDiscountPercent, dtId = ensureId(pr?.discount_type);
+                const ml = lines.find(l => toNum(l.product_id) === pId && toNum(l.branch_id) === toNum(pr.branch_id));
+                let linePct = poDiscountPercent, dtId = ensureId(pr?.discount_type || ml?.discount_type);
                 if (dtId) {
                     const dt = discountMap.get(String(dtId));
                     if (dt) linePct = dt.pct;
@@ -1425,6 +1431,7 @@ export async function POST(req: NextRequest) {
                 const { lineDiscountTypeStr, dAmount } = resolveLineDiscount({
                     pid,
                     unitPrice: toNum(ln.unit_price),
+                    lineDiscountType: ln.discount_type,
                     productLinksMap: linksMap,
                     discountMap,
                     headerDiscountPercent: poDiscountPercent,
@@ -1465,6 +1472,7 @@ export async function POST(req: NextRequest) {
                 const { lineDiscountTypeStr, dAmount } = resolveLineDiscount({
                     pid,
                     unitPrice: uPrice,
+                    lineDiscountType: r.discount_type,
                     productLinksMap: linksMap,
                     discountMap,
                     headerDiscountPercent: poDiscountPercent,

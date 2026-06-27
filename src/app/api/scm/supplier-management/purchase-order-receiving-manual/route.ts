@@ -540,10 +540,13 @@ export async function POST(req: NextRequest) {
 
                 const draftRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1));
 
-                const lineDiscountTypeId = productLinksMap.get(pid)?.discount_type;
+                const lineDiscountTypeId = ln.discount_type;
                 let lineDiscountPercent = headerDiscountPercent;
                 let lineDiscountTypeStr = dType ? toStr(dType.discount_type || dType.name, "Standard") : "Standard";
-                const resId = ensureId(lineDiscountTypeId);
+                let resId = ensureId(lineDiscountTypeId);
+                if (!resId) {
+                    resId = ensureId(productLinksMap.get(pid)?.discount_type);
+                }
                 if (resId) {
                     const dt = discountMap.get(String(resId));
                     if (dt) { lineDiscountPercent = dt.pct; lineDiscountTypeStr = dt.name; }
@@ -829,9 +832,12 @@ export async function POST(req: NextRequest) {
                         uPrice = toNum(pj2?.data?.cost_per_unit || 0);
                     }
 
-                    const lineTypeId = linksMap.get(pid)?.discount_type;
+                    const lineTypeId = ml ? ml.discount_type : linksMap.get(pid)?.discount_type;
                     let linePct = poDiscountPercent;
                     let resolvedId = ensureId(lineTypeId);
+                    if (!resolvedId && ml) {
+                        resolvedId = ensureId(linksMap.get(pid)?.discount_type);
+                    }
                     if (resolvedId) {
                         const dt = discountMap.get(String(resolvedId));
                         if (dt) { linePct = dt.pct; }
@@ -879,7 +885,8 @@ export async function POST(req: NextRequest) {
                                 });
                             }
                         } else {
-                            let linePct = poDiscountPercent, dtId = ensureId(row.discount_type);
+                            const ml = lines.find(l => toNum(l.product_id) === pId && toNum(l.branch_id) === toNum(row.branch_id));
+                            let linePct = poDiscountPercent, dtId = ensureId(row.discount_type || ml?.discount_type);
                             if (dtId) {
                                 const dt = discountMap.get(String(dtId));
                                 if (dt) linePct = dt.pct;
@@ -922,7 +929,8 @@ export async function POST(req: NextRequest) {
                     const pr = updatedPorRows.find(x => toNum(x.purchase_order_product_id) === porId);
                     const uPrice = toNum(pr?.unit_price || 0), pId = toNum(pr?.product_id);
 
-                    let linePct = poDiscountPercent, dtId = ensureId(pr?.discount_type);
+                    const ml = lines.find(l => toNum(l.product_id) === pId && toNum(l.branch_id) === toNum(pr?.branch_id));
+                    let linePct = poDiscountPercent, dtId = ensureId(pr?.discount_type || ml?.discount_type);
                     if (dtId) {
                         const dt = discountMap.get(String(dtId));
                         if (dt) linePct = dt.pct;
