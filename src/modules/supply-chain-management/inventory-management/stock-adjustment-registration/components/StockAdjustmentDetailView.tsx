@@ -122,7 +122,12 @@ export function StockAdjustmentDetailView({ id, onBack, mode = "creation", isMod
 
     const doc = await PdfEngine.generateWithFrame(templateName, companyData, (doc, startY, config) => {
       const pageWidth = doc.internal.pageSize.getWidth();
-      const margins = config.margins || { top: 10, bottom: 10, left: 10, right: 10 };
+      const margins = {
+        top: config.margins?.top ?? 10,
+        bottom: config.margins?.bottom ?? 10,
+        left: 15,
+        right: 15
+      };
 
       // --- Title ---
       const titleY = startY + 5;
