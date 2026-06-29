@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   X,
   Plus,
-  Minus,
   Trash2,
   Package,
   Filter,
@@ -220,7 +219,7 @@ export function ProductLookupModal({
       // Robust grouping key derivation
       const rawParentId = product.parent_id;
       let finalParentIdNum: number | null = null;
-      
+
       if (rawParentId && typeof rawParentId === "object") {
         finalParentIdNum = Number(rawParentId.product_id || rawParentId.id);
       } else if (rawParentId !== null && rawParentId !== undefined) {
@@ -233,14 +232,14 @@ export function ProductLookupModal({
 
       if (!groups[groupKey]) {
         groups[groupKey] = {
-          parent: product, 
+          parent: product,
           variants: [],
         };
       } else if (!finalParentIdNum || finalParentIdNum <= 0) {
         // If we found the actual base product (no parent), set it as the structural parent for display
         groups[groupKey].parent = product;
       }
-      
+
       groups[groupKey].variants.push(product);
     });
 
@@ -277,31 +276,7 @@ export function ProductLookupModal({
       );
 
       if (existingItemIndex !== -1) {
-        const updatedItems = [...prevItems];
-        const currentItem = updatedItems[existingItemIndex];
-        const newQuantity = currentItem.quantity + 1;
-
-        // Recalculate gross for existing item
-        const newGross = Math.round(newQuantity * currentItem.unitPrice * 100) / 100;
-        let percentage = 0;
-        if (currentItem.discountType) {
-          const matchedDisc = lineDiscounts?.find(
-            (d) => d.id.toString() === currentItem.discountType?.toString()
-          );
-          if (matchedDisc) {
-            percentage = parseFloat(matchedDisc.total_percent) || 0;
-          }
-        }
-        const discountAmt = Math.round(newGross * (percentage / 100) * 100) / 100;
-
-        updatedItems[existingItemIndex] = {
-          ...currentItem,
-          quantity: newQuantity,
-          grossAmount: newGross, // 🟢 Update Gross
-          discountAmount: discountAmt,
-          totalAmount: Math.round((newGross - discountAmt) * 100) / 100,
-        };
-        return updatedItems;
+        return prevItems;
       } else {
         // 🟢 Resolve final discount based on hierarchy
         const tiedDiscount = resolveFinalDiscount(
@@ -311,7 +286,7 @@ export function ProductLookupModal({
         );
 
         const unitOrder = unitsList.find(u => u.unit_id === product.unit_of_measurement)?.order || 0;
-        const initialQty = unitOrder === 3 ? 0 : 1;
+        const initialQty = 0; // Quantity must be 0 initially as it is scanned via RFID
         const initialGross = initialQty * selectedPrice;
 
         let percentage = 0;
@@ -336,7 +311,7 @@ export function ProductLookupModal({
           unit: unitLabel,
           quantity: initialQty,
           unitPrice: selectedPrice,
-          grossAmount: initialGross, // 0 if Box, selectedPrice if not
+          grossAmount: initialGross,
           discountType: tiedDiscount,
           discountAmount: discountAmt,
           totalAmount: totalAmount,
@@ -356,68 +331,7 @@ export function ProductLookupModal({
     });
   };
 
-  const updateItemQuantity = (tempId: string | undefined, change: number) => {
-    if (!tempId) return;
-    setSelectedItems((prev) =>
-      prev.map((item) => {
-        if (item.tempId === tempId) {
-          if (item.unitOrder === 3) return item; // 🟢 Box units stay at 0
-          const newQty = item.quantity + change;
-          if (newQty < 1) return item;
-          const newGross = Math.round(newQty * item.unitPrice * 100) / 100;
-          let percentage = 0;
-          if (item.discountType) {
-            const matchedDisc = lineDiscounts?.find(
-              (d) => d.id.toString() === item.discountType?.toString()
-            );
-            if (matchedDisc) {
-              percentage = parseFloat(matchedDisc.total_percent) || 0;
-            }
-          }
-          const discountAmt = Math.round(newGross * (percentage / 100) * 100) / 100;
-          return {
-            ...item,
-            quantity: newQty,
-            grossAmount: newGross,
-            discountAmount: discountAmt,
-            totalAmount: Math.round((newGross - discountAmt) * 100) / 100,
-          };
-        }
-        return item;
-      }),
-    );
-  };
 
-  const setItemQuantityDirect = (tempId: string | undefined, qty: number) => {
-    if (!tempId) return;
-    setSelectedItems((prev) =>
-      prev.map((item) => {
-        if (item.tempId === tempId) {
-          if (item.unitOrder === 3) return item; // 🟢 Box units stay at 0
-          const safeQty = Math.max(1, Math.floor(qty));
-          const newGross = Math.round(safeQty * item.unitPrice * 100) / 100;
-          let percentage = 0;
-          if (item.discountType) {
-            const matchedDisc = lineDiscounts?.find(
-              (d) => d.id.toString() === item.discountType?.toString()
-            );
-            if (matchedDisc) {
-              percentage = parseFloat(matchedDisc.total_percent) || 0;
-            }
-          }
-          const discountAmt = Math.round(newGross * (percentage / 100) * 100) / 100;
-          return {
-            ...item,
-            quantity: safeQty,
-            grossAmount: newGross,
-            discountAmount: discountAmt,
-            totalAmount: Math.round((newGross - discountAmt) * 100) / 100,
-          };
-        }
-        return item;
-      }),
-    );
-  };
 
   const handleRemoveItem = (tempId: string | undefined) => {
     if (!tempId) return;
@@ -725,52 +639,72 @@ export function ProductLookupModal({
                         </CardHeader>
                         <CardContent className="p-0 flex flex-col flex-1 divide-y divide-border">
                           {group.variants.map((product) => {
-                             const safePrice = resolvePrice(product, priceType);
-                             
-                             const unitObj = unitsList.find(
-                               (u) => u.unit_id === product.unit_of_measurement,
-                             );
-                             const baseUnitName = unitObj ? unitObj.unit_name : "Piece";
-                             const baseUnitShortcut = unitObj
-                               ? unitObj.unit_shortcut
-                               : "pcs";
+                            const safePrice = resolvePrice(product, priceType);
+
+                            const unitObj = unitsList.find(
+                              (u) => u.unit_id === product.unit_of_measurement,
+                            );
+                            const baseUnitName = unitObj ? unitObj.unit_name : "Piece";
+                            const baseUnitShortcut = unitObj
+                              ? unitObj.unit_shortcut
+                              : "pcs";
 
                             return (
-                               <div key={product.product_id} className="p-4 flex flex-col gap-3">
-                                  <div className="flex justify-between items-start">
-                                    <div className="flex flex-col">
-                                      <span className="text-xs text-muted-foreground font-mono">
-                                        Code: <span className="text-foreground font-medium">{product.product_code || product.barcode || "N/A"}</span>
-                                      </span>
-                                    </div>
-                                    <Badge variant="outline" className="font-normal text-xs bg-background">
-                                      {baseUnitName}
-                                    </Badge>
+                              <div key={product.product_id} className="p-4 flex flex-col gap-3">
+                                <div className="flex justify-between items-start">
+                                  <div className="flex flex-col">
+                                    <span className="text-xs text-muted-foreground font-mono">
+                                      Code: <span className="text-foreground font-medium">{product.product_code || product.barcode || "N/A"}</span>
+                                    </span>
                                   </div>
-                                  
-                                  <div className="flex items-center justify-between mt-auto">
-                                    <div className="flex flex-col">
-                                      <span className="font-bold text-foreground text-sm">
-                                        ₱
-                                        {safePrice.toLocaleString(undefined, {
-                                          minimumFractionDigits: 2,
-                                        })}
-                                      </span>
-                                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                                        (1 {baseUnitShortcut})
-                                      </span>
-                                    </div>
-                                    <Button
-                                      size="sm"
-                                      className="h-8 shadow-sm shadow-primary/20"
-                                      onClick={() =>
-                                        handleAddItem(product, baseUnitShortcut.toUpperCase(), safePrice)
-                                      }
-                                    >
-                                      <Plus className="h-3.5 w-3.5 mr-1" /> Add
-                                    </Button>
+                                  <Badge variant="outline" className="font-normal text-xs bg-background">
+                                    {baseUnitName}
+                                  </Badge>
+                                </div>
+
+                                <div className="flex items-center justify-between mt-auto">
+                                  <div className="flex flex-col">
+                                    <span className="font-bold text-foreground text-sm">
+                                      ₱
+                                      {safePrice.toLocaleString(undefined, {
+                                        minimumFractionDigits: 2,
+                                      })}
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                                      (1 {baseUnitShortcut})
+                                    </span>
                                   </div>
-                               </div>
+                                  {(() => {
+                                    const baseUnitShortcutUpper = baseUnitShortcut.toUpperCase();
+                                    const existingItem = selectedItems.find(
+                                      (item) => item.productId === product.product_id && item.unit === baseUnitShortcutUpper && item.unitPrice === safePrice
+                                    );
+                                    if (existingItem) {
+                                      return (
+                                        <Button
+                                          size="sm"
+                                          variant="destructive"
+                                          className="h-8 shadow-sm border-destructive text-destructive text-white"
+                                          onClick={() => handleRemoveItem(existingItem.tempId)}
+                                        >
+                                          <X className="h-3.5 w-3.5 mr-1" /> Removed
+                                        </Button>
+                                      );
+                                    }
+                                    return (
+                                      <Button
+                                        size="sm"
+                                        className="h-8 shadow-sm shadow-primary/20"
+                                        onClick={() =>
+                                          handleAddItem(product, baseUnitShortcutUpper, safePrice)
+                                        }
+                                      >
+                                        <Plus className="h-3.5 w-3.5 mr-1" /> Add
+                                      </Button>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
                             );
                           })}
                         </CardContent>
@@ -927,33 +861,8 @@ export function ProductLookupModal({
 
                       {/* Controls Row */}
                       <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
-                        {/* Qty Stepper */}
-                        <div className={`flex items-center bg-muted/30 rounded-md border border-border h-7 ${item.unitOrder === 3 ? "opacity-50 pointer-events-none" : ""}`}>
-                          <button
-                            className="px-2 h-full text-muted-foreground hover:text-primary hover:bg-background rounded-l-md disabled:opacity-30 transition-colors"
-                            onClick={() => updateItemQuantity(item.tempId, -1)}
-                            disabled={item.quantity <= 1}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </button>
-                          <input
-                            type="number"
-                            min={1}
-                            value={item.quantity}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value, 10);
-                              if (!isNaN(val) && val > 0) {
-                                setItemQuantityDirect(item.tempId, val);
-                              }
-                            }}
-                            className="w-10 text-center text-xs font-bold text-foreground bg-transparent border-0 outline-none appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                          />
-                          <button
-                            className="px-2 h-full text-muted-foreground hover:text-primary hover:bg-background rounded-r-md transition-colors"
-                            onClick={() => updateItemQuantity(item.tempId, 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
+                        <div className="flex items-center text-xs text-muted-foreground font-semibold">
+                          Qty: {item.quantity}
                         </div>
                         {/* Item Total */}
                         <div className="text-right">

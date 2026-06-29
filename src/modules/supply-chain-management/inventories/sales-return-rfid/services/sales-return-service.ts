@@ -464,10 +464,41 @@ export async function fetchStatusCard(
   }
 }
 
+async function validateRfidTagsPayload(payload: any, token: string, branchId: number, currentReturnNo?: string) {
+  if (!token) throw new Error("Missing token for RFID validation.");
+  
+  for (const item of payload.items) {
+    if (item.rfidTags && Array.isArray(item.rfidTags) && item.rfidTags.length > 0) {
+      for (const tag of item.rfidTags) {
+        // 1. Global Duplicate Check
+        const dupCheck = await repo.checkRfidDuplicate(tag);
+        if (dupCheck.data && dupCheck.data.length > 0) {
+          const returnNo = (dupCheck.data[0].sales_return_detail_id as any)?.return_no || "Unknown";
+          if (currentReturnNo && returnNo === currentReturnNo) {
+             // It's allowed to be in the current SR being updated
+          } else {
+             throw new Error(`Duplicate RFID: Tag "${tag}" is already returned in SR #${returnNo}`);
+          }
+        }
+        
+        // 2. Inventory Check
+        const lookup = await lookupRfid(tag, branchId, token);
+        if (lookup?.isOnInventory) {
+          const productId = Number(item.productId || item.product_id || item.id);
+          if (Number(lookup.productId) !== productId) {
+             throw new Error(`Product Mismatch: RFID "${tag}" belongs to a different product on-hand.`);
+          }
+          throw new Error(`Already in Stock: RFID "${tag}" is already in inventory.`);
+        }
+      }
+    }
+  }
+}
+
 /**
  * Creates a new sales return (header + details).
  */
-export async function submitReturn(payload: any, userId: number): Promise<any> {
+export async function submitReturn(payload: any, userId: number, token: string): Promise<any> {
   if (payload.appliedInvoiceId) {
     const invoiceData = await repo.getInvoiceStatus(payload.appliedInvoiceId);
     const isPosted = parseBoolean(invoiceData?.data?.isPosted);
@@ -476,9 +507,19 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
     }
   }
 
-  // Fetch line discounts for discount calculation
+  // Fetch line discounts for discount calculation and branch info for validation
   const refsResult = await repo.getRawReferences();
   const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
+  const salesmenData = (refsResult[0].data || []) as any[];
+
+  const salesman = salesmenData.find(s => String(s.id) === String(payload.salesmanId));
+  const branchId = salesman?.branch_code;
+
+  if (!branchId) {
+    throw new Error("Cannot determine branch for RFID lookup.");
+  }
+
+  await validateRfidTagsPayload(payload, token, branchId);
 
   // Build aggregate discount percentage map from junction + line_discount tables
   const lineDiscountMap = await buildDiscountPercentMap();
@@ -612,10 +653,23 @@ export async function updateReturn(
     isThirdParty?: boolean;
   },
   userId: number,
+  token: string,
 ): Promise<any> {
-  // Fetch line discounts
+  // Fetch line discounts and existing record for validation
   const refsResult = await repo.getRawReferences();
   const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
+
+  const existingHeader = await repo.getRawReturnById(payload.returnId);
+  const salesmanId = existingHeader?.data?.salesman_id;
+  const salesmenData = (refsResult[0].data || []) as any[];
+  const salesman = salesmenData.find(s => String(s.id) === String(salesmanId));
+  const branchId = salesman?.branch_code;
+
+  if (!branchId) {
+    throw new Error("Cannot determine branch for RFID lookup.");
+  }
+
+  await validateRfidTagsPayload(payload, token, branchId, payload.returnNo);
 
   // Build aggregate discount percentage map from junction + line_discount tables
   const lineDiscountMap = await buildDiscountPercentMap();
@@ -865,7 +919,7 @@ export async function lookupRfid(
   const SPRING_URL = process.env.SPRING_API_BASE_URL;
   if (!SPRING_URL) throw new Error("SPRING_API_BASE_URL is not defined");
 
-  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-rfid-onhand?rfid=${encodeURIComponent(rfidTag)}`;
+  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-rfid-onhand?rfid=${encodeURIComponent(rfidTag)}&branch_id=${branchId}`;
 
   try {
     const res = await fetch(targetUrl, {
@@ -891,6 +945,10 @@ export async function lookupRfid(
     const rfidBranchId = Number(matchedRow.branchId ?? matchedRow.branch_id);
     const rfidBranchName = matchedRow.branch_name ?? matchedRow.branchName ?? "Unknown Branch";
     const productId = Number(matchedRow.productId ?? matchedRow.product_id);
+
+    if (rfidBranchId !== branchId) {
+      return { isOnInventory: false };
+    }
 
     return {
       isOnInventory,

@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const data = await submitReturn(body, userId);
+    const data = await submitReturn(body, userId, token);
     return json({ data }, 201);
   } catch (error: any) {
     console.error("Sales Return RFID API POST Error:", error);
@@ -234,7 +234,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const data = await updateReturn(body, userId);
+    const data = await updateReturn(body, userId, token);
     return json({ data });
   } catch (error: any) {
     console.error("Sales Return RFID API PATCH Error:", error);
