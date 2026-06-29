@@ -36,6 +36,7 @@ interface MasterlistTableProps {
   pendingEditIds?: Set<number>;
   emptyTitle?: string;
   emptyDescription?: string;
+  hideSearch?: boolean;
 }
 
 export function MasterlistTable({
@@ -62,6 +63,7 @@ export function MasterlistTable({
   pendingEditIds,
   emptyTitle,
   emptyDescription,
+  hideSearch,
 }: MasterlistTableProps) {
   const columns = React.useMemo(
     () =>
@@ -100,7 +102,7 @@ export function MasterlistTable({
         sorting={sorting}
         onSortingChange={onSortingChange}
         manualSorting={manualSorting}
-        searchKey="product_name"
+        searchKey={hideSearch ? undefined : "product_name"}
         onSearch={onSearch}
         isLoading={isLoading}
         onSelectionChange={onSelectionChange}

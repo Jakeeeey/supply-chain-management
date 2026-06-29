@@ -13,8 +13,12 @@ interface ApiAreaPerCluster { id: number; cluster_id: number; province: string; 
 interface CustomerGroupRaw { id: string; customerName: string; salesmanName: string; orders: ApiSalesOrder[]; }
 interface ClusterGroupRaw { clusterId: string; clusterName: string; customers: CustomerGroupRaw[]; }
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        const { searchParams } = new URL(request.url);
+        const startDate = searchParams.get("startDate");
+        const endDate = searchParams.get("endDate");
+
         const fetchOptions = {
             cache: 'no-store' as const,
             headers: {
@@ -28,7 +32,16 @@ export async function GET() {
         const areaRes = await fetch(`${BASE_URL}/items/area_per_cluster?limit=-1`, fetchOptions);
         // Malalaking tables (fetching sequentially to prevent Directus overload/socket close)
         const customersRes = await fetch(`${BASE_URL}/items/customer?limit=-1`, fetchOptions);
-        const ordersRes = await fetch(`${BASE_URL}/items/sales_order?limit=-1`, fetchOptions);
+
+        let ordersUrl = `${BASE_URL}/items/sales_order?limit=-1`;
+        if (startDate && endDate) {
+            ordersUrl += `&filter[order_date][_between]=${startDate},${endDate}`;
+        } else if (startDate) {
+            ordersUrl += `&filter[order_date][_gte]=${startDate}`;
+        } else if (endDate) {
+            ordersUrl += `&filter[order_date][_lte]=${endDate}`;
+        }
+        const ordersRes = await fetch(ordersUrl, fetchOptions);
 
         const responses = [
             { name: 'cluster', res: clustersRes },

@@ -65,8 +65,12 @@ export function DirectEditModal({
   const handleSave = async () => {
     if (!sku) return;
     const id = sku.id || sku.product_id;
-    await onSave(id!, formData);
-    onClose();
+    try {
+      await onSave(id!, formData);
+      onClose();
+    } catch {
+      // Keep modal open on validation error
+    }
   };
 
   const isSaveDisabled =
@@ -100,7 +104,7 @@ export function DirectEditModal({
           </div>
         </DialogHeader>
 
-        <div className="p-6 space-y-5">
+        <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
             <div className="space-y-2">
               <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
                 Product Name *

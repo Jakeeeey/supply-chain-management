@@ -18,11 +18,12 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  ClipboardList,
-  Paperclip
+  ClipboardList
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ProductSelectionModal } from "../modals/ProductSelectionModal";
+import { AttachmentViewerModal } from "../modals/AttachmentViewerModal";
+import { FileText, Image as ImageIcon } from "lucide-react";
 import {
   StockAdjustmentFormSchema,
   StockAdjustmentFormValues,
@@ -55,8 +56,6 @@ import {
   ComboboxItem,
   ComboboxEmpty,
 } from "@/components/ui/combobox";
-import { AttachmentUpload } from "@/modules/supply-chain-management/inventory-management/stock-adjustment-registration/components/AttachmentUpload";
-
 
 // ——————————————————————————————————————————————————————————————————————————————
 interface StockAdjustmentFormProps {
@@ -68,12 +67,22 @@ interface StockAdjustmentFormProps {
   onSelectId?: (id: number) => void;
 }
 
+interface LocalAttachmentFile {
+  id: string;
+  type?: string;
+  filename_download?: string;
+  filesize?: number | string;
+}
+
+interface LocalAttachment {
+  attachment: LocalAttachmentFile | string;
+}
+
 // ——————————————————————————————————————————————————————————————————————————————
 // Memoised item row (renders only when *its own* data changes)
 interface ItemRowProps {
   index: number;
   control: Control<StockAdjustmentFormValues>;
-  onRemove: (index: number) => void;
   setValue: UseFormSetValue<StockAdjustmentFormValues>;
   isReadOnly?: boolean;
 }
@@ -81,7 +90,6 @@ interface ItemRowProps {
 const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   index,
   control,
-  onRemove,
   setValue,
   isReadOnly = false,
 }: ItemRowProps) {
@@ -123,12 +131,12 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
           </span>
         </div>
       </td>
-      <td className="p-3 w-40">
+      <td className="p-3 w-40 text-center">
         {isReadOnly ? (
-          <span className="text-xs font-bold px-3 py-1 bg-muted rounded-md border border-border/50">{quantity}</span>
+          <span className="text-xs font-bold px-3 py-1 bg-muted rounded-md border border-border/50 inline-block text-center min-w-10">{quantity}</span>
         ) : (
-          <div className="flex items-center gap-0 w-min bg-background border border-border rounded-md overflow-hidden">
-            <button 
+          <div className="flex items-center gap-0 w-min bg-background border border-border rounded-md overflow-hidden mx-auto">
+            <button
               type="button"
               className="w-7 h-7 flex items-center justify-center hover:bg-muted text-muted-foreground disabled:opacity-50 transition-colors"
               onClick={() => setValue(`items.${index}.quantity`, Math.max(1, Number(quantity || 0) - 1), { shouldValidate: true })}
@@ -147,7 +155,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
               className="w-12 h-7 text-center text-xs font-bold border-x border-border focus:outline-none focus:ring-0 bg-transparent p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               min={1}
             />
-            <button 
+            <button
               type="button"
               className="w-7 h-7 flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors"
               onClick={() => setValue(`items.${index}.quantity`, Number(quantity || 0) + 1, { shouldValidate: true })}
@@ -157,27 +165,13 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
           </div>
         )}
         {rowError?.quantity && (
-          <p className="text-[10px] text-red-500 font-bold mt-1">{rowError.quantity.message}</p>
+          <p className="text-[10px] text-red-500 font-bold mt-1 text-center">{rowError.quantity.message}</p>
         )}
       </td>
       <td className="p-3">
         <span className="text-xs font-bold text-primary dark:text-primary/70">
           ₱{Number(totalCost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
-      </td>
-      <td className="p-3 text-center w-16">
-        {!isReadOnly && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => onRemove(index)}
-            className="h-7 w-7 rounded-full text-red-400/50 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all mx-auto"
-            title="Remove item"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        )}
       </td>
     </tr>
   );
@@ -240,7 +234,6 @@ function FormSummary({
   );
 }
 
-// ——————————————————————————————————————————————————————————————————————————————
 export function StockAdjustmentForm({
   id,
   onCancel,
@@ -289,11 +282,14 @@ export function StockAdjustmentForm({
   const [pendingExitAction, setPendingExitAction] = useState<string | (() => void) | null>(null);
   const initialValuesRef = useRef<string>("");
 
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [activeAttachment, setActiveAttachment] = useState<{ fileUrl: string; filename?: string; isImage?: boolean } | null>(null);
+
 
   const form = useForm<StockAdjustmentFormValues>({
     resolver: zodResolver(StockAdjustmentFormSchema),
     defaultValues: {
-      doc_no: "", 
+      doc_no: "",
       branch_id: 0,
       supplier_id: 0,
       type: "IN",
@@ -414,6 +410,7 @@ export function StockAdjustmentForm({
   const watchedBranchId = useWatch({ control: form.control, name: "branch_id" });
   const watchedSupplierId = useWatch({ control: form.control, name: "supplier_id" });
   const watchedDocNo = useWatch({ control: form.control, name: "doc_no" });
+  const watchedAttachments = useWatch({ control: form.control, name: "stock_adjustment_attachment" }) || [];
 
   useEffect(() => {
     if (watchedBranchId && branches.length > 0) {
@@ -644,25 +641,25 @@ export function StockAdjustmentForm({
     (newItems: StockAdjustmentItem[]) => {
       const branchId = form.getValues("branch_id");
       const currentType = form.getValues("type");
-      
+
       const mapped = newItems.map((item) => ({
         ...item,
         branch_id: branchId,
         type: currentType
       }));
-      
+
       form.setValue("items", mapped, { shouldValidate: true });
-      
+
       // Async stock fetch
       mapped.forEach((item, idx) => {
         const pid = Number(item.product_id);
         const cachedStock = inventoryMap.get(pid) ?? 0;
         if (cachedStock === 0) {
-           fetchInventory(pid, branchId).then(stock => {
-              form.setValue(`items.${idx}.current_stock`, stock);
-           }).catch(console.error);
+          fetchInventory(pid, branchId).then(stock => {
+            form.setValue(`items.${idx}.current_stock`, stock);
+          }).catch(console.error);
         } else {
-           form.setValue(`items.${idx}.current_stock`, cachedStock);
+          form.setValue(`items.${idx}.current_stock`, cachedStock);
         }
       });
     },
@@ -741,8 +738,8 @@ export function StockAdjustmentForm({
                 ? "Review & Post Stock Adjustment"
                 : "Select Stock Adjustment"
               : id
-              ? "Edit Stock Adjustment"
-              : "New Stock Adjustment"}
+                ? "Edit Stock Adjustment"
+                : "New Stock Adjustment"}
           </h1>
           {id && (
             <Badge
@@ -758,11 +755,10 @@ export function StockAdjustmentForm({
           {id && sourceType && (
             <Badge
               variant="outline"
-              className={`px-3 py-1 font-bold shadow-sm ${
-                sourceType === "RFID"
+              className={`px-3 py-1 font-bold shadow-sm ${sourceType === "RFID"
                   ? "bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400 border-violet-200 dark:border-violet-800/50"
                   : "bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800/50"
-              } uppercase tracking-wider`}
+                } uppercase tracking-wider`}
             >
               {sourceType === "RFID" ? "RFID Base" : "Non-RFID"}
             </Badge>
@@ -1051,6 +1047,67 @@ export function StockAdjustmentForm({
                     disabled={isReadOnly}
                   />
                 </div>
+
+                {/* Attachments Section (ReadOnly) */}
+                {(() => {
+                  const attachments = watchedAttachments as unknown as LocalAttachment[];
+                  if (!attachments || attachments.length === 0) return null;
+                  return (
+                    <div className="space-y-3 mt-6">
+                      <div className="flex items-center gap-2 text-foreground">
+                        <ImageIcon className="h-4.5 w-4.5 text-rose-600" />
+                        <h3 className="font-bold text-sm">Attachments ({attachments.length})</h3>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {attachments.map((att, idx) => {
+                          const file = att.attachment;
+                          if (!file) return null;
+                          const fileId = typeof file === 'object' ? file.id : file;
+                          const isImage = typeof file === 'object' && file.type?.startsWith('image');
+                          const filename = typeof file === 'object' ? file.filename_download : `Attachment ${idx + 1}`;
+                          const sizeInMb = typeof file === 'object' && file.filesize 
+                            ? (Number(file.filesize) / (1024 * 1024)).toFixed(2)
+                            : null;
+
+                          const directusBase = process.env.NEXT_PUBLIC_DIRECTUS_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "";
+                          const cleanBase = directusBase.trim().replace(/\/$/, "");
+                          const fileUrl = `${cleanBase}/assets/${fileId}`;
+
+                          return (
+                            <div key={idx} className="flex items-center justify-between p-3 bg-background border border-border rounded-xl hover:bg-muted/10 transition-colors">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveAttachment({ fileUrl, filename, isImage });
+                                  setViewerOpen(true);
+                                }}
+                                className="flex items-center gap-3 flex-1 min-w-0 text-left bg-transparent border-none p-0 cursor-pointer focus:outline-none"
+                                title="Click to view file"
+                              >
+                                <div className="h-9 w-9 shrink-0 bg-rose-50 dark:bg-rose-950/20 rounded-lg flex items-center justify-center text-rose-600">
+                                  {isImage ? <ImageIcon className="h-4.5 w-4.5" /> : <FileText className="h-4.5 w-4.5" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-bold truncate text-foreground hover:text-rose-600 transition-colors">{filename}</p>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    {sizeInMb && (
+                                      <span className="text-[9px] text-muted-foreground font-semibold">
+                                        {sizeInMb} MB
+                                      </span>
+                                    )}
+                                    <span className="text-[9px] text-rose-600 font-bold uppercase tracking-wider hover:underline">
+                                      VIEW FILE
+                                    </span>
+                                  </div>
+                                </div>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </>
             )}
           </CardContent>
@@ -1140,13 +1197,12 @@ export function StockAdjustmentForm({
                           <th className="p-3">UOM</th>
                           <th className="p-3 w-40 text-center">Qty</th>
                           <th className="p-3">Net Total</th>
-                          <th className="p-3 text-center w-16">Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {paginatedFields.length === 0 && tableSearch ? (
                           <tr>
-                            <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                            <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
                               No products found matching &quot;{tableSearch}&quot;.
                             </td>
                           </tr>
@@ -1156,7 +1212,6 @@ export function StockAdjustmentForm({
                               key={field.id}
                               index={index}
                               control={form.control}
-                              onRemove={(idx) => setDeletingIndex(idx)}
                               setValue={form.setValue}
                               isReadOnly={isReadOnly}
                             />
@@ -1169,7 +1224,7 @@ export function StockAdjustmentForm({
                       <div className="flex items-center gap-6">
                         <div className="flex items-center gap-2">
                           <span className="text-xs">Rows per page</span>
-                          <select 
+                          <select
                             className="h-8 border border-border rounded-md bg-card px-2 text-xs focus:outline-none font-bold"
                             value={rowsPerPage}
                             onChange={(e) => {
@@ -1240,27 +1295,7 @@ export function StockAdjustmentForm({
               </CardContent>
             </Card>
 
-            {/* Attachments Card */}
-            <Card className="border border-border/50 shadow-sm bg-card border-border/40 mb-6">
-              <CardHeader className="bg-card border-b border-border/50 py-4 px-6">
-                <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                  <Paperclip className="h-4 w-4 text-primary" />
-                  Attachments
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <AttachmentUpload
-                  value={form.watch("stock_adjustment_attachment") || []}
-                  onChange={(atts) => form.setValue("stock_adjustment_attachment", atts, { shouldValidate: true })}
-                  disabled={isReadOnly}
-                />
-                {form.formState.errors.stock_adjustment_attachment?.message && (
-                  <p className="text-xs text-red-500 font-bold mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                    {String(form.formState.errors.stock_adjustment_attachment.message)}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+
 
             {/* Action Workspace buttons */}
             <div className="flex items-center justify-end gap-3 pb-8">
@@ -1511,6 +1546,17 @@ export function StockAdjustmentForm({
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Attachment Viewer Modal */}
+      {activeAttachment && (
+        <AttachmentViewerModal
+          open={viewerOpen}
+          fileUrl={activeAttachment.fileUrl}
+          filename={activeAttachment.filename}
+          isImage={activeAttachment.isImage}
+          onClose={() => setViewerOpen(false)}
+        />
+      )}
     </div>
   );
 }
