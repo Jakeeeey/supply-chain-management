@@ -29,7 +29,6 @@ export function ProductVerificationStep({ onContinue, onBack }: { onContinue: ()
         removeExtraProductLocally,
         manualCounts,
         setManualCounts,
-        editingReceiptId,
     } = useReceivingProductsManual();
 
     const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);

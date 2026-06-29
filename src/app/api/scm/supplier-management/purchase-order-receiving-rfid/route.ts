@@ -735,7 +735,7 @@ export async function POST(req: NextRequest) {
 
                 if (openRow && (openRow.discount_type !== null || openRow.discounted_amount !== null)) {
                     dAmount = toNum(openRow.discounted_amount);
-                    const dtId = String(openRow.discount_type ?? "");
+                    const dtId = String(ensureId(openRow.discount_type) ?? "");
                     if (dtId) {
                         const dt = discountMap.get(dtId);
                         lineDiscountTypeStr = dt ? dt.name : `Discount #${dtId}`;
@@ -807,7 +807,7 @@ export async function POST(req: NextRequest) {
 
                 if (openRow && (openRow.discount_type !== null || openRow.discounted_amount !== null)) {
                     dAmount = toNum(openRow.discounted_amount);
-                    const dtId = String(openRow.discount_type ?? "");
+                    const dtId = String(ensureId(openRow.discount_type) ?? "");
                     if (dtId) {
                         const dt = discountMap.get(dtId);
                         lineDiscountTypeStr = dt ? dt.name : `Discount #${dtId}`;
@@ -949,6 +949,7 @@ export async function POST(req: NextRequest) {
         }
         if (action === "lookup_product") {
             const code = toStr(body.barcode).trim();
+            const sid = toNum(body.supplierId);
             if (!code) return bad("Missing barcode/SKU");
             const url = `${base}/items/${PRODUCTS_COLLECTION}?limit=1&filter[_or][0][barcode][_eq]=${encodeURIComponent(code)}&filter[_or][1][product_code][_eq]=${encodeURIComponent(code)}&fields=product_id,product_name,barcode,product_code,cost_per_unit,unit_of_measurement.*,unit_of_measurement_count`;
             const j = await fetchJson<{ data: ProductRow[] }>(url);
@@ -968,11 +969,32 @@ export async function POST(req: NextRequest) {
                 }
             }
 
+            let discTypeStr = "Standard";
+            let discPct = 0;
+
+            if (sid) {
+                const linkUrl = `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=1&filter[product_id][_eq]=${p.product_id}&filter[supplier_id][_eq]=${sid}&fields=discount_type.*,discount_type.line_per_discount_type.line_id.*`;
+                const lj = await fetchJson<{ data: Array<Record<string, unknown>> }>(linkUrl).catch(() => ({ data: [] }));
+                const link = lj?.data?.[0];
+                const dt = link?.discount_type as Record<string, unknown> | null | undefined;
+                if (dt) {
+                    discTypeStr = toStr(dt.discount_type || dt.name, "Standard");
+                    const lines = (dt.line_per_discount_type as DiscountLine[]) || [];
+                    if (lines.length > 0) discPct = calculateDiscountFromLines(lines);
+                    else if (toNum(dt.total_percent) > 0) discPct = toNum(dt.total_percent);
+                    else discPct = deriveDiscountPercentFromCode(discTypeStr);
+                }
+            }
+
             return ok({
                 productId: String(p.product_id),
                 name: String(p.product_name),
                 barcode: String(p.barcode || p.product_code),
-                unitPrice: toNum(p.cost_per_unit)
+                unitPrice: toNum(p.cost_per_unit),
+                discountType: discTypeStr,
+                discountPercent: discPct,
+                uom: String(p.unit_of_measurement?.unit_shortcut ?? (uomId === 11 ? "BOX" : "PCS")).toUpperCase(),
+                sku: String(p.barcode || p.product_code)
             });
         }
 
@@ -1005,7 +1027,7 @@ export async function POST(req: NextRequest) {
 
 
             // Resolve discount from PO header
-            const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=discount_type.*,discount_type.line_per_discount_type.line_id.*,vat_amount,withholding_tax_amount`;
+            const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=supplier_name,discount_type.*,discount_type.line_per_discount_type.line_id.*,vat_amount,withholding_tax_amount`;
             const pj = await fetchJson<{ data: POHeaderRow }>(poUrl);
             const po = pj?.data;
 
