@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
     const userId = getUserIdFromToken(token);
     
     // 🟢 Session token is now mandatory.
-    if (!userId) {
+    if (!userId || !token) {
       return json({ error: "Unauthorized: Invalid or missing session" }, 401);
     }
 
@@ -229,7 +229,7 @@ export async function PATCH(req: NextRequest) {
     const userId = getUserIdFromToken(token);
     
     // 🟢 Session token is now mandatory.
-    if (!userId) {
+    if (!userId || !token) {
       return json({ error: "Unauthorized: Invalid or missing session" }, 401);
     }
 
