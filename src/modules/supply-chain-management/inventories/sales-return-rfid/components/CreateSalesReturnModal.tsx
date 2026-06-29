@@ -1374,11 +1374,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                       {items.map((item, idx) => {
                         const isSelected = selectedRowIndex === idx;
                         return (
-                          <tr 
-                            key={item.id || idx} 
-                            onClick={() => {
+                          <React.Fragment key={item.id || idx}>
+                            <tr 
+                              onClick={() => {
                               if (item.unitOrder === 3) {
-                                setSelectedRowIndex(idx);
+                                setSelectedRowIndex(prev => prev === idx ? null : idx);
                               } else {
                                 toast.info("RFID tagging is limited to Box units (Order 3).", {
                                   description: `"${item.description}" uses "${item.unit}", which must be handled manually.`
@@ -1411,17 +1411,29 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 {item.unit}
                               </span>
                             </td>
-                            <td className="px-4 py-2 text-center">
+                            <td className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                               <div className="flex flex-col items-center gap-1">
-                                <Badge variant="outline" className={cn(
-                                  "font-bold transition-all min-w-[40px] flex justify-center",
-                                  item.unitOrder === 3 ? "border-primary/40 bg-primary/10 text-primary shadow-sm" : "border-muted-foreground/30 bg-muted/10 text-muted-foreground opacity-70"
-                                )}>
-                                  {item.quantity}
-                                </Badge>
-                                <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-tighter">
-                                  {item.unitOrder === 3 ? "Box Units" : "Manual Qty"}
-                                </span>
+                                {item.unitOrder === 3 ? (
+                                  <Badge variant="outline" className={cn(
+                                    "font-bold transition-all min-w-[40px] flex justify-center",
+                                    "border-primary/40 bg-primary/10 text-primary shadow-sm"
+                                  )}>
+                                    {item.quantity}
+                                  </Badge>
+                                ) : (
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={item.quantity}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value, 10);
+                                      if (!isNaN(val) && val > 0) {
+                                        handleItemChange(idx, "quantity", val);
+                                      }
+                                    }}
+                                    className="w-16 h-7 text-center text-xs font-bold text-foreground border border-border rounded-md shadow-sm outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all bg-background"
+                                  />
+                                )}
                               </div>
                             </td>
                             <td className="px-3 py-2 text-right text-sm whitespace-nowrap">
@@ -1430,7 +1442,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                             <td className="px-3 py-2 text-right text-muted-foreground font-mono text-sm whitespace-nowrap">
                               ₱{(item.grossAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
-                            <td className="px-4 py-2">
+                            <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                               {(() => {
                                 const noDiscountOpt = lineDiscountOptions.find(o => o.discount_type === "No Discount");
                                 const defaultVal = noDiscountOpt ? noDiscountOpt.id.toString() : "";
@@ -1465,13 +1477,13 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                             <td className="px-3 py-2 text-right font-bold text-sm text-foreground whitespace-nowrap">
                               ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
-                             <td className="px-4 py-2">
+                             <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                                <ReasonInputSection
                                  value={item.reason || ""}
                                  onChange={(val) => handleItemChange(idx, "reason", val)}
                                />
                              </td>
-                            <td className="px-3 py-2">
+                            <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                               <SearchableSelect
                                 value={item.returnType || ""}
                                 onValueChange={(val) => { handleItemChange(idx, "returnType", val); setReturnTypeError(false); }}
@@ -1502,7 +1514,83 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 <Trash2 className="h-4 w-4" />
                               </button>
                             </td>
-                          </tr>
+                            </tr>
+
+                            {/* 🟢 EXPANDABLE TAG MANAGEMENT SUB-ROW */}
+                            {isSelected && item.unitOrder === 3 && (
+                              <tr>
+                                <td colSpan={12} className="p-0 border-b border-border bg-muted/5 border-l-2 border-l-primary/30">
+                                  <div className="p-4 animate-in fade-in duration-200">
+                                    <div className="flex justify-between items-center mb-4">
+                                      <h4 className="font-bold text-foreground flex items-center gap-2 text-base">
+                                        <div className="bg-emerald-500/10 p-1.5 rounded text-emerald-600">
+                                          <ScanLine className="h-5 w-5" />
+                                        </div>
+                                        Tagged RFIDs for: <span className="text-primary underline decoration-primary/30 underline-offset-4">{item.description}</span>
+                                      </h4>
+                                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-3 py-1 font-bold">
+                                        {item.rfidTags?.length || 0} ITEMS SCANNED
+                                      </Badge>
+                                    </div>
+                      
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                                      {(!item.rfidTags || item.rfidTags.length === 0) ? (
+                                        <div className="col-span-full py-12 text-center border border-dashed rounded-lg text-muted-foreground bg-muted/5">
+                                          <div className="flex flex-col items-center gap-2">
+                                            <ScanLine className="h-8 w-8 opacity-20" />
+                                            <p className="font-medium">No RFIDs tagged yet</p>
+                                            <span className="text-xs">Start scanning to add items to this row.</span>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        item.rfidTags.map((tag, tIdx) => (
+                                          <div key={tag} className="flex items-center justify-between bg-muted/20 border border-border p-2.5 rounded-md hover:border-primary/30 transition-all group hover:shadow-sm">
+                                            <div className="flex flex-col">
+                                              <span className="text-xs font-mono font-bold text-foreground">{tag}</span>
+                                              <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-black">Tag #{tIdx + 1}</span>
+                                            </div>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setItems(prev => {
+                                                  const next = [...prev];
+                                                  const row = next[idx];
+                                                  const newTags = row.rfidTags!.filter(t => t !== tag);
+                                                  const newQty = newTags.length;
+                                                  
+                                                  const unitPrice = Number(row.unitPrice) || 0;
+                                                  const gross = Math.round(unitPrice * newQty * 100) / 100;
+                                                  let discAmt = 0;
+                                                  if (row.discountType) {
+                                                    const opt = lineDiscountOptions.find(d => d.id.toString() === row.discountType?.toString());
+                                                    if (opt) discAmt = Math.round(gross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
+                                                  }
+                      
+                                                  next[idx] = {
+                                                    ...row,
+                                                    rfidTags: newTags,
+                                                    quantity: newQty,
+                                                    grossAmount: gross,
+                                                    discountAmount: discAmt,
+                                                    totalAmount: Math.round((gross - discAmt) * 100) / 100
+                                                  };
+                                                  return next;
+                                                });
+                                              }}
+                                              className="p-1.5 text-destructive/50 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                                              title="Remove Tag"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </button>
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
                         );
                       })}
                     </>
@@ -1511,76 +1599,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
               </table>
             </div>
           </div>
-
-          {/* 🟢 NEW: TAG MANAGEMENT SECTION */}
-          {selectedRowIndex !== null && items[selectedRowIndex] && (
-            <div className="bg-background rounded-lg border-2 border-primary/20 shadow-md p-5 mb-6 animate-in slide-in-from-bottom-4 duration-300">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="font-bold text-foreground flex items-center gap-2 text-base">
-                  <div className="bg-emerald-500/10 p-1.5 rounded text-emerald-600">
-                    <ScanLine className="h-5 w-5" />
-                  </div>
-                  Tagged RFIDs for: <span className="text-primary underline decoration-primary/30 underline-offset-4">{items[selectedRowIndex].description}</span>
-                </h4>
-                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-3 py-1 font-bold">
-                  {items[selectedRowIndex].rfidTags?.length || 0} ITEMS SCANNED
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {(!items[selectedRowIndex].rfidTags || items[selectedRowIndex].rfidTags!.length === 0) ? (
-                  <div className="col-span-full py-12 text-center border border-dashed rounded-lg text-muted-foreground bg-muted/5">
-                    <div className="flex flex-col items-center gap-2">
-                      <ScanLine className="h-8 w-8 opacity-20" />
-                      <p className="font-medium">No RFIDs tagged yet</p>
-                      <span className="text-xs">Start scanning to add items to this row.</span>
-                    </div>
-                  </div>
-                ) : (
-                  items[selectedRowIndex].rfidTags!.map((tag, tIdx) => (
-                    <div key={tag} className="flex items-center justify-between bg-muted/20 border border-border p-2.5 rounded-md hover:border-primary/30 transition-all group hover:shadow-sm">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-mono font-bold text-foreground">{tag}</span>
-                        <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-black">Tag #{tIdx + 1}</span>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setItems(prev => {
-                            const next = [...prev];
-                            const row = next[selectedRowIndex];
-                            const newTags = row.rfidTags!.filter(t => t !== tag);
-                            const newQty = newTags.length;
-                            
-                            const unitPrice = Number(row.unitPrice) || 0;
-                            const gross = Math.round(unitPrice * newQty * 100) / 100;
-                            let discAmt = 0;
-                            if (row.discountType) {
-                              const opt = lineDiscountOptions.find(d => d.id.toString() === row.discountType?.toString());
-                              if (opt) discAmt = Math.round(gross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
-                            }
-
-                            next[selectedRowIndex] = {
-                              ...row,
-                              rfidTags: newTags,
-                              quantity: newQty,
-                              grossAmount: gross,
-                              discountAmount: discAmt,
-                              totalAmount: Math.round((gross - discAmt) * 100) / 100
-                            };
-                            return next;
-                          });
-                        }}
-                        className="p-1.5 text-destructive/50 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
-                        title="Remove Tag"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
 
           {/* 3. BOTTOM SUMMARY */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">

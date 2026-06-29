@@ -472,23 +472,27 @@ async function validateRfidTagsPayload(payload: any, token: string, branchId: nu
       for (const tag of item.rfidTags) {
         // 1. Global Duplicate Check
         const dupCheck = await repo.checkRfidDuplicate(tag);
+        let isFromCurrentReturn = false;
         if (dupCheck.data && dupCheck.data.length > 0) {
           const returnNo = (dupCheck.data[0].sales_return_detail_id as any)?.return_no || "Unknown";
           if (currentReturnNo && returnNo === currentReturnNo) {
              // It's allowed to be in the current SR being updated
+             isFromCurrentReturn = true;
           } else {
              throw new Error(`Duplicate RFID: Tag "${tag}" is already returned in SR #${returnNo}`);
           }
         }
         
         // 2. Inventory Check
-        const lookup = await lookupRfid(tag, branchId, token);
-        if (lookup?.isOnInventory) {
-          const productId = Number(item.productId || item.product_id || item.id);
-          if (Number(lookup.productId) !== productId) {
-             throw new Error(`Product Mismatch: RFID "${tag}" belongs to a different product on-hand.`);
+        if (!isFromCurrentReturn) {
+          const lookup = await lookupRfid(tag, branchId, token);
+          if (lookup?.isOnInventory) {
+            const productId = Number(item.productId || item.product_id || item.id);
+            if (Number(lookup.productId) !== productId) {
+               throw new Error(`Product Mismatch: RFID "${tag}" belongs to a different product on-hand.`);
+            }
+            throw new Error(`Already in Stock: RFID "${tag}" is already in inventory.`);
           }
-          throw new Error(`Already in Stock: RFID "${tag}" is already in inventory.`);
         }
       }
     }

@@ -621,27 +621,22 @@ export function UpdateSalesReturnModal({
       const newDetails = [...prev];
       const item = { ...newDetails[index], [field]: value };
 
-      if (field === "discountType") {
-        if (value === "No Discount" || !value) {
-          item.discountAmount = 0;
-        } else {
-          const selectedDisc = discountOptions.find(
-            (d) => d.id.toString() === value,
-          );
-          if (selectedDisc) {
-            const percentage = parseFloat(selectedDisc.total_percent);
-            const gross =
-              Math.round(Number(item.quantity || 0) * Number(item.unitPrice || 0) * 100) / 100;
-            item.discountAmount = Math.round(gross * (percentage / 100) * 100) / 100;
-          }
-        }
-      }
-
       const qty = Number(item.quantity || 0);
       const price = Number(item.unitPrice || 0);
       const gross = Math.round(qty * price * 100) / 100;
-      const disc = Number(item.discountAmount || 0);
 
+      let disc = 0;
+      if (item.discountType && item.discountType !== "No Discount") {
+        const selectedDisc = discountOptions.find(
+          (d) => d.id.toString() === item.discountType?.toString(),
+        );
+        if (selectedDisc) {
+          const percentage = parseFloat(selectedDisc.total_percent);
+          disc = Math.round(gross * (percentage / 100) * 100) / 100;
+        }
+      }
+
+      item.discountAmount = disc;
       item.grossAmount = gross;
       item.totalAmount = Math.round((gross - disc) * 100) / 100;
 
@@ -1106,12 +1101,13 @@ export function UpdateSalesReturnModal({
                       details.map((item, idx) => {
                         const isSelected = selectedRowIndex === idx;
                         return (
-                          <TableRow
+                          <React.Fragment key={item.id || idx}>
+                            <TableRow
                             key={item.id || idx}
                             onClick={() => {
                               if (!canEditAll) return;
                               if (item.unitOrder === 3) {
-                                setSelectedRowIndex(idx);
+                                setSelectedRowIndex(prev => prev === idx ? null : idx);
                               } else {
                                 toast.info("RFID tagging is limited to Box units (Order 3).", {
                                   description: `"${item.description}" uses "${item.unit}", which must be handled manually.`
@@ -1144,17 +1140,30 @@ export function UpdateSalesReturnModal({
                                 {item.unit}
                               </Badge>
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-center">
+                            <TableCell className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                               <div className="flex flex-col items-center gap-1">
-                                <Badge variant="outline" className={cn(
-                                  "font-bold transition-all min-w-[40px] flex justify-center",
-                                  item.unitOrder === 3 ? "border-primary/40 bg-primary/10 text-primary shadow-sm" : "border-muted-foreground/30 bg-muted/10 text-muted-foreground opacity-70"
-                                )}>
-                                  {item.quantity}
-                                </Badge>
-                                <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-tighter">
-                                  {item.unitOrder === 3 ? "Box Units" : "Manual Qty"}
-                                </span>
+                                {item.unitOrder === 3 ? (
+                                  <Badge variant="outline" className={cn(
+                                    "font-bold transition-all min-w-[40px] flex justify-center",
+                                    "border-primary/40 bg-primary/10 text-primary shadow-sm"
+                                  )}>
+                                    {item.quantity}
+                                  </Badge>
+                                ) : (
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={item.quantity}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value, 10);
+                                      if (!isNaN(val) && val > 0) {
+                                        handleDetailChange(idx, "quantity", val);
+                                      }
+                                    }}
+                                    disabled={!canEditAll}
+                                    className="w-16 h-7 text-center text-xs font-bold text-foreground border border-border rounded-md shadow-sm outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all bg-background disabled:opacity-50"
+                                  />
+                                )}
                               </div>
                             </TableCell>
                             <TableCell className="px-3 py-2 text-right text-sm whitespace-nowrap">
@@ -1163,7 +1172,7 @@ export function UpdateSalesReturnModal({
                             <TableCell className="px-3 py-2 text-right text-muted-foreground font-mono text-sm whitespace-nowrap">
                               ₱{(Number(item.grossAmount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </TableCell>
-                            <TableCell className="px-4 py-2">
+                            <TableCell className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                               {canEditAll ? (
                                 (() => {
                                   const noDiscountOpt = discountOptions.find(o => o.discount_type === "No Discount");
@@ -1204,7 +1213,7 @@ export function UpdateSalesReturnModal({
                             <TableCell className="px-3 py-2 text-right font-bold text-sm text-foreground whitespace-nowrap">
                               ₱{Number(item.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </TableCell>
-                            <TableCell className="px-4 py-2">
+                            <TableCell className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                               {canEditAll ? (
                                 <ReasonInputSection
                                   value={item.reason || ""}
@@ -1216,7 +1225,7 @@ export function UpdateSalesReturnModal({
                                 </span>
                               )}
                             </TableCell>
-                            <TableCell className="px-3 py-2">
+                            <TableCell className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                               {canEditAll ? (
                                 <LocalSearchableSelect
                                   value={item.returnType || ""}
@@ -1253,8 +1262,84 @@ export function UpdateSalesReturnModal({
                                 </button>
                               </TableCell>
                             )}
-                          </TableRow>
-                        )
+                            </TableRow>
+
+                            {/* 🟢 EXPANDABLE TAG MANAGEMENT SUB-ROW */}
+                            {canEditAll && isSelected && item.unitOrder === 3 && (
+                              <TableRow>
+                                <TableCell colSpan={12} className="p-0 border-b border-border bg-muted/5 border-l-2 border-l-primary/30">
+                                  <div className="p-4 animate-in fade-in duration-200">
+                                    <div className="flex justify-between items-center mb-4">
+                                      <h4 className="font-bold text-foreground flex items-center gap-2 text-base">
+                                        <div className="bg-emerald-500/10 p-1.5 rounded text-emerald-600">
+                                          <ScanLine className="h-5 w-5" />
+                                        </div>
+                                        Tagged RFIDs for: <span className="text-primary underline decoration-primary/30 underline-offset-4">{item.description}</span>
+                                      </h4>
+                                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-3 py-1 font-bold">
+                                        {item.rfidTags?.length || 0} ITEMS SCANNED
+                                      </Badge>
+                                    </div>
+                      
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                                      {(!item.rfidTags || item.rfidTags.length === 0) ? (
+                                        <div className="col-span-full py-12 text-center border border-dashed rounded-lg text-muted-foreground bg-muted/5">
+                                          <div className="flex flex-col items-center gap-2">
+                                            <ScanLine className="h-8 w-8 opacity-20" />
+                                            <p className="font-medium">No RFIDs tagged yet</p>
+                                            <span className="text-xs">Start scanning to add items to this row.</span>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        item.rfidTags.map((tag, tIdx) => (
+                                          <div key={tag} className="flex items-center justify-between bg-muted/20 border border-border p-2.5 rounded-md hover:border-primary/30 transition-all group hover:shadow-sm">
+                                            <div className="flex flex-col">
+                                              <span className="text-xs font-mono font-bold text-foreground">{tag}</span>
+                                              <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-black">Tag #{tIdx + 1}</span>
+                                            </div>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDetails(prev => {
+                                                  const next = [...prev];
+                                                  const row = next[idx];
+                                                  const newTags = row.rfidTags!.filter(t => t !== tag);
+                                                  const newQty = newTags.length;
+                      
+                                                  const unitPrice = Number(row.unitPrice) || 0;
+                                                  const gross = Math.round(unitPrice * newQty * 100) / 100;
+                                                  let discAmt = 0;
+                                                  if (row.discountType) {
+                                                    const opt = discountOptions.find(d => d.id.toString() === row.discountType?.toString());
+                                                    if (opt) discAmt = Math.round(gross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
+                                                  }
+                      
+                                                  next[idx] = {
+                                                    ...row,
+                                                    rfidTags: newTags,
+                                                    quantity: newQty,
+                                                    grossAmount: gross,
+                                                    discountAmount: discAmt,
+                                                    totalAmount: Math.round((gross - discAmt) * 100) / 100
+                                                  };
+                                                  return next;
+                                                });
+                                              }}
+                                              className="p-1.5 text-destructive/50 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                                              title="Remove Tag"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </button>
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </React.Fragment>
+                        );
                       })
                     )}
                   </TableBody>
@@ -1262,77 +1347,6 @@ export function UpdateSalesReturnModal({
               </div>
             </div>
           </div>
-
-          {/* 🟢 NEW: TAG MANAGEMENT SECTION */}
-          {canEditAll && selectedRowIndex !== null && details[selectedRowIndex] && (
-            <div className="bg-background rounded-lg border-2 border-primary/20 shadow-md p-5 mb-6 animate-in slide-in-from-bottom-4 duration-300">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="font-bold text-foreground flex items-center gap-2 text-base">
-                  <div className="bg-emerald-500/10 p-1.5 rounded text-emerald-600">
-                    <ScanLine className="h-5 w-5" />
-                  </div>
-                  Tagged RFIDs for: <span className="text-primary underline decoration-primary/30 underline-offset-4">{details[selectedRowIndex].description}</span>
-                </h4>
-                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-3 py-1 font-bold">
-                  {details[selectedRowIndex].rfidTags?.length || 0} ITEMS SCANNED
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {(!details[selectedRowIndex].rfidTags || details[selectedRowIndex].rfidTags!.length === 0) ? (
-                  <div className="col-span-full py-12 text-center border border-dashed rounded-lg text-muted-foreground bg-muted/5">
-                    <div className="flex flex-col items-center gap-2">
-                      <ScanLine className="h-8 w-8 opacity-20" />
-                      <p className="font-medium">No RFIDs tagged yet</p>
-                      <span className="text-xs">Start scanning to add items to this row.</span>
-                    </div>
-                  </div>
-                ) : (
-                  details[selectedRowIndex].rfidTags!.map((tag, tIdx) => (
-                    <div key={tag} className="flex items-center justify-between bg-muted/20 border border-border p-2.5 rounded-md hover:border-primary/30 transition-all group hover:shadow-sm">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-mono font-bold text-foreground">{tag}</span>
-                        <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-black">Tag #{tIdx + 1}</span>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setDetails(prev => {
-                            const next = [...prev];
-                            const row = next[selectedRowIndex];
-                            const newTags = row.rfidTags!.filter(t => t !== tag);
-                            const newQty = newTags.length;
-
-                            const unitPrice = Number(row.unitPrice) || 0;
-                            const gross = Math.round(unitPrice * newQty * 100) / 100;
-                            let discAmt = 0;
-                            if (row.discountType) {
-                              const opt = discountOptions.find(d => d.id.toString() === row.discountType?.toString());
-                              if (opt) discAmt = Math.round(gross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
-                            }
-
-                            next[selectedRowIndex] = {
-                              ...row,
-                              rfidTags: newTags,
-                              quantity: newQty,
-                              grossAmount: gross,
-                              discountAmount: discAmt,
-                              totalAmount: Math.round((gross - discAmt) * 100) / 100
-                            };
-                            return next;
-                          });
-                        }}
-                        className="p-1.5 text-destructive/50 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
-                        title="Remove Tag"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
           {/* BOTTOM FORM GRID */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-4">
             <div className="md:col-span-2 space-y-4">

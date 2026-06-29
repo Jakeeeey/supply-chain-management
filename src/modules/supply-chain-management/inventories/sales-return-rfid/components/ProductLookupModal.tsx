@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   X,
   Plus,
+  Minus,
   Trash2,
   Package,
   Filter,
@@ -265,17 +266,39 @@ export function ProductLookupModal({
     return price;
   };
 
+  const recalculateItem = (item: SalesReturnItem, newQty: number) => {
+    const grossAmount = newQty * item.unitPrice;
+    let percentage = 0;
+    if (item.discountType) {
+      const matchedDisc = lineDiscounts?.find(d => String(d.id) === String(item.discountType));
+      if (matchedDisc) {
+        percentage = parseFloat(matchedDisc.total_percent) || 0;
+      }
+    }
+    const discountAmount = Math.round(grossAmount * (percentage / 100) * 100) / 100;
+    const totalAmount = Math.round((grossAmount - discountAmount) * 100) / 100;
+    return { ...item, quantity: newQty, grossAmount, discountAmount, totalAmount };
+  };
+
   const handleAddItem = (
     product: Product,
     unitLabel: string,
     selectedPrice: number,
   ) => {
+    const unitOrder = unitsList.find(u => u.unit_id === product.unit_of_measurement)?.order || 0;
+
     setSelectedItems((prevItems) => {
       const existingItemIndex = prevItems.findIndex(
         (item) => item.productId === product.product_id && item.unit === unitLabel && item.unitPrice === selectedPrice,
       );
 
       if (existingItemIndex !== -1) {
+        if (unitOrder !== 3) {
+          const updated = [...prevItems];
+          const item = updated[existingItemIndex];
+          updated[existingItemIndex] = recalculateItem(item, item.quantity + 1);
+          return updated;
+        }
         return prevItems;
       } else {
         // 🟢 Resolve final discount based on hierarchy
@@ -285,8 +308,7 @@ export function ProductLookupModal({
           catalogData || { connections: supplierConnections }
         );
 
-        const unitOrder = unitsList.find(u => u.unit_id === product.unit_of_measurement)?.order || 0;
-        const initialQty = 0; // Quantity must be 0 initially as it is scanned via RFID
+        const initialQty = unitOrder === 3 ? 0 : 1; 
         const initialGross = initialQty * selectedPrice;
 
         let percentage = 0;
@@ -336,6 +358,27 @@ export function ProductLookupModal({
   const handleRemoveItem = (tempId: string | undefined) => {
     if (!tempId) return;
     setSelectedItems((prev) => prev.filter((i) => i.tempId !== tempId));
+  };
+
+  const updateItemQuantity = (tempId: string | undefined, delta: number) => {
+    if (!tempId) return;
+    setSelectedItems(prev => prev.map(item => {
+      if (item.tempId === tempId && item.unitOrder !== 3) {
+        const newQty = Math.max(1, item.quantity + delta);
+        return recalculateItem(item, newQty);
+      }
+      return item;
+    }));
+  };
+
+  const setItemQuantityDirect = (tempId: string | undefined, newQty: number) => {
+    if (!tempId || newQty < 1) return;
+    setSelectedItems(prev => prev.map(item => {
+      if (item.tempId === tempId && item.unitOrder !== 3) {
+        return recalculateItem(item, newQty);
+      }
+      return item;
+    }));
   };
 
   const handleConfirm = () => {
@@ -679,7 +722,7 @@ export function ProductLookupModal({
                                     const existingItem = selectedItems.find(
                                       (item) => item.productId === product.product_id && item.unit === baseUnitShortcutUpper && item.unitPrice === safePrice
                                     );
-                                    if (existingItem) {
+                                    if (existingItem && unitObj?.order === 3) {
                                       return (
                                         <Button
                                           size="sm"
@@ -861,9 +904,39 @@ export function ProductLookupModal({
 
                       {/* Controls Row */}
                       <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
-                        <div className="flex items-center text-xs text-muted-foreground font-semibold">
-                          Qty: {item.quantity}
-                        </div>
+                        {item.unitOrder === 3 ? (
+                          <div className="flex items-center text-xs text-muted-foreground font-semibold">
+                            Qty: {item.quantity}
+                          </div>
+                        ) : (
+                          <div className="flex items-center bg-muted/30 rounded-md border border-border h-7">
+                            <button
+                              className="px-2 h-full text-muted-foreground hover:text-primary hover:bg-background rounded-l-md disabled:opacity-30 transition-colors"
+                              onClick={() => updateItemQuantity(item.tempId, -1)}
+                              disabled={item.quantity <= 1}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <input
+                              type="number"
+                              min={1}
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                if (!isNaN(val) && val > 0) {
+                                  setItemQuantityDirect(item.tempId, val);
+                                }
+                              }}
+                              className="w-10 text-center text-xs font-bold text-foreground bg-transparent border-0 outline-none appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            />
+                            <button
+                              className="px-2 h-full text-muted-foreground hover:text-primary hover:bg-background rounded-r-md transition-colors"
+                              onClick={() => updateItemQuantity(item.tempId, 1)}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
                         {/* Item Total */}
                         <div className="text-right">
                           <span className="block text-sm font-bold text-foreground">
