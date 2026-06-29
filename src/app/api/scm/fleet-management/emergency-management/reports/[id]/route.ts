@@ -22,7 +22,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const body = await request.json();
     const nextStatus = typeof body.status === "string" ? body.status.trim() : "";
 
-    const payload: Record<string, any> = {
+    const payload: Record<string, string | number | null> = {
       updated_at: new Date().toISOString(),
     };
 

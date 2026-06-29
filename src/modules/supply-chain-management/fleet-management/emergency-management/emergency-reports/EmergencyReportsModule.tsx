@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Clock, ExternalLink, Loader2, MapPin, Phone, Search, Siren, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -85,17 +85,17 @@ export default function EmergencyReportsModule() {
     }
   }, [selectedReport]);
 
-  const handlePrevImage = (e?: React.MouseEvent) => {
+  const handlePrevImage = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (lightboxIndex === null || attachmentsList.length === 0) return;
     setLightboxIndex((prev) => (prev! - 1 + attachmentsList.length) % attachmentsList.length);
-  };
+  }, [lightboxIndex, attachmentsList]);
 
-  const handleNextImage = (e?: React.MouseEvent) => {
+  const handleNextImage = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (lightboxIndex === null || attachmentsList.length === 0) return;
     setLightboxIndex((prev) => (prev! + 1) % attachmentsList.length);
-  };
+  }, [lightboxIndex, attachmentsList]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -107,7 +107,7 @@ export default function EmergencyReportsModule() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [lightboxIndex, attachmentsList]);
+  }, [lightboxIndex, attachmentsList, handlePrevImage, handleNextImage]);
 
   const counts = useMemo(() => {
     return reports.reduce(

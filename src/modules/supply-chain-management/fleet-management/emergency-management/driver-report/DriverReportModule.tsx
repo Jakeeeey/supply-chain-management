@@ -32,6 +32,51 @@ import type { DriverProfileResponse, EmergencyReport } from "../types";
 
 type ReportingState = "initializing" | "ready" | "submitting" | "success" | "error" | "not-driver";
 
+type GeoState = "locating" | "available" | "denied" | "timeout" | "unavailable" | "unsupported";
+
+const INITIAL_GEO_OPTIONS: PositionOptions = {
+  enableHighAccuracy: false,
+  timeout: 30000,
+  maximumAge: 0,
+};
+
+const RETRY_GEO_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  timeout: 30000,
+  maximumAge: 60000,
+};
+
+function getGeoStateFromError(error: unknown): GeoState {
+  const geoError = error as GeolocationPositionError;
+  if (geoError.code === geoError.PERMISSION_DENIED) return "denied";
+  if (geoError.code === geoError.TIMEOUT) return "timeout";
+  return "unavailable";
+}
+
+function logGeoError(label: string, error: unknown) {
+  const geoError = error as GeolocationPositionError;
+  console.warn(`${label}: code=${geoError.code ?? "unknown"} message=${geoError.message || "No message"}`);
+}
+
+function getGeoLabel(geoState: GeoState) {
+  if (geoState === "available") return "";
+  if (geoState === "locating") return "Locating...";
+  if (geoState === "denied") return "Permission denied";
+  if (geoState === "timeout") return "Location timed out";
+  if (geoState === "unavailable") return "Location unavailable";
+  return "GPS unsupported";
+}
+
+function hasFiniteCoords(coords: { lat: number | null; lon: number | null }) {
+  return Number.isFinite(coords.lat) && Number.isFinite(coords.lon);
+}
+
+function requestCurrentPosition(options: PositionOptions) {
+  return new Promise<GeolocationPosition>((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, options);
+  });
+}
+
 export default function DriverReportModule() {
   const router = useRouter();
   const initTriggered = useRef(false);
@@ -41,6 +86,7 @@ export default function DriverReportModule() {
   const [profile, setProfile] = useState<DriverProfileResponse | null>(null);
   const [report, setReport] = useState<EmergencyReport | null>(null);
   const [coords, setCoords] = useState<{ lat: number | null; lon: number | null }>({ lat: null, lon: null });
+  const [geoState, setGeoState] = useState<GeoState>("locating");
   const [errorMsg, setErrorMsg] = useState("");
 
   // Additional detail states
@@ -72,25 +118,19 @@ export default function DriverReportModule() {
 
         // 2. Request Geolocation
         setProgressText("Acquiring GPS location coordinates...");
-        let lat: number | null = null;
-        let lon: number | null = null;
+        setGeoState("locating");
 
         if ("geolocation" in navigator) {
           try {
-            const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-              navigator.geolocation.getCurrentPosition(resolve, reject, {
-                enableHighAccuracy: true,
-                timeout: 5000,
-                maximumAge: 0,
-              });
-            });
-            lat = pos.coords.latitude;
-            lon = pos.coords.longitude;
-            setCoords({ lat, lon });
+            const pos = await requestCurrentPosition(INITIAL_GEO_OPTIONS);
+            setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+            setGeoState("available");
           } catch (geoError) {
-            console.warn("Geolocation warning or permission denied:", geoError);
-            // Non-blocking, continue with null coords
+            logGeoError("Geolocation initial error", geoError);
+            setGeoState(getGeoStateFromError(geoError));
           }
+        } else {
+          setGeoState("unsupported");
         }
 
         setState("ready");
@@ -104,6 +144,26 @@ export default function DriverReportModule() {
     void loadContextFlow();
   }, []);
 
+  function retryGeo() {
+    setGeoState("locating");
+    setCoords({ lat: null, lon: null });
+
+    if (!("geolocation" in navigator)) {
+      setGeoState("unsupported");
+      return;
+    }
+
+    requestCurrentPosition(RETRY_GEO_OPTIONS)
+      .then((pos) => {
+        setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        setGeoState("available");
+      })
+      .catch((geoError) => {
+        logGeoError("Geolocation retry error", geoError);
+        setGeoState(getGeoStateFromError(geoError));
+      });
+  }
+
   async function triggerSOSBroadcast() {
     if (!profile) return;
     
@@ -111,8 +171,9 @@ export default function DriverReportModule() {
     setProgressText("Broadcasting emergency distress signal...");
     
     try {
-      const locationName = coords.lat
-        ? `GPS: ${coords.lat.toFixed(6)}, ${coords.lon?.toFixed(6)}`
+      const hasCoords = hasFiniteCoords(coords);
+      const locationName = hasCoords
+        ? `GPS: ${coords.lat!.toFixed(6)}, ${coords.lon!.toFixed(6)}`
         : "Location Unknown";
 
       const newReport = await createEmergencyReport({
@@ -123,8 +184,8 @@ export default function DriverReportModule() {
         dispatch_plan_id: profile.activeTrip?.id || null,
         occurred_at: new Date(new Date().getTime() + 8 * 60 * 60 * 1000).toISOString().replace("Z", ""),
         location_name: locationName,
-        latitude: coords.lat,
-        longitude: coords.lon,
+        latitude: hasCoords ? coords.lat : null,
+        longitude: hasCoords ? coords.lon : null,
         description: "Automated distress signal sent via Driver Quick Report SOS Distress button.",
         contact_name: profile.user?.name || "Driver",
         contact_phone: profile.user?.user_contact || "",
@@ -305,8 +366,15 @@ export default function DriverReportModule() {
               <div className="flex items-center gap-1.5 font-medium">
                 <Navigation className="size-4 text-muted-foreground" />
                 <span>
-                  {coords.lat ? `${coords.lat.toFixed(5)}, ${coords.lon?.toFixed(5)}` : "Locating..."}
+                  {geoState === "available" && hasFiniteCoords(coords)
+                    ? `${coords.lat!.toFixed(5)}, ${coords.lon!.toFixed(5)}`
+                    : getGeoLabel(geoState)}
                 </span>
+                {geoState !== "available" && geoState !== "locating" ? (
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={retryGeo}>
+                    Retry GPS
+                  </Button>
+                ) : null}
               </div>
             </div>
           </CardContent>
@@ -434,7 +502,11 @@ export default function DriverReportModule() {
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <Navigation className="size-4 text-muted-foreground" />
                     <span className="font-medium">
-                      {coords.lat ? `${coords.lat.toFixed(5)}, ${coords.lon?.toFixed(5)}` : "Unavailable"}
+                      {geoState === "available" && hasFiniteCoords(coords)
+                        ? `${coords.lat!.toFixed(5)}, ${coords.lon!.toFixed(5)}`
+                        : geoState === "locating"
+                          ? "Unavailable"
+                          : getGeoLabel(geoState)}
                     </span>
                   </div>
                 </div>
