@@ -47,7 +47,7 @@ export function ProductVerificationStep({ onContinue, onBack }: { onContinue: ()
         }).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
         return all;
-    }, [selectedPO, editingReceiptId]);
+    }, [selectedPO]);
 
     const allItems = React.useMemo(() => {
         if (!searchQuery.trim()) return flattenedAllItems;

@@ -4,6 +4,7 @@ import * as React from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import type { PostingReceipt } from "../../types";
 import { formatPostedAt, safeText } from "../../utils/format";
 import { ConfirmPostReceiptDialog } from "../dialogs/ConfirmPostReceiptDialog";
@@ -45,8 +46,23 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
         <Card className="p-3">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <div className="text-sm font-semibold">
-                        {safeText(receipt.receiptNo)}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <div className="text-sm font-semibold">
+                            {safeText(receipt.receiptNo)}
+                        </div>
+                        {receipt.receivingMethod && (
+                            <Badge
+                                variant="outline"
+                                className={cn(
+                                    "text-[9px] font-black uppercase tracking-tight py-0 px-1.5 h-4.5",
+                                    receipt.receivingMethod.toLowerCase() === "rfid" 
+                                        ? "bg-indigo-500/10 text-indigo-700 border-indigo-500/20" 
+                                        : "bg-slate-500/10 text-slate-700 border-slate-500/20"
+                                )}
+                            >
+                                {receipt.receivingMethod}
+                            </Badge>
+                        )}
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">
                         Receipt Date: {formatPostedAt(receipt.receiptDate)}

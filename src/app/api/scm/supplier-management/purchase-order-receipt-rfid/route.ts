@@ -257,6 +257,7 @@ interface PORow {
     withholding_amount?: string | number;
     total_amount?: string | number;
     receipt_type?: string | null;
+    receiving_method?: string | null;
 }
 
 interface POProductRow {
@@ -270,7 +271,7 @@ interface POProductRow {
     discount_type?: string | number | null;
 }
 
-const POR_SAFE_FIELDS = "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,receipt_type,received_date,isPosted,is_reverted,lot_id,batch_no,expiry_date,discount_type,unit_price,discounted_amount";
+const POR_SAFE_FIELDS = "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,receipt_type,received_date,isPosted,is_reverted,lot_id,batch_no,expiry_date,discount_type,unit_price,discounted_amount,receiving_method";
 
 
 async function fetchReceivingItemsByLinkIds(base: string, linkIds: number[]) {
@@ -589,6 +590,7 @@ async function ensureOpenReceivingRow(args: {
         receipt_no: null,
         receipt_date: null,
         received_date: null,
+        receiving_method: "rfid"
     };
     const created = await fetchJson<{ data: Record<string, unknown> }>(insertUrl, { method: "POST", body: JSON.stringify(payload) });
     const porId = toNum(created?.data?.purchase_order_product_id);
@@ -1347,7 +1349,7 @@ export async function POST(req: NextRequest) {
                         const resetPatch = {
                             receipt_no: null, receipt_date: null, receipt_type: null, received_quantity: 0, received_date: null, isPosted: 0, is_reverted: 0,
                             discounted_amount: 0, vat_amount: 0, withholding_amount: 0, total_amount: 0,
-                            lot_id: null, batch_no: null, expiry_date: null
+                            lot_id: null, batch_no: null, expiry_date: null, receiving_method: null
                         };
                         await fetchJson(`${base}/items/${POR_COLLECTION}/${realPorId}`, { method: "PATCH", body: JSON.stringify(resetPatch) });
                     }
@@ -1381,7 +1383,8 @@ export async function POST(req: NextRequest) {
                     receipt_no: receiptNo, receipt_date: receiptDate, receipt_type: resolvedReceiptTypeId || null, received_quantity: newQty, received_date: nowISO(), isPosted: 0, is_reverted: 0,
                     discount_type: dtId || null, discounted_amount: lineDisc,
                     vat_amount: vatAmtTotal, withholding_amount: ewtAmtTotal,
-                    total_amount: Number(lineGross.toFixed(2))
+                    total_amount: Number(lineGross.toFixed(2)),
+                    receiving_method: "rfid"
                 };
                 if (m.lotId !== undefined && m.lotId !== null && m.lotId !== "") patch.lot_id = toNum(m.lotId);
                 if (m.batchNo !== undefined && m.batchNo !== null) patch.batch_no = String(m.batchNo).trim() || null;
