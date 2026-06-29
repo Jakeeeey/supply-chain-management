@@ -347,6 +347,7 @@ export function CreateReturnModal({
         toast.error("Invalid RFID Tag", {
           description: `RFID tag "${rfidTag}" must be a 24-character hexadecimal string.`,
         });
+        setLastScannedRfid("");
         return;
       }
 
@@ -355,6 +356,7 @@ export function CreateReturnModal({
         toast.warning("Duplicate RFID", {
           description: `RFID "${cleanedTag}" is already in the cart.`,
         });
+        setLastScannedRfid("");
         return;
       }
 
@@ -368,6 +370,7 @@ export function CreateReturnModal({
           toast.error("RFID Not Found", {
             description: `No on-hand product found for RFID "${cleanedTag}" at this branch.`,
           });
+          setLastScannedRfid("");
           return;
         }
 
@@ -381,6 +384,7 @@ export function CreateReturnModal({
           toast.error("Supplier Mismatch", {
             description: `Product associated with RFID "${cleanedTag}" does not belong to the selected Supplier or is out of stock.`,
           });
+          setLastScannedRfid("");
           return;
         }
 
@@ -392,6 +396,7 @@ export function CreateReturnModal({
           toast.error("Not Eligible for RFID", {
             description: `"${invRecord.unit_name}" (order ${matchedUnit?.order ?? "?"}) is not eligible for RFID scanning. Only the largest unit (order 3) is allowed.`,
           });
+          setLastScannedRfid("");
           return;
         }
 
@@ -438,9 +443,8 @@ export function CreateReturnModal({
         }, 2000);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to look up RFID tag.";
-        toast.error("RFID Scan Error", {
-          description: message,
-        });
+        toast.error("Scan Error", { description: message });
+        setLastScannedRfid("");
       } finally {
         setRfidScanning(false);
         // Automatically refocus for the next scan after the element is re-enabled
@@ -897,7 +901,8 @@ export function CreateReturnModal({
                 submitting ||
                 !selection.supplierId ||
                 !selection.branchId ||
-                cart.length === 0
+                cart.length === 0 ||
+                cart.some((item) => item.quantity > (item.onHand ?? item.stock ?? Infinity))
               }
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >

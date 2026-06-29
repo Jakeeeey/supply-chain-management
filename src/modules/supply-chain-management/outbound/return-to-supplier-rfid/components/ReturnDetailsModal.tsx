@@ -382,6 +382,7 @@ export function ReturnDetailsModal({
         const result = await lookupRfid(cleanedTag, currentBranchId);
         if (!result || !result.productId) {
           toast.error("RFID Not Found", { description: `No product found for RFID "${cleanedTag}" at this branch.` });
+          setLastScannedRfid("");
           return;
         }
 
@@ -390,6 +391,7 @@ export function ReturnDetailsModal({
         
         if (!invRecord) {
           toast.error("Stock Error", { description: "Product not in current supplier inventory." });
+          setLastScannedRfid("");
           return;
         }
 
@@ -397,6 +399,7 @@ export function ReturnDetailsModal({
         const matchedUnit = refs.units.find((u) => u.unit_name === invRecord.unit_name);
         if (!matchedUnit || matchedUnit.order !== 3) {
           toast.error("Ineligible Unit", { description: `${invRecord.unit_name} is not eligible for RFID. (Order 3 only)` });
+          setLastScannedRfid("");
           return;
         }
 
@@ -434,9 +437,14 @@ export function ReturnDetailsModal({
 
         addToCartInternal(product, 1);
         toast.success("RFID Added", { description: `Added "${product.name}"` });
+        
+        setTimeout(() => {
+          setLastScannedRfid("");
+        }, 2000);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "An unknown error occurred.";
         toast.error("Scan Error", { description: message });
+        setLastScannedRfid("");
       } finally {
         setRfidScanning(false);
       }
@@ -931,7 +939,7 @@ export function ReturnDetailsModal({
                 <Button
                   className="bg-primary hover:bg-primary/90 text-primary-foreground"
                   onClick={() => handleSave(false)}
-                  disabled={saving}
+                  disabled={saving || items.some((item) => item.quantity > (item.onHand ?? item.stock ?? Infinity))}
                 >
                   {saving ? (
                     <Loader2 className="animate-spin mr-2 h-4 w-4" />
@@ -943,7 +951,7 @@ export function ReturnDetailsModal({
                 <Button
                   className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md font-bold transition-all active:scale-[0.98]"
                   onClick={() => handleSave(true)}
-                  disabled={saving}
+                  disabled={saving || items.some((item) => item.quantity > (item.onHand ?? item.stock ?? Infinity))}
                 >
                   {saving ? (
                     <Loader2 className="animate-spin mr-2 h-4 w-4" />

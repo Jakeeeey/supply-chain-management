@@ -358,8 +358,19 @@ export async function lookupRfid(
 /**
  * Creates a new Return-to-Supplier transaction.
  */
-export async function createTransaction(dto: CreateReturnDTO) {
+export async function createTransaction(dto: CreateReturnDTO, token: string) {
   const { rts_items, ...header } = dto;
+  
+  // 1. Fetch Inventory once and validate all items
+  const inventory = await fetchInventory(header.branch_id, header.supplier_id, token);
+  for (const item of rts_items) {
+    const inv = inventory.find(i => i.product_id === item.product_id);
+    const stock = inv?.running_inventory ?? 0;
+    if (item.quantity > stock) {
+      throw new Error(`Insufficient stock for product ID ${item.product_id}. Requested: ${item.quantity}, Available: ${stock}`);
+    }
+  }
+
   const docNo = `RTS-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`;
 
   const calculatedTotalNet = rts_items.reduce((sum, item) => sum + (item.net_amount || 0), 0);
@@ -391,8 +402,18 @@ export async function createTransaction(dto: CreateReturnDTO) {
  * Updates an existing Return-to-Supplier transaction.
  * Cleans up old items and rfids before creating new ones.
  */
-export async function updateTransaction(id: string, dto: CreateReturnDTO) {
+export async function updateTransaction(id: string, dto: CreateReturnDTO, token: string) {
   const { rts_items, ...header } = dto;
+
+  // 0. Fetch Inventory once and validate all items
+  const inventory = await fetchInventory(header.branch_id, header.supplier_id, token);
+  for (const item of rts_items) {
+    const inv = inventory.find(i => i.product_id === item.product_id);
+    const stock = inv?.running_inventory ?? 0;
+    if (item.quantity > stock) {
+      throw new Error(`Insufficient stock for product ID ${item.product_id}. Requested: ${item.quantity}, Available: ${stock}`);
+    }
+  }
   
   const calculatedTotalNet = rts_items.reduce((sum, item) => sum + (item.net_amount || 0), 0);
 

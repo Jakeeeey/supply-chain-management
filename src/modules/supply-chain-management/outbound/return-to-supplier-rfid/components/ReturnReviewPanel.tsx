@@ -256,19 +256,30 @@ export function ReturnReviewPanel({
                             {item.quantity}
                           </div>
                         ) : (
-                          <Input
-                            type="number"
-                            min={1}
-                            value={item.quantity}
-                            onChange={(e) =>
-                              onUpdateItem(
-                                item.id,
-                                "quantity",
-                                Math.max(1, parseFloat(e.target.value) || 0),
-                              )
-                            }
-                            className="h-8 text-center"
-                          />
+                          <div className="flex flex-col gap-1 items-center">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={item.quantity}
+                              onChange={(e) =>
+                                onUpdateItem(
+                                  item.id,
+                                  "quantity",
+                                  Math.max(1, parseFloat(e.target.value) || 0),
+                                )
+                              }
+                              className={`h-8 text-center ${
+                                item.quantity > (item.onHand ?? item.stock ?? Infinity)
+                                  ? "border-red-500 ring-1 ring-red-500 focus-visible:ring-red-500"
+                                  : ""
+                              }`}
+                            />
+                            {item.quantity > (item.onHand ?? item.stock ?? Infinity) && (
+                              <span className="text-[10px] text-red-500 font-bold whitespace-nowrap">
+                                Exceeds stock ({(item.onHand ?? item.stock ?? 0)})
+                              </span>
+                            )}
+                          </div>
                         )}
                       </TableCell>
                       <TableCell className="text-right text-sm font-medium">
