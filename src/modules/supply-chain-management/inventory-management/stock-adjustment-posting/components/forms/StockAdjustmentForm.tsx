@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ProductSelectionModal } from "../modals/ProductSelectionModal";
+import { AttachmentViewerModal } from "../modals/AttachmentViewerModal";
+import { FileText, Image as ImageIcon } from "lucide-react";
 import {
   StockAdjustmentFormSchema,
   StockAdjustmentFormValues,
@@ -63,6 +65,17 @@ interface StockAdjustmentFormProps {
   mode?: "creation" | "posting";
   unpostedList?: { id?: number; doc_no: string }[];
   onSelectId?: (id: number) => void;
+}
+
+interface LocalAttachmentFile {
+  id: string;
+  type?: string;
+  filename_download?: string;
+  filesize?: number | string;
+}
+
+interface LocalAttachment {
+  attachment: LocalAttachmentFile | string;
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
@@ -269,6 +282,9 @@ export function StockAdjustmentForm({
   const [pendingExitAction, setPendingExitAction] = useState<string | (() => void) | null>(null);
   const initialValuesRef = useRef<string>("");
 
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [activeAttachment, setActiveAttachment] = useState<{ fileUrl: string; filename?: string; isImage?: boolean } | null>(null);
+
 
   const form = useForm<StockAdjustmentFormValues>({
     resolver: zodResolver(StockAdjustmentFormSchema),
@@ -394,6 +410,7 @@ export function StockAdjustmentForm({
   const watchedBranchId = useWatch({ control: form.control, name: "branch_id" });
   const watchedSupplierId = useWatch({ control: form.control, name: "supplier_id" });
   const watchedDocNo = useWatch({ control: form.control, name: "doc_no" });
+  const watchedAttachments = useWatch({ control: form.control, name: "stock_adjustment_attachment" }) || [];
 
   useEffect(() => {
     if (watchedBranchId && branches.length > 0) {
@@ -1030,6 +1047,67 @@ export function StockAdjustmentForm({
                     disabled={isReadOnly}
                   />
                 </div>
+
+                {/* Attachments Section (ReadOnly) */}
+                {(() => {
+                  const attachments = watchedAttachments as unknown as LocalAttachment[];
+                  if (!attachments || attachments.length === 0) return null;
+                  return (
+                    <div className="space-y-3 mt-6">
+                      <div className="flex items-center gap-2 text-foreground">
+                        <ImageIcon className="h-4.5 w-4.5 text-rose-600" />
+                        <h3 className="font-bold text-sm">Attachments ({attachments.length})</h3>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {attachments.map((att, idx) => {
+                          const file = att.attachment;
+                          if (!file) return null;
+                          const fileId = typeof file === 'object' ? file.id : file;
+                          const isImage = typeof file === 'object' && file.type?.startsWith('image');
+                          const filename = typeof file === 'object' ? file.filename_download : `Attachment ${idx + 1}`;
+                          const sizeInMb = typeof file === 'object' && file.filesize 
+                            ? (Number(file.filesize) / (1024 * 1024)).toFixed(2)
+                            : null;
+
+                          const directusBase = process.env.NEXT_PUBLIC_DIRECTUS_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "";
+                          const cleanBase = directusBase.trim().replace(/\/$/, "");
+                          const fileUrl = `${cleanBase}/assets/${fileId}`;
+
+                          return (
+                            <div key={idx} className="flex items-center justify-between p-3 bg-background border border-border rounded-xl hover:bg-muted/10 transition-colors">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveAttachment({ fileUrl, filename, isImage });
+                                  setViewerOpen(true);
+                                }}
+                                className="flex items-center gap-3 flex-1 min-w-0 text-left bg-transparent border-none p-0 cursor-pointer focus:outline-none"
+                                title="Click to view file"
+                              >
+                                <div className="h-9 w-9 shrink-0 bg-rose-50 dark:bg-rose-950/20 rounded-lg flex items-center justify-center text-rose-600">
+                                  {isImage ? <ImageIcon className="h-4.5 w-4.5" /> : <FileText className="h-4.5 w-4.5" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-bold truncate text-foreground hover:text-rose-600 transition-colors">{filename}</p>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    {sizeInMb && (
+                                      <span className="text-[9px] text-muted-foreground font-semibold">
+                                        {sizeInMb} MB
+                                      </span>
+                                    )}
+                                    <span className="text-[9px] text-rose-600 font-bold uppercase tracking-wider hover:underline">
+                                      VIEW FILE
+                                    </span>
+                                  </div>
+                                </div>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </>
             )}
           </CardContent>
@@ -1468,6 +1546,17 @@ export function StockAdjustmentForm({
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Attachment Viewer Modal */}
+      {activeAttachment && (
+        <AttachmentViewerModal
+          open={viewerOpen}
+          fileUrl={activeAttachment.fileUrl}
+          filename={activeAttachment.filename}
+          isImage={activeAttachment.isImage}
+          onClose={() => setViewerOpen(false)}
+        />
+      )}
     </div>
   );
 }
