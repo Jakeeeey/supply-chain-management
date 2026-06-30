@@ -199,6 +199,36 @@ export function useStockAdjustmentForm() {
     []
   );
 
+  const resolveRFID = useCallback(
+    async (
+      rfid: string,
+      branchId: number,
+      supplierId: number,
+      type: "IN" | "OUT"
+    ): Promise<{ valid: boolean; product?: StockAdjustmentProduct; error?: string }> => {
+      try {
+        const params = new URLSearchParams();
+        params.set("rfid", rfid);
+        params.set("branchId", String(branchId));
+        params.set("supplierId", String(supplierId));
+        params.set("type", type);
+
+        const response = await fetch(
+          `/api/scm/inventory-management/stock-adjustment-registration/resolve-rfid?${params.toString()}`
+        );
+        const result = await response.json();
+        if (!response.ok) {
+          return { valid: false, error: result.error || "Failed to resolve RFID tag." };
+        }
+        return { valid: true, product: result.product };
+      } catch (err) {
+        console.error("Failed to resolve RFID:", err);
+        return { valid: false, error: "Network error while resolving RFID tag." };
+      }
+    },
+    []
+  );
+
   const fetchNextDocNo = useCallback(async (type: "IN" | "OUT"): Promise<string> => {
     try {
       const response = await fetch(`/api/scm/inventory-management/stock-adjustment-registration/next-doc-no?type=${type}`);
@@ -307,6 +337,7 @@ export function useStockAdjustmentForm() {
     fetchInventory,
     checkRFID,
     validateRFIDAvailability,
+    resolveRFID,
     fetchNextDocNo,
     createAdjustment,
     updateAdjustment,
