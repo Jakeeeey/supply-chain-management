@@ -293,7 +293,7 @@ export async function getSummaryReturnsWithItems(
   }
 
   const returnIds = parentsRaw.map((r: Record<string, unknown>) => Number(r["return_id"])).filter(Boolean);
-  let appliedToMap = new Map<number, string>();
+  const appliedToMap = new Map<number, string>();
 
   if (returnIds.length > 0) {
     try {
