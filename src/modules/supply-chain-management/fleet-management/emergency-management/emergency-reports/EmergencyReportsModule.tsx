@@ -509,13 +509,13 @@ export default function EmergencyReportsModule() {
                       <div className="bg-muted px-4 py-2 border-b flex items-center justify-between">
                         <span className="text-xs font-semibold uppercase text-muted-foreground">Live Map Coordinate</span>
                         <span className="text-[10px] bg-white border px-1.5 py-0.5 rounded font-mono text-muted-foreground">
-                          {selectedReport.latitude.toFixed(5)}, {selectedReport.longitude.toFixed(5)}
+                          {Number(selectedReport.latitude).toFixed(5)}, {Number(selectedReport.longitude).toFixed(5)}
                         </span>
                       </div>
                       <div className="h-64 relative">
                         <ReportMapPanel
-                          latitude={selectedReport.latitude}
-                          longitude={selectedReport.longitude}
+                          latitude={Number(selectedReport.latitude)}
+                          longitude={Number(selectedReport.longitude)}
                           locationName={selectedReport.location_name}
                         />
                       </div>

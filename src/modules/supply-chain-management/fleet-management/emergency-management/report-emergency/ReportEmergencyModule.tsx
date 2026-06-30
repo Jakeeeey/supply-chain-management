@@ -37,11 +37,7 @@ function defaultForm(): FormState {
     vehicle_id: NONE,
     driver_user_id: NONE,
     dispatch_plan_id: NONE,
-    occurred_at: (() => {
-      const now = new Date();
-      const offset = now.getTimezoneOffset() * 60000;
-      return new Date(now.getTime() - offset).toISOString().slice(0, 16);
-    })(),
+    occurred_at: "",
     location_name: "",
     description: "",
     immediate_action_taken: "",
@@ -60,6 +56,13 @@ export default function ReportEmergencyModule() {
   const [loadingLookups, setLoadingLookups] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [createdReportNo, setCreatedReportNo] = useState<string | null>(null);
+
+  useEffect(() => {
+    const now = new Date();
+    const offset = now.getTimezoneOffset() * 60000;
+    const localTime = new Date(now.getTime() - offset).toISOString().slice(0, 16);
+    setForm((current) => ({ ...current, occurred_at: localTime }));
+  }, []);
 
   useEffect(() => {
     let alive = true;
