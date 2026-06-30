@@ -28,9 +28,9 @@ export async function GET(request: Request) {
     const endDate = searchParams.get('endDate');
 
     try {
-        // Only fetch dispatches with status "For Clearance"
+        // Only fetch dispatches with status "For Clearance", and apply descending sort
         const statusFilter = "For Clearance";
-        let plansQuery = `/post_dispatch_plan?filter[status][_eq]=${encodeURIComponent(statusFilter)}&page=${page}&limit=${limit}&meta=*`;
+        let plansQuery = `/post_dispatch_plan?filter[status][_eq]=${encodeURIComponent(statusFilter)}&page=${page}&limit=${limit}&sort=-date_encoded,-id&meta=*`;
 
         // If search is provided, we need to find matching vehicle IDs and member IDs
         if (search) {

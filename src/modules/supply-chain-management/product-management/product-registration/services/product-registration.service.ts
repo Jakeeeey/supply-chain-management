@@ -7,6 +7,7 @@ import { API_BASE_URL, fetchItems, request } from "@/modules/supply-chain-manage
 import { generateSKUCode } from "@/modules/supply-chain-management/product-management/sku/sku-creation/services/sku-generator";
 import { skuQueryService } from "@/modules/supply-chain-management/product-management/sku/sku-creation/services/sku-query";
 import { CellHelpers } from "@/modules/supply-chain-management/product-management/sku/sku-creation/utils/sku-helpers";
+import { getDatabaseTimeISO } from "@/modules/supply-chain-management/product-management/utils/timezone";
 
 /**
  * Product Registration Service — Direct master product creation.
@@ -33,6 +34,7 @@ export const productRegistrationService = {
       itemType?: string;
       brandId?: number;
       status?: string;
+      uomId?: number;
     },
   ): Promise<PaginatedSKU> {
     // Delegate to the existing skuQueryService.fetchApproved which already
@@ -100,7 +102,7 @@ export const productRegistrationService = {
       }
     }
 
-    const nowGMT = new Date().toISOString();
+    const nowPHT = await getDatabaseTimeISO();
 
     const createPayload = (
       u: {
@@ -123,10 +125,10 @@ export const productRegistrationService = {
       cost_per_unit: u.cost,
       barcode: u.barcode,
       product_code: code,
-      date_added: nowGMT,
-      last_updated: nowGMT,
-      created_at: nowGMT,
-      updated_at: nowGMT,
+      date_added: nowPHT,
+      last_updated: nowPHT,
+      created_at: nowPHT,
+      updated_at: nowPHT,
       // Note: created_by and updated_by are merged from baseData
     });
 
@@ -198,12 +200,12 @@ export const productRegistrationService = {
    * Restricted to editable fields: name, supplier, description, taxonomy.
    */
   async updateProduct(id: number | string, data: Partial<SKU>): Promise<SKU> {
-    const nowGMT = new Date().toISOString();
+    const nowPHT = await getDatabaseTimeISO();
     const { data: updated } = await request<{ data: SKU }>(
       `${API_BASE_URL}/items/products/${id}`,
       {
         method: "PATCH",
-        body: JSON.stringify({ ...data, last_updated: nowGMT }),
+        body: JSON.stringify({ ...data, last_updated: nowPHT }),
       },
     );
 
@@ -290,11 +292,39 @@ export const productRegistrationService = {
     });
   },
 
-  /**
-   * Check if a product name already exists in the master table.
-   */
-  async checkDuplicateName(name: string): Promise<boolean> {
-    return skuQueryService.checkDuplicateName(name);
+  async checkDuplicateName(name: string, excludeId?: number | string): Promise<boolean> {
+    const trimmedName = name.trim();
+    const [approvedRes, draftsRes] = await Promise.all([
+      fetchItems<SKU>("/items/products", {
+        filter: JSON.stringify({ product_name: { _eq: trimmedName } }),
+        limit: 100,
+      }),
+      fetchItems<SKU>("/items/product_draft", {
+        filter: JSON.stringify({ product_name: { _eq: trimmedName } }),
+        limit: 100,
+      }),
+    ]);
+
+
+    const approved = approvedRes.data || [];
+    const drafts = draftsRes.data || [];
+
+    const hasDuplicateInProducts = approved.some(
+      (p) => {
+        if (excludeId && (String(p.id) === String(excludeId) || String(p.product_id) === String(excludeId))) return false;
+        if (excludeId && p.parent_id && (String(p.parent_id) === String(excludeId) || (typeof p.parent_id === "object" && String((p.parent_id as { id?: number | string }).id) === String(excludeId)))) return false;
+        return !p.parent_id;
+      }
+    );
+    const hasDuplicateInDrafts = drafts.some(
+      (p) => {
+        if (excludeId && (String(p.id) === String(excludeId) || String(p.product_id) === String(excludeId))) return false;
+        if (excludeId && p.parent_id && (String(p.parent_id) === String(excludeId) || (typeof p.parent_id === "object" && String((p.parent_id as { id?: number | string }).id) === String(excludeId)))) return false;
+        return !p.parent_id;
+      }
+    );
+
+    return hasDuplicateInProducts || hasDuplicateInDrafts;
   },
 
   /**
