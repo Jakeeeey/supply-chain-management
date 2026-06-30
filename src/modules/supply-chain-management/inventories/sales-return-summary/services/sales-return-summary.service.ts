@@ -292,13 +292,39 @@ export async function getSummaryReturnsWithItems(
     detailsByReturnNo.get(returnNo)!.push(item);
   }
 
+  const returnIds = parentsRaw.map((r: Record<string, unknown>) => Number(r["return_id"])).filter(Boolean);
+  const appliedToMap = new Map<number, string>();
+
+  if (returnIds.length > 0) {
+    try {
+      const linkedRes = await Repo.fetchLinkedInvoicesByReturnIds(returnIds);
+      for (const link of linkedRes.data || []) {
+        const returnNo = Number(link["return_no"]);
+        const invObj = link["invoice_no"] as Record<string, unknown>;
+        const invNo = String(invObj?.["invoice_no"] || "");
+        if (returnNo && invNo) {
+          // Keep the first one we find for a given return
+          if (!appliedToMap.has(returnNo)) {
+            appliedToMap.set(returnNo, invNo);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch linked invoices for summary:", err);
+    }
+  }
+
   let data: SummaryReturnHeader[] = parentsRaw.map((r: Record<string, unknown>) => {
     const cust = lookups.customerMap.get(String(r["customer_code"]));
     const sm = lookups.salesmanMap.get(String(r["salesman_id"]));
+    
+    const returnId = Number(r["return_id"]);
+    const mappedInvoiceNo = appliedToMap.get(returnId) || "";
+
     const rawItems = detailsByReturnNo.get(String(r["return_number"])) || [];
     const items = rawItems.map((item) => ({
       ...item,
-      invoiceNo: String(r["invoice_no"] || "-"),
+      invoiceNo: mappedInvoiceNo || "-",
     }));
 
     return {
@@ -310,7 +336,7 @@ export async function getSummaryReturnsWithItems(
       storeName: String(cust?.["store_name"] || ""),
       salesmanName: String(sm?.["salesman_name"] || ""),
       salesmanCode: String(sm?.["salesman_code"] || ""),
-      invoiceNo: String(r["invoice_no"] || ""),
+      invoiceNo: mappedInvoiceNo,
       netTotal: Helpers.toNum(r["total_amount"]),
       remarks: String(r["remarks"] || ""),
       items,
