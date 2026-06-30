@@ -6,6 +6,7 @@ import {
   StockAdjustmentItem,
   StockAdjustmentProduct,
 } from "../types/stock-adjustment.schema";
+import { isPostedStatus } from "../utils/status-utils";
 
 interface RawItem {
   id?: number;
@@ -417,8 +418,25 @@ export const stockAdjustmentService = {
 
   async fetchProductInventory(productId: number, branchId: number, token: string): Promise<number> {
     try {
+      // 1. Try to fetch from RFID on-hand tag lists first
+      const rfidUrl = `${SPRING_API_URL}/api/view-rfid-onhand?branchId=${branchId}&branch_id=${branchId}`;
+      const rfidRes = await fetch(rfidUrl, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (rfidRes.ok) {
+        const rfidData = await rfidRes.json();
+        if (Array.isArray(rfidData)) {
+          const tagsForProduct = rfidData.filter(
+            (item: any) => Number(item.productId || item.product_id || 0) === productId
+          );
+          if (tagsForProduct.length > 0) {
+            return tagsForProduct.length;
+          }
+        }
+      }
+
+      // 2. Fall back to standard running inventory
       const url = `${SPRING_API_URL}/api/view-running-inventory/all?branch_id=${branchId}`;
-      
       const res = await fetch(url, {
         headers: {
           "Authorization": `Bearer ${token}`
@@ -444,16 +462,51 @@ export const stockAdjustmentService = {
       const res = await fetch(url, {
         headers: { "Authorization": `Bearer ${token}` }
       });
-      if (!res.ok) return [];
+      let inventoryList: { product_id: number; running_inventory: number }[] = [];
 
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        return data.map((item: InventoryItem) => ({
-          product_id: Number(item.product_id),
-          running_inventory: Number(item.running_inventory || 0),
-        }));
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          inventoryList = data.map((item: InventoryItem) => ({
+            product_id: Number(item.product_id),
+            running_inventory: Number(item.running_inventory || 0),
+          }));
+        }
       }
-      return [];
+
+      // Fetch RFID on-hand tag lists to override count for RFID products
+      const rfidUrl = `${SPRING_API_URL}/api/view-rfid-onhand?branchId=${branchId}&branch_id=${branchId}`;
+      const rfidRes = await fetch(rfidUrl, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+
+      if (rfidRes.ok) {
+        const rfidData = await rfidRes.json();
+        if (Array.isArray(rfidData)) {
+          const rfidCounts = new Map<number, number>();
+          rfidData.forEach((item: any) => {
+            const pid = Number(item.productId || item.product_id || 0);
+            if (pid > 0) {
+              rfidCounts.set(pid, (rfidCounts.get(pid) || 0) + 1);
+            }
+          });
+
+          inventoryList = inventoryList.map((item) => {
+            if (rfidCounts.has(item.product_id)) {
+              const count = rfidCounts.get(item.product_id) || 0;
+              rfidCounts.delete(item.product_id);
+              return { product_id: item.product_id, running_inventory: count };
+            }
+            return item;
+          });
+
+          rfidCounts.forEach((count, pid) => {
+            inventoryList.push({ product_id: pid, running_inventory: count });
+          });
+        }
+      }
+
+      return inventoryList;
     } catch (error) {
       console.error("Failed to fetch branch inventory:", error);
       return [];
@@ -462,7 +515,7 @@ export const stockAdjustmentService = {
 
   async fetchBranchRFIDStatus(branchId: number, token: string): Promise<RfidStatusItem[]> {
     try {
-      const url = `${SPRING_API_URL}/api/view-rfid-onhand?branchId=${branchId}`;
+      const url = `${SPRING_API_URL}/api/view-rfid-onhand?branchId=${branchId}&branch_id=${branchId}`;
       const res = await fetch(url, {
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -476,7 +529,7 @@ export const stockAdjustmentService = {
 
   async checkRFIDStatus(productId: number, branchId: number, token: string): Promise<RfidStatusItem | null> {
     try {
-      const url = `${SPRING_API_URL}/api/view-rfid-onhand?branchId=${branchId}`;
+      const url = `${SPRING_API_URL}/api/view-rfid-onhand?branchId=${branchId}&branch_id=${branchId}`;
       
       const res = await fetch(url, {
         headers: {
@@ -501,7 +554,10 @@ export const stockAdjustmentService = {
       // 1. Check Spring API (Inventory On Hand)
       const springUrl = new URL(`${SPRING_API_URL}/api/view-rfid-onhand`);
       springUrl.searchParams.set("rfid", rfid);
-      if (branchId) springUrl.searchParams.set("branchId", String(branchId));
+      if (branchId) {
+        springUrl.searchParams.set("branchId", String(branchId));
+        springUrl.searchParams.set("branch_id", String(branchId));
+      }
 
       const springRes = await fetch(springUrl.toString(), {
         headers: { "Authorization": `Bearer ${token}` }
@@ -568,6 +624,7 @@ export const stockAdjustmentService = {
       const springUrl = new URL(`${SPRING_API_URL}/api/view-rfid-onhand`);
       springUrl.searchParams.set("rfid", rfid);
       springUrl.searchParams.set("branchId", String(branchId));
+      springUrl.searchParams.set("branch_id", String(branchId));
 
       const springRes = await fetch(springUrl.toString(), {
         headers: { Authorization: `Bearer ${token}` },
@@ -587,120 +644,84 @@ export const stockAdjustmentService = {
         }
       }
 
-      // ── Step 2: Was this RFID registered in a Stock IN for this branch,
-      //            supplier, and product? ───────────────────────────────────
-      // Find the rfid record in stock_adjustment_rfid and expand to the
-      // linked stock_adjustment item (product_id, branch_id, doc_no).
+      // ── Step 1.5: Is this RFID tag registered in any unposted Stock IN transaction? ──
       const rfidRes = await directusFetch<{
         data: {
           id: number;
-          rfid_tag: string;
-          stock_adjustment_id: {
-            id: number;
-            product_id: number | { id?: number; product_id?: number };
-            branch_id: number | { id?: number };
+          stock_adjustment_id?: {
             doc_no: string;
           };
         }[];
       }>(
-        `${DIRECTUS_URL}/items/stock_adjustment_rfid?filter={"rfid_tag":{"_eq":"${rfid}"}}&fields=id,rfid_tag,stock_adjustment_id.id,stock_adjustment_id.product_id,stock_adjustment_id.branch_id,stock_adjustment_id.doc_no&limit=1`
+        `${DIRECTUS_URL}/items/stock_adjustment_rfid?filter={"rfid_tag":{"_eq":"${rfid}"}}&fields=id,stock_adjustment_id.doc_no&limit=10`
       );
 
       const rfidRecords = rfidRes.data || [];
-
-      if (rfidRecords.length === 0) {
-        return {
-          valid: false,
-          reason: "RFID tag has not been registered in any Stock IN record.",
-        };
+      for (const rfidRecord of rfidRecords) {
+        const docNo = rfidRecord.stock_adjustment_id?.doc_no;
+        if (docNo) {
+          const headerRes = await directusFetch<{
+            data: {
+              type: string;
+              isPosted?: boolean | number;
+            }[];
+          }>(
+            `${DIRECTUS_URL}/items/stock_adjustment_header?filter={"doc_no":{"_eq":"${docNo}"}}&fields=type,isPosted&limit=1`
+          );
+          const headers = headerRes.data || [];
+          if (headers.length > 0) {
+            const header = headers[0];
+            const isStockIn = (header.type || "").toUpperCase() === "IN";
+            const isPostedHeader = isPostedStatus(header.isPosted);
+            if (isStockIn && !isPostedHeader) {
+              return {
+                valid: false,
+                reason: `RFID tag belongs to an unposted Stock IN transaction (${docNo}). It must be posted before it can be scanned for Stock OUT.`,
+              };
+            }
+          }
+        }
       }
 
-      const rfidRecord = rfidRecords[0];
-      const item = rfidRecord.stock_adjustment_id;
-
-      // Resolve product_id from the linked item
-      const itemProductId =
-        typeof item.product_id === "object"
-          ? Number(item.product_id?.id ?? item.product_id?.product_id ?? 0)
-          : Number(item.product_id ?? 0);
-
-      // Resolve branch_id from the linked item
-      const itemBranchId =
-        typeof item.branch_id === "object"
-          ? Number(item.branch_id?.id ?? 0)
-          : Number(item.branch_id ?? 0);
-
-      // ── Check product match ──────────────────────────────────────────────
-      if (itemProductId !== productId) {
-        return {
-          valid: false,
-          reason: `RFID tag belongs to a different product (expected product ID ${productId}, found ${itemProductId}).`,
-        };
-      }
-
-      // ── Check branch match ───────────────────────────────────────────────
-      if (itemBranchId !== branchId) {
-        return {
-          valid: false,
-          reason: "RFID tag was registered under a different branch.",
-        };
-      }
-
-      // ── Check supplier and type via the header (doc_no) ─────────────────
-      const docNo = item.doc_no;
-      const headerRes = await directusFetch<{
-        data: {
-          id: number;
-          type: string;
-          supplier_id: number | { id?: number } | null;
-          remarks?: string;
-        }[];
+      // ── Step 2: Ensure the resolved product (or its parent) belongs to the selected supplier ──
+      // Check product_per_supplier junction table in Directus
+      const ppsRes = await directusFetch<{
+        data: { id: number }[];
       }>(
-        `${DIRECTUS_URL}/items/stock_adjustment_header?filter={"doc_no":{"_eq":"${docNo}"}}&fields=id,type,supplier_id,remarks&limit=1`
+        `${DIRECTUS_URL}/items/product_per_supplier?filter[product_id][_eq]=${productId}&filter[supplier_id][_eq]=${supplierId}&limit=1`
       );
 
-      const headers = headerRes.data || [];
+      const isLinked = (ppsRes.data || []).length > 0;
 
-      if (headers.length === 0) {
+      if (!isLinked) {
+        // Fetch parent_id of the product just in case the parent product is linked
+        const productRes = await directusFetch<{
+          data: { parent_id?: number | { id: number } }[];
+        }>(
+          `${DIRECTUS_URL}/items/product?filter[id][_eq]=${productId}&fields=parent_id&limit=1`
+        );
+
+        const parentVal = productRes.data?.[0]?.parent_id;
+        const parentId = typeof parentVal === "object" ? parentVal?.id : parentVal;
+
+        if (parentId) {
+          const parentPpsRes = await directusFetch<{
+            data: { id: number }[];
+          }>(
+            `${DIRECTUS_URL}/items/product_per_supplier?filter[product_id][_eq]=${parentId}&filter[supplier_id][_eq]=${supplierId}&limit=1`
+          );
+
+          if ((parentPpsRes.data || []).length > 0) {
+            return { valid: true };
+          }
+        }
+
         return {
           valid: false,
-          reason: "Could not find the original Stock IN header for this RFID.",
+          reason: "Product associated with RFID tag is not linked to the selected supplier.",
         };
       }
 
-      const header = headers[0];
-
-      // Must be a Stock IN
-      if ((header.type || "").toUpperCase() !== "IN") {
-        return {
-          valid: false,
-          reason: "RFID tag was not registered via a Stock IN transaction.",
-        };
-      }
-
-      // Resolve supplier_id – could be embedded in remarks as [SUPPLIER_ID: X]
-      let resolvedSupplierId: number | null = null;
-
-      const remarksMatch = String(header.remarks || "").match(
-        /\[SUPPLIER_ID:\s*(\d+)\]/
-      );
-      if (remarksMatch) {
-        resolvedSupplierId = Number(remarksMatch[1]);
-      } else if (header.supplier_id) {
-        resolvedSupplierId =
-          typeof header.supplier_id === "object"
-            ? Number(header.supplier_id?.id ?? 0)
-            : Number(header.supplier_id);
-      }
-
-      if (resolvedSupplierId !== supplierId) {
-        return {
-          valid: false,
-          reason: "RFID tag was registered under a different supplier.",
-        };
-      }
-
-      // All checks passed
       return { valid: true };
     } catch (error) {
       console.error("Failed to validate RFID for Stock OUT:", error);
@@ -1131,4 +1152,27 @@ export const stockAdjustmentService = {
     // Format with padding: 001, 002, etc.
     return `${searchPrefix}${nextNumber.toString().padStart(3, "0")}`;
   },
+
+  /**
+   * Fetch a single product by its ID.
+   */
+  async fetchProductById(productId: number) {
+    const query = `fields=product_id,product_name,product_code,price_per_unit,cost_per_unit,barcode,description,unit_of_measurement.unit_name,unit_of_measurement.order,product_brand.brand_name`;
+    const res = await directusFetch<{ data: any }>(
+      `${DIRECTUS_URL}/items/products/${productId}?${query}`
+    );
+    const p = res.data;
+    if (!p) return null;
+    const uom = p['unit_of_measurement'] as Record<string, unknown> | undefined;
+    const brand = p['product_brand'] as Record<string, unknown> | undefined;
+
+    return {
+      ...p,
+      id: Number(p['product_id']),
+      unit_name: uom?.['unit_name'] || p['unit_name'] || "pcs",
+      unit_id: uom?.['unit_id'] || p['unit_id'] || null,
+      brand_name: brand?.['brand_name'] || p['brand_name'] || "N/A",
+      unit_of_measurement: uom
+    };
+  }
 };
