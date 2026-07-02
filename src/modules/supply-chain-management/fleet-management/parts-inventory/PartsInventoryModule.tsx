@@ -9,6 +9,7 @@ import {
   ChevronsUpDown,
   ClipboardList,
   Edit,
+  Eye,
   FileText,
   PackageMinus,
   PackagePlus,
@@ -39,6 +40,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -69,6 +76,7 @@ import type {
   CreatePartInput,
   CreateReservationInput,
   PartInventoryRow,
+  PartMovementRow,
   PartMovementType,
   PartReservationRow,
   PartsInventoryListResponse,
@@ -94,7 +102,35 @@ type ReservationActionState = {
   action: "issue" | "return" | "cancel";
 };
 
+type PartDetailRow = PartInventoryRow & {
+  recentMovements?: PartMovementRow[];
+  activeReservations?: PartReservationRow[];
+};
+
 const movementTypes: PartMovementType[] = ["Receiving", "Issue", "Return", "Adjustment", "Damage"];
+const CENTRAL_OR_UNASSIGNED_LABEL = "Central or unassigned";
+const summaryToneStyles = {
+  info: {
+    card: "border-blue-200 bg-blue-50/70 dark:border-blue-900/50 dark:bg-blue-950/25",
+    value: "text-blue-700 dark:text-blue-300",
+    icon: "border-blue-200 bg-blue-100/70 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/50 dark:text-blue-300",
+  },
+  warning: {
+    card: "border-amber-200 bg-amber-50/70 dark:border-amber-900/50 dark:bg-amber-950/25",
+    value: "text-amber-700 dark:text-amber-300",
+    icon: "border-amber-200 bg-amber-100/70 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/50 dark:text-amber-300",
+  },
+  critical: {
+    card: "border-red-200 bg-red-50/70 dark:border-red-900/50 dark:bg-red-950/25",
+    value: "text-red-700 dark:text-red-300",
+    icon: "border-red-200 bg-red-100/70 text-red-700 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-300",
+  },
+  success: {
+    card: "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/50 dark:bg-emerald-950/25",
+    value: "text-emerald-700 dark:text-emerald-300",
+    icon: "border-emerald-200 bg-emerald-100/70 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/50 dark:text-emerald-300",
+  },
+} as const;
 const emptyPartsResponse: PartsInventoryListResponse = {
   data: [],
   meta: { page: 1, limit: 25, total: 0 },
@@ -180,19 +216,23 @@ function SummaryCard({
   title,
   value,
   icon: Icon,
+  tone,
 }: {
   title: string;
   value: string | number;
   icon: React.ComponentType<{ className?: string }>;
+  tone: keyof typeof summaryToneStyles;
 }) {
+  const styles = summaryToneStyles[tone];
+
   return (
-    <Card>
+    <Card className={styles.card}>
       <CardContent className="flex items-center justify-between gap-4 p-4">
         <div>
           <div className="text-xs font-medium uppercase text-muted-foreground">{title}</div>
-          <div className="mt-1 text-2xl font-semibold">{value}</div>
+          <div className={cn("mt-1 text-2xl font-semibold", styles.value)}>{value}</div>
         </div>
-        <div className="rounded-md border p-2 text-muted-foreground">
+        <div className={cn("rounded-md border p-2", styles.icon)}>
           <Icon className="size-5" />
         </div>
       </CardContent>
@@ -474,7 +514,7 @@ function PartDialog({
               <div className="grid gap-2">
                 <Label htmlFor="initialBranchId">Initial stock branch</Label>
                 <NativeSelect id="initialBranchId" value={form.initialBranchId} onChange={(event) => update("initialBranchId", event.target.value)} className="w-full">
-                  <NativeSelectOption value="">Central or unassigned</NativeSelectOption>
+                  <NativeSelectOption value="">{CENTRAL_OR_UNASSIGNED_LABEL}</NativeSelectOption>
                   {lookups.branches.map((branch) => (
                     <NativeSelectOption key={branch.id} value={branch.id}>
                       {branch.name}
@@ -503,6 +543,125 @@ function PartDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-xs font-medium uppercase text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm">{value || "-"}</div>
+    </div>
+  );
+}
+
+function PartViewDialog({
+  open,
+  part,
+  loading,
+  onOpenChange,
+}: {
+  open: boolean;
+  part: PartDetailRow | null;
+  loading: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const movements = part?.recentMovements || [];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>{part ? part.partName : "Part Details"}</DialogTitle>
+          <DialogDescription>{part?.partCode || "View part information and related stock movements."}</DialogDescription>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="grid gap-3">
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-40 w-full" />
+          </div>
+        ) : part ? (
+          <div className="grid gap-5">
+            <div className="grid gap-3 rounded-md border p-4 sm:grid-cols-2 lg:grid-cols-4">
+              <DetailItem label="Category" value={part.categoryName} />
+              <DetailItem label="Unit" value={part.unit} />
+              <DetailItem label="Minimum Quantity" value={formatNumber(part.minimumQuantity)} />
+              <DetailItem label="Storage Location" value={part.storageLocation} />
+              <DetailItem label="Status" value={<Badge variant={statusVariant(part.stockStatus)}>{part.stockStatusLabel}</Badge>} />
+              <DetailItem label="Active" value={part.isActive ? "Yes" : "No"} />
+              <DetailItem label="On Hand" value={formatNumber(part.totalStockOnHand)} />
+              <DetailItem label="Available" value={formatNumber(part.totalAvailableQuantity)} />
+            </div>
+
+            <div className="grid gap-2">
+              <div className="text-sm font-medium">Compatible Vehicle Types</div>
+              <div className="flex flex-wrap gap-1">
+                {part.compatibleVehicleTypes.length ? part.compatibleVehicleTypes.map((type) => (
+                  <Badge key={type.id} variant="secondary">{type.name}</Badge>
+                )) : <span className="text-sm text-muted-foreground">All</span>}
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <div className="text-sm font-medium">Branch Stock</div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Branch</TableHead>
+                    <TableHead className="text-right">On Hand</TableHead>
+                    <TableHead className="text-right">Reserved</TableHead>
+                    <TableHead className="text-right">Damaged</TableHead>
+                    <TableHead className="text-right">Available</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {part.branchStock.length === 0 ? <EmptyRows colSpan={5} label="No branch stock found." /> : null}
+                  {part.branchStock.map((stock) => (
+                    <TableRow key={stock.id}>
+                      <TableCell>{stock.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : stock.branchName || "-"}</TableCell>
+                      <TableCell className="text-right">{formatNumber(stock.stockOnHand)}</TableCell>
+                      <TableCell className="text-right">{formatNumber(stock.reservedQuantity)}</TableCell>
+                      <TableCell className="text-right">{formatNumber(stock.damagedQuantity)}</TableCell>
+                      <TableCell className="text-right">{formatNumber(stock.availableQuantity)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="grid gap-2">
+              <div className="text-sm font-medium">Recent Movements</div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Movement</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Branch</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {movements.length === 0 ? <EmptyRows colSpan={5} label="No recent movements found." /> : null}
+                  {movements.map((movement) => (
+                    <TableRow key={movement.id}>
+                      <TableCell className="font-medium">{movement.movementNo}</TableCell>
+                      <TableCell>{formatDate(movement.movementAt)}</TableCell>
+                      <TableCell>{movement.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : movement.branchName || "-"}</TableCell>
+                      <TableCell><Badge variant="outline">{movement.movementType}</Badge></TableCell>
+                      <TableCell className="text-right">{formatNumber(movement.quantity)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        ) : (
+          <div className="py-8 text-center text-sm text-muted-foreground">No part selected.</div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -634,7 +793,7 @@ function MovementDialog({
             <div className="grid gap-2">
               <Label htmlFor="movementBranch">Branch</Label>
               <NativeSelect id="movementBranch" value={form.branchId} onChange={(event) => update("branchId", event.target.value)} className="w-full">
-                <NativeSelectOption value="">Central or unassigned</NativeSelectOption>
+                <NativeSelectOption value="">{CENTRAL_OR_UNASSIGNED_LABEL}</NativeSelectOption>
                 {lookups.branches.map((branch) => (
                   <NativeSelectOption key={branch.id} value={branch.id}>
                     {branch.name}
@@ -797,7 +956,7 @@ function ReservationDialog({
             <div className="grid gap-2">
               <Label htmlFor="reservationBranch">Branch</Label>
               <NativeSelect id="reservationBranch" value={form.branchId} onChange={(event) => update("branchId", event.target.value)} className="w-full">
-                <NativeSelectOption value="">Central or unassigned</NativeSelectOption>
+                <NativeSelectOption value="">{CENTRAL_OR_UNASSIGNED_LABEL}</NativeSelectOption>
                 {lookups.branches.map((branch) => (
                   <NativeSelectOption key={branch.id} value={branch.id}>
                     {branch.name}
@@ -941,6 +1100,9 @@ export default function PartsInventoryModule() {
 
   const [activeTab, setActiveTab] = React.useState("parts");
   const [partDialog, setPartDialog] = React.useState<DialogState<PartInventoryRow>>({ open: false, item: null });
+  const [partViewOpen, setPartViewOpen] = React.useState(false);
+  const [partView, setPartView] = React.useState<PartDetailRow | null>(null);
+  const [partViewLoading, setPartViewLoading] = React.useState(false);
   const [movementDialog, setMovementDialog] = React.useState<MovementDialogState>({
     open: false,
     part: null,
@@ -1062,6 +1224,22 @@ export default function PartsInventoryModule() {
     setReservationDialog({ open: true, item: part });
   }
 
+  async function openPartView(part: PartInventoryRow) {
+    setPartViewOpen(true);
+    setPartView(part);
+    setPartViewLoading(true);
+    try {
+      const response = await api.fetchPartDetail(part.id);
+      setPartView(response.data as PartDetailRow);
+    } catch (error) {
+      toast.error("Failed to load part details", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setPartViewLoading(false);
+    }
+  }
+
   async function refreshAll() {
     await Promise.all([inventory.refresh(), movements.refresh(), reservations.refresh()]);
     setLowStockReloadKey((current) => current + 1);
@@ -1128,10 +1306,10 @@ export default function PartsInventoryModule() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard title="Total parts" value={inventory.response.summary.totalParts} icon={Boxes} />
-          <SummaryCard title="Low stock" value={inventory.response.summary.lowStockCount} icon={AlertTriangle} />
-          <SummaryCard title="Out of stock" value={inventory.response.summary.outOfStockCount} icon={ShieldAlert} />
-          <SummaryCard title="Available qty" value={formatNumber(inventory.response.summary.totalAvailableQuantity)} icon={ClipboardList} />
+          <SummaryCard title="Total parts" value={inventory.response.summary.totalParts} icon={Boxes} tone="info" />
+          <SummaryCard title="Low stock" value={inventory.response.summary.lowStockCount} icon={AlertTriangle} tone="warning" />
+          <SummaryCard title="Out of stock" value={inventory.response.summary.outOfStockCount} icon={ShieldAlert} tone="critical" />
+          <SummaryCard title="Available qty" value={formatNumber(inventory.response.summary.totalAvailableQuantity)} icon={ClipboardList} tone="success" />
         </div>
 
         <Card>
@@ -1228,17 +1406,32 @@ export default function PartsInventoryModule() {
                         <TableCell>{part.storageLocation || "-"}</TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" aria-label="View part" onClick={() => openPartView(part)}>
+                              <Eye className="size-4" />
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" aria-label="Edit stock">
+                                  <Wrench className="size-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openMovementDialog(part, "Receiving")}>
+                                  <PackagePlus className="mr-2 size-4" />
+                                  Add Stock
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openMovementDialog(part, "Issue")}>
+                                  <PackageMinus className="mr-2 size-4" />
+                                  Reduce Stock
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openMovementDialog(part, "Adjustment")}>
+                                  <Wrench className="mr-2 size-4" />
+                                  Adjust Stock
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                             <Button variant="ghost" size="icon" aria-label="Edit part" onClick={() => setPartDialog({ open: true, item: part })}>
                               <Edit className="size-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" aria-label="Receive stock" onClick={() => openMovementDialog(part, "Receiving")}>
-                              <PackagePlus className="size-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" aria-label="Issue part" onClick={() => openMovementDialog(part, "Issue")}>
-                              <PackageMinus className="size-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" aria-label="Adjust stock" onClick={() => openMovementDialog(part, "Adjustment")}>
-                              <Wrench className="size-4" />
                             </Button>
                             <Button variant="ghost" size="icon" aria-label="Reserve part" onClick={() => openReservationDialog(part)}>
                               <CalendarClock className="size-4" />
@@ -1298,8 +1491,8 @@ export default function PartsInventoryModule() {
                       <TableRow key={movement.id}>
                         <TableCell className="font-medium">{movement.movementNo}</TableCell>
                         <TableCell>{formatDate(movement.movementAt)}</TableCell>
-                        <TableCell>{movement.partCode} {movement.partName ? `- ${movement.partName}` : ""}</TableCell>
-                        <TableCell>{movement.branchName || "-"}</TableCell>
+                        <TableCell>{movement.partName || movement.partCode || "-"}</TableCell>
+                        <TableCell>{movement.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : movement.branchName || "-"}</TableCell>
                         <TableCell><Badge variant="outline">{movement.movementType}</Badge></TableCell>
                         <TableCell className="text-right">{formatNumber(movement.quantity)}</TableCell>
                         <TableCell className="text-right">{formatNumber(movement.stockBefore)}</TableCell>
@@ -1366,7 +1559,7 @@ export default function PartsInventoryModule() {
                           <div className="text-xs text-muted-foreground">{formatDate(reservation.neededAt)}</div>
                         </TableCell>
                         <TableCell>{reservation.partCode} {reservation.partName ? `- ${reservation.partName}` : ""}</TableCell>
-                        <TableCell>{reservation.branchName || "-"}</TableCell>
+                        <TableCell>{reservation.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : reservation.branchName || "-"}</TableCell>
                         <TableCell>{reservation.vehiclePlate || "-"}</TableCell>
                         <TableCell className="text-right">{formatNumber(reservation.reservedQuantity)}</TableCell>
                         <TableCell className="text-right">{formatNumber(reservation.issuedQuantity)}</TableCell>
@@ -1507,6 +1700,16 @@ export default function PartsInventoryModule() {
             const result = await api.createPartCategory(name);
             await inventory.refreshLookups();
             return result.data;
+          }}
+        />
+
+        <PartViewDialog
+          open={partViewOpen}
+          part={partView}
+          loading={partViewLoading}
+          onOpenChange={(open) => {
+            setPartViewOpen(open);
+            if (!open) setPartView(null);
           }}
         />
 

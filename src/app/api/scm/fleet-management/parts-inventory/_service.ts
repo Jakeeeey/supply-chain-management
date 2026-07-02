@@ -38,6 +38,7 @@ const STOCK_FIELDS = [
 const MOVEMENT_FIELDS = [
   "id",
   "movement_no",
+  "part_id",
   "part_id.id",
   "part_id.part_code",
   "part_id.part_name",
@@ -895,6 +896,40 @@ function mapMovement(row: DirectusMovementRow) {
   };
 }
 
+async function enrichMovementRowsWithParts(
+  rows: Array<ReturnType<typeof mapMovement>>,
+): Promise<Array<ReturnType<typeof mapMovement>>> {
+  const missingPartIds = uniqueNumbers(
+    rows.filter((row) => row.partId != null && (!row.partCode || !row.partName)).map((row) => row.partId),
+  );
+  if (missingPartIds.length === 0) return rows;
+
+  const partRows = await listItems<{ id?: number | string | null; part_code?: string | null; part_name?: string | null }>(
+    "fleet_parts",
+    {
+      limit: -1,
+      fields: "id,part_code,part_name",
+      filter: filterParam({ id: { _in: missingPartIds }, deleted_at: { _null: true } }),
+    },
+  );
+  const partMap = new Map<number, { code: string | null; name: string | null }>();
+  for (const part of partRows) {
+    const id = asNullableNumber(part.id);
+    if (id != null) partMap.set(id, { code: asNullableString(part.part_code), name: asNullableString(part.part_name) });
+  }
+
+  return rows.map((row) => {
+    if ((row.partCode && row.partName) || row.partId == null) return row;
+    const fallback = partMap.get(row.partId);
+    if (!fallback) return row;
+    return {
+      ...row,
+      partCode: row.partCode || fallback.code,
+      partName: row.partName || fallback.name,
+    };
+  });
+}
+
 function mapReservation(row: DirectusReservationRow) {
   const reservedQuantity = asNumber(row.reserved_quantity);
   const issuedQuantity = asNumber(row.issued_quantity);
@@ -1333,7 +1368,8 @@ export async function createMovement(body: CreateMovementRequest, actorId: Actor
   }
 
   const movement = await applyStockMovement(body, actorId);
-  return { data: mapMovement(movement) };
+  const enriched = await enrichMovementRowsWithParts([mapMovement(movement)]);
+  return { data: enriched[0] };
 }
 
 async function fetchReservation(reservationId: number) {
@@ -1554,8 +1590,10 @@ async function getFilteredMovementRows(query: MovementFilterQuery) {
     sort: "-movement_at",
   });
 
+  let rows = await enrichMovementRowsWithParts(movements.map(mapMovement));
+
   const search = query.search.trim().toLowerCase();
-  const rows = movements.map(mapMovement).filter((row) => {
+  rows = rows.filter((row) => {
     if (!search) return true;
     return [
       row.movementNo,
