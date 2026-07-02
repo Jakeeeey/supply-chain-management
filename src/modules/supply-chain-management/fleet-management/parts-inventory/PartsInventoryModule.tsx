@@ -5,11 +5,14 @@ import {
   AlertTriangle,
   Boxes,
   CalendarClock,
+  Check,
+  ChevronsUpDown,
   ClipboardList,
   Edit,
   FileText,
   PackageMinus,
   PackagePlus,
+  Plus,
   RefreshCcw,
   ShieldAlert,
   Wrench,
@@ -21,6 +24,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -30,6 +41,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -43,6 +59,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import { usePartMovements } from "./hooks/usePartMovements";
 import { usePartReservations } from "./hooks/usePartReservations";
 import { usePartsInventory } from "./hooks/usePartsInventory";
@@ -214,6 +231,7 @@ function PartDialog({
   saving,
   onOpenChange,
   onSave,
+  onCategoryCreate,
 }: {
   open: boolean;
   part: PartInventoryRow | null;
@@ -221,6 +239,7 @@ function PartDialog({
   saving: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (payload: CreatePartInput, partId?: number) => Promise<void>;
+  onCategoryCreate: (name: string) => Promise<{ id: number; code: string | null; name: string; description: string | null }>;
 }) {
   const [form, setForm] = React.useState({
     partCode: "",
@@ -235,6 +254,13 @@ function PartDialog({
     initialStock: "",
   });
   const [compatibleTypeIds, setCompatibleTypeIds] = React.useState<number[]>([]);
+  const [categoryOpen, setCategoryOpen] = React.useState(false);
+  const [categorySearch, setCategorySearch] = React.useState("");
+  const [creatingCategory, setCreatingCategory] = React.useState(false);
+
+  const selectedCategory = lookups.categories.find((cat) => String(cat.id) === form.categoryId);
+  const canCreateCategory = categorySearch.trim().length > 0
+    && !lookups.categories.some((cat) => cat.name.toLowerCase() === categorySearch.trim().toLowerCase());
 
   React.useEffect(() => {
     if (!open) return;
@@ -251,6 +277,7 @@ function PartDialog({
       initialStock: "",
     });
     setCompatibleTypeIds(part?.compatibleVehicleTypes.map((type) => type.id) || []);
+    setCategorySearch("");
   }, [open, part]);
 
   function update(key: keyof typeof form, value: string | boolean) {
@@ -261,6 +288,25 @@ function PartDialog({
     setCompatibleTypeIds((current) =>
       checked ? Array.from(new Set([...current, typeId])) : current.filter((id) => id !== typeId),
     );
+  }
+
+  async function handleCreateCategory(name?: string) {
+    const categoryName = name ?? categorySearch.trim();
+    if (!categoryName || creatingCategory) return;
+    setCreatingCategory(true);
+    try {
+      const created = await onCategoryCreate(categoryName);
+      update("categoryId", String(created.id));
+      setCategoryOpen(false);
+      setCategorySearch("");
+      toast.success(`Category "${categoryName}" created`);
+    } catch (error) {
+      toast.error("Failed to create category", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setCreatingCategory(false);
+    }
   }
 
   async function submit(event: React.FormEvent) {
@@ -306,14 +352,84 @@ function PartDialog({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="categoryId">Category</Label>
-              <NativeSelect id="categoryId" value={form.categoryId} onChange={(event) => update("categoryId", event.target.value)} className="w-full">
-                <NativeSelectOption value="">Uncategorized</NativeSelectOption>
-                {lookups.categories.map((category) => (
-                  <NativeSelectOption key={category.id} value={category.id}>
-                    {category.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="categoryId"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={categoryOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {selectedCategory ? selectedCategory.name : categorySearch || "Uncategorized"}
+                    <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[200px] p-0" align="start">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search categories..."
+                      value={categorySearch}
+                      onValueChange={setCategorySearch}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        {canCreateCategory ? (
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start gap-2 text-sm"
+                            onClick={() => handleCreateCategory()}
+                            disabled={creatingCategory}
+                          >
+                            <Plus className="size-4" />
+                            {creatingCategory ? "Creating..." : `New Category "${categorySearch.trim()}"`}
+                          </Button>
+                        ) : (
+                          "No categories found"
+                        )}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value=""
+                          onSelect={() => {
+                            update("categoryId", "");
+                            setCategoryOpen(false);
+                            setCategorySearch("");
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 size-4",
+                              form.categoryId === "" ? "opacity-100" : "opacity-0",
+                            )}
+                          />
+                          Uncategorized
+                        </CommandItem>
+                        {lookups.categories.map((category) => (
+                          <CommandItem
+                            key={category.id}
+                            value={String(category.id)}
+                            onSelect={() => {
+                              update("categoryId", String(category.id));
+                              setCategoryOpen(false);
+                              setCategorySearch("");
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 size-4",
+                                form.categoryId === String(category.id) ? "opacity-100" : "opacity-0",
+                              )}
+                            />
+                            {category.name}
+                          </CommandItem>
+                        ))}
+
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="unit">Unit</Label>
@@ -392,6 +508,12 @@ function PartDialog({
   );
 }
 
+function movementLabel(type: PartMovementType) {
+  if (type === "Receiving") return "Add Stock";
+  if (type === "Issue") return "Reduce Stock";
+  return `${type} Movement`;
+}
+
 function MovementDialog({
   state,
   lookups,
@@ -416,7 +538,7 @@ function MovementDialog({
   const [form, setForm] = React.useState({
     partId: "",
     branchId: "",
-    movementType: "Receiving" as PartMovementType,
+    movementType: state.movementType,
     adjustmentDirection: "IN" as "IN" | "OUT",
     quantity: "",
     vehicleId: "",
@@ -431,7 +553,7 @@ function MovementDialog({
     setForm({
       partId: state.part ? String(state.part.id) : "",
       branchId: state.part?.branchStock[0]?.branchId ? String(state.part.branchStock[0].branchId) : "",
-      movementType: state.movementType,
+    movementType: state.movementType,
       adjustmentDirection: "IN",
       quantity: "",
       vehicleId: "",
@@ -470,8 +592,8 @@ function MovementDialog({
     <Dialog open={state.open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{form.movementType} Movement</DialogTitle>
-          <DialogDescription>Record an immutable stock movement for fleet parts inventory.</DialogDescription>
+          <DialogTitle>{movementLabel(form.movementType)}</DialogTitle>
+          <DialogDescription>Record a stock movement for fleet parts inventory.</DialogDescription>
         </DialogHeader>
 
         <form className="grid gap-4" onSubmit={submit}>
@@ -570,7 +692,7 @@ function MovementDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : "Record Movement"}
+              {saving ? "Saving..." : movementLabel(form.movementType)}
             </Button>
           </DialogFooter>
         </form>
@@ -1381,6 +1503,11 @@ export default function PartsInventoryModule() {
           saving={inventory.saving}
           onOpenChange={(open) => setPartDialog((current) => ({ ...current, open }))}
           onSave={savePart}
+          onCategoryCreate={async (name) => {
+            const result = await api.createPartCategory(name);
+            await inventory.refreshLookups();
+            return result.data;
+          }}
         />
 
         <MovementDialog

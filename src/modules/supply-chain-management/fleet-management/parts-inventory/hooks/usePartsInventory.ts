@@ -112,6 +112,7 @@ export function usePartsInventory() {
     loading,
     saving,
     refresh: loadParts,
+    refreshLookups: loadLookups,
     savePart,
   };
 }

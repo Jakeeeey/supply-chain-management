@@ -155,6 +155,13 @@ export async function updateReservation(payload: UpdateReservationInput) {
   });
 }
 
+export async function createPartCategory(name: string) {
+  return request<{ data: { id: number; code: string | null; name: string; description: string | null } }>(
+    `${BASE}/categories`,
+    { method: "POST", body: JSON.stringify({ name }) },
+  );
+}
+
 export async function fetchReport(type: string, filters: { branchId?: string; vehicleId?: string; categoryId?: string }) {
   const params = new URLSearchParams();
   params.set("type", type);

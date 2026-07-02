@@ -690,6 +690,20 @@ async function fetchCompatibilityRows(partIds: number[]) {
   });
 }
 
+async function fetchVehicleTypeNameMap(): Promise<Map<number, string>> {
+  const rows = await listItems<{ id?: number | string | null; type_name?: string | null }>(
+    "vehicle_type",
+    { limit: -1, fields: "id,type_name", sort: "id" },
+  );
+  const map = new Map<number, string>();
+  for (const row of rows) {
+    const id = asNullableNumber(row.id);
+    const name = asNullableString(row.type_name);
+    if (id != null && name) map.set(id, name);
+  }
+  return map;
+}
+
 async function fetchStockRow(partId: number, branchId?: number | null) {
   const rows = await listItems<DirectusStockRow>("fleet_part_stock", {
     limit: 1,
@@ -777,26 +791,43 @@ function branchAwareStockStatus(
   return worstStockStatus(branchStock.map((stock) => stockStatus(stock.availableQuantity, minimumQuantity)));
 }
 
+function resolveVehicleTypeName(
+  vehicleTypeId: number,
+  compatibilityRow: DirectusCompatibilityRow | null,
+  vehicleTypeNameMap: Map<number, string>,
+): string {
+  if (compatibilityRow) {
+    const expandedName = relationLabel(compatibilityRow.vehicle_type_id, "type_name");
+    if (expandedName) return expandedName;
+  }
+  return vehicleTypeNameMap.get(vehicleTypeId) ?? `Type #${vehicleTypeId}`;
+}
+
 function mapPartRow(
   part: DirectusPartRow,
   stockRows: DirectusStockRow[],
   compatibilityRows: DirectusCompatibilityRow[],
+  vehicleTypeNameMap: Map<number, string>,
 ) {
   const partId = part.id;
   const partStocks = stockRows.filter((stock) => partIdFrom(stock.part_id) === partId);
   const compatibleVehicleTypes = compatibilityRows
     .filter((row) => partIdFrom(row.part_id) === partId)
-    .map((row) => ({
-      id: asNullableNumber(row.vehicle_type_id, "id"),
-      name: relationLabel(row.vehicle_type_id, "type_name") || "Unknown type",
-    }))
-    .filter((row): row is { id: number; name: string } => row.id != null);
+    .map((row) => {
+      const typeId = asNullableNumber(row.vehicle_type_id, "id");
+      if (typeId == null) return null;
+      return {
+        id: typeId,
+        name: resolveVehicleTypeName(typeId, row, vehicleTypeNameMap),
+      };
+    })
+    .filter((row): row is { id: number; name: string } => row != null);
 
   const shortcutTypeId = asNullableNumber(part.compatible_vehicle_type_id, "id");
   if (shortcutTypeId && !compatibleVehicleTypes.some((row) => row.id === shortcutTypeId)) {
     compatibleVehicleTypes.push({
       id: shortcutTypeId,
-      name: relationLabel(part.compatible_vehicle_type_id, "type_name") || `Type #${shortcutTypeId}`,
+      name: relationLabel(part.compatible_vehicle_type_id, "type_name") || vehicleTypeNameMap.get(shortcutTypeId) || `Type #${shortcutTypeId}`,
     });
   }
 
@@ -915,14 +946,15 @@ async function getFilteredPartRows(query: PartInventoryFilterQuery) {
   const parts = await fetchParts();
 
   const partIds = parts.map((part) => part.id);
-  const [stockRows, compatibilityRows] = await Promise.all([
+  const [stockRows, compatibilityRows, vehicleTypeNameMap] = await Promise.all([
     fetchStockRows(partIds),
     fetchCompatibilityRows(partIds),
+    fetchVehicleTypeNameMap(),
   ]);
 
   const search = query.search.trim().toLowerCase();
   const rows = parts
-    .map((part) => mapPartRow(part, stockRows, compatibilityRows))
+    .map((part) => mapPartRow(part, stockRows, compatibilityRows, vehicleTypeNameMap))
     .map((row) => {
       if (!query.branchId) return row;
       const branchStock = row.branchStock.filter((stock) => stock.branchId === query.branchId);
@@ -988,16 +1020,17 @@ export async function listParts(query: PartInventoryQuery) {
 
 export async function getPartDetail(partId: number) {
   const part = await fetchPart(partId);
-  const [stockRows, compatibilityRows, movements, reservations] = await Promise.all([
+  const [stockRows, compatibilityRows, movements, reservations, vehicleTypeNameMap] = await Promise.all([
     fetchStockRows([partId]),
     fetchCompatibilityRows([partId]),
     listMovements({ partId, search: "", page: 1, limit: 10 }),
     listReservations({ partId, search: "", page: 1, limit: 10 }),
+    fetchVehicleTypeNameMap(),
   ]);
 
   return {
     data: {
-      ...mapPartRow(part, stockRows, compatibilityRows),
+      ...mapPartRow(part, stockRows, compatibilityRows, vehicleTypeNameMap),
       recentMovements: movements.data,
       activeReservations: reservations.data.filter((row) => !["Cancelled", "Returned"].includes(row.status)),
     },
@@ -1592,6 +1625,64 @@ export async function listReservations(query: ReservationQuery) {
       limit: query.limit,
       total: rows.length,
     },
+  };
+}
+
+export async function createCategory(name: string, actorId: ActorId) {
+  const trimmed = name.trim();
+  if (!trimmed) throw new PartsInventoryError("Category name is required", 400);
+
+  // Check for duplicate active categories (case-insensitive)
+  const existing = await listItems<UnknownRecord>("fleet_part_categories", {
+    limit: 1,
+    fields: "id",
+    filter: filterParam({
+      category_name: { _eq: trimmed },
+      deleted_at: { _null: true },
+    }),
+  });
+  if (existing.length > 0) {
+    throw new PartsInventoryError(`Category "${trimmed}" already exists`, 409);
+  }
+
+  // Generate code: uppercase slug, append suffix if needed
+  const baseCode = trimmed
+    .replace(/[^a-zA-Z0-9\s-]/g, "")
+    .replace(/\s+/g, "_")
+    .toUpperCase()
+    .slice(0, 20);
+
+  let code = baseCode;
+  let suffix = 1;
+  while (true) {
+    const dupe = await listItems<UnknownRecord>("fleet_part_categories", {
+      limit: 1,
+      fields: "id",
+      filter: filterParam({
+        category_code: { _eq: code },
+        deleted_at: { _null: true },
+      }),
+    });
+    if (dupe.length === 0) break;
+    suffix++;
+    code = `${baseCode}_${suffix}`;
+  }
+
+  const now = nowIso();
+  const created = await createItem<UnknownRecord>("fleet_part_categories", {
+    category_name: trimmed,
+    category_code: code,
+    is_active: true,
+    description: null,
+    created_at: now,
+    created_by: actorId,
+  });
+
+  return {
+    id: asNullableNumber(created.id),
+    code: asNullableString(created.category_code),
+    name: asString(created.category_name),
+    description: asNullableString(created.description),
   };
 }
 
