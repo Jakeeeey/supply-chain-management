@@ -162,11 +162,24 @@ export async function createPartCategory(name: string) {
   );
 }
 
-export async function fetchReport(type: string, filters: { branchId?: string; vehicleId?: string; categoryId?: string }) {
+export async function fetchReport(
+  type: string,
+  filters: {
+    branchId?: string;
+    vehicleId?: string;
+    categoryId?: string;
+    movementType?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  },
+) {
   const params = new URLSearchParams();
   params.set("type", type);
   appendIfPresent(params, "branchId", filters.branchId);
   appendIfPresent(params, "vehicleId", filters.vehicleId);
   appendIfPresent(params, "categoryId", filters.categoryId);
+  appendIfPresent(params, "movementType", filters.movementType);
+  appendIfPresent(params, "dateFrom", filters.dateFrom);
+  appendIfPresent(params, "dateTo", filters.dateTo);
   return request<ReportResponse>(`${BASE}/reports?${params}`);
 }

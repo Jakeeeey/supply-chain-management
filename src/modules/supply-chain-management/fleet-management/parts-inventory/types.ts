@@ -70,6 +70,7 @@ export type PartMovementRow = {
   partId: number | null;
   partCode: string | null;
   partName: string | null;
+  categoryId: number | null;
   categoryName: string | null;
   branchId: number | null;
   branchName: string | null;
@@ -176,7 +177,7 @@ export type ReservationFilters = {
 };
 
 export type CreatePartInput = {
-  partCode: string;
+  partCode?: string;
   partName: string;
   categoryId?: number | null;
   category?: string | null;

@@ -42,9 +42,11 @@ const MOVEMENT_FIELDS = [
   "part_id.id",
   "part_id.part_code",
   "part_id.part_name",
+  "part_id.category_id.id",
   "part_id.category_id.category_name",
   "branch_id.id",
   "branch_id.branch_name",
+  "vehicle_id",
   "vehicle_id.vehicle_id",
   "vehicle_id.vehicle_plate",
   "vehicle_id.name",
@@ -70,6 +72,7 @@ const MOVEMENT_FIELDS = [
 const RESERVATION_FIELDS = [
   "id",
   "reservation_no",
+  "part_id",
   "part_id.id",
   "part_id.part_code",
   "part_id.part_name",
@@ -295,13 +298,14 @@ export const ReportQuerySchema = z.object({
   branchId: z.coerce.number().int().positive().optional(),
   vehicleId: z.coerce.number().int().positive().optional(),
   categoryId: z.coerce.number().int().positive().optional(),
+  movementType: z.enum(["Receiving", "Issue", "Return", "Adjustment", "Damage"]).optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   format: z.enum(["json", "xlsx", "pdf"]).optional().default("json"),
 });
 
 export const CreatePartSchema = z.object({
-  partCode: z.string().trim().min(1),
+  partCode: z.string().trim().min(1).optional(),
   partName: z.string().trim().min(1),
   categoryId: optionalNullableNumber,
   category: optionalNullableString,
@@ -745,6 +749,37 @@ async function assertPartCodeAvailable(partCode: string, ignorePartId?: number) 
   }
 }
 
+const GENERATED_PART_CODE_PREFIX = "FP";
+const GENERATED_PART_CODE_WIDTH = 6;
+const GENERATED_PART_CODE_ATTEMPTS = 5;
+
+async function generatePartCode() {
+  const prefix = `${GENERATED_PART_CODE_PREFIX}-`;
+  const rows = await listItems<{ part_code?: string | null }>("fleet_parts", {
+    limit: -1,
+    fields: "part_code",
+    filter: filterParam({
+      part_code: { _starts_with: prefix },
+    }),
+  });
+  const pattern = new RegExp(`^${GENERATED_PART_CODE_PREFIX}-(\\d{${GENERATED_PART_CODE_WIDTH}})$`);
+  const highest = rows.reduce((max, row) => {
+    const match = asNullableString(row.part_code)?.match(pattern);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  const sequence = String(highest + 1).padStart(GENERATED_PART_CODE_WIDTH, "0");
+  return `${prefix}${sequence}`;
+}
+
+function isPartCodeDuplicateError(error: unknown) {
+  if (!(error instanceof PartsInventoryError)) return false;
+  const message = error.message.toLowerCase();
+  return message.includes("part code already exists")
+    || message.includes("duplicate")
+    || message.includes("unique")
+    || message.includes("part_code");
+}
+
 async function countMovementsForPart(partId: number) {
   const rows = await listItems<{ id: number }>("fleet_part_movements", {
     limit: 1,
@@ -871,6 +906,7 @@ function mapMovement(row: DirectusMovementRow) {
     partId: asNullableNumber(row.part_id, "id"),
     partCode: relationLabel(row.part_id, "part_code"),
     partName: relationLabel(row.part_id, "part_name"),
+    categoryId: asNullableNumber(asRecord(row.part_id)?.category_id, "id"),
     categoryName: relationLabel(asRecord(row.part_id)?.category_id, "category_name"),
     branchId: branchIdFrom(row.branch_id),
     branchName: relationLabel(row.branch_id, "branch_name"),
@@ -904,28 +940,76 @@ async function enrichMovementRowsWithParts(
   );
   if (missingPartIds.length === 0) return rows;
 
-  const partRows = await listItems<{ id?: number | string | null; part_code?: string | null; part_name?: string | null }>(
+  const partRows = await listItems<{ id?: number | string | null; part_code?: string | null; part_name?: string | null; category_id?: unknown }>(
     "fleet_parts",
     {
       limit: -1,
-      fields: "id,part_code,part_name",
+      fields: "id,part_code,part_name,category_id.id,category_id.category_name",
       filter: filterParam({ id: { _in: missingPartIds }, deleted_at: { _null: true } }),
     },
   );
-  const partMap = new Map<number, { code: string | null; name: string | null }>();
+  const partMap = new Map<number, { code: string | null; name: string | null; categoryId: number | null; categoryName: string | null }>();
   for (const part of partRows) {
     const id = asNullableNumber(part.id);
-    if (id != null) partMap.set(id, { code: asNullableString(part.part_code), name: asNullableString(part.part_name) });
+    if (id != null) {
+      partMap.set(id, {
+        code: asNullableString(part.part_code),
+        name: asNullableString(part.part_name),
+        categoryId: asNullableNumber(part.category_id, "id"),
+        categoryName: relationLabel(part.category_id, "category_name"),
+      });
+    }
   }
 
   return rows.map((row) => {
-    if ((row.partCode && row.partName) || row.partId == null) return row;
+    if ((row.partCode && row.partName && row.categoryId != null && row.categoryName) || row.partId == null) return row;
     const fallback = partMap.get(row.partId);
     if (!fallback) return row;
     return {
       ...row,
       partCode: row.partCode || fallback.code,
       partName: row.partName || fallback.name,
+      categoryId: row.categoryId ?? fallback.categoryId,
+      categoryName: row.categoryName || fallback.categoryName,
+    };
+  });
+}
+
+async function enrichMovementRowsWithVehicles(
+  rows: Array<ReturnType<typeof mapMovement>>,
+): Promise<Array<ReturnType<typeof mapMovement>>> {
+  const missingVehicleIds = uniqueNumbers(
+    rows.filter((row) => row.vehicleId != null && (!row.vehiclePlate || !row.vehicleName)).map((row) => row.vehicleId),
+  );
+  if (missingVehicleIds.length === 0) return rows;
+
+  const vehicleRows = await listItems<{ vehicle_id?: number | string | null; vehicle_plate?: string | null; name?: string | null }>(
+    "vehicles",
+    {
+      limit: -1,
+      fields: fields(VEHICLE_FIELDS),
+      filter: filterParam({ vehicle_id: { _in: missingVehicleIds } }),
+    },
+  );
+  const vehicleMap = new Map<number, { plate: string | null; name: string | null }>();
+  for (const vehicle of vehicleRows) {
+    const id = asNullableNumber(vehicle.vehicle_id);
+    if (id != null) {
+      vehicleMap.set(id, {
+        plate: asNullableString(vehicle.vehicle_plate),
+        name: asNullableString(vehicle.name),
+      });
+    }
+  }
+
+  return rows.map((row) => {
+    if ((row.vehiclePlate && row.vehicleName) || row.vehicleId == null) return row;
+    const fallback = vehicleMap.get(row.vehicleId);
+    if (!fallback) return row;
+    return {
+      ...row,
+      vehiclePlate: row.vehiclePlate || fallback.plate,
+      vehicleName: row.vehicleName || fallback.name,
     };
   });
 }
@@ -960,6 +1044,45 @@ function mapReservation(row: DirectusReservationRow) {
     updatedAt: row.updated_at || null,
     cancelReason: asNullableString(row.cancel_reason),
   };
+}
+
+async function enrichReservationRowsWithParts(
+  rows: Array<ReturnType<typeof mapReservation>>,
+): Promise<Array<ReturnType<typeof mapReservation>>> {
+  const missingPartIds = uniqueNumbers(
+    rows.filter((row) => row.partId != null && (!row.partCode || !row.partName)).map((row) => row.partId),
+  );
+  if (missingPartIds.length === 0) return rows;
+
+  const partRows = await listItems<{ id?: number | string | null; part_code?: string | null; part_name?: string | null }>(
+    "fleet_parts",
+    {
+      limit: -1,
+      fields: "id,part_code,part_name",
+      filter: filterParam({ id: { _in: missingPartIds }, deleted_at: { _null: true } }),
+    },
+  );
+  const partMap = new Map<number, { code: string | null; name: string | null }>();
+  for (const part of partRows) {
+    const id = asNullableNumber(part.id);
+    if (id != null) partMap.set(id, { code: asNullableString(part.part_code), name: asNullableString(part.part_name) });
+  }
+
+  return rows.map((row) => {
+    if (row.partId == null) return row;
+    const fallback = partMap.get(row.partId);
+    if (!fallback) return row;
+    return {
+      ...row,
+      partCode: row.partCode || fallback.code,
+      partName: row.partName || fallback.name,
+    };
+  });
+}
+
+async function mapReservationWithPart(row: DirectusReservationRow) {
+  const [reservation] = await enrichReservationRowsWithParts([mapReservation(row)]);
+  return reservation;
 }
 
 function matchesVehicleTypeFilter(row: ReturnType<typeof mapPartRow>, vehicleTypeId?: number) {
@@ -1058,15 +1181,18 @@ export async function getPartDetail(partId: number) {
   const [stockRows, compatibilityRows, movements, reservations, vehicleTypeNameMap] = await Promise.all([
     fetchStockRows([partId]),
     fetchCompatibilityRows([partId]),
-    listMovements({ partId, search: "", page: 1, limit: 10 }),
+    getFilteredMovementRows({ partId, search: "" }),
     listReservations({ partId, search: "", page: 1, limit: 10 }),
     fetchVehicleTypeNameMap(),
   ]);
+  const issuedVehicles = usageByVehicle(movements)
+    .filter((row) => row.vehicleId != null && row.issuedQuantity > 0);
 
   return {
     data: {
       ...mapPartRow(part, stockRows, compatibilityRows, vehicleTypeNameMap),
-      recentMovements: movements.data,
+      recentMovements: movements.slice(0, 10),
+      issuedVehicles,
       activeReservations: reservations.data.filter((row) => !["Cancelled", "Returned"].includes(row.status)),
     },
   };
@@ -1095,10 +1221,7 @@ async function replaceCompatibility(partId: number, vehicleTypeIds: number[], ac
 }
 
 export async function createPart(body: CreatePartRequest, actorId: ActorId) {
-  await assertPartCodeAvailable(body.partCode);
-
-  const payload = {
-    part_code: body.partCode,
+  const basePayload = {
     part_name: body.partName,
     category_id: body.categoryId ?? null,
     category: body.category ?? null,
@@ -1111,13 +1234,32 @@ export async function createPart(body: CreatePartRequest, actorId: ActorId) {
     created_by: actorId,
   };
 
-  let part: DirectusPartRow;
-  try {
-    part = await createItem<DirectusPartRow>("fleet_parts", payload);
-  } catch (error) {
-    if (!isMinimumQuantityFieldError(error)) throw error;
-    part = await createItem<DirectusPartRow>("fleet_parts", legacyMinimumQuantityPayload(payload));
+  let part: DirectusPartRow | null = null;
+  for (let attempt = 0; attempt < GENERATED_PART_CODE_ATTEMPTS; attempt++) {
+    const payload = {
+      ...basePayload,
+      part_code: await generatePartCode(),
+    };
+
+    try {
+      part = await createItem<DirectusPartRow>("fleet_parts", payload);
+      break;
+    } catch (error) {
+      if (isMinimumQuantityFieldError(error)) {
+        try {
+          part = await createItem<DirectusPartRow>("fleet_parts", legacyMinimumQuantityPayload(payload));
+          break;
+        } catch (legacyError) {
+          if (isPartCodeDuplicateError(legacyError) && attempt < GENERATED_PART_CODE_ATTEMPTS - 1) continue;
+          throw legacyError;
+        }
+      }
+
+      if (isPartCodeDuplicateError(error) && attempt < GENERATED_PART_CODE_ATTEMPTS - 1) continue;
+      throw error;
+    }
   }
+  if (!part) throw new PartsInventoryError("Unable to generate a unique part code", 409);
 
   await replaceCompatibility(part.id, body.compatibleVehicleTypeIds, actorId);
 
@@ -1438,7 +1580,7 @@ export async function createReservation(body: CreateReservationRequest, actorId:
     created_by: actorId,
   });
 
-  return { data: mapReservation(reservation) };
+  return { data: await mapReservationWithPart(await fetchReservation(reservation.id)) };
 }
 
 function reservationStatusAfterIssue(reserved: number, issued: number, cancelled: number) {
@@ -1459,11 +1601,6 @@ async function applyReservationAction(
   const branchId = branchIdFrom(reservation.branch_id);
   const vehicleId = vehicleIdFrom(reservation.vehicle_id);
 
-  if (!partId) throw new PartsInventoryError("Reservation has no part reference", 409);
-
-  const stock = await fetchStockRow(partId, branchId);
-  if (!stock) throw new PartsInventoryError("Stock row does not exist for this reservation", 404);
-
   const reservedQuantity = asNumber(reservation.reserved_quantity);
   const issuedQuantity = asNumber(reservation.issued_quantity);
   const returnedQuantity = asNumber(reservation.returned_quantity);
@@ -1472,6 +1609,11 @@ async function applyReservationAction(
   const now = nowIso();
 
   if (body.action === "issue") {
+    if (!partId) throw new PartsInventoryError("Reservation has no part reference", 409);
+
+    const stock = await fetchStockRow(partId, branchId);
+    if (!stock) throw new PartsInventoryError("Stock row does not exist for this reservation", 404);
+
     const quantity = body.quantity ?? unissuedQuantity;
     if (quantity <= 0 || quantity > unissuedQuantity) {
       throw new PartsInventoryError("Issue quantity exceeds unissued reserved quantity", 409, {
@@ -1506,10 +1648,15 @@ async function applyReservationAction(
       updated_at: now,
       updated_by: actorId,
     });
-    return { data: mapReservation(updated) };
+    return { data: await mapReservationWithPart(await fetchReservation(updated.id)) };
   }
 
   if (body.action === "return") {
+    if (!partId) throw new PartsInventoryError("Reservation has no part reference", 409);
+
+    const stock = await fetchStockRow(partId, branchId);
+    if (!stock) throw new PartsInventoryError("Stock row does not exist for this reservation", 404);
+
     const returnableQuantity = Math.max(0, issuedQuantity - returnedQuantity);
     const quantity = body.quantity ?? returnableQuantity;
     if (quantity <= 0 || quantity > returnableQuantity) {
@@ -1545,18 +1692,21 @@ async function applyReservationAction(
       updated_at: now,
       updated_by: actorId,
     });
-    return { data: mapReservation(updated) };
+    return { data: await mapReservationWithPart(await fetchReservation(updated.id)) };
   }
 
   if (!body.cancelReason) {
     throw new PartsInventoryError("Cancellation reason is required", 400);
   }
 
-  await updateItem<DirectusStockRow>("fleet_part_stock", stock.id, {
-    reserved_quantity: Math.max(0, asNumber(stock.reserved_quantity) - unissuedQuantity),
-    updated_at: now,
-    updated_by: actorId,
-  });
+  const stock = partId ? await fetchStockRow(partId, branchId) : null;
+  if (stock) {
+    await updateItem<DirectusStockRow>("fleet_part_stock", stock.id, {
+      reserved_quantity: Math.max(0, asNumber(stock.reserved_quantity) - unissuedQuantity),
+      updated_at: now,
+      updated_by: actorId,
+    });
+  }
 
   const updated = await updateItem<DirectusReservationRow>("fleet_part_reservations", reservation.id, {
     cancelled_quantity: cancelledQuantity + unissuedQuantity,
@@ -1567,7 +1717,7 @@ async function applyReservationAction(
     updated_at: now,
     updated_by: actorId,
   });
-  return { data: mapReservation(updated) };
+  return { data: await mapReservationWithPart(await fetchReservation(updated.id)) };
 }
 
 export async function updateReservation(body: UpdateReservationRequest, actorId: ActorId) {
@@ -1591,6 +1741,7 @@ async function getFilteredMovementRows(query: MovementFilterQuery) {
   });
 
   let rows = await enrichMovementRowsWithParts(movements.map(mapMovement));
+  rows = await enrichMovementRowsWithVehicles(rows);
 
   const search = query.search.trim().toLowerCase();
   rows = rows.filter((row) => {
@@ -1600,6 +1751,7 @@ async function getFilteredMovementRows(query: MovementFilterQuery) {
       row.partCode || "",
       row.partName || "",
       row.branchName || "",
+      row.vehicleName || "",
       row.vehiclePlate || "",
       row.referenceNo || "",
       row.remarks || "",
@@ -1640,7 +1792,8 @@ export async function listReservations(query: ReservationQuery) {
   });
 
   const search = query.search.trim().toLowerCase();
-  const rows = reservations.map(mapReservation).filter((row) => {
+  const enrichedRows = await enrichReservationRowsWithParts(reservations.map(mapReservation));
+  const rows = enrichedRows.filter((row) => {
     if (!search) return true;
     return [
       row.reservationNo,
@@ -1828,6 +1981,7 @@ function usageByVehicle(movements: Awaited<ReturnType<typeof listMovements>>["da
     issuedQuantity: number;
     returnedQuantity: number;
     damagedQuantity: number;
+    latestMovementAt: string | null;
   }>();
 
   for (const movement of movements) {
@@ -1843,11 +1997,15 @@ function usageByVehicle(movements: Awaited<ReturnType<typeof listMovements>>["da
       issuedQuantity: 0,
       returnedQuantity: 0,
       damagedQuantity: 0,
+      latestMovementAt: null,
     };
 
     if (movement.movementType === "Issue") current.issuedQuantity += movement.quantity;
     if (movement.movementType === "Return") current.returnedQuantity += movement.quantity;
     if (movement.movementType === "Damage") current.damagedQuantity += movement.quantity;
+    if (movement.movementAt && (!current.latestMovementAt || new Date(movement.movementAt).getTime() > new Date(current.latestMovementAt).getTime())) {
+      current.latestMovementAt = movement.movementAt;
+    }
     groups.set(key, current);
   }
 
@@ -1911,18 +2069,22 @@ export async function getReport(query: ReportQuery) {
   const movements = await getFilteredMovementRows({
     vehicleId: query.vehicleId,
     branchId: query.branchId,
+    movementType: query.movementType,
     dateFrom: query.dateFrom,
     dateTo: query.dateTo,
     search: "",
   });
+  const reportMovements = query.categoryId
+    ? movements.filter((movement) => movement.categoryId === query.categoryId)
+    : movements;
 
   if (type === "usage_by_vehicle") {
-    return { type, data: usageByVehicle(movements) };
+    return { type, data: usageByVehicle(reportMovements) };
   }
 
   if (type === "usage_by_category") {
-    return { type, data: usageByCategory(movements) };
+    return { type, data: usageByCategory(reportMovements) };
   }
 
-  return { type, data: movements };
+  return { type, data: reportMovements };
 }

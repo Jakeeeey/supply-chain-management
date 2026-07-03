@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import * as XLSX from "xlsx";
 import {
   AlertTriangle,
   Boxes,
@@ -8,6 +9,7 @@ import {
   Check,
   ChevronsUpDown,
   ClipboardList,
+  Download,
   Edit,
   Eye,
   FileText,
@@ -105,6 +107,47 @@ type ReservationActionState = {
 type PartDetailRow = PartInventoryRow & {
   recentMovements?: PartMovementRow[];
   activeReservations?: PartReservationRow[];
+  issuedVehicles?: Array<{
+    vehicleId: number | null;
+    vehiclePlate: string | null;
+    vehicleName: string | null;
+    issuedQuantity: number;
+    returnedQuantity: number;
+    damagedQuantity: number;
+    netUsedQuantity: number;
+    latestMovementAt: string | null;
+  }>;
+};
+
+type ReportType =
+  | "stock_on_hand"
+  | "low_stock"
+  | "out_of_stock"
+  | "usage_by_vehicle"
+  | "usage_by_category"
+  | "movement_audit";
+
+type ReportFilters = {
+  branchId: string;
+  vehicleId: string;
+  categoryId: string;
+  movementType: "all" | PartMovementType;
+  dateFrom: string;
+  dateTo: string;
+};
+
+type ReportColumn = {
+  key: string;
+  label: string;
+  align?: "left" | "right";
+  render?: (value: unknown, row: Record<string, unknown>) => React.ReactNode;
+};
+
+type ReportMetric = {
+  title: string;
+  value: string | number;
+  icon: React.ComponentType<{ className?: string }>;
+  tone: keyof typeof summaryToneStyles;
 };
 
 const movementTypes: PartMovementType[] = ["Receiving", "Issue", "Return", "Adjustment", "Damage"];
@@ -163,10 +206,92 @@ function formatDate(value: string | null) {
   }).format(date);
 }
 
+function formatDateOnly(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function dateInputDaysAgo(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+function todayDateInput() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function reportValue(row: Record<string, unknown>, key: string) {
+  return row[key];
+}
+
+function reportNumber(row: Record<string, unknown>, key: string) {
+  const value = reportValue(row, key);
+  return typeof value === "number" ? value : Number(value || 0);
+}
+
+function reportText(row: Record<string, unknown>, key: string) {
+  const value = reportValue(row, key);
+  return value == null || value === "" ? "-" : String(value);
+}
+
+function categoryLabel(categoryName: string | null | undefined) {
+  return categoryName?.trim() || "Uncategorized";
+}
+
+function stockStatusLabel(status: unknown) {
+  if (status === "out_of_stock") return "Out of Stock";
+  if (status === "low_stock") return "Low Stock";
+  if (status === "available") return "Available";
+  return reportText({ status }, "status");
+}
+
 function statusVariant(status: string) {
   if (status === "out_of_stock" || status === "Cancelled") return "destructive" as const;
   if (status === "low_stock" || status === "Partially Issued") return "secondary" as const;
   return "outline" as const;
+}
+
+function movementDirection(stockBefore: number, stockAfter: number) {
+  if (stockAfter > stockBefore) return "positive";
+  if (stockAfter < stockBefore) return "negative";
+  return "neutral";
+}
+
+function movementDirectionClasses(direction: ReturnType<typeof movementDirection>) {
+  if (direction === "positive") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300";
+  if (direction === "negative") return "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300";
+  return "border-muted bg-muted/40 text-muted-foreground";
+}
+
+function movementDirectionTextClasses(direction: ReturnType<typeof movementDirection>) {
+  if (direction === "positive") return "text-emerald-700 dark:text-emerald-300";
+  if (direction === "negative") return "text-red-700 dark:text-red-300";
+  return "text-muted-foreground";
+}
+
+function movementQuantityLabel(quantity: number, stockBefore: number, stockAfter: number) {
+  const direction = movementDirection(stockBefore, stockAfter);
+  const prefix = direction === "positive" ? "+" : direction === "negative" ? "-" : "";
+  return `${prefix}${formatNumber(quantity)}`;
+}
+
+function MovementDirectionBadge({
+  movementType,
+  stockBefore,
+  stockAfter,
+}: {
+  movementType: string;
+  stockBefore: number;
+  stockAfter: number;
+}) {
+  return (
+    <Badge variant="outline" className={movementDirectionClasses(movementDirection(stockBefore, stockAfter))}>
+      {movementType}
+    </Badge>
+  );
 }
 
 function mergePartOptions(options: PartInventoryRow[], selectedPart: PartInventoryRow | null) {
@@ -238,6 +363,191 @@ function SummaryCard({
       </CardContent>
     </Card>
   );
+}
+
+const inventoryReportColumns: ReportColumn[] = [
+  { key: "partCode", label: "Part Code" },
+  { key: "partName", label: "Part Name" },
+  { key: "categoryName", label: "Category" },
+  { key: "branchName", label: "Branch", render: (value) => value ? String(value) : CENTRAL_OR_UNASSIGNED_LABEL },
+  { key: "stockOnHand", label: "On Hand", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "reservedQuantity", label: "Reserved", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "damagedQuantity", label: "Damaged", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "availableQuantity", label: "Available", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "minimumQuantity", label: "Minimum Qty", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "stockStatus", label: "Status", render: (value) => <Badge variant={statusVariant(String(value))}>{stockStatusLabel(value)}</Badge> },
+];
+
+const shortageReportColumns: ReportColumn[] = [
+  ...inventoryReportColumns.slice(0, 4),
+  { key: "availableQuantity", label: "Available", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "minimumQuantity", label: "Minimum Qty", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "shortageQuantity", label: "Shortage", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "lastMovementAt", label: "Last Movement", render: (value) => formatDate(typeof value === "string" ? value : null) },
+  { key: "stockStatus", label: "Status", render: (value) => <Badge variant={statusVariant(String(value))}>{stockStatusLabel(value)}</Badge> },
+];
+
+const usageByVehicleColumns: ReportColumn[] = [
+  { key: "vehiclePlate", label: "Vehicle", render: (_value, row) => [reportText(row, "vehiclePlate"), reportText(row, "vehicleName")].filter((value) => value !== "-").join(" - ") || "-" },
+  { key: "partCode", label: "Part Code" },
+  { key: "partName", label: "Part Name" },
+  { key: "issuedQuantity", label: "Issued", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "returnedQuantity", label: "Returned", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "damagedQuantity", label: "Damaged", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "netUsedQuantity", label: "Net Used", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "latestMovementAt", label: "Latest Movement", render: (value) => formatDate(typeof value === "string" ? value : null) },
+];
+
+const usageByCategoryColumns: ReportColumn[] = [
+  { key: "categoryName", label: "Category", render: (value) => value ? String(value) : "Uncategorized" },
+  { key: "movementCount", label: "Movements", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "issuedQuantity", label: "Issued", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "returnedQuantity", label: "Returned", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "netUsedQuantity", label: "Net Used", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+];
+
+const movementAuditColumns: ReportColumn[] = [
+  { key: "movementNo", label: "Movement No." },
+  { key: "movementAt", label: "Movement Date", render: (value) => formatDate(typeof value === "string" ? value : null) },
+  {
+    key: "movementType",
+    label: "Type",
+    render: (value, row) => (
+      <MovementDirectionBadge
+        movementType={String(value || "-")}
+        stockBefore={reportNumber(row, "stockBefore")}
+        stockAfter={reportNumber(row, "stockAfter")}
+      />
+    ),
+  },
+  { key: "partName", label: "Part", render: (_value, row) => reportText(row, "partName") !== "-" ? reportText(row, "partName") : reportText(row, "partCode") },
+  { key: "branchName", label: "Branch", render: (value) => value ? String(value) : CENTRAL_OR_UNASSIGNED_LABEL },
+  { key: "vehiclePlate", label: "Vehicle" },
+  {
+    key: "quantity",
+    label: "Qty",
+    align: "right",
+    render: (value, row) => (
+      <span className={cn("font-medium", movementDirectionTextClasses(movementDirection(reportNumber(row, "stockBefore"), reportNumber(row, "stockAfter"))))}>
+        {movementQuantityLabel(Number(value || 0), reportNumber(row, "stockBefore"), reportNumber(row, "stockAfter"))}
+      </span>
+    ),
+  },
+  { key: "stockBefore", label: "Before", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "stockAfter", label: "After", align: "right", render: (value) => formatNumber(Number(value || 0)) },
+  { key: "referenceNo", label: "Reference" },
+];
+
+const reportDefinitions: Record<ReportType, {
+  label: string;
+  description: string;
+  columns: ReportColumn[];
+  filters: Array<keyof ReportFilters>;
+  metrics: (rows: Array<Record<string, unknown>>) => ReportMetric[];
+}> = {
+  stock_on_hand: {
+    label: "Stock on Hand",
+    description: "Current on-hand, reserved, damaged, and available quantities by part and branch.",
+    columns: inventoryReportColumns,
+    filters: ["branchId", "categoryId"],
+    metrics: (rows) => [
+      { title: "Report rows", value: rows.length, icon: FileText, tone: "info" },
+      { title: "Available qty", value: formatNumber(rows.reduce((sum, row) => sum + reportNumber(row, "availableQuantity"), 0)), icon: ClipboardList, tone: "success" },
+      { title: "Reserved qty", value: formatNumber(rows.reduce((sum, row) => sum + reportNumber(row, "reservedQuantity"), 0)), icon: CalendarClock, tone: "warning" },
+      { title: "Damaged qty", value: formatNumber(rows.reduce((sum, row) => sum + reportNumber(row, "damagedQuantity"), 0)), icon: ShieldAlert, tone: "critical" },
+    ],
+  },
+  low_stock: {
+    label: "Minimum Quantity Action List",
+    description: "Parts and branches at or below the configured minimum quantity.",
+    columns: shortageReportColumns,
+    filters: ["branchId", "categoryId"],
+    metrics: (rows) => [
+      { title: "Action rows", value: rows.length, icon: AlertTriangle, tone: "warning" },
+      { title: "Shortage qty", value: formatNumber(rows.reduce((sum, row) => sum + reportNumber(row, "shortageQuantity"), 0)), icon: PackageMinus, tone: "critical" },
+      { title: "Out of stock", value: rows.filter((row) => row.stockStatus === "out_of_stock").length, icon: ShieldAlert, tone: "critical" },
+      { title: "Categories", value: new Set(rows.map((row) => reportText(row, "categoryName"))).size, icon: Boxes, tone: "info" },
+    ],
+  },
+  out_of_stock: {
+    label: "Out of Stock",
+    description: "Parts and branches with no available quantity.",
+    columns: shortageReportColumns,
+    filters: ["branchId", "categoryId"],
+    metrics: (rows) => [
+      { title: "Out-of-stock rows", value: rows.length, icon: ShieldAlert, tone: "critical" },
+      { title: "Shortage qty", value: formatNumber(rows.reduce((sum, row) => sum + reportNumber(row, "shortageQuantity"), 0)), icon: PackageMinus, tone: "critical" },
+      { title: "Parts affected", value: new Set(rows.map((row) => reportText(row, "partCode"))).size, icon: Boxes, tone: "warning" },
+      { title: "Branches affected", value: new Set(rows.map((row) => reportText(row, "branchName"))).size, icon: ClipboardList, tone: "info" },
+    ],
+  },
+  usage_by_vehicle: {
+    label: "Usage by Vehicle",
+    description: "Issued, returned, damaged, and net used quantities grouped by vehicle and part.",
+    columns: usageByVehicleColumns,
+    filters: ["branchId", "vehicleId", "dateFrom", "dateTo"],
+    metrics: (rows) => [
+      { title: "Vehicle-part rows", value: rows.length, icon: FileText, tone: "info" },
+      { title: "Issued qty", value: formatNumber(rows.reduce((sum, row) => sum + reportNumber(row, "issuedQuantity"), 0)), icon: PackageMinus, tone: "warning" },
+      { title: "Returned qty", value: formatNumber(rows.reduce((sum, row) => sum + reportNumber(row, "returnedQuantity"), 0)), icon: PackagePlus, tone: "success" },
+      { title: "Net used qty", value: formatNumber(rows.reduce((sum, row) => sum + reportNumber(row, "netUsedQuantity"), 0)), icon: Wrench, tone: "critical" },
+    ],
+  },
+  usage_by_category: {
+    label: "Usage by Category",
+    description: "Issued, returned, and net used quantities grouped by part category.",
+    columns: usageByCategoryColumns,
+    filters: ["branchId", "categoryId", "dateFrom", "dateTo"],
+    metrics: (rows) => [
+      { title: "Categories", value: rows.length, icon: Boxes, tone: "info" },
+      { title: "Movements", value: formatNumber(rows.reduce((sum, row) => sum + reportNumber(row, "movementCount"), 0)), icon: FileText, tone: "info" },
+      { title: "Issued qty", value: formatNumber(rows.reduce((sum, row) => sum + reportNumber(row, "issuedQuantity"), 0)), icon: PackageMinus, tone: "warning" },
+      { title: "Net used qty", value: formatNumber(rows.reduce((sum, row) => sum + reportNumber(row, "netUsedQuantity"), 0)), icon: Wrench, tone: "critical" },
+    ],
+  },
+  movement_audit: {
+    label: "Movement Audit",
+    description: "Detailed stock movement log for audit and reconciliation checks.",
+    columns: movementAuditColumns,
+    filters: ["branchId", "vehicleId", "movementType", "dateFrom", "dateTo"],
+    metrics: (rows) => [
+      { title: "Movements", value: rows.length, icon: FileText, tone: "info" },
+      { title: "Total qty", value: formatNumber(rows.reduce((sum, row) => sum + reportNumber(row, "quantity"), 0)), icon: ClipboardList, tone: "info" },
+      { title: "Issue rows", value: rows.filter((row) => row.movementType === "Issue").length, icon: PackageMinus, tone: "warning" },
+      { title: "Latest movement", value: formatDateOnly(rows.reduce<string | null>((latest, row) => {
+        const value = typeof row.movementAt === "string" ? row.movementAt : null;
+        if (!value) return latest;
+        if (!latest) return value;
+        return new Date(value).getTime() > new Date(latest).getTime() ? value : latest;
+      }, null)) || "-", icon: CalendarClock, tone: "success" },
+    ],
+  },
+};
+
+function reportExportValue(column: ReportColumn, row: Record<string, unknown>) {
+  const value = reportValue(row, column.key);
+  if (column.key === "branchName") return value ? String(value) : CENTRAL_OR_UNASSIGNED_LABEL;
+  if (column.key === "stockStatus") return stockStatusLabel(value);
+  if (column.key === "movementAt" || column.key === "lastMovementAt" || column.key === "latestMovementAt") return formatDate(typeof value === "string" ? value : null);
+  if (column.key === "vehiclePlate") {
+    const vehicle = [reportText(row, "vehiclePlate"), reportText(row, "vehicleName")]
+      .filter((item) => item !== "-")
+      .join(" - ");
+    return vehicle || "-";
+  }
+  if (column.key === "partName") return reportText(row, "partName") !== "-" ? reportText(row, "partName") : reportText(row, "partCode");
+  if (typeof value === "number") return value;
+  return reportText(row, column.key);
+}
+
+function downloadExcel(filename: string, sheetName: string, columns: ReportColumn[], rows: Array<Record<string, unknown>>) {
+  const exportRows = rows.map((row) => Object.fromEntries(
+    columns.map((column) => [column.label, reportExportValue(column, row)]),
+  ));
+  const worksheet = XLSX.utils.json_to_sheet(exportRows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName.slice(0, 31));
+  XLSX.writeFile(workbook, filename);
 }
 
 function EmptyRows({ colSpan, label }: { colSpan: number; label: string }) {
@@ -354,7 +664,6 @@ function PartDialog({
     const initialStockValue = Number(form.initialStock || 0);
     await onSave(
       {
-        partCode: form.partCode,
         partName: form.partName,
         categoryId: nullableNumber(form.categoryId),
         unit: form.unit,
@@ -383,12 +692,12 @@ function PartDialog({
         <form className="grid gap-4" onSubmit={submit}>
           <div className="grid gap-3 md:grid-cols-2">
             <div className="grid gap-2">
-              <Label htmlFor="partCode">Part code</Label>
-              <Input id="partCode" value={form.partCode} onChange={(event) => update("partCode", event.target.value)} required />
-            </div>
-            <div className="grid gap-2">
               <Label htmlFor="partName">Part name</Label>
               <Input id="partName" value={form.partName} onChange={(event) => update("partName", event.target.value)} required />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="partCode">Part code</Label>
+              <Input id="partCode" value={part ? form.partCode : "Auto-generated on save"} disabled />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="categoryId">Category</Label>
@@ -569,6 +878,7 @@ function PartViewDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const movements = part?.recentMovements || [];
+  const issuedVehicles = part?.issuedVehicles || [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -586,7 +896,7 @@ function PartViewDialog({
         ) : part ? (
           <div className="grid gap-5">
             <div className="grid gap-3 rounded-md border p-4 sm:grid-cols-2 lg:grid-cols-4">
-              <DetailItem label="Category" value={part.categoryName} />
+              <DetailItem label="Category" value={categoryLabel(part.categoryName)} />
               <DetailItem label="Unit" value={part.unit} />
               <DetailItem label="Minimum Quantity" value={formatNumber(part.minimumQuantity)} />
               <DetailItem label="Storage Location" value={part.storageLocation} />
@@ -633,6 +943,37 @@ function PartViewDialog({
             </div>
 
             <div className="grid gap-2">
+              <div className="text-sm font-medium">Issued Vehicles</div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Vehicle</TableHead>
+                    <TableHead className="text-right">Issued</TableHead>
+                    <TableHead className="text-right">Returned</TableHead>
+                    <TableHead className="text-right">Damaged</TableHead>
+                    <TableHead className="text-right">Net Used</TableHead>
+                    <TableHead>Latest Movement</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {issuedVehicles.length === 0 ? <EmptyRows colSpan={6} label="No issued vehicles found." /> : null}
+                  {issuedVehicles.map((vehicle) => (
+                    <TableRow key={vehicle.vehicleId ?? `${vehicle.vehiclePlate}-${vehicle.vehicleName}`}>
+                      <TableCell>
+                        {[vehicle.vehiclePlate, vehicle.vehicleName].filter(Boolean).join(" - ") || "-"}
+                      </TableCell>
+                      <TableCell className="text-right">{formatNumber(vehicle.issuedQuantity)}</TableCell>
+                      <TableCell className="text-right">{formatNumber(vehicle.returnedQuantity)}</TableCell>
+                      <TableCell className="text-right">{formatNumber(vehicle.damagedQuantity)}</TableCell>
+                      <TableCell className="text-right">{formatNumber(vehicle.netUsedQuantity)}</TableCell>
+                      <TableCell>{formatDate(vehicle.latestMovementAt)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="grid gap-2">
               <div className="text-sm font-medium">Recent Movements</div>
               <Table>
                 <TableHeader>
@@ -651,8 +992,16 @@ function PartViewDialog({
                       <TableCell className="font-medium">{movement.movementNo}</TableCell>
                       <TableCell>{formatDate(movement.movementAt)}</TableCell>
                       <TableCell>{movement.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : movement.branchName || "-"}</TableCell>
-                      <TableCell><Badge variant="outline">{movement.movementType}</Badge></TableCell>
-                      <TableCell className="text-right">{formatNumber(movement.quantity)}</TableCell>
+                      <TableCell>
+                        <MovementDirectionBadge
+                          movementType={String(movement.movementType)}
+                          stockBefore={movement.stockBefore}
+                          stockAfter={movement.stockAfter}
+                        />
+                      </TableCell>
+                      <TableCell className={cn("text-right font-medium", movementDirectionTextClasses(movementDirection(movement.stockBefore, movement.stockAfter)))}>
+                        {movementQuantityLabel(movement.quantity, movement.stockBefore, movement.stockAfter)}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -671,6 +1020,14 @@ function movementLabel(type: PartMovementType) {
   if (type === "Receiving") return "Add Stock";
   if (type === "Issue") return "Reduce Stock";
   return `${type} Movement`;
+}
+
+function isStockDeduction(type: PartMovementType, adjustmentDirection: "IN" | "OUT") {
+  return type === "Issue" || type === "Damage" || (type === "Adjustment" && adjustmentDirection === "OUT");
+}
+
+function branchValue(branchId: number | null) {
+  return branchId == null ? "" : String(branchId);
 }
 
 function MovementDialog({
@@ -709,10 +1066,11 @@ function MovementDialog({
 
   React.useEffect(() => {
     if (!state.open) return;
+    const defaultStock = state.part?.branchStock.find((stock) => stock.availableQuantity > 0) || state.part?.branchStock[0];
     setForm({
       partId: state.part ? String(state.part.id) : "",
-      branchId: state.part?.branchStock[0]?.branchId ? String(state.part.branchStock[0].branchId) : "",
-    movementType: state.movementType,
+      branchId: defaultStock ? branchValue(defaultStock.branchId) : "",
+      movementType: state.movementType,
       adjustmentDirection: "IN",
       quantity: "",
       vehicleId: "",
@@ -726,6 +1084,29 @@ function MovementDialog({
   function update(key: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
   }
+
+  const selectedPart = React.useMemo(
+    () => parts.find((part) => String(part.id) === form.partId) || null,
+    [form.partId, parts],
+  );
+  const deductsStock = isStockDeduction(form.movementType, form.adjustmentDirection);
+  const availableBranchStock = React.useMemo(
+    () => selectedPart?.branchStock.filter((stock) => stock.availableQuantity > 0) || [],
+    [selectedPart],
+  );
+  const branchOptions = deductsStock ? availableBranchStock : null;
+  const hasAvailableStockForDeduction = !deductsStock || availableBranchStock.length > 0;
+
+  React.useEffect(() => {
+    if (!state.open || !selectedPart || !deductsStock) return;
+    const currentBranchIsAvailable = availableBranchStock.some((stock) => branchValue(stock.branchId) === form.branchId);
+    if (!currentBranchIsAvailable) {
+      setForm((current) => ({
+        ...current,
+        branchId: availableBranchStock[0] ? branchValue(availableBranchStock[0].branchId) : "",
+      }));
+    }
+  }, [availableBranchStock, deductsStock, form.branchId, selectedPart, state.open]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -793,13 +1174,30 @@ function MovementDialog({
             <div className="grid gap-2">
               <Label htmlFor="movementBranch">Branch</Label>
               <NativeSelect id="movementBranch" value={form.branchId} onChange={(event) => update("branchId", event.target.value)} className="w-full">
-                <NativeSelectOption value="">{CENTRAL_OR_UNASSIGNED_LABEL}</NativeSelectOption>
-                {lookups.branches.map((branch) => (
-                  <NativeSelectOption key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </NativeSelectOption>
-                ))}
+                {branchOptions ? (
+                  branchOptions.length ? (
+                    branchOptions.map((stock) => (
+                      <NativeSelectOption key={stock.id} value={branchValue(stock.branchId)}>
+                        {stock.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : stock.branchName || "-"} - Available: {formatNumber(stock.availableQuantity)}
+                      </NativeSelectOption>
+                    ))
+                  ) : (
+                    <NativeSelectOption value="">No available stock</NativeSelectOption>
+                  )
+                ) : (
+                  <>
+                    <NativeSelectOption value="">{CENTRAL_OR_UNASSIGNED_LABEL}</NativeSelectOption>
+                    {lookups.branches.map((branch) => (
+                      <NativeSelectOption key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </NativeSelectOption>
+                    ))}
+                  </>
+                )}
               </NativeSelect>
+              {selectedPart && !hasAvailableStockForDeduction ? (
+                <div className="text-xs text-destructive">No available stock for this part.</div>
+              ) : null}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="movementQuantity">Quantity</Label>
@@ -850,7 +1248,7 @@ function MovementDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || !hasAvailableStockForDeduction}>
               {saving ? "Saving..." : movementLabel(form.movementType)}
             </Button>
           </DialogFooter>
@@ -1114,9 +1512,18 @@ export default function PartsInventoryModule() {
     reservation: null,
     action: "issue",
   });
-  const [reportType, setReportType] = React.useState("stock_on_hand");
+  const [reportType, setReportType] = React.useState<ReportType>("stock_on_hand");
+  const [reportFilters, setReportFilters] = React.useState<ReportFilters>({
+    branchId: "",
+    vehicleId: "",
+    categoryId: "",
+    movementType: "all",
+    dateFrom: dateInputDaysAgo(30),
+    dateTo: todayDateInput(),
+  });
   const [report, setReport] = React.useState<ReportResponse | null>(null);
   const [reportLoading, setReportLoading] = React.useState(false);
+  const [reportPage, setReportPage] = React.useState(1);
   const [lowStockResponse, setLowStockResponse] = React.useState<PartsInventoryListResponse>(emptyPartsResponse);
   const [lowStockLoading, setLowStockLoading] = React.useState(false);
   const [lowStockPage, setLowStockPage] = React.useState(1);
@@ -1127,6 +1534,11 @@ export default function PartsInventoryModule() {
   const [operationPartsLoading, setOperationPartsLoading] = React.useState(false);
 
   const parts = inventory.response.data;
+  const reportDefinition = reportDefinitions[reportType];
+  const reportRows = report?.type === reportType ? report.data : [];
+  const reportLimit = 25;
+  const reportPageRows = reportRows.slice((reportPage - 1) * reportLimit, reportPage * reportLimit);
+  const reportMetrics = report ? reportDefinition.metrics(reportRows) : [];
   const selectedOperationPart = movementDialog.open
     ? movementDialog.part
     : reservationDialog.open
@@ -1214,6 +1626,46 @@ export default function PartsInventoryModule() {
     };
   }, [movementDialog.open, operationPartSearch, reservationDialog.open]);
 
+  React.useEffect(() => {
+    let alive = true;
+    setReportLoading(true);
+    setReportPage(1);
+
+    api.fetchReport(reportType, {
+      branchId: reportFilters.branchId,
+      categoryId: reportFilters.categoryId,
+      vehicleId: reportFilters.vehicleId,
+      movementType: reportFilters.movementType,
+      dateFrom: reportFilters.dateFrom,
+      dateTo: reportFilters.dateTo,
+    })
+      .then((response) => {
+        if (alive) setReport(response);
+      })
+      .catch((error) => {
+        if (!alive) return;
+        setReport(null);
+        toast.error("Failed to load report", {
+          description: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(() => {
+        if (alive) setReportLoading(false);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [
+    reportType,
+    reportFilters.branchId,
+    reportFilters.categoryId,
+    reportFilters.vehicleId,
+    reportFilters.movementType,
+    reportFilters.dateFrom,
+    reportFilters.dateTo,
+  ]);
+
   function openMovementDialog(part: PartInventoryRow | null, movementType: PartMovementType) {
     setOperationPartSearch("");
     setMovementDialog({ open: true, part, movementType });
@@ -1268,22 +1720,21 @@ export default function PartsInventoryModule() {
     setLowStockReloadKey((current) => current + 1);
   }
 
-  async function loadReport() {
-    setReportLoading(true);
-    try {
-      setReport(
-        await api.fetchReport(reportType, {
-          branchId: inventory.filters.branchId,
-          categoryId: inventory.filters.categoryId,
-        }),
-      );
-    } catch (error) {
-      toast.error("Failed to load report", {
-        description: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      setReportLoading(false);
-    }
+  function updateReportFilter(key: keyof ReportFilters, value: string) {
+    setReportFilters((current) => ({ ...current, [key]: value }));
+    setReport(null);
+    setReportPage(1);
+  }
+
+  function updateReportType(value: ReportType) {
+    setReportType(value);
+    setReport(null);
+    setReportPage(1);
+  }
+
+  function exportReportExcel() {
+    if (!reportRows.length) return;
+    downloadExcel(`${reportType}-${todayDateInput()}.xlsx`, reportDefinition.label, reportDefinition.columns, reportRows);
   }
 
   return (
@@ -1385,10 +1836,10 @@ export default function PartsInventoryModule() {
                     {!inventory.loading && parts.map((part) => (
                       <TableRow key={part.id}>
                         <TableCell>
-                          <div className="font-medium">{part.partCode}</div>
-                          <div className="text-xs text-muted-foreground">{part.partName}</div>
+                          <div className="font-medium">{part.partName}</div>
+                          <div className="text-xs text-muted-foreground">{part.partCode}</div>
                         </TableCell>
-                        <TableCell>{part.categoryName || "-"}</TableCell>
+                        <TableCell>{categoryLabel(part.categoryName)}</TableCell>
                         <TableCell className="max-w-[220px]">
                           <div className="flex flex-wrap gap-1">
                             {part.compatibleVehicleTypes.length ? part.compatibleVehicleTypes.map((type) => (
@@ -1493,11 +1944,19 @@ export default function PartsInventoryModule() {
                         <TableCell>{formatDate(movement.movementAt)}</TableCell>
                         <TableCell>{movement.partName || movement.partCode || "-"}</TableCell>
                         <TableCell>{movement.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : movement.branchName || "-"}</TableCell>
-                        <TableCell><Badge variant="outline">{movement.movementType}</Badge></TableCell>
-                        <TableCell className="text-right">{formatNumber(movement.quantity)}</TableCell>
+                        <TableCell>
+                          <MovementDirectionBadge
+                            movementType={String(movement.movementType)}
+                            stockBefore={movement.stockBefore}
+                            stockAfter={movement.stockAfter}
+                          />
+                        </TableCell>
+                        <TableCell className={cn("text-right font-medium", movementDirectionTextClasses(movementDirection(movement.stockBefore, movement.stockAfter)))}>
+                          {movementQuantityLabel(movement.quantity, movement.stockBefore, movement.stockAfter)}
+                        </TableCell>
                         <TableCell className="text-right">{formatNumber(movement.stockBefore)}</TableCell>
                         <TableCell className="text-right">{formatNumber(movement.stockAfter)}</TableCell>
-                        <TableCell>{movement.vehiclePlate || "-"}</TableCell>
+                        <TableCell>{[movement.vehiclePlate, movement.vehicleName].filter(Boolean).join(" - ") || "-"}</TableCell>
                         <TableCell>{movement.referenceNo || movement.reservationNo || "-"}</TableCell>
                       </TableRow>
                     ))}
@@ -1558,7 +2017,13 @@ export default function PartsInventoryModule() {
                           <div className="font-medium">{reservation.reservationNo}</div>
                           <div className="text-xs text-muted-foreground">{formatDate(reservation.neededAt)}</div>
                         </TableCell>
-                        <TableCell>{reservation.partCode} {reservation.partName ? `- ${reservation.partName}` : ""}</TableCell>
+                        <TableCell>
+                          {reservation.partId == null ? (
+                            <span className="text-destructive">Missing part reference</span>
+                          ) : (
+                            `${reservation.partCode || reservation.partId}${reservation.partName ? ` - ${reservation.partName}` : ""}`
+                          )}
+                        </TableCell>
                         <TableCell>{reservation.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : reservation.branchName || "-"}</TableCell>
                         <TableCell>{reservation.vehiclePlate || "-"}</TableCell>
                         <TableCell className="text-right">{formatNumber(reservation.reservedQuantity)}</TableCell>
@@ -1568,10 +2033,10 @@ export default function PartsInventoryModule() {
                         <TableCell><Badge variant={statusVariant(reservation.status)}>{reservation.status}</Badge></TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="sm" disabled={reservation.remainingQuantity <= 0 || reservation.status === "Cancelled"} onClick={() => setReservationAction({ open: true, reservation, action: "issue" })}>
+                            <Button variant="ghost" size="sm" disabled={reservation.partId == null || reservation.remainingQuantity <= 0 || reservation.status === "Cancelled"} onClick={() => setReservationAction({ open: true, reservation, action: "issue" })}>
                               Issue
                             </Button>
-                            <Button variant="ghost" size="sm" disabled={reservation.returnableQuantity <= 0 || reservation.status === "Cancelled"} onClick={() => setReservationAction({ open: true, reservation, action: "return" })}>
+                            <Button variant="ghost" size="sm" disabled={reservation.partId == null || reservation.returnableQuantity <= 0 || reservation.status === "Cancelled"} onClick={() => setReservationAction({ open: true, reservation, action: "return" })}>
                               Return
                             </Button>
                             <Button variant="ghost" size="sm" disabled={reservation.status === "Cancelled" || reservation.remainingQuantity <= 0} onClick={() => setReservationAction({ open: true, reservation, action: "cancel" })}>
@@ -1616,8 +2081,8 @@ export default function PartsInventoryModule() {
                     {!lowStockLoading && lowStockResponse.data.map((part) => (
                       <TableRow key={part.id}>
                         <TableCell>
-                          <div className="font-medium">{part.partCode}</div>
-                          <div className="text-xs text-muted-foreground">{part.partName}</div>
+                          <div className="font-medium">{part.partName}</div>
+                          <div className="text-xs text-muted-foreground">{part.partCode}</div>
                         </TableCell>
                         <TableCell>{part.categoryName || "-"}</TableCell>
                         <TableCell className="text-right">{formatNumber(part.totalAvailableQuantity)}</TableCell>
@@ -1640,50 +2105,132 @@ export default function PartsInventoryModule() {
 
           <TabsContent value="reports" className="space-y-3">
             <Card>
-              <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <CardTitle className="text-base">Reports</CardTitle>
-                <div className="flex flex-wrap gap-2">
-                  <NativeSelect value={reportType} onChange={(event) => setReportType(event.target.value)}>
+              <CardHeader className="space-y-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <CardTitle className="text-base">{reportDefinition.label}</CardTitle>
+                    <p className="mt-1 text-sm text-muted-foreground">{reportDefinition.description}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={exportReportExcel} disabled={!reportRows.length || reportLoading}>
+                      <Download className="size-4" />
+                      Export Excel
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                  <div className="space-y-1">
+                    <Label htmlFor="reportType">Report</Label>
+                    <NativeSelect id="reportType" value={reportType} onChange={(event) => updateReportType(event.target.value as ReportType)} className="w-full">
                     <NativeSelectOption value="stock_on_hand">Stock on Hand</NativeSelectOption>
-                    <NativeSelectOption value="low_stock">Low Stock</NativeSelectOption>
+                    <NativeSelectOption value="low_stock">Minimum Quantity Action List</NativeSelectOption>
                     <NativeSelectOption value="out_of_stock">Out of Stock</NativeSelectOption>
                     <NativeSelectOption value="usage_by_vehicle">Usage by Vehicle</NativeSelectOption>
                     <NativeSelectOption value="usage_by_category">Usage by Category</NativeSelectOption>
                     <NativeSelectOption value="movement_audit">Movement Audit</NativeSelectOption>
-                  </NativeSelect>
-                  <Button variant="outline" onClick={loadReport} disabled={reportLoading}>
-                    <FileText className="size-4" />
-                    {reportLoading ? "Loading..." : "Load Report"}
-                  </Button>
+                    </NativeSelect>
+                  </div>
+                  {reportDefinition.filters.includes("branchId") ? (
+                    <div className="space-y-1">
+                      <Label htmlFor="reportBranch">Branch</Label>
+                      <NativeSelect id="reportBranch" value={reportFilters.branchId} onChange={(event) => updateReportFilter("branchId", event.target.value)} className="w-full">
+                        <NativeSelectOption value="">All branches</NativeSelectOption>
+                        {inventory.lookups.branches.map((branch) => (
+                          <NativeSelectOption key={branch.id} value={branch.id}>{branch.name}</NativeSelectOption>
+                        ))}
+                      </NativeSelect>
+                    </div>
+                  ) : null}
+                  {reportDefinition.filters.includes("categoryId") ? (
+                    <div className="space-y-1">
+                      <Label htmlFor="reportCategory">Category</Label>
+                      <NativeSelect id="reportCategory" value={reportFilters.categoryId} onChange={(event) => updateReportFilter("categoryId", event.target.value)} className="w-full">
+                        <NativeSelectOption value="">All categories</NativeSelectOption>
+                        {inventory.lookups.categories.map((category) => (
+                          <NativeSelectOption key={category.id} value={category.id}>{category.name}</NativeSelectOption>
+                        ))}
+                      </NativeSelect>
+                    </div>
+                  ) : null}
+                  {reportDefinition.filters.includes("vehicleId") ? (
+                    <div className="space-y-1">
+                      <Label htmlFor="reportVehicle">Vehicle</Label>
+                      <NativeSelect id="reportVehicle" value={reportFilters.vehicleId} onChange={(event) => updateReportFilter("vehicleId", event.target.value)} className="w-full">
+                        <NativeSelectOption value="">All vehicles</NativeSelectOption>
+                        {inventory.lookups.vehicles.map((vehicle) => (
+                          <NativeSelectOption key={vehicle.id} value={vehicle.id}>
+                            {vehicle.plateNo}{vehicle.name ? ` - ${vehicle.name}` : ""}
+                          </NativeSelectOption>
+                        ))}
+                      </NativeSelect>
+                    </div>
+                  ) : null}
+                  {reportDefinition.filters.includes("movementType") ? (
+                    <div className="space-y-1">
+                      <Label htmlFor="reportMovementType">Movement type</Label>
+                      <NativeSelect id="reportMovementType" value={reportFilters.movementType} onChange={(event) => updateReportFilter("movementType", event.target.value)} className="w-full">
+                        <NativeSelectOption value="all">All movement types</NativeSelectOption>
+                        {movementTypes.map((type) => <NativeSelectOption key={type} value={type}>{type}</NativeSelectOption>)}
+                      </NativeSelect>
+                    </div>
+                  ) : null}
+                  {reportDefinition.filters.includes("dateFrom") ? (
+                    <div className="space-y-1">
+                      <Label htmlFor="reportDateFrom">From</Label>
+                      <Input id="reportDateFrom" type="date" value={reportFilters.dateFrom} onChange={(event) => updateReportFilter("dateFrom", event.target.value)} />
+                    </div>
+                  ) : null}
+                  {reportDefinition.filters.includes("dateTo") ? (
+                    <div className="space-y-1">
+                      <Label htmlFor="reportDateTo">To</Label>
+                      <Input id="reportDateTo" type="date" value={reportFilters.dateTo} onChange={(event) => updateReportFilter("dateTo", event.target.value)} />
+                    </div>
+                  ) : null}
                 </div>
               </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Field 1</TableHead>
-                      <TableHead>Field 2</TableHead>
-                      <TableHead>Field 3</TableHead>
-                      <TableHead>Field 4</TableHead>
-                      <TableHead>Field 5</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reportLoading ? <LoadingRows colSpan={5} /> : null}
-                    {!reportLoading && !report ? <EmptyRows colSpan={5} label="Load a report to view results." /> : null}
-                    {!reportLoading && report?.data.length === 0 ? <EmptyRows colSpan={5} label="No report rows found." /> : null}
-                    {!reportLoading && report?.data.slice(0, 100).map((row, index) => {
-                      const values = Object.values(row).slice(0, 5);
-                      return (
-                        <TableRow key={index}>
-                          {Array.from({ length: 5 }).map((_, valueIndex) => (
-                            <TableCell key={valueIndex}>{String(values[valueIndex] ?? "-")}</TableCell>
+              <CardContent className="space-y-3 p-0">
+                {report ? (
+                  <div className="grid gap-3 px-3 md:grid-cols-2 xl:grid-cols-4">
+                    {reportMetrics.map((metric) => (
+                      <SummaryCard key={metric.title} title={metric.title} value={metric.value} icon={metric.icon} tone={metric.tone} />
+                    ))}
+                  </div>
+                ) : null}
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        {reportDefinition.columns.map((column) => (
+                          <TableHead key={column.key} className={column.align === "right" ? "text-right" : undefined}>
+                            {column.label}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {reportLoading ? <LoadingRows colSpan={reportDefinition.columns.length} /> : null}
+                      {!reportLoading && !report ? <EmptyRows colSpan={reportDefinition.columns.length} label="Report results load automatically." /> : null}
+                      {!reportLoading && report && reportRows.length === 0 ? <EmptyRows colSpan={reportDefinition.columns.length} label="No report rows found." /> : null}
+                      {!reportLoading && reportPageRows.map((row, index) => (
+                        <TableRow key={`${reportPage}-${index}`}>
+                          {reportDefinition.columns.map((column) => (
+                            <TableCell key={column.key} className={column.align === "right" ? "text-right" : undefined}>
+                              {column.render ? column.render(reportValue(row, column.key), row) : reportText(row, column.key)}
+                            </TableCell>
                           ))}
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {report ? (
+                  <PaginationControls
+                    page={reportPage}
+                    limit={reportLimit}
+                    total={reportRows.length}
+                    onPageChange={setReportPage}
+                  />
+                ) : null}
               </CardContent>
             </Card>
           </TabsContent>
