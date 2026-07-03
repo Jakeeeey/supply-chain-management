@@ -119,6 +119,8 @@ type PartDetailRow = PartInventoryRow & {
   }>;
 };
 
+type SharedUnitLookup = PartsLookupData["units"][number];
+
 type ReportType =
   | "stock_on_hand"
   | "low_stock"
@@ -582,6 +584,7 @@ function PartDialog({
   onOpenChange,
   onSave,
   onCategoryCreate,
+  onUnitCreate,
 }: {
   open: boolean;
   part: PartInventoryRow | null;
@@ -590,6 +593,7 @@ function PartDialog({
   onOpenChange: (open: boolean) => void;
   onSave: (payload: CreatePartInput, partId?: number) => Promise<void>;
   onCategoryCreate: (name: string) => Promise<{ id: number; code: string | null; name: string; description: string | null }>;
+  onUnitCreate: (payload: { unitName: string; unitShortcut: string; skuCode?: string | null; order?: number | null }) => Promise<SharedUnitLookup>;
 }) {
   const [form, setForm] = React.useState({
     partCode: "",
@@ -607,10 +611,23 @@ function PartDialog({
   const [categoryOpen, setCategoryOpen] = React.useState(false);
   const [categorySearch, setCategorySearch] = React.useState("");
   const [creatingCategory, setCreatingCategory] = React.useState(false);
+  const [unitOpen, setUnitOpen] = React.useState(false);
+  const [unitSearch, setUnitSearch] = React.useState("");
+  const [unitDialogOpen, setUnitDialogOpen] = React.useState(false);
+  const [creatingUnit, setCreatingUnit] = React.useState(false);
 
   const selectedCategory = lookups.categories.find((cat) => String(cat.id) === form.categoryId);
+  const selectedUnit = lookups.units.find((unit) => {
+    const value = form.unit.trim().toLowerCase();
+    return unit.shortcut.toLowerCase() === value || unit.name.toLowerCase() === value;
+  });
   const canCreateCategory = categorySearch.trim().length > 0
     && !lookups.categories.some((cat) => cat.name.toLowerCase() === categorySearch.trim().toLowerCase());
+  const canCreateUnit = unitSearch.trim().length > 0
+    && !lookups.units.some((unit) => {
+      const search = unitSearch.trim().toLowerCase();
+      return unit.name.toLowerCase() === search || unit.shortcut.toLowerCase() === search;
+    });
 
   React.useEffect(() => {
     if (!open) return;
@@ -628,6 +645,14 @@ function PartDialog({
     });
     setCompatibleTypeIds(part?.compatibleVehicleTypes.map((type) => type.id) || []);
     setCategorySearch("");
+    setUnitSearch("");
+  }, [open, part]);
+
+  React.useEffect(() => {
+    if (!open || part) return;
+    api.fetchNextPartCode()
+      .then((result) => setForm((current) => ({ ...current, partCode: result.data.partCode })))
+      .catch(() => {});
   }, [open, part]);
 
   function update(key: keyof typeof form, value: string | boolean) {
@@ -659,6 +684,25 @@ function PartDialog({
     }
   }
 
+  async function handleCreateUnit(payload: { unitName: string; unitShortcut: string; skuCode?: string | null; order?: number | null }) {
+    if (creatingUnit) return;
+    setCreatingUnit(true);
+    try {
+      const created = await onUnitCreate(payload);
+      update("unit", created.shortcut);
+      setUnitDialogOpen(false);
+      setUnitOpen(false);
+      setUnitSearch("");
+      toast.success(`Unit "${created.name}" created`);
+    } catch (error) {
+      toast.error("Failed to create unit", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setCreatingUnit(false);
+    }
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const initialStockValue = Number(form.initialStock || 0);
@@ -666,7 +710,7 @@ function PartDialog({
       {
         partName: form.partName,
         categoryId: nullableNumber(form.categoryId),
-        unit: form.unit,
+        unit: form.unit.trim(),
         minimumQuantity: Number(form.minimumQuantity || 0),
         storageLocation: form.storageLocation || null,
         description: form.description || null,
@@ -682,6 +726,7 @@ function PartDialog({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
@@ -697,7 +742,7 @@ function PartDialog({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="partCode">Part code</Label>
-              <Input id="partCode" value={part ? form.partCode : "Auto-generated on save"} disabled />
+              <Input id="partCode" value={form.partCode || (part ? "" : "Generating...")} disabled />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="categoryId">Category</Label>
@@ -782,7 +827,84 @@ function PartDialog({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="unit">Unit</Label>
-              <Input id="unit" value={form.unit} onChange={(event) => update("unit", event.target.value)} required />
+              <Popover open={unitOpen} onOpenChange={setUnitOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="unit"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={unitOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {selectedUnit ? `${selectedUnit.name} (${selectedUnit.shortcut})` : form.unit || unitSearch || "Select unit"}
+                    <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[200px] p-0" align="start">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search units..."
+                      value={unitSearch}
+                      onValueChange={setUnitSearch}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        {canCreateUnit ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="w-full justify-start gap-2 text-sm"
+                            onClick={() => {
+                              setUnitOpen(false);
+                              setUnitDialogOpen(true);
+                            }}
+                          >
+                            <Plus className="size-4" />
+                            <span>New Unit</span>
+                            <span className="truncate">{unitSearch.trim()}</span>
+                          </Button>
+                        ) : (
+                          "No units found"
+                        )}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {form.unit && !selectedUnit ? (
+                          <CommandItem
+                            value={form.unit}
+                            onSelect={() => {
+                              setUnitOpen(false);
+                              setUnitSearch("");
+                            }}
+                          >
+                            <Check className="mr-2 size-4 opacity-100" />
+                            {form.unit}
+                          </CommandItem>
+                        ) : null}
+                        {lookups.units.map((unit) => (
+                          <CommandItem
+                            key={unit.id}
+                            value={`${unit.name} ${unit.shortcut}`}
+                            onSelect={() => {
+                              update("unit", unit.shortcut);
+                              setUnitOpen(false);
+                              setUnitSearch("");
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 size-4",
+                                selectedUnit?.id === unit.id ? "opacity-100" : "opacity-0",
+                              )}
+                            />
+                            <span>{unit.name}</span>
+                            <span className="ml-2 text-xs text-muted-foreground">({unit.shortcut})</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="minimumQuantity">Minimum Quantity</Label>
@@ -849,6 +971,106 @@ function PartDialog({
             </Button>
             <Button type="submit" disabled={saving}>
               {saving ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+    <CreateSharedUnitDialog
+      open={unitDialogOpen}
+      initialName={unitSearch.trim()}
+      saving={creatingUnit}
+      onOpenChange={setUnitDialogOpen}
+      onCreate={handleCreateUnit}
+    />
+    </>
+  );
+}
+
+function suggestedUnitShortcut(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length > 1) return words.map((word) => word[0]).join("").toLowerCase().slice(0, 8);
+  return name.replace(/[^a-zA-Z0-9]/g, "").toLowerCase().slice(0, 8);
+}
+
+function CreateSharedUnitDialog({
+  open,
+  initialName,
+  saving,
+  onOpenChange,
+  onCreate,
+}: {
+  open: boolean;
+  initialName: string;
+  saving: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreate: (payload: { unitName: string; unitShortcut: string; skuCode?: string | null; order?: number | null }) => Promise<void>;
+}) {
+  const [form, setForm] = React.useState({
+    unitName: "",
+    unitShortcut: "",
+    skuCode: "",
+    order: "0",
+  });
+
+  React.useEffect(() => {
+    if (!open) return;
+    setForm({
+      unitName: initialName,
+      unitShortcut: suggestedUnitShortcut(initialName),
+      skuCode: "",
+      order: "0",
+    });
+  }, [open, initialName]);
+
+  function update(key: keyof typeof form, value: string) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    await onCreate({
+      unitName: form.unitName,
+      unitShortcut: form.unitShortcut,
+      skuCode: form.skuCode || null,
+      order: Number(form.order || 0),
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create Unit</DialogTitle>
+          <DialogDescription>Add a shared unit of measurement for fleet parts and other SCM modules.</DialogDescription>
+        </DialogHeader>
+        <form className="grid gap-4" onSubmit={submit}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="sharedUnitName">Unit name</Label>
+              <Input id="sharedUnitName" value={form.unitName} onChange={(event) => update("unitName", event.target.value)} placeholder="e.g. Piece" required />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="sharedUnitShortcut">Shortcut</Label>
+              <Input id="sharedUnitShortcut" value={form.unitShortcut} onChange={(event) => update("unitShortcut", event.target.value)} placeholder="e.g. pc" required />
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="sharedUnitSkuCode">Unit code</Label>
+              <Input id="sharedUnitSkuCode" value={form.skuCode} onChange={(event) => update("skuCode", event.target.value)} placeholder="Optional" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="sharedUnitOrder">Sort order</Label>
+              <Input id="sharedUnitOrder" type="number" min="0" step="1" value={form.order} onChange={(event) => update("order", event.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Creating..." : "Create Unit"}
             </Button>
           </DialogFooter>
         </form>
@@ -1127,14 +1349,48 @@ function MovementDialog({
 
   const requiresReason = form.movementType === "Adjustment" || form.movementType === "Damage";
   const showVehicle = form.movementType === "Issue" || form.movementType === "Return" || form.movementType === "Damage";
+  const currentAvailable = React.useMemo(() => {
+    if (!selectedPart) return null;
+    const stock = selectedPart.branchStock.find((s) => branchValue(s.branchId) === form.branchId);
+    return stock?.availableQuantity ?? null;
+  }, [selectedPart, form.branchId]);
+  const qty = Number(form.quantity) || 0;
+  const afterAvailable = deductsStock && currentAvailable != null
+    ? currentAvailable - qty
+    : !deductsStock && currentAvailable != null
+      ? currentAvailable + qty
+      : null;
+
+  function movementGuidance(type: PartMovementType): string {
+    if (type === "Receiving") return "Use this to record received parts or verified stock additions. On-hand quantity at the selected branch will increase.";
+    if (type === "Issue") return "Use this when issuing parts to a vehicle, repair job, or other traceable use. Available stock will be deducted.";
+    if (type === "Return") return "Return unused or excess parts back to inventory. On-hand quantity will be restored.";
+    if (type === "Adjustment") return "Correct stock discrepancies discovered during cycle counts or audits. Provide a reason code and remarks.";
+    if (type === "Damage") return "Record parts that are damaged, expired, or otherwise unsellable. Damaged quantity will increase.";
+    return "";
+  }
 
   return (
     <Dialog open={state.open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{movementLabel(form.movementType)}</DialogTitle>
-          <DialogDescription>Record a stock movement for fleet parts inventory.</DialogDescription>
+          <DialogDescription>{movementGuidance(form.movementType)}</DialogDescription>
         </DialogHeader>
+
+        {currentAvailable != null && qty > 0 && (form.movementType === "Receiving" || form.movementType === "Issue") && afterAvailable != null && afterAvailable >= 0 ? (
+          <div className={cn(
+            "rounded-md border px-3 py-2 text-sm",
+            deductsStock ? "border-orange-200 bg-orange-50 dark:border-orange-900 dark:bg-orange-950/20" : "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/20",
+          )}>
+            <span className="font-medium">
+              {deductsStock ? "Available stock will decrease" : "Available stock will increase"}
+            </span>
+            <span className="ml-1 text-muted-foreground">
+              from <strong>{formatNumber(currentAvailable)}</strong> to <strong>{formatNumber(afterAvailable)}</strong>
+            </span>
+          </div>
+        ) : null}
 
         <form className="grid gap-4" onSubmit={submit}>
           <div className="grid gap-3 md:grid-cols-2">
@@ -1202,6 +1458,11 @@ function MovementDialog({
             <div className="grid gap-2">
               <Label htmlFor="movementQuantity">Quantity</Label>
               <Input id="movementQuantity" type="number" min="0.01" step="0.01" value={form.quantity} onChange={(event) => update("quantity", event.target.value)} required />
+              {selectedPart && currentAvailable != null ? (
+                <div className="text-xs text-muted-foreground">
+                  Available at selected branch: <strong>{formatNumber(currentAvailable)}</strong>
+                </div>
+              ) : null}
             </div>
             {form.movementType === "Adjustment" && (
               <div className="grid gap-2">
@@ -1228,6 +1489,11 @@ function MovementDialog({
             <div className="grid gap-2">
               <Label htmlFor="referenceNo">Reference no</Label>
               <Input id="referenceNo" value={form.referenceNo} onChange={(event) => update("referenceNo", event.target.value)} />
+              {form.movementType === "Issue" ? (
+                <div className="text-xs text-muted-foreground">Record the source document or job order for traceability.</div>
+              ) : form.movementType === "Receiving" ? (
+                <div className="text-xs text-muted-foreground">Record the purchase order or delivery receipt number.</div>
+              ) : null}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="movementAt">Movement date</Label>
@@ -1243,6 +1509,9 @@ function MovementDialog({
           <div className="grid gap-2">
             <Label htmlFor="movementRemarks">Remarks</Label>
             <Textarea id="movementRemarks" value={form.remarks} onChange={(event) => update("remarks", event.target.value)} required={requiresReason} />
+            {!requiresReason ? (
+              <div className="text-xs text-muted-foreground">Optional. Add notes about the source or reason for this movement.</div>
+            ) : null}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -2245,6 +2514,11 @@ export default function PartsInventoryModule() {
           onSave={savePart}
           onCategoryCreate={async (name) => {
             const result = await api.createPartCategory(name);
+            await inventory.refreshLookups();
+            return result.data;
+          }}
+          onUnitCreate={async (payload) => {
+            const result = await api.createSharedUnit(payload);
             await inventory.refreshLookups();
             return result.data;
           }}

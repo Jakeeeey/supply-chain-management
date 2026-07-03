@@ -155,10 +155,26 @@ export async function updateReservation(payload: UpdateReservationInput) {
   });
 }
 
+export async function fetchNextPartCode() {
+  return request<{ data: { partCode: string } }>(`${BASE}/next-code`);
+}
+
 export async function createPartCategory(name: string) {
   return request<{ data: { id: number; code: string | null; name: string; description: string | null } }>(
     `${BASE}/categories`,
     { method: "POST", body: JSON.stringify({ name }) },
+  );
+}
+
+export async function createSharedUnit(payload: {
+  unitName: string;
+  unitShortcut: string;
+  skuCode?: string | null;
+  order?: number | null;
+}) {
+  return request<{ data: { id: number; name: string; shortcut: string; skuCode: string | null; order: number | null } }>(
+    `${BASE}/units`,
+    { method: "POST", body: JSON.stringify(payload) },
   );
 }
 

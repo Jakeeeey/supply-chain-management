@@ -132,6 +132,7 @@ export type PaginatedResponse<T> = {
 
 export type PartsLookupData = {
   categories: Array<{ id: number; code: string | null; name: string; description: string | null }>;
+  units: Array<{ id: number; name: string; shortcut: string; skuCode: string | null; order: number | null }>;
   vehicleTypes: Array<{ id: number; name: string }>;
   branches: Array<{ id: number; code: string | null; name: string }>;
   vehicles: Array<{

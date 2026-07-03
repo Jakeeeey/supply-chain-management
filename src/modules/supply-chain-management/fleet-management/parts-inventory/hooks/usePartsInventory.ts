@@ -35,6 +35,7 @@ const emptyResponse: PartsInventoryListResponse = {
 
 const emptyLookups: PartsLookupData = {
   categories: [],
+  units: [],
   vehicleTypes: [],
   branches: [],
   vehicles: [],

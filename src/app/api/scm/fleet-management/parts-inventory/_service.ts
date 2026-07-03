@@ -104,6 +104,7 @@ const CATEGORY_FIELDS = [
   "deleted_at",
 ] as const;
 
+const UNIT_FIELDS = ["unit_id", "unit_name", "unit_shortcut", "sku_code", "order"] as const;
 const VEHICLE_TYPE_FIELDS = ["id", "type_name"] as const;
 const BRANCH_FIELDS = ["id", "branch_code", "branch_name", "isActive"] as const;
 const VEHICLE_FIELDS = ["vehicle_id", "vehicle_plate", "name", "vehicle_type", "status"] as const;
@@ -753,7 +754,7 @@ const GENERATED_PART_CODE_PREFIX = "FP";
 const GENERATED_PART_CODE_WIDTH = 6;
 const GENERATED_PART_CODE_ATTEMPTS = 5;
 
-async function generatePartCode() {
+export async function generatePartCode() {
   const prefix = `${GENERATED_PART_CODE_PREFIX}-`;
   const rows = await listItems<{ part_code?: string | null }>("fleet_parts", {
     limit: -1,
@@ -1877,13 +1878,70 @@ export async function createCategory(name: string, actorId: ActorId) {
   };
 }
 
+export async function createSharedUnit(payload: {
+  unitName: string;
+  unitShortcut: string;
+  skuCode?: string | null;
+  order?: number | null;
+}) {
+  const unitName = payload.unitName.trim();
+  const unitShortcut = payload.unitShortcut.trim();
+  const skuCode = payload.skuCode?.trim() || null;
+  const order = payload.order ?? 0;
+
+  if (!unitName) throw new PartsInventoryError("Unit name is required", 400);
+  if (!unitShortcut) throw new PartsInventoryError("Unit shortcut is required", 400);
+
+  const duplicateFilters: UnknownRecord[] = [
+    { unit_name: { _eq: unitName } },
+    { unit_shortcut: { _eq: unitShortcut } },
+  ];
+  if (skuCode) duplicateFilters.push({ sku_code: { _eq: skuCode } });
+
+  const existing = await listItems<UnknownRecord>("units", {
+    limit: 1,
+    fields: fields(UNIT_FIELDS),
+    filter: filterParam({ _or: duplicateFilters }),
+  });
+  if (existing.length > 0) {
+    const duplicate = existing[0];
+    if (asString(duplicate.unit_name).toLowerCase() === unitName.toLowerCase()) {
+      throw new PartsInventoryError(`Unit name "${unitName}" already exists`, 409);
+    }
+    if (asString(duplicate.unit_shortcut).toLowerCase() === unitShortcut.toLowerCase()) {
+      throw new PartsInventoryError(`Unit shortcut "${unitShortcut}" already exists`, 409);
+    }
+    throw new PartsInventoryError(`Unit code "${skuCode}" already exists`, 409);
+  }
+
+  const created = await createItem<UnknownRecord>("units", {
+    unit_name: unitName,
+    unit_shortcut: unitShortcut,
+    sku_code: skuCode,
+    order,
+  });
+
+  return {
+    id: asNullableNumber(created.unit_id),
+    name: asString(created.unit_name),
+    shortcut: asString(created.unit_shortcut),
+    skuCode: asNullableString(created.sku_code),
+    order: asNullableNumber(created.order),
+  };
+}
+
 export async function listLookups() {
-  const [categories, vehicleTypes, branches, vehicles] = await Promise.all([
+  const [categories, units, vehicleTypes, branches, vehicles] = await Promise.all([
     listItems<UnknownRecord>("fleet_part_categories", {
       limit: -1,
       fields: fields(CATEGORY_FIELDS),
       filter: filterParam({ deleted_at: { _null: true }, is_active: { _eq: true } }),
       sort: "category_name",
+    }),
+    listItems<UnknownRecord>("units", {
+      limit: -1,
+      fields: fields(UNIT_FIELDS),
+      sort: "order,unit_name",
     }),
     listItems<UnknownRecord>("vehicle_type", {
       limit: -1,
@@ -1910,6 +1968,15 @@ export async function listLookups() {
       name: asString(category.category_name),
       description: asNullableString(category.description),
     })).filter((category): category is { id: number; code: string | null; name: string; description: string | null } => category.id != null),
+    units: units.map((unit) => ({
+      id: asNullableNumber(unit.unit_id),
+      name: asString(unit.unit_name),
+      shortcut: asString(unit.unit_shortcut),
+      skuCode: asNullableString(unit.sku_code),
+      order: asNullableNumber(unit.order),
+    })).filter((unit): unit is { id: number; name: string; shortcut: string; skuCode: string | null; order: number | null } =>
+      unit.id != null && unit.name.length > 0 && unit.shortcut.length > 0
+    ),
     vehicleTypes: vehicleTypes.map((type) => ({
       id: asNullableNumber(type.id),
       name: asString(type.type_name),
