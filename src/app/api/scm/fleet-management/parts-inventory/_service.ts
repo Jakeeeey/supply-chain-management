@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { z } from "zod";
 
 const DIRECTUS_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
@@ -78,6 +79,7 @@ const RESERVATION_FIELDS = [
   "part_id.part_name",
   "branch_id.id",
   "branch_id.branch_name",
+  "vehicle_id",
   "vehicle_id.vehicle_id",
   "vehicle_id.vehicle_plate",
   "vehicle_id.name",
@@ -119,7 +121,7 @@ const COMPATIBILITY_FIELDS = [
 
 type UnknownRecord = Record<string, unknown>;
 type ActorId = number | string | null;
-type MovementType = "Receiving" | "Issue" | "Return" | "Adjustment" | "Damage";
+type MovementType = "Receiving" | "Issue" | "Return" | "Adjustment" | "Damage" | "Reservation";
 type ReservationAction = "issue" | "return" | "cancel";
 type PartStockStatus = "available" | "low_stock" | "out_of_stock";
 type ReportType =
@@ -267,12 +269,16 @@ export const MovementQuerySchema = z.object({
   partId: z.coerce.number().int().positive().optional(),
   branchId: z.coerce.number().int().positive().optional(),
   vehicleId: z.coerce.number().int().positive().optional(),
-  movementType: z.enum(["Receiving", "Issue", "Return", "Adjustment", "Damage"]).optional(),
+  movementType: z.enum(["Receiving", "Issue", "Return", "Adjustment", "Damage", "Reservation"]).optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   search: z.string().optional().default(""),
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(25),
+});
+
+export const NextMovementReferenceQuerySchema = z.object({
+  movementType: z.enum(["Receiving", "Issue", "Return", "Adjustment", "Damage"]),
 });
 
 export const ReservationQuerySchema = z.object({
@@ -299,7 +305,7 @@ export const ReportQuerySchema = z.object({
   branchId: z.coerce.number().int().positive().optional(),
   vehicleId: z.coerce.number().int().positive().optional(),
   categoryId: z.coerce.number().int().positive().optional(),
-  movementType: z.enum(["Receiving", "Issue", "Return", "Adjustment", "Damage"]).optional(),
+  movementType: z.enum(["Receiving", "Issue", "Return", "Adjustment", "Damage", "Reservation"]).optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   format: z.enum(["json", "xlsx", "pdf"]).optional().default("json"),
@@ -525,6 +531,10 @@ function filterParam(filter: UnknownRecord) {
   return JSON.stringify(filter);
 }
 
+function optionalRelationPayload(field: string, value: number | string | null | undefined) {
+  return value == null ? {} : { [field]: value };
+}
+
 function asRecord(value: unknown): UnknownRecord | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as UnknownRecord) : null;
 }
@@ -578,8 +588,37 @@ function nowIso() {
 
 function generatedRef(prefix: string) {
   const stamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
-  const suffix = Math.random().toString(36).slice(2, 7).toUpperCase();
+  const suffix = randomBytes(4).toString("hex").toUpperCase();
   return `${prefix}-${stamp}-${suffix}`;
+}
+
+function movementReferencePrefix(movementType: CreateMovementRequest["movementType"]) {
+  if (movementType === "Receiving") return "FMR-RCV";
+  if (movementType === "Issue") return "FMR-ISS";
+  if (movementType === "Return") return "FMR-RET";
+  if (movementType === "Adjustment") return "FMR-ADJ";
+  return "FMR-DMG";
+}
+
+export function generateMovementReference(movementType: CreateMovementRequest["movementType"]) {
+  return generatedRef(movementReferencePrefix(movementType));
+}
+
+function isGeneratedMovementReference(referenceNo: string, movementType: CreateMovementRequest["movementType"]) {
+  const escapedPrefix = movementReferencePrefix(movementType).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${escapedPrefix}-\\d{14}-[A-F0-9]{8}$`).test(referenceNo);
+}
+
+function movementReferenceNo(body: CreateMovementRequest) {
+  if (!body.referenceNo) return generateMovementReference(body.movementType);
+  const isInitialStockReference = body.movementType === "Receiving" && body.referenceNo === "INITIAL-STOCK";
+  if (!isGeneratedMovementReference(body.referenceNo, body.movementType) && !isInitialStockReference) {
+    throw new PartsInventoryError("Invalid generated movement reference number", 400, {
+      referenceNo: body.referenceNo,
+      movementType: body.movementType,
+    });
+  }
+  return body.referenceNo;
 }
 
 function availableQuantity(stock: Pick<DirectusStockRow, "stock_on_hand" | "reserved_quantity" | "damaged_quantity">) {
@@ -976,9 +1015,9 @@ async function enrichMovementRowsWithParts(
   });
 }
 
-async function enrichMovementRowsWithVehicles(
-  rows: Array<ReturnType<typeof mapMovement>>,
-): Promise<Array<ReturnType<typeof mapMovement>>> {
+async function enrichRowsWithVehicles<T extends { vehicleId: number | null; vehiclePlate: string | null; vehicleName: string | null }>(
+  rows: T[],
+): Promise<T[]> {
   const missingVehicleIds = uniqueNumbers(
     rows.filter((row) => row.vehicleId != null && (!row.vehiclePlate || !row.vehicleName)).map((row) => row.vehicleId),
   );
@@ -1082,7 +1121,7 @@ async function enrichReservationRowsWithParts(
 }
 
 async function mapReservationWithPart(row: DirectusReservationRow) {
-  const [reservation] = await enrichReservationRowsWithParts([mapReservation(row)]);
+  const [reservation] = await enrichRowsWithVehicles(await enrichReservationRowsWithParts([mapReservation(row)]));
   return reservation;
 }
 
@@ -1367,6 +1406,7 @@ async function patchStockAndCreateMovement(
   }
 
   const now = nowIso();
+  const referenceNo = movementReferenceNo(body);
   const beforeStockOnHand = asNumber(stock.stock_on_hand);
   const beforeReserved = asNumber(stock.reserved_quantity);
   const beforeDamaged = asNumber(stock.damaged_quantity);
@@ -1383,10 +1423,10 @@ async function patchStockAndCreateMovement(
   return createItem<DirectusMovementRow>("fleet_part_movements", {
     movement_no: generatedRef("FPM"),
     part_id: body.partId,
-    branch_id: body.branchId ?? null,
-    vehicle_id: body.vehicleId ?? null,
-    motorpool_job_id: body.motorpoolJobId ?? null,
-    reservation_id: body.reservationId ?? null,
+    ...optionalRelationPayload("branch_id", body.branchId),
+    ...optionalRelationPayload("vehicle_id", body.vehicleId),
+    ...optionalRelationPayload("motorpool_job_id", body.motorpoolJobId),
+    ...optionalRelationPayload("reservation_id", body.reservationId),
     movement_type: body.movementType,
     quantity: body.quantity,
     stock_before: beforeStockOnHand,
@@ -1395,7 +1435,7 @@ async function patchStockAndCreateMovement(
     reserved_after: after.reservedQuantity,
     damaged_before: beforeDamaged,
     damaged_after: after.damagedQuantity,
-    reference_no: body.referenceNo ?? null,
+    reference_no: referenceNo,
     reason_code: body.reasonCode ?? null,
     remarks: body.remarks ?? null,
     movement_at: body.movementAt || now,
@@ -1424,14 +1464,6 @@ async function applyStockMovement(
 
   if ((body.movementType === "Adjustment" || body.movementType === "Damage") && (!body.reasonCode || !body.remarks)) {
     throw new PartsInventoryError("Reason code and remarks are required for adjustment and damage movements", 400);
-  }
-
-  if (body.movementType === "Issue" && !body.vehicleId && !body.motorpoolJobId && !body.reservationId && !body.referenceNo) {
-    throw new PartsInventoryError("Issue requires a vehicle, reservation, job, or reference number", 400);
-  }
-
-  if (body.movementType === "Return" && !body.vehicleId && !body.motorpoolJobId && !body.reservationId && !body.referenceNo) {
-    throw new PartsInventoryError("Return requires a vehicle, reservation, job, or reference number", 400);
   }
 
   const stock = stockRow || (canCreateMissingStockRow(body)
@@ -1510,6 +1542,16 @@ export async function createMovement(body: CreateMovementRequest, actorId: Actor
     return listMovements({ partId: body.partId, search: "", page: 1, limit: 1 });
   }
 
+  if (body.movementType === "Issue") {
+    const movement = await applyStockMovement({ ...body, reservationId: null }, actorId);
+    const reservation = await createIssuedReservationForMovement(body, actorId);
+    await updateItem<DirectusMovementRow>("fleet_part_movements", movement.id, {
+      reservation_id: reservation.id,
+    });
+    const enriched = await enrichRowsWithVehicles(await enrichMovementRowsWithParts([mapMovement(await fetchMovement(movement.id))]));
+    return { data: enriched[0] };
+  }
+
   const movement = await applyStockMovement(body, actorId);
   const enriched = await enrichMovementRowsWithParts([mapMovement(movement)]);
   return { data: enriched[0] };
@@ -1518,6 +1560,35 @@ export async function createMovement(body: CreateMovementRequest, actorId: Actor
 async function fetchReservation(reservationId: number) {
   return getItem<DirectusReservationRow>("fleet_part_reservations", reservationId, {
     fields: fields(RESERVATION_FIELDS),
+  });
+}
+
+async function fetchMovement(movementId: number) {
+  return getItem<DirectusMovementRow>("fleet_part_movements", movementId, {
+    fields: fields(MOVEMENT_FIELDS),
+  });
+}
+
+async function createIssuedReservationForMovement(body: CreateMovementRequest, actorId: ActorId) {
+  const now = nowIso();
+  // Issued reservations may come from direct no-vehicle Issue movements; manual reservations remain vehicle-required.
+  return createItem<DirectusReservationRow>("fleet_part_reservations", {
+    reservation_no: generatedRef("FPR"),
+    part_id: body.partId,
+    ...optionalRelationPayload("branch_id", body.branchId),
+    ...optionalRelationPayload("vehicle_id", body.vehicleId),
+    ...optionalRelationPayload("motorpool_job_id", body.motorpoolJobId),
+    reserved_quantity: body.quantity,
+    issued_quantity: body.quantity,
+    returned_quantity: 0,
+    cancelled_quantity: 0,
+    status: "Issued",
+    needed_at: body.movementAt ?? null,
+    remarks: body.remarks ?? body.referenceNo ?? null,
+    created_at: now,
+    created_by: actorId,
+    updated_at: now,
+    updated_by: actorId,
   });
 }
 
@@ -1558,8 +1629,12 @@ export async function createReservation(body: CreateReservationRequest, actorId:
   }
 
   const now = nowIso();
+  const stockOnHand = asNumber(stock.stock_on_hand);
+  const reservedBefore = asNumber(stock.reserved_quantity);
+  const damagedQuantity = asNumber(stock.damaged_quantity);
+  const reservedAfter = reservedBefore + body.reservedQuantity;
   await updateItem<DirectusStockRow>("fleet_part_stock", stock.id, {
-    reserved_quantity: asNumber(stock.reserved_quantity) + body.reservedQuantity,
+    reserved_quantity: reservedAfter,
     updated_at: now,
     updated_by: actorId,
   });
@@ -1577,6 +1652,30 @@ export async function createReservation(body: CreateReservationRequest, actorId:
     status: "Reserved",
     needed_at: body.neededAt ?? null,
     remarks: body.remarks ?? null,
+    created_at: now,
+    created_by: actorId,
+  });
+
+  await createItem<DirectusMovementRow>("fleet_part_movements", {
+    movement_no: generatedRef("FPM"),
+    part_id: body.partId,
+    branch_id: body.branchId ?? null,
+    vehicle_id: body.vehicleId,
+    motorpool_job_id: body.motorpoolJobId ?? null,
+    reservation_id: reservation.id,
+    movement_type: "Reservation",
+    quantity: body.reservedQuantity,
+    stock_before: stockOnHand,
+    stock_after: stockOnHand,
+    reserved_before: reservedBefore,
+    reserved_after: reservedAfter,
+    damaged_before: damagedQuantity,
+    damaged_after: damagedQuantity,
+    reference_no: asString(reservation.reservation_no),
+    reason_code: null,
+    remarks: body.remarks ?? null,
+    movement_at: now,
+    encoded_by: actorId,
     created_at: now,
     created_by: actorId,
   });
@@ -1742,7 +1841,7 @@ async function getFilteredMovementRows(query: MovementFilterQuery) {
   });
 
   let rows = await enrichMovementRowsWithParts(movements.map(mapMovement));
-  rows = await enrichMovementRowsWithVehicles(rows);
+  rows = await enrichRowsWithVehicles(rows);
 
   const search = query.search.trim().toLowerCase();
   rows = rows.filter((row) => {
@@ -1793,7 +1892,7 @@ export async function listReservations(query: ReservationQuery) {
   });
 
   const search = query.search.trim().toLowerCase();
-  const enrichedRows = await enrichReservationRowsWithParts(reservations.map(mapReservation));
+  const enrichedRows = await enrichRowsWithVehicles(await enrichReservationRowsWithParts(reservations.map(mapReservation)));
   const rows = enrichedRows.filter((row) => {
     if (!search) return true;
     return [

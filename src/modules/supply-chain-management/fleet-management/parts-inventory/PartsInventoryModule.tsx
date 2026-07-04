@@ -74,9 +74,11 @@ import { usePartReservations } from "./hooks/usePartReservations";
 import { usePartsInventory } from "./hooks/usePartsInventory";
 import * as api from "./providers/partsInventoryApi";
 import type {
+  BranchStock,
   CreateMovementInput,
   CreatePartInput,
   CreateReservationInput,
+  ManualPartMovementType,
   PartInventoryRow,
   PartMovementRow,
   PartMovementType,
@@ -95,7 +97,7 @@ type DialogState<T> = {
 type MovementDialogState = {
   open: boolean;
   part: PartInventoryRow | null;
-  movementType: PartMovementType;
+  movementType: ManualPartMovementType;
 };
 
 type ReservationActionState = {
@@ -152,7 +154,8 @@ type ReportMetric = {
   tone: keyof typeof summaryToneStyles;
 };
 
-const movementTypes: PartMovementType[] = ["Receiving", "Issue", "Return", "Adjustment", "Damage"];
+const manualMovementTypes: ManualPartMovementType[] = ["Receiving", "Issue", "Return", "Adjustment", "Damage"];
+const movementTypes: PartMovementType[] = [...manualMovementTypes, "Reservation"];
 const CENTRAL_OR_UNASSIGNED_LABEL = "Central or unassigned";
 const summaryToneStyles = {
   info: {
@@ -221,6 +224,12 @@ function dateInputDaysAgo(days: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function nowLocalDatetime() {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
+
 function todayDateInput() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -250,10 +259,32 @@ function stockStatusLabel(status: unknown) {
   return reportText({ status }, "status");
 }
 
-function statusVariant(status: string) {
-  if (status === "out_of_stock" || status === "Cancelled") return "destructive" as const;
-  if (status === "low_stock" || status === "Partially Issued") return "secondary" as const;
-  return "outline" as const;
+function statusBadgeClasses(status: string) {
+  const normalized = status.toLowerCase().replace(/\s+/g, "_");
+  if (normalized === "available" || normalized === "returned") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300";
+  }
+  if (normalized === "low_stock" || normalized === "partially_issued") {
+    return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300";
+  }
+  if (normalized === "out_of_stock" || normalized === "cancelled") {
+    return "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300";
+  }
+  if (normalized === "reserved") {
+    return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300";
+  }
+  if (normalized === "issued") {
+    return "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-300";
+  }
+  return "border-muted bg-muted/40 text-muted-foreground";
+}
+
+function StatusBadge({ status, label }: { status: string; label: React.ReactNode }) {
+  return (
+    <Badge variant="outline" className={statusBadgeClasses(status)}>
+      {label}
+    </Badge>
+  );
 }
 
 function movementDirection(stockBefore: number, stockAfter: number) {
@@ -272,6 +303,47 @@ function movementDirectionTextClasses(direction: ReturnType<typeof movementDirec
   if (direction === "positive") return "text-emerald-700 dark:text-emerald-300";
   if (direction === "negative") return "text-red-700 dark:text-red-300";
   return "text-muted-foreground";
+}
+
+function movementDisplaySnapshot(movement: PartMovementRow) {
+  if (movement.movementType === "Reservation") {
+    return {
+      before: movement.stockBefore - movement.reservedBefore - movement.damagedBefore,
+      after: movement.stockAfter - movement.reservedAfter - movement.damagedAfter,
+    };
+  }
+  return {
+    before: movement.stockBefore,
+    after: movement.stockAfter,
+  };
+}
+
+function reservationActionButtonClasses(action: "issue" | "return" | "cancel") {
+  if (action === "issue") {
+    return "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-900 disabled:border-border disabled:bg-transparent disabled:text-muted-foreground dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-950/50";
+  }
+  if (action === "return") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 disabled:border-border disabled:bg-transparent disabled:text-muted-foreground dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50";
+  }
+  return "border-red-200 bg-red-50 text-red-800 hover:bg-red-100 hover:text-red-900 disabled:border-border disabled:bg-transparent disabled:text-muted-foreground dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50";
+}
+
+function reservationDisplayQuantities(reservation: PartReservationRow) {
+  if (reservation.status === "Cancelled") {
+    return {
+      reserved: 0,
+      issued: 0,
+      returned: 0,
+      remaining: 0,
+    };
+  }
+
+  return {
+    reserved: reservation.remainingQuantity,
+    issued: Math.max(0, reservation.issuedQuantity - reservation.returnedQuantity),
+    returned: reservation.returnedQuantity,
+    remaining: reservation.remainingQuantity,
+  };
 }
 
 function movementQuantityLabel(quantity: number, stockBefore: number, stockAfter: number) {
@@ -377,7 +449,7 @@ const inventoryReportColumns: ReportColumn[] = [
   { key: "damagedQuantity", label: "Damaged", align: "right", render: (value) => formatNumber(Number(value || 0)) },
   { key: "availableQuantity", label: "Available", align: "right", render: (value) => formatNumber(Number(value || 0)) },
   { key: "minimumQuantity", label: "Minimum Qty", align: "right", render: (value) => formatNumber(Number(value || 0)) },
-  { key: "stockStatus", label: "Status", render: (value) => <Badge variant={statusVariant(String(value))}>{stockStatusLabel(value)}</Badge> },
+  { key: "stockStatus", label: "Status", render: (value) => <StatusBadge status={String(value)} label={stockStatusLabel(value)} /> },
 ];
 
 const shortageReportColumns: ReportColumn[] = [
@@ -386,7 +458,7 @@ const shortageReportColumns: ReportColumn[] = [
   { key: "minimumQuantity", label: "Minimum Qty", align: "right", render: (value) => formatNumber(Number(value || 0)) },
   { key: "shortageQuantity", label: "Shortage", align: "right", render: (value) => formatNumber(Number(value || 0)) },
   { key: "lastMovementAt", label: "Last Movement", render: (value) => formatDate(typeof value === "string" ? value : null) },
-  { key: "stockStatus", label: "Status", render: (value) => <Badge variant={statusVariant(String(value))}>{stockStatusLabel(value)}</Badge> },
+  { key: "stockStatus", label: "Status", render: (value) => <StatusBadge status={String(value)} label={stockStatusLabel(value)} /> },
 ];
 
 const usageByVehicleColumns: ReportColumn[] = [
@@ -628,6 +700,8 @@ function PartDialog({
       const search = unitSearch.trim().toLowerCase();
       return unit.name.toLowerCase() === search || unit.shortcut.toLowerCase() === search;
     });
+  const allVehicleTypesSelected = lookups.vehicleTypes.length > 0
+    && lookups.vehicleTypes.every((type) => compatibleTypeIds.includes(type.id));
 
   React.useEffect(() => {
     if (!open) return;
@@ -663,6 +737,10 @@ function PartDialog({
     setCompatibleTypeIds((current) =>
       checked ? Array.from(new Set([...current, typeId])) : current.filter((id) => id !== typeId),
     );
+  }
+
+  function selectAllVehicleTypes() {
+    setCompatibleTypeIds(lookups.vehicleTypes.map((type) => type.id));
   }
 
   async function handleCreateCategory(name?: string) {
@@ -922,7 +1000,20 @@ function PartDialog({
           </div>
 
           <div className="grid gap-2">
-            <Label>Compatible vehicle types</Label>
+            <div className="flex items-center justify-between gap-3">
+              <Label>Compatible vehicle types</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-2"
+                disabled={lookups.vehicleTypes.length === 0 || allVehicleTypesSelected}
+                onClick={selectAllVehicleTypes}
+              >
+                <Check className="size-4" />
+                Select all
+              </Button>
+            </div>
             <div className="grid gap-2 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-3">
               {lookups.vehicleTypes.length === 0 ? (
                 <div className="text-sm text-muted-foreground">No vehicle types available.</div>
@@ -1100,6 +1191,7 @@ function PartViewDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const movements = part?.recentMovements || [];
+  const activeReservations = part?.activeReservations || [];
   const issuedVehicles = part?.issuedVehicles || [];
 
   return (
@@ -1122,7 +1214,7 @@ function PartViewDialog({
               <DetailItem label="Unit" value={part.unit} />
               <DetailItem label="Minimum Quantity" value={formatNumber(part.minimumQuantity)} />
               <DetailItem label="Storage Location" value={part.storageLocation} />
-              <DetailItem label="Status" value={<Badge variant={statusVariant(part.stockStatus)}>{part.stockStatusLabel}</Badge>} />
+              <DetailItem label="Status" value={<StatusBadge status={part.stockStatus} label={part.stockStatusLabel} />} />
               <DetailItem label="Active" value={part.isActive ? "Yes" : "No"} />
               <DetailItem label="On Hand" value={formatNumber(part.totalStockOnHand)} />
               <DetailItem label="Available" value={formatNumber(part.totalAvailableQuantity)} />
@@ -1160,6 +1252,43 @@ function PartViewDialog({
                       <TableCell className="text-right">{formatNumber(stock.availableQuantity)}</TableCell>
                     </TableRow>
                   ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="grid gap-2">
+              <div className="text-sm font-medium">Active Reservations</div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Reservation</TableHead>
+                    <TableHead>Vehicle</TableHead>
+                    <TableHead>Branch</TableHead>
+                    <TableHead className="text-right">Reserved</TableHead>
+                    <TableHead className="text-right">Issued</TableHead>
+                    <TableHead className="text-right">Returned</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activeReservations.length === 0 ? <EmptyRows colSpan={7} label="No active reservations found." /> : null}
+                  {activeReservations.map((reservation) => {
+                    const displayQuantities = reservationDisplayQuantities(reservation);
+                    return (
+                      <TableRow key={reservation.id}>
+                        <TableCell>
+                          <div className="font-medium">{reservation.reservationNo}</div>
+                          <div className="text-xs text-muted-foreground">{formatDate(reservation.neededAt)}</div>
+                        </TableCell>
+                        <TableCell>{[reservation.vehiclePlate, reservation.vehicleName].filter(Boolean).join(" - ") || "-"}</TableCell>
+                        <TableCell>{reservation.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : reservation.branchName || "-"}</TableCell>
+                        <TableCell className="text-right">{formatNumber(displayQuantities.reserved)}</TableCell>
+                        <TableCell className="text-right">{formatNumber(displayQuantities.issued)}</TableCell>
+                        <TableCell className="text-right">{formatNumber(displayQuantities.returned)}</TableCell>
+                        <TableCell><StatusBadge status={reservation.status} label={reservation.status} /></TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -1209,23 +1338,26 @@ function PartViewDialog({
                 </TableHeader>
                 <TableBody>
                   {movements.length === 0 ? <EmptyRows colSpan={5} label="No recent movements found." /> : null}
-                  {movements.map((movement) => (
-                    <TableRow key={movement.id}>
-                      <TableCell className="font-medium">{movement.movementNo}</TableCell>
-                      <TableCell>{formatDate(movement.movementAt)}</TableCell>
-                      <TableCell>{movement.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : movement.branchName || "-"}</TableCell>
-                      <TableCell>
-                        <MovementDirectionBadge
-                          movementType={String(movement.movementType)}
-                          stockBefore={movement.stockBefore}
-                          stockAfter={movement.stockAfter}
-                        />
-                      </TableCell>
-                      <TableCell className={cn("text-right font-medium", movementDirectionTextClasses(movementDirection(movement.stockBefore, movement.stockAfter)))}>
-                        {movementQuantityLabel(movement.quantity, movement.stockBefore, movement.stockAfter)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {movements.map((movement) => {
+                    const snapshot = movementDisplaySnapshot(movement);
+                    return (
+                      <TableRow key={movement.id}>
+                        <TableCell className="font-medium">{movement.movementNo}</TableCell>
+                        <TableCell>{formatDate(movement.movementAt)}</TableCell>
+                        <TableCell>{movement.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : movement.branchName || "-"}</TableCell>
+                        <TableCell>
+                          <MovementDirectionBadge
+                            movementType={String(movement.movementType)}
+                            stockBefore={snapshot.before}
+                            stockAfter={snapshot.after}
+                          />
+                        </TableCell>
+                        <TableCell className={cn("text-right font-medium", movementDirectionTextClasses(movementDirection(snapshot.before, snapshot.after)))}>
+                          {movementQuantityLabel(movement.quantity, snapshot.before, snapshot.after)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -1238,18 +1370,144 @@ function PartViewDialog({
   );
 }
 
-function movementLabel(type: PartMovementType) {
+function movementLabel(type: ManualPartMovementType) {
   if (type === "Receiving") return "Add Stock";
   if (type === "Issue") return "Reduce Stock";
   return `${type} Movement`;
 }
 
-function isStockDeduction(type: PartMovementType, adjustmentDirection: "IN" | "OUT") {
+function isStockDeduction(type: ManualPartMovementType, adjustmentDirection: "IN" | "OUT") {
   return type === "Issue" || type === "Damage" || (type === "Adjustment" && adjustmentDirection === "OUT");
 }
 
 function branchValue(branchId: number | null) {
   return branchId == null ? "" : String(branchId);
+}
+
+type PickerOption = {
+  value: string;
+  label: string;
+  keywords?: string;
+};
+
+function SearchablePicker({
+  id,
+  value,
+  options,
+  placeholder,
+  searchPlaceholder,
+  emptyLabel,
+  disabled,
+  searchValue,
+  onSearchChange,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  options: PickerOption[];
+  placeholder: string;
+  searchPlaceholder: string;
+  emptyLabel: string;
+  disabled?: boolean;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const selectedOption = options.find((option) => option.value === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          id={id}
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className="w-full justify-between font-normal"
+        >
+          <span className="truncate">{selectedOption?.label || placeholder}</span>
+          <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[220px] p-0" align="start">
+        <Command>
+          <CommandInput
+            placeholder={searchPlaceholder}
+            value={searchValue}
+            onValueChange={onSearchChange}
+          />
+          <CommandList>
+            <CommandEmpty>{emptyLabel}</CommandEmpty>
+            <CommandGroup>
+              {options.map((option) => (
+                <CommandItem
+                  key={option.value || "empty-option"}
+                  value={[option.label, option.keywords || ""].join(" ")}
+                  onSelect={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 size-4",
+                      value === option.value ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  <span className="truncate">{option.label}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function branchOptionsFromStocks(stocks: BranchStock[]): PickerOption[] {
+  return stocks.map((stock) => ({
+    value: branchValue(stock.branchId),
+    label: `${stock.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : stock.branchName || "-"} - Available: ${formatNumber(stock.availableQuantity)}`,
+    keywords: `${stock.branchName || ""} ${stock.availableQuantity}`,
+  }));
+}
+
+function branchOptionsFromLookups(branches: PartsLookupData["branches"]): PickerOption[] {
+  return [
+    { value: "", label: CENTRAL_OR_UNASSIGNED_LABEL },
+    ...branches.map((branch) => ({
+      value: String(branch.id),
+      label: branch.name,
+      keywords: `${branch.code || ""} ${branch.name}`,
+    })),
+  ];
+}
+
+function partOptionLabel(part: PartInventoryRow) {
+  return `${part.partCode || `Part #${part.id}`} - ${part.partName || "Unnamed part"}`;
+}
+
+function partOptionsFromRows(parts: PartInventoryRow[]): PickerOption[] {
+  return parts.map((part) => ({
+    value: String(part.id),
+    label: partOptionLabel(part),
+    keywords: `${part.partCode} ${part.partName} ${part.categoryName || ""} ${part.storageLocation || ""}`,
+  }));
+}
+
+function vehicleOptionsFromLookups(vehicles: PartsLookupData["vehicles"], includeNoVehicle: boolean): PickerOption[] {
+  return [
+    ...(includeNoVehicle ? [{ value: "", label: "No vehicle" }] : []),
+    ...vehicles.map((vehicle) => ({
+      value: String(vehicle.id),
+      label: `${vehicle.plateNo}${vehicle.name ? ` - ${vehicle.name}` : ""}`,
+      keywords: `${vehicle.plateNo} ${vehicle.name || ""}`,
+    })),
+  ];
 }
 
 function MovementDialog({
@@ -1283,8 +1541,9 @@ function MovementDialog({
     referenceNo: "",
     reasonCode: "",
     remarks: "",
-    movementAt: "",
+    movementAt: nowLocalDatetime(),
   });
+  const [referenceLoading, setReferenceLoading] = React.useState(false);
 
   React.useEffect(() => {
     if (!state.open) return;
@@ -1299,17 +1558,43 @@ function MovementDialog({
       referenceNo: "",
       reasonCode: "",
       remarks: "",
-      movementAt: "",
+      movementAt: nowLocalDatetime(),
     });
   }, [state.open, state.part, state.movementType]);
+
+  React.useEffect(() => {
+    if (!state.open) return;
+    let cancelled = false;
+    setReferenceLoading(true);
+    setForm((current) => ({ ...current, referenceNo: "" }));
+    api.fetchNextMovementReference(form.movementType)
+      .then((result) => {
+        if (!cancelled) {
+          setForm((current) => ({ ...current, referenceNo: result.data.referenceNo }));
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          toast.error("Unable to generate movement reference", {
+            description: error instanceof Error ? error.message : String(error),
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReferenceLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.movementType, state.open]);
 
   function update(key: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
   const selectedPart = React.useMemo(
-    () => parts.find((part) => String(part.id) === form.partId) || null,
-    [form.partId, parts],
+    () => state.part || parts.find((part) => String(part.id) === form.partId) || null,
+    [form.partId, parts, state.part],
   );
   const deductsStock = isStockDeduction(form.movementType, form.adjustmentDirection);
   const availableBranchStock = React.useMemo(
@@ -1318,6 +1603,11 @@ function MovementDialog({
   );
   const branchOptions = deductsStock ? availableBranchStock : null;
   const hasAvailableStockForDeduction = !deductsStock || availableBranchStock.length > 0;
+  const movementBranchOptions = branchOptions
+    ? branchOptionsFromStocks(branchOptions)
+    : branchOptionsFromLookups(lookups.branches);
+  const movementVehicleOptions = vehicleOptionsFromLookups(lookups.vehicles, true);
+  const movementPartOptions = partOptionsFromRows(mergePartOptions(parts, state.part));
 
   React.useEffect(() => {
     if (!state.open || !selectedPart || !deductsStock) return;
@@ -1349,21 +1639,57 @@ function MovementDialog({
 
   const requiresReason = form.movementType === "Adjustment" || form.movementType === "Damage";
   const showVehicle = form.movementType === "Issue" || form.movementType === "Return" || form.movementType === "Damage";
-  const currentAvailable = React.useMemo(() => {
+  const selectedBranchStock = React.useMemo(() => {
     if (!selectedPart) return null;
-    const stock = selectedPart.branchStock.find((s) => branchValue(s.branchId) === form.branchId);
-    return stock?.availableQuantity ?? null;
+    return selectedPart.branchStock.find((s) => branchValue(s.branchId) === form.branchId) || null;
   }, [selectedPart, form.branchId]);
+  const currentStockOnHand = selectedPart ? selectedBranchStock?.stockOnHand ?? 0 : null;
+  const currentAvailable = selectedPart ? selectedBranchStock?.availableQuantity ?? 0 : null;
+  const currentDamaged = selectedPart ? selectedBranchStock?.damagedQuantity ?? 0 : null;
   const qty = Number(form.quantity) || 0;
-  const afterAvailable = deductsStock && currentAvailable != null
-    ? currentAvailable - qty
-    : !deductsStock && currentAvailable != null
-      ? currentAvailable + qty
-      : null;
+  const quantityPreview = React.useMemo(() => {
+    if (!selectedPart || qty <= 0 || currentStockOnHand == null || currentAvailable == null || currentDamaged == null) return null;
 
-  function movementGuidance(type: PartMovementType): string {
+    let stockAfter = currentStockOnHand;
+    let availableAfter = currentAvailable;
+    let damagedAfter = currentDamaged;
+    let title = "Quantity adjustment";
+    let tone: "increase" | "decrease" | "damage" = "increase";
+
+    if (form.movementType === "Receiving" || form.movementType === "Return" || (form.movementType === "Adjustment" && form.adjustmentDirection === "IN")) {
+      stockAfter += qty;
+      availableAfter += qty;
+      title = form.movementType === "Receiving" ? "Stock will increase" : form.movementType === "Return" ? "Returned stock will increase inventory" : "Adjustment will increase stock";
+      tone = "increase";
+    } else if (form.movementType === "Issue" || (form.movementType === "Adjustment" && form.adjustmentDirection === "OUT")) {
+      stockAfter -= qty;
+      availableAfter -= qty;
+      title = form.movementType === "Issue" ? "Stock will decrease" : "Adjustment will decrease stock";
+      tone = "decrease";
+    } else if (form.movementType === "Damage") {
+      damagedAfter += qty;
+      availableAfter -= qty;
+      title = "Damaged quantity will increase";
+      tone = "damage";
+    }
+
+    const invalid = stockAfter < 0 || availableAfter < 0 || damagedAfter < 0;
+
+    return {
+      title,
+      tone,
+      invalid,
+      rows: [
+        { label: "Stock on hand", before: currentStockOnHand, after: stockAfter },
+        { label: "Available", before: currentAvailable, after: availableAfter },
+        { label: "Damaged", before: currentDamaged, after: damagedAfter, show: form.movementType === "Damage" || currentDamaged !== damagedAfter },
+      ].filter((row) => row.show !== false),
+    };
+  }, [currentAvailable, currentDamaged, currentStockOnHand, form.adjustmentDirection, form.movementType, qty, selectedPart]);
+
+  function movementGuidance(type: ManualPartMovementType): string {
     if (type === "Receiving") return "Use this to record received parts or verified stock additions. On-hand quantity at the selected branch will increase.";
-    if (type === "Issue") return "Use this when issuing parts to a vehicle, repair job, or other traceable use. Available stock will be deducted.";
+    if (type === "Issue") return "Use this when issuing parts to a vehicle, repair job, or other traceable use. Available stock will be deducted and an Issued reservation entry will be created.";
     if (type === "Return") return "Return unused or excess parts back to inventory. On-hand quantity will be restored.";
     if (type === "Adjustment") return "Correct stock discrepancies discovered during cycle counts or audits. Provide a reason code and remarks.";
     if (type === "Damage") return "Record parts that are damaged, expired, or otherwise unsellable. Damaged quantity will increase.";
@@ -1378,49 +1704,61 @@ function MovementDialog({
           <DialogDescription>{movementGuidance(form.movementType)}</DialogDescription>
         </DialogHeader>
 
-        {currentAvailable != null && qty > 0 && (form.movementType === "Receiving" || form.movementType === "Issue") && afterAvailable != null && afterAvailable >= 0 ? (
+        {quantityPreview ? (
           <div className={cn(
             "rounded-md border px-3 py-2 text-sm",
-            deductsStock ? "border-orange-200 bg-orange-50 dark:border-orange-900 dark:bg-orange-950/20" : "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/20",
+            quantityPreview.invalid
+              ? "border-red-200 bg-red-50 text-red-900 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200"
+              : quantityPreview.tone === "increase"
+                ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/20"
+                : quantityPreview.tone === "damage"
+                  ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20"
+                  : "border-orange-200 bg-orange-50 dark:border-orange-900 dark:bg-orange-950/20",
           )}>
-            <span className="font-medium">
-              {deductsStock ? "Available stock will decrease" : "Available stock will increase"}
-            </span>
-            <span className="ml-1 text-muted-foreground">
-              from <strong>{formatNumber(currentAvailable)}</strong> to <strong>{formatNumber(afterAvailable)}</strong>
-            </span>
+            <div className="font-medium">{quantityPreview.invalid ? "Quantity adjustment needs review" : quantityPreview.title}</div>
+            <div className="mt-2 grid gap-1.5 sm:grid-cols-3">
+              {quantityPreview.rows.map((row) => {
+                const direction = row.after > row.before ? "positive" : row.after < row.before ? "negative" : "neutral";
+                return (
+                  <div key={row.label} className="rounded border border-border/60 bg-background/70 px-2 py-1.5">
+                    <div className="text-[11px] font-medium text-muted-foreground">{row.label}</div>
+                    <div className="mt-0.5 text-sm font-semibold">
+                      {formatNumber(row.before)}
+                      <span className="mx-1 text-muted-foreground">to</span>
+                      <span className={movementDirectionTextClasses(direction)}>{formatNumber(row.after)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {quantityPreview.invalid ? (
+              <div className="mt-2 text-xs font-medium">This change would result in a negative quantity and should not be saved.</div>
+            ) : null}
           </div>
         ) : null}
 
         <form className="grid gap-4" onSubmit={submit}>
           <div className="grid gap-3 md:grid-cols-2">
-            {!state.part && (
-              <div className="grid gap-2 md:col-span-2">
-                <Label htmlFor="movementPartSearch">Search parts</Label>
-                <Input
-                  id="movementPartSearch"
-                  placeholder="Search by part code, name, category, or product"
-                  value={partSearch}
-                  onChange={(event) => onPartSearchChange(event.target.value)}
-                />
-              </div>
-            )}
             <div className="grid gap-2">
               <Label htmlFor="movementPart">Part</Label>
-              <NativeSelect id="movementPart" value={form.partId} onChange={(event) => update("partId", event.target.value)} className="w-full" required>
-                <NativeSelectOption value="">Select part</NativeSelectOption>
-                {parts.map((part) => (
-                  <NativeSelectOption key={part.id} value={part.id}>
-                    {part.partCode} - {part.partName}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              <SearchablePicker
+                id="movementPart"
+                value={form.partId}
+                options={movementPartOptions}
+                placeholder="Select part"
+                searchPlaceholder="Search by part code, name, category, or product..."
+                emptyLabel={partsLoading ? "Loading part options..." : "No parts found"}
+                disabled={!!state.part}
+                searchValue={state.part ? undefined : partSearch}
+                onSearchChange={state.part ? undefined : onPartSearchChange}
+                onChange={(value) => update("partId", value)}
+              />
               {partsLoading && <div className="text-xs text-muted-foreground">Loading part options...</div>}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="movementType">Movement type</Label>
               <NativeSelect id="movementType" value={form.movementType} onChange={(event) => update("movementType", event.target.value)} className="w-full">
-                {movementTypes.map((type) => (
+                {manualMovementTypes.map((type) => (
                   <NativeSelectOption key={type} value={type}>
                     {type}
                   </NativeSelectOption>
@@ -1429,28 +1767,16 @@ function MovementDialog({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="movementBranch">Branch</Label>
-              <NativeSelect id="movementBranch" value={form.branchId} onChange={(event) => update("branchId", event.target.value)} className="w-full">
-                {branchOptions ? (
-                  branchOptions.length ? (
-                    branchOptions.map((stock) => (
-                      <NativeSelectOption key={stock.id} value={branchValue(stock.branchId)}>
-                        {stock.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : stock.branchName || "-"} - Available: {formatNumber(stock.availableQuantity)}
-                      </NativeSelectOption>
-                    ))
-                  ) : (
-                    <NativeSelectOption value="">No available stock</NativeSelectOption>
-                  )
-                ) : (
-                  <>
-                    <NativeSelectOption value="">{CENTRAL_OR_UNASSIGNED_LABEL}</NativeSelectOption>
-                    {lookups.branches.map((branch) => (
-                      <NativeSelectOption key={branch.id} value={branch.id}>
-                        {branch.name}
-                      </NativeSelectOption>
-                    ))}
-                  </>
-                )}
-              </NativeSelect>
+              <SearchablePicker
+                id="movementBranch"
+                value={form.branchId}
+                options={movementBranchOptions}
+                placeholder={branchOptions && !branchOptions.length ? "No available stock" : "Select branch"}
+                searchPlaceholder="Search branches..."
+                emptyLabel="No branches found"
+                disabled={branchOptions != null && branchOptions.length === 0}
+                onChange={(value) => update("branchId", value)}
+              />
               {selectedPart && !hasAvailableStockForDeduction ? (
                 <div className="text-xs text-destructive">No available stock for this part.</div>
               ) : null}
@@ -1476,24 +1802,21 @@ function MovementDialog({
             {showVehicle && (
               <div className="grid gap-2">
                 <Label htmlFor="movementVehicle">Vehicle</Label>
-                <NativeSelect id="movementVehicle" value={form.vehicleId} onChange={(event) => update("vehicleId", event.target.value)} className="w-full">
-                  <NativeSelectOption value="">No vehicle</NativeSelectOption>
-                  {lookups.vehicles.map((vehicle) => (
-                    <NativeSelectOption key={vehicle.id} value={vehicle.id}>
-                      {vehicle.plateNo} {vehicle.name ? `- ${vehicle.name}` : ""}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                <SearchablePicker
+                  id="movementVehicle"
+                  value={form.vehicleId}
+                  options={movementVehicleOptions}
+                  placeholder="No vehicle"
+                  searchPlaceholder="Search vehicles..."
+                  emptyLabel="No vehicles found"
+                  onChange={(value) => update("vehicleId", value)}
+                />
               </div>
             )}
             <div className="grid gap-2">
               <Label htmlFor="referenceNo">Reference no</Label>
-              <Input id="referenceNo" value={form.referenceNo} onChange={(event) => update("referenceNo", event.target.value)} />
-              {form.movementType === "Issue" ? (
-                <div className="text-xs text-muted-foreground">Record the source document or job order for traceability.</div>
-              ) : form.movementType === "Receiving" ? (
-                <div className="text-xs text-muted-foreground">Record the purchase order or delivery receipt number.</div>
-              ) : null}
+              <Input id="referenceNo" value={referenceLoading ? "Generating..." : form.referenceNo} disabled />
+              <div className="text-xs text-muted-foreground">System-generated and locked for this movement.</div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="movementAt">Movement date</Label>
@@ -1517,7 +1840,7 @@ function MovementDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={saving || !hasAvailableStockForDeduction}>
+            <Button type="submit" disabled={saving || referenceLoading || !form.partId || !form.referenceNo || !hasAvailableStockForDeduction}>
               {saving ? "Saving..." : movementLabel(form.movementType)}
             </Button>
           </DialogFooter>
@@ -1575,6 +1898,33 @@ function ReservationDialog({
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  const selectedPart = React.useMemo(
+    () => part || parts.find((row) => String(row.id) === form.partId) || null,
+    [form.partId, part, parts],
+  );
+  const selectedBranchStock = React.useMemo(() => {
+    if (!selectedPart) return null;
+    return selectedPart.branchStock.find((stock) => branchValue(stock.branchId) === form.branchId) || null;
+  }, [form.branchId, selectedPart]);
+  const reservationQuantity = Number(form.quantity) || 0;
+  const reservationPreview = React.useMemo(() => {
+    if (!selectedPart) return null;
+    const availableBefore = selectedBranchStock?.availableQuantity ?? 0;
+    const reservedBefore = selectedBranchStock?.reservedQuantity ?? 0;
+    const reservedAfter = reservedBefore + Math.max(0, reservationQuantity);
+    const availableAfter = availableBefore - Math.max(0, reservationQuantity);
+    return {
+      availableBefore,
+      availableAfter,
+      reservedBefore,
+      reservedAfter,
+      invalid: !selectedBranchStock || (reservationQuantity > 0 && availableAfter < 0),
+    };
+  }, [reservationQuantity, selectedBranchStock, selectedPart]);
+  const reservationBranchOptions = branchOptionsFromLookups(lookups.branches);
+  const reservationVehicleOptions = vehicleOptionsFromLookups(lookups.vehicles, false);
+  const reservationPartOptions = partOptionsFromRows(mergePartOptions(parts, part));
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     await onSave({
@@ -1595,52 +1945,78 @@ function ReservationDialog({
           <DialogTitle>Reserve Part</DialogTitle>
           <DialogDescription>Hold available stock for planned repair or service work.</DialogDescription>
         </DialogHeader>
+        {reservationPreview ? (
+          <div className={cn(
+            "rounded-md border px-3 py-2 text-sm",
+            reservationPreview.invalid
+              ? "border-red-200 bg-red-50 text-red-900 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200"
+              : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20",
+          )}>
+            <div className="font-medium">{reservationPreview.invalid ? "Reservation quantity needs review" : "Available stock will decrease"}</div>
+            <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+              <div className="rounded border border-border/60 bg-background/70 px-2 py-1.5">
+                <div className="text-[11px] font-medium text-muted-foreground">Available</div>
+                <div className="mt-0.5 text-sm font-semibold">
+                  {formatNumber(reservationPreview.availableBefore)}
+                  <span className="mx-1 text-muted-foreground">to</span>
+                  <span className={movementDirectionTextClasses(movementDirection(reservationPreview.availableBefore, reservationPreview.availableAfter))}>{formatNumber(reservationPreview.availableAfter)}</span>
+                </div>
+              </div>
+              <div className="rounded border border-border/60 bg-background/70 px-2 py-1.5">
+                <div className="text-[11px] font-medium text-muted-foreground">Reserved</div>
+                <div className="mt-0.5 text-sm font-semibold">
+                  {formatNumber(reservationPreview.reservedBefore)}
+                  <span className="mx-1 text-muted-foreground">to</span>
+                  <span className={movementDirectionTextClasses(movementDirection(reservationPreview.reservedBefore, reservationPreview.reservedAfter))}>{formatNumber(reservationPreview.reservedAfter)}</span>
+                </div>
+              </div>
+            </div>
+            {reservationPreview.invalid ? (
+              <div className="mt-2 text-xs font-medium">{selectedBranchStock ? "This reservation would exceed available stock." : "No stock row exists for the selected part and branch."}</div>
+            ) : null}
+          </div>
+        ) : null}
         <form className="grid gap-4" onSubmit={submit}>
           <div className="grid gap-3 md:grid-cols-2">
-            {!part && (
-              <div className="grid gap-2 md:col-span-2">
-                <Label htmlFor="reservationPartSearch">Search parts</Label>
-                <Input
-                  id="reservationPartSearch"
-                  placeholder="Search by part code, name, category, or product"
-                  value={partSearch}
-                  onChange={(event) => onPartSearchChange(event.target.value)}
-                />
-              </div>
-            )}
             <div className="grid gap-2">
               <Label htmlFor="reservationPart">Part</Label>
-              <NativeSelect id="reservationPart" value={form.partId} onChange={(event) => update("partId", event.target.value)} className="w-full" required>
-                <NativeSelectOption value="">Select part</NativeSelectOption>
-                {parts.map((row) => (
-                  <NativeSelectOption key={row.id} value={row.id}>
-                    {row.partCode} - {row.partName}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              <SearchablePicker
+                id="reservationPart"
+                value={form.partId}
+                options={reservationPartOptions}
+                placeholder="Select part"
+                searchPlaceholder="Search by part code, name, category, or product..."
+                emptyLabel={partsLoading ? "Loading part options..." : "No parts found"}
+                disabled={!!part}
+                searchValue={part ? undefined : partSearch}
+                onSearchChange={part ? undefined : onPartSearchChange}
+                onChange={(value) => update("partId", value)}
+              />
               {partsLoading && <div className="text-xs text-muted-foreground">Loading part options...</div>}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="reservationBranch">Branch</Label>
-              <NativeSelect id="reservationBranch" value={form.branchId} onChange={(event) => update("branchId", event.target.value)} className="w-full">
-                <NativeSelectOption value="">{CENTRAL_OR_UNASSIGNED_LABEL}</NativeSelectOption>
-                {lookups.branches.map((branch) => (
-                  <NativeSelectOption key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              <SearchablePicker
+                id="reservationBranch"
+                value={form.branchId}
+                options={reservationBranchOptions}
+                placeholder="Select branch"
+                searchPlaceholder="Search branches..."
+                emptyLabel="No branches found"
+                onChange={(value) => update("branchId", value)}
+              />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="reservationVehicle">Vehicle</Label>
-              <NativeSelect id="reservationVehicle" value={form.vehicleId} onChange={(event) => update("vehicleId", event.target.value)} className="w-full" required>
-                <NativeSelectOption value="">Select vehicle</NativeSelectOption>
-                {lookups.vehicles.map((vehicle) => (
-                  <NativeSelectOption key={vehicle.id} value={vehicle.id}>
-                    {vehicle.plateNo} {vehicle.name ? `- ${vehicle.name}` : ""}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              <SearchablePicker
+                id="reservationVehicle"
+                value={form.vehicleId}
+                options={reservationVehicleOptions}
+                placeholder="Select vehicle"
+                searchPlaceholder="Search vehicles..."
+                emptyLabel="No vehicles found"
+                onChange={(value) => update("vehicleId", value)}
+              />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="reservationQuantity">Quantity</Label>
@@ -1659,7 +2035,7 @@ function ReservationDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || !form.partId || !form.vehicleId || !!reservationPreview?.invalid}>
               {saving ? "Saving..." : "Create Reservation"}
             </Button>
           </DialogFooter>
@@ -1681,9 +2057,11 @@ function ReservationActionDialog({
   onSave: (payload: UpdateReservationInput) => Promise<void>;
 }) {
   const [form, setForm] = React.useState({ quantity: "", referenceNo: "", remarks: "", cancelReason: "" });
+  const [referenceLoading, setReferenceLoading] = React.useState(false);
 
   React.useEffect(() => {
     if (!state.open) return;
+    setReferenceLoading(false);
     const reservation = state.reservation;
     const defaultQuantity = state.action === "issue"
       ? reservation?.remainingQuantity
@@ -1692,11 +2070,38 @@ function ReservationActionDialog({
         : reservation?.remainingQuantity;
     setForm({
       quantity: defaultQuantity ? String(defaultQuantity) : "",
-      referenceNo: reservation?.reservationNo || "",
+      referenceNo: "",
       remarks: "",
       cancelReason: "",
     });
   }, [state.open, state.action, state.reservation]);
+
+  React.useEffect(() => {
+    if (!state.open || state.action === "cancel") return;
+    let cancelled = false;
+    const movementType = state.action === "issue" ? "Issue" : "Return";
+    setReferenceLoading(true);
+    setForm((current) => ({ ...current, referenceNo: "" }));
+    api.fetchNextMovementReference(movementType)
+      .then((result) => {
+        if (!cancelled) {
+          setForm((current) => ({ ...current, referenceNo: result.data.referenceNo }));
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          toast.error("Unable to generate movement reference", {
+            description: error instanceof Error ? error.message : String(error),
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReferenceLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [state.action, state.open]);
 
   function update(key: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -1709,7 +2114,7 @@ function ReservationActionDialog({
       id: state.reservation.id,
       action: state.action,
       quantity: state.action === "cancel" ? undefined : Number(form.quantity),
-      referenceNo: form.referenceNo || null,
+      referenceNo: state.action === "cancel" ? null : form.referenceNo || null,
       remarks: form.remarks || null,
       cancelReason: form.cancelReason || null,
     });
@@ -1732,10 +2137,13 @@ function ReservationActionDialog({
               <Input id="actionQuantity" type="number" min="0.01" step="0.01" value={form.quantity} onChange={(event) => update("quantity", event.target.value)} required />
             </div>
           )}
-          <div className="grid gap-2">
-            <Label htmlFor="actionReference">Reference no</Label>
-            <Input id="actionReference" value={form.referenceNo} onChange={(event) => update("referenceNo", event.target.value)} />
-          </div>
+          {state.action !== "cancel" && (
+            <div className="grid gap-2">
+              <Label htmlFor="actionReference">Reference no</Label>
+              <Input id="actionReference" value={referenceLoading ? "Generating..." : form.referenceNo} disabled />
+              <div className="text-xs text-muted-foreground">System-generated and locked for this movement.</div>
+            </div>
+          )}
           {state.action === "cancel" && (
             <div className="grid gap-2">
               <Label htmlFor="cancelReason">Cancel reason</Label>
@@ -1750,7 +2158,7 @@ function ReservationActionDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={saving} variant={state.action === "cancel" ? "destructive" : "default"}>
+            <Button type="submit" disabled={saving || (state.action !== "cancel" && (referenceLoading || !form.referenceNo))} variant={state.action === "cancel" ? "destructive" : "default"}>
               {saving ? "Saving..." : "Confirm"}
             </Button>
           </DialogFooter>
@@ -1935,7 +2343,7 @@ export default function PartsInventoryModule() {
     reportFilters.dateTo,
   ]);
 
-  function openMovementDialog(part: PartInventoryRow | null, movementType: PartMovementType) {
+  function openMovementDialog(part: PartInventoryRow | null, movementType: ManualPartMovementType) {
     setOperationPartSearch("");
     setMovementDialog({ open: true, part, movementType });
   }
@@ -1979,7 +2387,7 @@ export default function PartsInventoryModule() {
 
   async function saveReservation(payload: CreateReservationInput) {
     await reservations.createReservation(payload);
-    await inventory.refresh();
+    await Promise.all([inventory.refresh(), movements.refresh()]);
     setLowStockReloadKey((current) => current + 1);
   }
 
@@ -2064,9 +2472,9 @@ export default function PartsInventoryModule() {
                 <NativeSelectOption value="out_of_stock">Out of Stock</NativeSelectOption>
               </NativeSelect>
               <NativeSelect value={inventory.filters.active} onChange={(event) => inventory.setFilters({ active: event.target.value as "true" | "false" | "all" })} className="w-full">
+                <NativeSelectOption value="all">All statuses</NativeSelectOption>
                 <NativeSelectOption value="true">Active only</NativeSelectOption>
                 <NativeSelectOption value="false">Inactive only</NativeSelectOption>
-                <NativeSelectOption value="all">All statuses</NativeSelectOption>
               </NativeSelect>
             </div>
           </CardContent>
@@ -2121,7 +2529,7 @@ export default function PartsInventoryModule() {
                         <TableCell className="text-right">{formatNumber(part.totalDamagedQuantity)}</TableCell>
                         <TableCell className="text-right">{formatNumber(part.totalAvailableQuantity)}</TableCell>
                         <TableCell>
-                          <Badge variant={statusVariant(part.stockStatus)}>{part.stockStatusLabel}</Badge>
+                          <StatusBadge status={part.stockStatus} label={part.stockStatusLabel} />
                         </TableCell>
                         <TableCell>{part.storageLocation || "-"}</TableCell>
                         <TableCell>
@@ -2207,28 +2615,31 @@ export default function PartsInventoryModule() {
                   <TableBody>
                     {movements.loading ? <LoadingRows colSpan={10} /> : null}
                     {!movements.loading && movements.response.data.length === 0 ? <EmptyRows colSpan={10} label="No movements found." /> : null}
-                    {!movements.loading && movements.response.data.map((movement) => (
-                      <TableRow key={movement.id}>
-                        <TableCell className="font-medium">{movement.movementNo}</TableCell>
-                        <TableCell>{formatDate(movement.movementAt)}</TableCell>
-                        <TableCell>{movement.partName || movement.partCode || "-"}</TableCell>
-                        <TableCell>{movement.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : movement.branchName || "-"}</TableCell>
-                        <TableCell>
-                          <MovementDirectionBadge
-                            movementType={String(movement.movementType)}
-                            stockBefore={movement.stockBefore}
-                            stockAfter={movement.stockAfter}
-                          />
-                        </TableCell>
-                        <TableCell className={cn("text-right font-medium", movementDirectionTextClasses(movementDirection(movement.stockBefore, movement.stockAfter)))}>
-                          {movementQuantityLabel(movement.quantity, movement.stockBefore, movement.stockAfter)}
-                        </TableCell>
-                        <TableCell className="text-right">{formatNumber(movement.stockBefore)}</TableCell>
-                        <TableCell className="text-right">{formatNumber(movement.stockAfter)}</TableCell>
-                        <TableCell>{[movement.vehiclePlate, movement.vehicleName].filter(Boolean).join(" - ") || "-"}</TableCell>
-                        <TableCell>{movement.referenceNo || movement.reservationNo || "-"}</TableCell>
-                      </TableRow>
-                    ))}
+                    {!movements.loading && movements.response.data.map((movement) => {
+                      const snapshot = movementDisplaySnapshot(movement);
+                      return (
+                        <TableRow key={movement.id}>
+                          <TableCell className="font-medium">{movement.movementNo}</TableCell>
+                          <TableCell>{formatDate(movement.movementAt)}</TableCell>
+                          <TableCell>{movement.partName || movement.partCode || "-"}</TableCell>
+                          <TableCell>{movement.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : movement.branchName || "-"}</TableCell>
+                          <TableCell>
+                            <MovementDirectionBadge
+                              movementType={String(movement.movementType)}
+                              stockBefore={snapshot.before}
+                              stockAfter={snapshot.after}
+                            />
+                          </TableCell>
+                          <TableCell className={cn("text-right font-medium", movementDirectionTextClasses(movementDirection(snapshot.before, snapshot.after)))}>
+                            {movementQuantityLabel(movement.quantity, snapshot.before, snapshot.after)}
+                          </TableCell>
+                          <TableCell className="text-right">{formatNumber(snapshot.before)}</TableCell>
+                          <TableCell className="text-right">{formatNumber(snapshot.after)}</TableCell>
+                          <TableCell>{[movement.vehiclePlate, movement.vehicleName].filter(Boolean).join(" - ") || "-"}</TableCell>
+                          <TableCell>{movement.referenceNo || movement.reservationNo || "-"}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
                 <PaginationControls
@@ -2280,41 +2691,44 @@ export default function PartsInventoryModule() {
                   <TableBody>
                     {reservations.loading ? <LoadingRows colSpan={10} /> : null}
                     {!reservations.loading && reservations.response.data.length === 0 ? <EmptyRows colSpan={10} label="No reservations found." /> : null}
-                    {!reservations.loading && reservations.response.data.map((reservation) => (
-                      <TableRow key={reservation.id}>
-                        <TableCell>
-                          <div className="font-medium">{reservation.reservationNo}</div>
-                          <div className="text-xs text-muted-foreground">{formatDate(reservation.neededAt)}</div>
-                        </TableCell>
-                        <TableCell>
-                          {reservation.partId == null ? (
-                            <span className="text-destructive">Missing part reference</span>
-                          ) : (
-                            `${reservation.partCode || reservation.partId}${reservation.partName ? ` - ${reservation.partName}` : ""}`
-                          )}
-                        </TableCell>
-                        <TableCell>{reservation.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : reservation.branchName || "-"}</TableCell>
-                        <TableCell>{reservation.vehiclePlate || "-"}</TableCell>
-                        <TableCell className="text-right">{formatNumber(reservation.reservedQuantity)}</TableCell>
-                        <TableCell className="text-right">{formatNumber(reservation.issuedQuantity)}</TableCell>
-                        <TableCell className="text-right">{formatNumber(reservation.returnedQuantity)}</TableCell>
-                        <TableCell className="text-right">{formatNumber(reservation.remainingQuantity)}</TableCell>
-                        <TableCell><Badge variant={statusVariant(reservation.status)}>{reservation.status}</Badge></TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="sm" disabled={reservation.partId == null || reservation.remainingQuantity <= 0 || reservation.status === "Cancelled"} onClick={() => setReservationAction({ open: true, reservation, action: "issue" })}>
-                              Issue
-                            </Button>
-                            <Button variant="ghost" size="sm" disabled={reservation.partId == null || reservation.returnableQuantity <= 0 || reservation.status === "Cancelled"} onClick={() => setReservationAction({ open: true, reservation, action: "return" })}>
-                              Return
-                            </Button>
-                            <Button variant="ghost" size="sm" disabled={reservation.status === "Cancelled" || reservation.remainingQuantity <= 0} onClick={() => setReservationAction({ open: true, reservation, action: "cancel" })}>
-                              Cancel
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {!reservations.loading && reservations.response.data.map((reservation) => {
+                      const displayQuantities = reservationDisplayQuantities(reservation);
+                      return (
+                        <TableRow key={reservation.id}>
+                          <TableCell>
+                            <div className="font-medium">{reservation.reservationNo}</div>
+                            <div className="text-xs text-muted-foreground">{formatDate(reservation.neededAt)}</div>
+                          </TableCell>
+                          <TableCell>
+                            {reservation.partId == null ? (
+                              <span className="text-destructive">Missing part reference</span>
+                            ) : (
+                              `${reservation.partCode || reservation.partId}${reservation.partName ? ` - ${reservation.partName}` : ""}`
+                            )}
+                          </TableCell>
+                          <TableCell>{reservation.branchId == null ? CENTRAL_OR_UNASSIGNED_LABEL : reservation.branchName || "-"}</TableCell>
+                          <TableCell>{[reservation.vehiclePlate, reservation.vehicleName].filter(Boolean).join(" - ") || "-"}</TableCell>
+                          <TableCell className="text-right">{formatNumber(displayQuantities.reserved)}</TableCell>
+                          <TableCell className="text-right">{formatNumber(displayQuantities.issued)}</TableCell>
+                          <TableCell className="text-right">{formatNumber(displayQuantities.returned)}</TableCell>
+                          <TableCell className="text-right">{formatNumber(displayQuantities.remaining)}</TableCell>
+                          <TableCell><StatusBadge status={reservation.status} label={reservation.status} /></TableCell>
+                          <TableCell>
+                            <div className="flex justify-end gap-1">
+                              <Button variant="outline" size="sm" className={cn("h-8 font-medium", reservationActionButtonClasses("issue"))} disabled={reservation.partId == null || reservation.remainingQuantity <= 0 || reservation.status === "Cancelled"} onClick={() => setReservationAction({ open: true, reservation, action: "issue" })}>
+                                Issue
+                              </Button>
+                              <Button variant="outline" size="sm" className={cn("h-8 font-medium", reservationActionButtonClasses("return"))} disabled={reservation.partId == null || reservation.returnableQuantity <= 0 || reservation.status === "Cancelled"} onClick={() => setReservationAction({ open: true, reservation, action: "return" })}>
+                                Return
+                              </Button>
+                              <Button variant="outline" size="sm" className={cn("h-8 font-medium", reservationActionButtonClasses("cancel"))} disabled={reservation.status === "Cancelled" || reservation.remainingQuantity <= 0} onClick={() => setReservationAction({ open: true, reservation, action: "cancel" })}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
                 <PaginationControls
@@ -2357,7 +2771,7 @@ export default function PartsInventoryModule() {
                         <TableCell className="text-right">{formatNumber(part.totalAvailableQuantity)}</TableCell>
                         <TableCell className="text-right">{formatNumber(part.minimumQuantity)}</TableCell>
                         <TableCell className="text-right">{formatNumber(Math.max(0, part.minimumQuantity - part.totalAvailableQuantity))}</TableCell>
-                        <TableCell><Badge variant={statusVariant(part.stockStatus)}>{part.stockStatusLabel}</Badge></TableCell>
+                        <TableCell><StatusBadge status={part.stockStatus} label={part.stockStatusLabel} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

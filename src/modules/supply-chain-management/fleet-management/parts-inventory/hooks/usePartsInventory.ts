@@ -17,7 +17,7 @@ const initialFilters: PartsInventoryFilters = {
   vehicleTypeId: "",
   branchId: "",
   stockStatus: "all",
-  active: "true",
+  active: "all",
   page: 1,
   limit: 25,
 };

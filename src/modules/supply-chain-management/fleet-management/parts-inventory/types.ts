@@ -6,7 +6,10 @@ export type PartMovementType =
   | "Issue"
   | "Return"
   | "Adjustment"
-  | "Damage";
+  | "Damage"
+  | "Reservation";
+
+export type ManualPartMovementType = Exclude<PartMovementType, "Reservation">;
 
 export type PartReservationStatus =
   | "Reserved"
@@ -199,7 +202,7 @@ export type UpdatePartInput = Partial<CreatePartInput>;
 export type CreateMovementInput = {
   partId: number;
   branchId?: number | null;
-  movementType: PartMovementType;
+  movementType: ManualPartMovementType;
   adjustmentDirection?: "IN" | "OUT";
   quantity: number;
   vehicleId?: number | null;

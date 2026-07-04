@@ -2,6 +2,7 @@ import type {
   CreateMovementInput,
   CreatePartInput,
   CreateReservationInput,
+  ManualPartMovementType,
   MovementFilters,
   PaginatedResponse,
   PartInventoryRow,
@@ -127,6 +128,11 @@ export async function createMovement(payload: CreateMovementInput) {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function fetchNextMovementReference(movementType: ManualPartMovementType) {
+  const params = new URLSearchParams({ movementType });
+  return request<{ data: { referenceNo: string } }>(`${BASE}/movements/next-reference?${params}`);
 }
 
 export async function fetchReservations(filters: ReservationFilters) {
