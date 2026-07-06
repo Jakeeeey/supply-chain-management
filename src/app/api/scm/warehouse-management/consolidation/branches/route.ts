@@ -17,7 +17,7 @@ export async function GET() {
     }
 
     const springBaseUrl = process.env.SPRING_API_BASE_URL?.replace(/\/$/, "");
-    const targetUrl = `${springBaseUrl}/api/branches/active`;
+    const targetUrl = `${springBaseUrl}/api/branches`;
 
     try {
         const springRes = await fetch(targetUrl, {

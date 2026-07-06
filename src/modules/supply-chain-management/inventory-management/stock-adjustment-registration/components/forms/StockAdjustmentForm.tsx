@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+
 import { useForm, useFieldArray, useWatch, Control, UseFormSetValue, useFormState, FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -18,10 +18,13 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Paperclip,
+  ScanLine
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { RFIDScannerModal } from "../modals/RFIDScannerModal";
+import { AttachmentUpload } from "../AttachmentUpload";
 import { ProductSelectionModal } from "../modals/ProductSelectionModal";
 import {
   StockAdjustmentFormSchema,
@@ -73,6 +76,7 @@ interface ItemRowProps {
   setValue: UseFormSetValue<StockAdjustmentFormValues>;
   onOpenScanner: (index: number) => void;
   isReadOnly?: boolean;
+  type?: "IN" | "OUT";
 }
 
 const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
@@ -82,18 +86,20 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   setValue,
   onOpenScanner,
   isReadOnly = false,
+  type = "IN",
 }: ItemRowProps) {
   const product_name = useWatch({ control, name: `items.${index}.product_name` });
   const unitName = useWatch({ control, name: `items.${index}.unit_name` });
   const quantity = useWatch({ control, name: `items.${index}.quantity` });
   const costPerUnit = useWatch({ control, name: `items.${index}.cost_per_unit` });
-  const hasRfid = useWatch({ control, name: `items.${index}.has_rfid` });
   const brandName = useWatch({ control, name: `items.${index}.brand_name` });
   const barcode = useWatch({ control, name: `items.${index}.barcode` });
   const unitOrder = useWatch({ control, name: `items.${index}.unit_order` });
+  const current_stock = useWatch({ control, name: `items.${index}.current_stock` });
+  const hasRfid = unitOrder === 3;
 
   const rfidTags = useWatch({ control, name: `items.${index}.rfid_tags` });
-  const isRfidMissing = (hasRfid || unitOrder === 3) && (!rfidTags || rfidTags.length === 0);
+  const isRfidMissing = hasRfid && (!rfidTags || rfidTags.length === 0);
 
   const { errors } = useFormState({ control });
   const rowError = Array.isArray(errors.items)
@@ -101,6 +107,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
     : undefined;
 
   const totalCost = Number(quantity || 0) * Number(costPerUnit || 0);
+  const remaining = Math.max(0, Number(current_stock || 0) - Number(quantity || 0));
 
   return (
     <tr className="border-b border-border/50 hover:bg-muted/10 transition-colors bg-card">
@@ -132,89 +139,139 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
           )}
         </div>
       </td>
-      <td className="p-3 w-40">
-        {isReadOnly ? (
-          <span className="text-xs font-bold px-3 py-1 bg-muted rounded-md border border-border/50">{quantity}</span>
-        ) : hasRfid || unitOrder === 3 ? (
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold px-3 py-1 rounded-md border min-w-10 text-center select-none ${
-                isRfidMissing 
+      {type === "OUT" ? (
+        <>
+          {/* On-Hand Column */}
+          <td className="p-3 text-center w-28">
+            <span className="text-xs font-bold text-foreground bg-muted/40 border border-border/60 px-3 py-1.5 rounded-md inline-block min-w-10">
+              {current_stock ?? 0}
+            </span>
+          </td>
+
+          {/* Scanned Qty Column */}
+          <td className="p-3 text-center w-28">
+            <div className="flex flex-col items-center gap-1 justify-center">
+              <span className={`text-xs font-bold px-3 py-1.5 rounded-md border min-w-10 text-center select-none inline-block ${quantity === 0
                   ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400"
-                  : "bg-muted/50 border-border/50"
-              }`}>{isRfidMissing ? 0 : quantity}</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onOpenScanner(index)}
-                className={`h-8 font-bold gap-1 px-2 transition-all duration-200 shadow-sm rounded-lg text-[10px] ${
-                  isRfidMissing
-                    ? "border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 hover:bg-red-100 hover:border-red-300 dark:hover:bg-red-900/40"
-                    : "border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700"
-                }`}
-              >
-                <Tag className={`h-3 w-3 ${isRfidMissing ? "text-red-500 animate-pulse" : "text-blue-500"}`} />
-                SCAN
-              </Button>
+                  : remaining > 0
+                    ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50 text-amber-600 dark:text-amber-400"
+                    : "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800/50 text-green-600 dark:text-green-400"
+                }`}>{quantity}</span>
+              {quantity === 0 && (
+                <span className="text-[9px] text-red-500 font-black animate-pulse leading-none mt-1 uppercase tracking-wider block">
+                  Scan Required
+                </span>
+              )}
             </div>
-            {isRfidMissing && (
-              <span className="text-[9px] text-red-500 font-black animate-pulse leading-none mt-1 uppercase tracking-wider pl-1 block">
-                Scan Required
-              </span>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center gap-0 w-min bg-background border border-border rounded-md overflow-hidden">
-            <button 
-              type="button"
-              className="w-7 h-7 flex items-center justify-center hover:bg-muted text-muted-foreground disabled:opacity-50 transition-colors"
-              onClick={() => setValue(`items.${index}.quantity`, Math.max(1, Number(quantity || 0) - 1), { shouldValidate: true })}
-              disabled={Number(quantity || 0) <= 1}
-            >
-              <Minus className="h-3 w-3" />
-            </button>
-            <input
-              type="number"
-              value={quantity === 0 ? "" : quantity}
-              onChange={(e) => {
-                let val = parseInt(e.target.value, 10);
-                if (isNaN(val) || val < 1) val = 1;
-                setValue(`items.${index}.quantity`, val, { shouldValidate: true });
-              }}
-              className="w-12 h-7 text-center text-xs font-bold border-x border-border focus:outline-none focus:ring-0 bg-transparent p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              min={1}
-            />
-            <button 
-              type="button"
-              className="w-7 h-7 flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors"
-              onClick={() => setValue(`items.${index}.quantity`, Number(quantity || 0) + 1, { shouldValidate: true })}
-            >
-              <Plus className="h-3 w-3" />
-            </button>
-          </div>
-        )}
-        {rowError?.quantity && (
-          <p className="text-[10px] text-red-500 font-bold mt-1">{rowError.quantity.message}</p>
-        )}
-      </td>
+          </td>
+
+          {/* Remaining Column */}
+          <td className="p-3 text-center w-28">
+            <span className={`text-xs font-bold px-3 py-1.5 rounded-md border min-w-10 text-center select-none inline-block ${remaining > 0
+                ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50 text-amber-600 dark:text-amber-400"
+                : "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800/50 text-green-600 dark:text-green-400"
+              }`}>{remaining}</span>
+          </td>
+        </>
+      ) : (
+        <td className="p-3 w-40">
+          {isReadOnly ? (
+            <span className="text-xs font-bold px-3 py-1 bg-muted rounded-md border border-border/50">{quantity}</span>
+          ) : hasRfid || unitOrder === 3 ? (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold px-3 py-1 rounded-md border min-w-10 text-center select-none ${isRfidMissing
+                    ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400"
+                    : "bg-muted/50 border-border/50"
+                  }`}>{isRfidMissing ? 0 : quantity}</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onOpenScanner(index)}
+                  className={`h-8 font-bold gap-1 px-2 transition-all duration-200 shadow-sm rounded-lg text-[10px] ${isRfidMissing
+                      ? "border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 hover:bg-red-100 hover:border-red-300 dark:hover:bg-red-900/40"
+                      : "border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700"
+                    }`}
+                >
+                  <Tag className={`h-3 w-3 ${isRfidMissing ? "text-red-500 animate-pulse" : "text-blue-500"}`} />
+                  SCAN
+                </Button>
+              </div>
+              {isRfidMissing && (
+                <span className="text-[9px] text-red-500 font-black animate-pulse leading-none mt-1 uppercase tracking-wider pl-1 block">
+                  Scan Required
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-0 w-min bg-background border border-border rounded-md overflow-hidden">
+              <button
+                type="button"
+                className="w-7 h-7 flex items-center justify-center hover:bg-muted text-muted-foreground disabled:opacity-50 transition-colors"
+                onClick={() => setValue(`items.${index}.quantity`, Math.max(1, Number(quantity || 0) - 1), { shouldValidate: true })}
+                disabled={Number(quantity || 0) <= 1}
+              >
+                <Minus className="h-3 w-3" />
+              </button>
+              <input
+                type="number"
+                value={quantity === 0 ? "" : quantity}
+                onChange={(e) => {
+                  let val = parseInt(e.target.value, 10);
+                  if (isNaN(val) || val < 1) val = 1;
+                  setValue(`items.${index}.quantity`, val, { shouldValidate: true });
+                }}
+                className="w-12 h-7 text-center text-xs font-bold border-x border-border focus:outline-none focus:ring-0 bg-transparent p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                min={1}
+              />
+              <button
+                type="button"
+                className="w-7 h-7 flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors"
+                onClick={() => setValue(`items.${index}.quantity`, Number(quantity || 0) + 1, { shouldValidate: true })}
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+          {rowError?.quantity && (
+            <p className="text-[10px] text-red-500 font-bold mt-1">{rowError.quantity.message}</p>
+          )}
+        </td>
+      )}
       <td className="p-3">
         <span className="text-xs font-bold text-primary dark:text-primary/70">
           ₱{Number(totalCost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       </td>
-      <td className="p-3 text-center w-16">
+      <td className="p-3 text-center w-28">
         {!isReadOnly && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => onRemove(index)}
-            className="h-7 w-7 rounded-full text-red-400/50 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all mx-auto"
-            title="Remove item"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          type === "OUT" ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenScanner(index)}
+              className={`h-8 font-bold gap-1 px-3 transition-all duration-200 shadow-sm rounded-lg text-[10px] mx-auto flex items-center ${isRfidMissing
+                  ? "border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 hover:bg-red-100 hover:border-red-300 dark:hover:bg-red-900/40"
+                  : "border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700"
+                }`}
+            >
+              <Tag className={`h-3 w-3 ${isRfidMissing ? "text-red-500 animate-pulse" : "text-blue-500"}`} />
+              SCAN RFID
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => onRemove(index)}
+              className="h-7 w-7 rounded-full text-red-400/50 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all mx-auto"
+              title="Remove item"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )
         )}
       </td>
     </tr>
@@ -243,7 +300,7 @@ function FormSummary({
       const c = Number(item?.cost_per_unit || 0);
       qty += q;
       amt += q * c;
-      if (item?.has_rfid) rfid++;
+      if (item?.unit_order === 3) rfid++;
     }
     return { totalQuantity: qty, totalAmount: amt, rfidItemsCount: rfid };
   }, [items]);
@@ -310,7 +367,7 @@ function RfidBanner({ control }: { control: Control<StockAdjustmentFormValues> }
   const items = useWatch({ control, name: "items" });
   const rfidItemsCount = useMemo(() => {
     const currentItems = (items || []) as StockAdjustmentItem[];
-    return currentItems.filter((item) => item?.has_rfid).length;
+    return currentItems.filter((item) => item?.unit_order === 3).length;
   }, [items]);
 
   if (rfidItemsCount === 0) return null;
@@ -340,7 +397,7 @@ export function StockAdjustmentForm({
   onSuccess,
   mode = "creation",
 }: StockAdjustmentFormProps) {
-  const router = useRouter();
+
   const {
     fetchById,
     createAdjustment,
@@ -360,10 +417,15 @@ export function StockAdjustmentForm({
     fetchNextDocNo,
     postAdjustment,
     validateRFIDAvailability,
+    resolveRFID,
     deleteAdjustment,
   } = useStockAdjustmentForm();
 
   const [loading, setLoading] = useState(false);
+  const [scanLog, setScanLog] = useState<Array<{ rfid: string; status: 'success' | 'error' | 'validating'; message: string; timestamp: Date }>>([]);
+  const [globalScanInputVal, setGlobalScanInputVal] = useState("");
+  const [isGlobalScanValidating, setIsGlobalScanValidating] = useState(false);
+  const globalScanInputRef = useRef<HTMLInputElement>(null);
   const [showRFIDScanner, setShowRFIDScanner] = useState(false);
   const [showPostConfirmation, setShowPostConfirmation] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
@@ -379,25 +441,244 @@ export function StockAdjustmentForm({
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
+  const prevTypeRef = useRef("IN");
 
 
   const form = useForm<StockAdjustmentFormValues>({
     resolver: zodResolver(StockAdjustmentFormSchema),
     defaultValues: {
-      doc_no: "", 
+      doc_no: "",
       branch_id: 0,
       supplier_id: 0,
       type: "IN",
       remarks: "",
       items: [],
       isPosted: false,
+      stock_adjustment_attachment: [],
     },
   });
+
+  const watchedBranchId = useWatch({ control: form.control, name: "branch_id" });
+  const watchedSupplierId = useWatch({ control: form.control, name: "supplier_id" });
+  const watchedType = useWatch({ control: form.control, name: "type" });
+  const watchedBranchIdForSelect = watchedBranchId;
+  const watchedSupplierIdForSelect = watchedSupplierId;
+
+  const isPosted = useWatch({ control: form.control, name: "isPosted" });
+  const isReadOnly = !!isPosted || mode === "posting";
+
+  const watchedItemsList = useWatch({ control: form.control, name: "items" });
 
   const { fields, remove } = useFieldArray({
     control: form.control,
     name: "items",
   });
+
+  // Global RFID Scan Handler
+  const handleGlobalScan = useCallback(async (tag: string) => {
+    if (watchedType !== "OUT") return;
+
+    let rawTag = tag.trim().toUpperCase();
+    if (!rawTag) return;
+
+    if (rawTag.length >= 16) {
+      for (let len = 8; len <= rawTag.length / 2; len++) {
+        if (rawTag.length % len === 0) {
+          const chunk = rawTag.substring(0, len);
+          const expected = chunk.repeat(rawTag.length / len);
+          if (rawTag === expected) {
+            rawTag = chunk;
+            break;
+          }
+        }
+      }
+    }
+
+    if (rawTag.length !== 24 || !/^[A-Z0-9]{24}$/.test(rawTag)) {
+      toast.error("Invalid RFID Tag", {
+        description: `RFID tag must be exactly 24 alphanumeric characters.`,
+      });
+      return;
+    }
+
+    const currentItems = form.getValues("items") || [];
+
+    const isAlreadyScanned = currentItems.some((item) =>
+      item.rfid_tags?.includes(rawTag)
+    );
+
+    if (isAlreadyScanned) {
+      toast.warning("Duplicate Scan", {
+        description: `RFID tag ${rawTag} has already been scanned.`,
+      });
+      setScanLog((prev) => [
+        {
+          rfid: rawTag,
+          status: "error",
+          message: "Duplicate scan. Tag already added.",
+          timestamp: new Date(),
+        },
+        ...prev.slice(0, 4),
+      ]);
+      return;
+    }
+
+    setIsGlobalScanValidating(true);
+    try {
+      const res = await resolveRFID(
+        rawTag,
+        Number(watchedBranchId),
+        Number(watchedSupplierId),
+        "OUT"
+      );
+
+      if (!res.valid || !res.product) {
+        toast.error("Scan Blocked", { description: res.error || "Validation failed" });
+        setScanLog((prev) => [
+          {
+            rfid: rawTag,
+            status: "error",
+            message: res.error || "Validation failed.",
+            timestamp: new Date(),
+          },
+          ...prev.slice(0, 4),
+        ]);
+        return;
+      }
+
+      const resolvedProduct = res.product;
+      const productId = Number(resolvedProduct.id || resolvedProduct.product_id);
+
+      const existingIndex = currentItems.findIndex(
+        (item) => Number(item.product_id) === productId
+      );
+
+      if (existingIndex > -1) {
+        const item = currentItems[existingIndex];
+        const updatedTags = [...(item.rfid_tags || []), rawTag];
+        form.setValue(`items.${existingIndex}.rfid_tags`, updatedTags);
+        form.setValue(`items.${existingIndex}.quantity`, updatedTags.length, { shouldValidate: true });
+        form.setValue(`items.${existingIndex}.rfid_count`, updatedTags.length);
+      } else {
+        const newItem: StockAdjustmentItem = {
+          product_id: productId,
+          product_name: resolvedProduct.product_name || "Unknown Product",
+          product_code: resolvedProduct.product_code || "",
+          cost_per_unit: resolvedProduct.cost_per_unit || resolvedProduct.price_per_unit || 0,
+          brand_name: resolvedProduct.brand_name || "N/A",
+          barcode: resolvedProduct.barcode || "",
+          unit_name: resolvedProduct.unit_name || "pcs",
+          unit_order: resolvedProduct.unit_of_measurement?.order || 3,
+          has_rfid: true,
+          quantity: 1,
+          rfid_tags: [rawTag],
+          rfid_count: 1,
+          current_stock: 0,
+          remarks: "",
+          branch_id: Number(watchedBranchId),
+          type: "OUT",
+        };
+
+        const newItems = [...currentItems, newItem];
+        form.setValue("items", newItems, { shouldValidate: true });
+
+        const idx = newItems.length - 1;
+        fetchInventory(productId, Number(watchedBranchId))
+          .then((stock) => {
+            form.setValue(`items.${idx}.current_stock`, stock);
+          })
+          .catch(console.error);
+      }
+
+      toast.success(`Scanned: ${resolvedProduct.product_name}`);
+      setScanLog((prev) => [
+        {
+          rfid: rawTag,
+          status: "success",
+          message: `Scanned & added: ${resolvedProduct.product_name}`,
+          timestamp: new Date(),
+        },
+        ...prev.slice(0, 4),
+      ]);
+    } catch (err) {
+      console.error("Global scan error:", err);
+      toast.error("An error occurred during scanning");
+    } finally {
+      setIsGlobalScanValidating(false);
+    }
+  }, [watchedType, watchedBranchId, watchedSupplierId, form, resolveRFID, fetchInventory]);
+
+  // Global Keyboard Listener for Scanner
+  useEffect(() => {
+    if (isReadOnly || !watchedBranchId || !watchedSupplierId || watchedType !== "OUT") return;
+
+    const handleGlobalKeyDown = async (e: KeyboardEvent) => {
+      if (isGlobalScanValidating) return;
+
+      const activeTag = (document.activeElement?.tagName || "").toLowerCase();
+      if (
+        (activeTag === "input" && document.activeElement !== globalScanInputRef.current) ||
+        activeTag === "textarea" ||
+        activeTag === "select"
+      ) {
+        return;
+      }
+
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const val = globalScanInputRef.current ? globalScanInputRef.current.value : "";
+        if (globalScanInputRef.current) {
+          globalScanInputRef.current.value = "";
+        }
+        setGlobalScanInputVal("");
+        if (val) {
+          await handleGlobalScan(val);
+        }
+        return;
+      }
+
+      if (e.key.length === 1) {
+        if (document.activeElement !== globalScanInputRef.current) {
+          globalScanInputRef.current?.focus();
+          setGlobalScanInputVal((prev) => prev + e.key);
+          e.preventDefault();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeyDown, { capture: true });
+    };
+  }, [isReadOnly, watchedBranchId, watchedSupplierId, watchedType, isGlobalScanValidating, handleGlobalScan]);
+
+  const handleClearForm = useCallback(async () => {
+    // Clear visual input displays for comboboxes
+    setBranchInputValue("");
+    setSupplierInputValue("");
+    setBranchSearch("");
+    setSupplierSearch("");
+
+    // Stay on the page — reset the form for the next entry with default "IN" type
+    const nextDocNo = await fetchNextDocNo("IN");
+    form.reset({
+      doc_no: nextDocNo,
+      branch_id: 0,
+      supplier_id: 0,
+      type: "IN",
+      remarks: "",
+      items: [],
+      isPosted: false,
+      stock_adjustment_attachment: [],
+    });
+  }, [
+    form,
+    fetchNextDocNo,
+    setBranchInputValue,
+    setSupplierInputValue,
+    setBranchSearch,
+    setSupplierSearch,
+  ]);
 
   useEffect(() => {
     const unlock = () => {
@@ -447,6 +728,7 @@ export function StockAdjustmentForm({
             isPosted: resolvedIsPosted,
             postedAt: data.postedAt || undefined,
             posted_by: data.posted_by || undefined,
+            stock_adjustment_attachment: data.stock_adjustment_attachment || [],
             items: data.items.map((item) => ({
               ...item,
               quantity: Number(item.quantity || 0),
@@ -478,7 +760,7 @@ export function StockAdjustmentForm({
               rfid_tags: item.rfid_tags || [],
               rfid_count: item.rfid_count || 0,
               db_id: Number(item.id || 0),
-              has_rfid: (item.rfid_tags && item.rfid_tags.length > 0) || rfidProductIds.has(Number((item.product_id as { id?: number; product_id?: number })?.product_id || (item.product_id as { id?: number; product_id?: number })?.id || item.product_id)),
+              has_rfid: ((item.product_id as { unit_of_measurement?: { order: number } })?.unit_of_measurement?.order === 3 || item.unit_order === 3),
             })),
           });
         } catch (error) {
@@ -492,9 +774,6 @@ export function StockAdjustmentForm({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
-
-  const watchedBranchId = useWatch({ control: form.control, name: "branch_id" });
-  const watchedSupplierId = useWatch({ control: form.control, name: "supplier_id" });
 
   useEffect(() => {
     if (watchedBranchId && branches.length > 0) {
@@ -545,12 +824,38 @@ export function StockAdjustmentForm({
     }
   }, [watchedSupplierId, fetchProductsBySupplier]);
 
+  // Reset items if adjustment type is changed
+  useEffect(() => {
+    const currentType = form.getValues("type");
+    if (currentType !== prevTypeRef.current) {
+      prevTypeRef.current = currentType;
+      form.setValue("items", []);
+    }
+  }, [watchedType, form]);
+
+  // Keep items empty for new Stock OUT adjustments until scanned
+  useEffect(() => {
+    if (!id && watchedType === "OUT") {
+      form.setValue("items", []);
+    }
+  }, [watchedType, id, form]);
+
   const isFormLoading = id ? loading : false;
-  const isPosted = useWatch({ control: form.control, name: "isPosted" });
-  const isReadOnly = !!isPosted || mode === "posting";
 
   const handlePost = async () => {
     if (!id) return;
+    const currentType = form.getValues("type");
+    if (currentType === "OUT") {
+      const items = form.getValues("items") || [];
+      const nonZeroItems = items.filter((item) => item.quantity > 0);
+      if (nonZeroItems.length === 0) {
+        toast.error("RFID Scan Required", {
+          description: "Please scan at least one product before posting.",
+        });
+        return;
+      }
+      form.setValue("items", nonZeroItems, { shouldValidate: false });
+    }
     setShowPostConfirmation(true);
   };
 
@@ -562,7 +867,7 @@ export function StockAdjustmentForm({
       async (values) => {
         // Validate that all items requiring RFID have scanned tags
         const missingRfidItem = values.items.find(
-          (item) => (item.has_rfid || item.unit_order === 3) && (!item.rfid_tags || item.rfid_tags.length === 0)
+          (item) => item.unit_order === 3 && (!item.rfid_tags || item.rfid_tags.length === 0)
         );
 
         if (missingRfidItem) {
@@ -607,15 +912,25 @@ export function StockAdjustmentForm({
     }
   };
 
-  const onInvalid = () => {
-    toast.error("Please fill in all required fields correctly.");
-  };
+  const onInvalid = useCallback((errors: FieldErrors<StockAdjustmentFormValues>) => {
+    console.warn("Validation failed errors:", errors);
+    const errorDetails = Object.entries(errors)
+      .map(([key, value]) => {
+        const msg = (value as { message?: string })?.message || "Invalid field value";
+        return `${key}: ${msg}`;
+      })
+      .join(", ");
+    toast.error("Please fill in all required fields correctly.", {
+      description: errorDetails || undefined,
+      duration: 6000,
+    });
+  }, []);
 
   const onSubmit = useCallback(
     async (values: StockAdjustmentFormValues) => {
       // Validate that all items requiring RFID have scanned tags
       const missingRfidItem = values.items.find(
-        (item) => (item.has_rfid || item.unit_order === 3) && (!item.rfid_tags || item.rfid_tags.length === 0)
+        (item) => item.unit_order === 3 && (!item.rfid_tags || item.rfid_tags.length === 0)
       );
 
       if (missingRfidItem) {
@@ -631,11 +946,16 @@ export function StockAdjustmentForm({
         if (id) {
           await updateAdjustment(id, values);
           toast.success("Adjustment Updated Successfully");
+          onSuccess();
         } else {
           await createAdjustment(values);
-          toast.success("Adjustment Created Successfully");
+          toast.success("Stock Adjustment Registered Successfully", {
+            description: `Document ${values.doc_no} has been saved as a draft.`,
+            duration: 4000,
+          });
+
+          await handleClearForm();
         }
-        onSuccess();
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to save adjustment";
         toast.error(message);
@@ -643,37 +963,59 @@ export function StockAdjustmentForm({
         setLoading(false);
       }
     },
-    [id, createAdjustment, updateAdjustment, onSuccess]
+    [
+      id,
+      createAdjustment,
+      updateAdjustment,
+      onSuccess,
+      handleClearForm,
+    ]
   );
 
   const handleConfirmModalItems = useCallback(
     (newItems: StockAdjustmentItem[]) => {
       const branchId = form.getValues("branch_id");
       const currentType = form.getValues("type");
-      
+
       const mapped = newItems.map((item) => ({
         ...item,
         branch_id: branchId,
         type: currentType
       }));
-      
+
       form.setValue("items", mapped, { shouldValidate: true });
-      
+
       // Async stock fetch
       mapped.forEach((item, idx) => {
         const pid = Number(item.product_id);
         const cachedStock = inventoryMap.get(pid) ?? 0;
         if (cachedStock === 0) {
-           fetchInventory(pid, branchId).then(stock => {
-              form.setValue(`items.${idx}.current_stock`, stock);
-           }).catch(console.error);
+          fetchInventory(pid, branchId).then(stock => {
+            form.setValue(`items.${idx}.current_stock`, stock);
+          }).catch(console.error);
         } else {
-           form.setValue(`items.${idx}.current_stock`, cachedStock);
+          form.setValue(`items.${idx}.current_stock`, cachedStock);
         }
       });
     },
     [form, fetchInventory, inventoryMap]
   );
+
+  const handleSaveDraft = useCallback(() => {
+    const currentType = form.getValues("type");
+    if (currentType === "OUT") {
+      const items = form.getValues("items") || [];
+      const nonZeroItems = items.filter((item) => item.quantity > 0);
+      if (nonZeroItems.length === 0) {
+        toast.error("RFID Scan Required", {
+          description: "Please scan at least one product before saving.",
+        });
+        return;
+      }
+      form.setValue("items", nonZeroItems, { shouldValidate: false });
+    }
+    form.handleSubmit(onSubmit, onInvalid)();
+  }, [form, onSubmit, onInvalid]);
 
   const handleRFIDSave = useCallback((tags: string[]) => {
     if (scannerContext) {
@@ -701,12 +1043,6 @@ export function StockAdjustmentForm({
       setShowRFIDScanner(true);
     }, 600);
   }, [form]);
-
-  const watchedBranchIdForSelect = useWatch({ control: form.control, name: "branch_id" });
-  const watchedSupplierIdForSelect = useWatch({ control: form.control, name: "supplier_id" });
-  const watchedType = useWatch({ control: form.control, name: "type" });
-
-  const watchedItemsList = useWatch({ control: form.control, name: "items" });
 
   const filteredFields = useMemo(() => {
     return fields.map((field, index) => ({ field, index })).filter(({ index }) => {
@@ -751,7 +1087,7 @@ export function StockAdjustmentForm({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {onCancel ? (
+          {onCancel && (
             <Button
               variant="outline"
               onClick={onCancel}
@@ -759,15 +1095,6 @@ export function StockAdjustmentForm({
             >
               <ArrowLeft className="h-4 w-4" />
               Back to List
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              onClick={() => router.push("/scm/inventory-management/stock-adjustment-summary")}
-              className="gap-2 h-10 border-border bg-card shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg transition-all"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Summary
             </Button>
           )}
         </div>
@@ -1069,7 +1396,7 @@ export function StockAdjustmentForm({
                   className="pl-9 h-9 text-xs border-input font-semibold"
                 />
               </div>
-              {!isReadOnly && (
+              {!isReadOnly && watchedType !== "OUT" && (
                 <Button
                   type="button"
                   onClick={() => setIsModalOpen(true)}
@@ -1084,6 +1411,113 @@ export function StockAdjustmentForm({
             </div>
           </CardHeader>
           <CardContent className="p-0">
+            {/* Global RFID Scanner Control Panel */}
+            {!isReadOnly && Number(watchedBranchId) > 0 && Number(watchedSupplierId) > 0 && watchedType === "OUT" && (
+              <div className="border-b border-border bg-muted/10 p-6 flex flex-col gap-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex items-center justify-center h-10 w-10 rounded-full bg-primary/10 border border-primary/20">
+                      <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping opacity-75" style={{ animationDuration: '3s' }} />
+                      <Tag className="h-5 w-5 text-primary animate-pulse" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                        Global RFID Scanner
+                        <span className="flex h-2 w-2 relative">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-muted-foreground font-medium">
+                        Focus anywhere on the page and scan RFID tags to adjust quantities instantly.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40 px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm shrink-0">
+                    <ScanLine className="h-3.5 w-3.5" />
+                    Smart Tag Routing Active
+                  </div>
+                </div>
+
+                {/* Scan Input & Logs */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch mt-1">
+                  {/* Manual input / capture field */}
+                  <div className="md:col-span-4 relative flex items-center">
+                    <input
+                      ref={globalScanInputRef}
+                      type="text"
+                      placeholder="Scan RFID tag..."
+                      value={globalScanInputVal}
+                      onChange={(e) => setGlobalScanInputVal(e.target.value)}
+                      onKeyDown={async (e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const val = globalScanInputVal;
+                          setGlobalScanInputVal("");
+                          await handleGlobalScan(val);
+                        }
+                      }}
+                      className="w-full h-10 pl-9 pr-24 text-xs font-semibold border border-primary/40 focus:border-primary rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm transition-all uppercase"
+                      disabled={isGlobalScanValidating}
+                    />
+                    <ScanLine className="absolute left-3 h-4 w-4 text-muted-foreground/60" />
+                    {isGlobalScanValidating ? (
+                      <span className="absolute right-3 text-[10px] font-bold text-primary animate-pulse flex items-center gap-1">
+                        <span className="h-3 w-3 animate-spin">⌾</span>
+                        Validating...
+                      </span>
+                    ) : (
+                      <span className="absolute right-3 text-[9px] font-bold bg-muted text-muted-foreground px-2 py-1 rounded border uppercase tracking-wider">
+                        Auto Focus
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Scan History Logs */}
+                  <div className="md:col-span-8 border border-border/80 rounded-xl bg-background p-3 flex flex-col justify-center min-h-[50px]">
+                    <div className="text-[9px] font-black text-muted-foreground/50 uppercase tracking-[0.15em] mb-1.5 pl-1 flex items-center justify-between">
+                      <span>Live Scan Log</span>
+                      {scanLog.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setScanLog([])}
+                          className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-red-600 hover:text-white bg-red-50 hover:bg-red-500 border border-red-200 hover:border-red-500 rounded-md transition-all cursor-pointer shadow-sm ml-auto"
+                        >
+                          Clear log
+                        </button>
+                      )}
+                    </div>
+                    {scanLog.length === 0 ? (
+                      <span className="text-[11px] text-muted-foreground italic pl-1">
+                        No tags scanned yet. Position cursor/scanner and scan.
+                      </span>
+                    ) : (
+                      <div className="flex flex-col gap-1.5">
+                        {scanLog.slice(0, 3).map((log, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-xs font-semibold px-2 py-1 rounded bg-muted/30">
+                            <div className="flex items-center gap-2 truncate">
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${log.status === 'success' ? 'bg-green-500' : 'bg-red-500 animate-pulse'
+                                }`} />
+                              <span className="font-mono text-[10px] text-muted-foreground/80 tracking-wider">
+                                {log.rfid}
+                              </span>
+                              <span className="text-foreground truncate text-[11px] font-bold">
+                                {log.message}
+                              </span>
+                            </div>
+                            <span className="text-[9px] text-muted-foreground/50 shrink-0 pl-2">
+                              {log.timestamp.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {isFormLoading || (isProductsLoading && fields.length === 0) ? (
               <div className="p-6 space-y-6">
                 {[1, 2, 3].map((i) => (
@@ -1103,11 +1537,15 @@ export function StockAdjustmentForm({
                   </div>
                 </div>
                 <h3 className="text-lg font-bold text-foreground mb-1">
-                  {watchedSupplierIdForSelect ? "Empty Cart" : "Supplier required"}
+                  {watchedSupplierIdForSelect
+                    ? (watchedType === "OUT" ? "No RFID products" : "Empty Cart")
+                    : "Supplier required"}
                 </h3>
                 <p className="text-muted-foreground font-semibold max-w-xs mx-auto text-xs">
                   {watchedSupplierIdForSelect
-                    ? "Click \"ADD MORE PRODUCTS\" to browse and add items."
+                    ? (watchedType === "OUT"
+                      ? "There are no RFID-capable products configured for this supplier."
+                      : "Click \"ADD MORE PRODUCTS\" to browse and add items.")
                     : "Select a supplier first to browse and add products."}
                 </p>
                 {form.formState.errors.items && form.formState.errors.items.message && (
@@ -1120,21 +1558,36 @@ export function StockAdjustmentForm({
               <div className="overflow-x-auto min-h-[300px]">
                 <table className="w-full text-sm text-left">
                   <thead className="text-[10px] font-bold uppercase text-muted-foreground bg-muted/40 border-b border-border">
-                    <tr>
-                      <th className="p-3 text-center w-12 border-r border-border/50">#</th>
-                      <th className="p-3">Brand</th>
-                      <th className="p-3">Product Name</th>
-                      <th className="p-3">Price</th>
-                      <th className="p-3">UOM</th>
-                      <th className="p-3 w-40 text-center">Qty</th>
-                      <th className="p-3">Net Total</th>
-                      <th className="p-3 text-center w-16">Action</th>
-                    </tr>
+                    {watchedType === "OUT" ? (
+                      <tr>
+                        <th className="p-3 text-center w-12 border-r border-border/50">#</th>
+                        <th className="p-3">Brand</th>
+                        <th className="p-3">Product Name</th>
+                        <th className="p-3">Price</th>
+                        <th className="p-3">UOM</th>
+                        <th className="p-3 text-center w-28">On-Hand</th>
+                        <th className="p-3 text-center w-28">Scanned Qty</th>
+                        <th className="p-3 text-center w-28">Remaining</th>
+                        <th className="p-3">Net Total</th>
+                        <th className="p-3 text-center w-28">Action</th>
+                      </tr>
+                    ) : (
+                      <tr>
+                        <th className="p-3 text-center w-12 border-r border-border/50">#</th>
+                        <th className="p-3">Brand</th>
+                        <th className="p-3">Product Name</th>
+                        <th className="p-3">Price</th>
+                        <th className="p-3">UOM</th>
+                        <th className="p-3 w-40 text-center">Qty</th>
+                        <th className="p-3">Net Total</th>
+                        <th className="p-3 text-center w-28">Action</th>
+                      </tr>
+                    )}
                   </thead>
                   <tbody>
                     {paginatedFields.length === 0 && tableSearch ? (
                       <tr>
-                        <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                        <td colSpan={watchedType === "OUT" ? 10 : 8} className="p-8 text-center text-sm text-muted-foreground">
                           No products found matching &quot;{tableSearch}&quot;.
                         </td>
                       </tr>
@@ -1148,6 +1601,7 @@ export function StockAdjustmentForm({
                           setValue={form.setValue}
                           onOpenScanner={handleOpenScanner}
                           isReadOnly={isReadOnly}
+                          type={watchedType}
                         />
                       ))
                     )}
@@ -1158,7 +1612,7 @@ export function StockAdjustmentForm({
                   <div className="flex items-center gap-6">
                     <div className="flex items-center gap-2">
                       <span className="text-xs">Rows per page</span>
-                      <select 
+                      <select
                         className="h-8 border border-border rounded-md bg-card px-2 text-xs focus:outline-none font-bold"
                         value={rowsPerPage}
                         onChange={(e) => {
@@ -1230,6 +1684,28 @@ export function StockAdjustmentForm({
           </CardContent>
         </Card>
 
+        {/* Attachments Card */}
+        <Card className="border border-border/50 shadow-sm bg-card border-border/40">
+          <CardHeader className="bg-card border-b border-border/50 py-4 px-6">
+            <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+              <Paperclip className="h-4 w-4 text-primary" />
+              Attachments
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            <AttachmentUpload
+              value={form.watch("stock_adjustment_attachment") || []}
+              onChange={(atts) => form.setValue("stock_adjustment_attachment", atts, { shouldValidate: true })}
+              disabled={isReadOnly}
+            />
+            {form.formState.errors.stock_adjustment_attachment?.message && (
+              <p className="text-xs text-red-500 font-bold mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                {String(form.formState.errors.stock_adjustment_attachment.message)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Action Workspace buttons */}
         <div className="flex items-center justify-end gap-3 pb-8">
           {onCancel ? (
@@ -1245,9 +1721,9 @@ export function StockAdjustmentForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
+              onClick={async () => {
                 if (window.confirm("Are you sure you want to clear all fields and start over?")) {
-                  onSuccess();
+                  await handleClearForm();
                 }
               }}
               className="h-10 px-8 font-bold border-border text-muted-foreground hover:bg-card rounded-lg transition-colors text-xs"
@@ -1257,12 +1733,13 @@ export function StockAdjustmentForm({
           )}
           {!isReadOnly && (
             <Button
-              type="submit"
+              type="button"
+              onClick={handleSaveDraft}
               disabled={loading}
               className="h-10 px-8 font-bold bg-primary hover:bg-primary/95 text-primary-foreground gap-2 shadow-sm rounded-lg transition-all duration-300 hover:scale-[1.02] text-xs"
             >
               {loading ? (
-                <span className="animate-spin mr-2">â—Œ</span>
+                <span className="animate-spin mr-2">⌾</span>
               ) : (
                 <Save className="h-4 w-4" />
               )}
@@ -1309,6 +1786,8 @@ export function StockAdjustmentForm({
           type={form.getValues("type")}
           initialTags={form.getValues(`items.${scannerContext.index}.rfid_tags`) || []}
           branchId={Number(form.getValues("branch_id"))}
+          supplierId={Number(form.getValues("supplier_id"))}
+          productId={Number(form.getValues(`items.${scannerContext.index}.product_id`))}
           validateRFID={validateRFIDAvailability}
         />
       )}

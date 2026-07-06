@@ -108,6 +108,7 @@ export interface InvoiceLine {
   product_name: string;
   sku: string;
   unit: string;
+  unit_order?: number;
   qty: number;
   missing_qty?: number;
   price: number;

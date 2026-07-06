@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Search, Package, Minus, Plus, Tag } from "lucide-react";
+import { Search, Package, Minus, Plus } from "lucide-react";
 import { StockAdjustmentProduct, StockAdjustmentItem } from "../../types/stock-adjustment.schema";
 
 interface ProductSelectionModalProps {
@@ -148,7 +148,6 @@ export function ProductSelectionModal({
                   {filteredProducts.map((product) => {
                     const pid = Number(product.product_id || product.id);
                     const isAdded = addedProductIds.has(pid);
-                    const isProductRfid = rfidProductIds.has(pid) || product.unit_of_measurement?.order === 3;
                     
                     return (
                       <div
@@ -182,12 +181,7 @@ export function ProductSelectionModal({
                                 {product.unit_name}
                               </div>
                             )}
-                            {isProductRfid && (
-                              <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full border border-amber-300 text-amber-600 text-[9px] font-bold uppercase shadow-sm bg-amber-50 dark:bg-amber-950/20">
-                                <Tag className="h-2.5 w-2.5 fill-amber-500" />
-                                RFID
-                              </div>
-                            )}
+
                           </div>
                         </div>
                         
@@ -253,8 +247,6 @@ export function ProductSelectionModal({
                   const cost = Number(item.cost_per_unit || 0);
                   const qty = item.quantity || 1;
                   const total = cost * qty;
-                  const isItemRfid = item.has_rfid || item.unit_order === 3;
-                  
                   return (
                     <div key={pid} className="bg-card rounded-2xl border border-border p-4 shadow-sm relative">
                       <div className="flex justify-between items-start gap-2 mb-1">
@@ -273,53 +265,40 @@ export function ProductSelectionModal({
                             {item.unit_name}
                           </div>
                         )}
-                        {isItemRfid && (
-                          <div className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-amber-500 tracking-wide">
-                            <Tag className="h-2.5 w-2.5 fill-amber-500" />
-                            RFID
-                          </div>
-                        )}
                       </div>
                       
                       <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
-                        {isItemRfid ? (
-                          <div className="text-[10px] font-black text-amber-600 bg-amber-50 dark:bg-amber-900/20 border border-amber-200/50 px-2 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm max-w-[170px] select-none">
-                            <Tag className="h-3 w-3 text-amber-500 fill-amber-500" />
-                            Scan RFID tags in form to change qty
-                          </div>
-                        ) : (
-                          <div className="flex items-center bg-background border border-border rounded-md overflow-hidden h-9 shadow-sm">
-                            <button 
-                              className="w-9 flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors"
-                              onClick={() => handleUpdateQuantity(pid, -1)}
-                              disabled={qty <= 1}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </button>
-                            <input
-                              type="number"
-                              value={qty === 0 ? "" : qty}
-                              onChange={(e) => {
-                                let val = parseInt(e.target.value, 10);
-                                if (isNaN(val) || val < 1) val = 1;
-                                setCartItems(cartItems.map((cItem) => {
-                                  if (Number(cItem.product_id) === pid) {
-                                    return { ...cItem, quantity: val };
-                                  }
-                                  return cItem;
-                                }));
-                              }}
-                              className="w-12 h-9 text-center text-xs font-bold border-x border-border focus:outline-none focus:ring-0 bg-transparent p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              min={1}
-                            />
-                            <button 
-                              className="w-9 flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors"
-                              onClick={() => handleUpdateQuantity(pid, 1)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex items-center bg-background border border-border rounded-md overflow-hidden h-9 shadow-sm">
+                          <button 
+                            className="w-9 flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors"
+                            onClick={() => handleUpdateQuantity(pid, -1)}
+                            disabled={qty <= 1}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <input
+                            type="number"
+                            value={qty === 0 ? "" : qty}
+                            onChange={(e) => {
+                              let val = parseInt(e.target.value, 10);
+                              if (isNaN(val) || val < 1) val = 1;
+                              setCartItems(cartItems.map((cItem) => {
+                                if (Number(cItem.product_id) === pid) {
+                                  return { ...cItem, quantity: val };
+                                }
+                                return cItem;
+                              }));
+                            }}
+                            className="w-12 h-9 text-center text-xs font-bold border-x border-border focus:outline-none focus:ring-0 bg-transparent p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            min={1}
+                          />
+                          <button 
+                            className="w-9 flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors"
+                            onClick={() => handleUpdateQuantity(pid, 1)}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
                         
                         <div className="text-right flex flex-col justify-end h-9">
                           <div className="text-[9px] text-muted-foreground font-bold uppercase tracking-wider mb-0.5">Subtotal</div>

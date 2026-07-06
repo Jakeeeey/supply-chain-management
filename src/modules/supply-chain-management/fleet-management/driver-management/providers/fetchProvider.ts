@@ -1,9 +1,10 @@
-import type { Driver, DriverWithDetails, User, Branch } from "../types";
+import type { Driver, DriverManagementCapabilities, DriverWithDetails, User, Branch } from "../types";
 
 export async function fetchDriversWithDetails(): Promise<{
     drivers: DriverWithDetails[];
     users: User[];
     branches: Branch[];
+    capabilities?: DriverManagementCapabilities;
 }> {
     const res = await fetch("/api/scm/fleet-management/driver-management");
     if (!res.ok) throw new Error("Failed to fetch data");

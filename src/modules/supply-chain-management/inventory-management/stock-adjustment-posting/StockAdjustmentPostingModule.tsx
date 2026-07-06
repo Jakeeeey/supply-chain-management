@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useStockAdjustment } from "@/modules/supply-chain-management/inventory-management/stock-adjustment-posting/hooks/useStockAdjustment";
 import { StockAdjustmentForm } from "@/modules/supply-chain-management/inventory-management/stock-adjustment-posting/components/forms/StockAdjustmentForm";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
@@ -13,24 +12,20 @@ interface StockAdjustmentModuleProps {
 }
 
 export default function StockAdjustmentModule({ mode = "creation", initialId = null }: StockAdjustmentModuleProps) {
-  const router = useRouter();
   const { data, isLoading, error, refresh } = useStockAdjustment("Unposted");
   const [selectedId, setSelectedId] = useState<number | null>(initialId || null);
 
-  // Automatically load first unposted draft or auto-switch to next available draft when current is posted/deleted
+  // Require manual document number selection, do not auto-select first item
   useEffect(() => {
     if (!isLoading) {
       if (initialId && data.some((item) => item.id === initialId)) {
-        // If an initial ID is explicitly requested via query parameter and exists in list, prioritize it
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedId(initialId);
-      } else if (data.length === 0 && selectedId !== initialId) {
+      } else if (data.length === 0) {
         setSelectedId(null);
-      } else if (selectedId === null || (!data.some((item) => item.id === selectedId) && selectedId !== initialId)) {
-        setSelectedId(data[0]?.id || null);
       }
     }
-  }, [isLoading, data, selectedId, initialId]);
+  }, [isLoading, data, initialId]);
 
   if (isLoading && selectedId === null && data.length === 0) {
     return <ModuleSkeleton hasTabs={false} rowCount={6} />;
@@ -60,19 +55,18 @@ export default function StockAdjustmentModule({ mode = "creation", initialId = n
 
   return (
     <div className="stock-adjustment-module">
-      {selectedId && (
-        <StockAdjustmentForm
-          key={selectedId} // Force remounting form when selected document changes
-          id={selectedId}
-          onCancel={undefined} // Hides cancel/back-to-list buttons, shows "Reset Changes" instead
-          onSuccess={() => {
-            router.push("/scm/inventory-management/stock-adjustment-summary");
-          }}
-          mode={mode}
-          unpostedList={data}
-          onSelectId={setSelectedId}
-        />
-      )}
+      <StockAdjustmentForm
+        key={selectedId || "empty"} // Force remounting form when selected document changes
+        id={selectedId}
+        onCancel={undefined} // Hides cancel/back-to-list buttons, shows "Reset Changes" instead
+        onSuccess={() => {
+          setSelectedId(null); // Reset selection after post/delete
+          refresh();
+        }}
+        mode={mode}
+        unpostedList={data}
+        onSelectId={setSelectedId}
+      />
     </div>
   );
 }

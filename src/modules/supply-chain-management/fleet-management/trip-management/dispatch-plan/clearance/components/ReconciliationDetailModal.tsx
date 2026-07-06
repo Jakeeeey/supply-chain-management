@@ -540,7 +540,8 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                             <Button
                                 variant="outline"
                                 onClick={() => setIsScanningOpen(true)}
-                                className="flex-1 md:flex-none rounded-xl px-6 font-bold text-primary border-primary/20 bg-primary/5 hover:bg-primary/10 flex items-center gap-2 h-10 transition-all active:scale-95"
+                                disabled={reconciliation.status === 'Fulfilled with Concerns' && selectedLineIds.size === 0}
+                                className="flex-1 md:flex-none rounded-xl px-6 font-bold text-primary border-primary/20 bg-primary/5 hover:bg-primary/10 flex items-center gap-2 h-10 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <Scan className="w-4 h-4" />
                                 Start Scan

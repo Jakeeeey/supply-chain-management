@@ -45,13 +45,17 @@ export function DirectCreationModal({
               : "Enter product information to register a new product directly into the masterlist."}
           </DialogDescription>
         </DialogHeader>
-        <div className="px-4">
+        <div className="px-4 max-h-[75vh] overflow-y-auto pb-4">
           <SKUForm
             initialData={initialData}
             masterData={masterData}
             onSubmit={async (data) => {
-              await onSubmit(data);
-              setOpen(false);
+              try {
+                await onSubmit(data);
+                setOpen(false);
+              } catch {
+                // Keep modal open on validation error
+              }
             }}
             loading={loading}
           />

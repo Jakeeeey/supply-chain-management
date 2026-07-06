@@ -16,7 +16,7 @@ export async function GET() {
         return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
     }
 
-    const springBaseUrl = (process.env.SPRING_API_BASE_URL || "http://goatedcodoer:8083").replace(/\/$/, "");
+    const springBaseUrl = process.env.SPRING_API_BASE_URL?.replace(/\/$/, "");
     const targetUrl = `${springBaseUrl}/api/branches`;
 
     try {

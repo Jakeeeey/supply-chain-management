@@ -502,11 +502,14 @@ export const stockAdjustmentManualService = {
     const { header, items } = payload;
 
     let finalRemarks = String(header.remarks || "").trim();
-    // Clean any existing supplier tags to be safe
+    // Clean any existing supplier / source tags to be safe
     finalRemarks = finalRemarks.replace(/\s*\[SUPPLIER_ID:\s*(\d+)\]/g, "").trim();
+    finalRemarks = finalRemarks.replace(/\s*\[SOURCE:\s*[A-Z]+\]/g, "").trim();
     if (header.supplier_id) {
       finalRemarks = `${finalRemarks}\n[SUPPLIER_ID: ${header.supplier_id}]`.trim();
     }
+    // Stamp source type so the summary can label this record as Manual
+    finalRemarks = `${finalRemarks}\n[SOURCE: MANUAL]`.trim();
 
     const headerRes = await directusFetch<{ data: { id: number } }>(`${DIRECTUS_URL}/items/stock_adjustment_header`, {
       method: "POST",
@@ -573,9 +576,12 @@ export const stockAdjustmentManualService = {
   async update(id: number, payload: { header: Record<string, unknown>; items: StockAdjustmentManualItem[]; userId?: number }) {
     let finalRemarks = String(payload.header.remarks || "").trim();
     finalRemarks = finalRemarks.replace(/\s*\[SUPPLIER_ID:\s*(\d+)\]/g, "").trim();
+    finalRemarks = finalRemarks.replace(/\s*\[SOURCE:\s*[A-Z]+\]/g, "").trim();
     if (payload.header.supplier_id) {
       finalRemarks = `${finalRemarks}\n[SUPPLIER_ID: ${payload.header.supplier_id}]`.trim();
     }
+    // Preserve the MANUAL source marker on updates
+    finalRemarks = `${finalRemarks}\n[SOURCE: MANUAL]`.trim();
 
     const headerPayload = {
       doc_no: payload.header.doc_no,

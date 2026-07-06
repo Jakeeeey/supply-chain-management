@@ -10,6 +10,7 @@ export function useDriverManagement() {
     const [branches, setBranches] = React.useState<Branch[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
+    const [driverContactFieldsSupported, setDriverContactFieldsSupported] = React.useState(false);
 
     // Filters
     const [searchQuery, setSearchQuery] = React.useState("");
@@ -28,6 +29,7 @@ export function useDriverManagement() {
             setDrivers(data.drivers || []);
             setUsers(data.users || []);
             setBranches(data.branches || []);
+            setDriverContactFieldsSupported(data.capabilities?.driverContactFields === true);
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Failed to load data");
         } finally {
@@ -60,15 +62,24 @@ export function useDriverManagement() {
                     }
                 }
 
-                // Search by user ID or user name
+                // Search by driver identity and contact details
                 if (searchQuery) {
                     const query = searchQuery.toLowerCase();
                     const userIdStr = d.user_id?.toString() || "";
                     const userName = d.user
                         ? `${d.user.user_fname} ${d.user.user_mname || ""} ${d.user.user_lname}`.toLowerCase()
                         : "";
+                    const contactDetails = [
+                        d.contact_phone,
+                        d.contact_email,
+                        d.emergency_contact_name,
+                        d.emergency_contact_phone,
+                    ]
+                        .filter(Boolean)
+                        .join(" ")
+                        .toLowerCase();
 
-                    return userIdStr.includes(query) || userName.includes(query);
+                    return userIdStr.includes(query) || userName.includes(query) || contactDetails.includes(query);
                 }
 
                 return true;
@@ -101,5 +112,6 @@ export function useDriverManagement() {
         itemsPerPage,
         refresh: loadData,
         setItemsPerPage,
+        driverContactFieldsSupported,
     };
 }
