@@ -38,6 +38,8 @@ export const InvoiceRefSchema = z.object({
   po_id: z.number().optional(),
   po_no: z.string().optional(),
   status: z.string().optional(),
+  latitude: z.number().optional().nullable(),
+  longitude: z.number().optional().nullable(),
 });
 
 // ─── POST — Create Dispatch Plan ────────────────────────────

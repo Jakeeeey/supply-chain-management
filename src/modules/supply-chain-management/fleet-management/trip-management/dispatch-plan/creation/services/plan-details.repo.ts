@@ -115,7 +115,7 @@ export async function fetchPlanDetails(
         }),
         fetchItems<PostDispatchOtherRowDetail>("/items/post_dispatch_plan_others", {
           "filter[post_dispatch_plan_id][_eq]": tripId,
-          fields: "id,remarks,distance,sequence,status",
+          fields: "id,remarks,distance,sequence,status,latitude,longitude",
           limit: -1,
         }),
         fetchItems<PostDispatchPurchaseRow>("/items/post_dispatch_purchases", {
@@ -156,6 +156,8 @@ export async function fetchPlanDetails(
       distance: other.distance,
       sequence: other.sequence,
       status: other.status,
+      latitude: other.latitude,
+      longitude: other.longitude,
     }));
 
     manualStops = [...manualStops, ...poStops];
@@ -319,9 +321,11 @@ export async function fetchPlanDetails(
       remarks: string;
       sequence: number;
       status: string;
+      latitude?: number | null;
+      longitude?: number | null;
     }>("/items/post_dispatch_plan_others", {
       "filter[post_dispatch_plan_id][_eq]": tripId,
-      fields: "remarks,sequence,status",
+      fields: "remarks,sequence,status,latitude,longitude",
       limit: -1,
     });
     const stopDataMap = new Map(

@@ -33,6 +33,8 @@ export function groupPlanDetails(items: PlanDetailItem[]): GroupedPlanDetailItem
         po_no: item.po_no,
         totalAmount: item.amount,
         status: item.isManualStop || item.isPoStop ? (item.status || "Not Fulfilled") : item.order_status,
+        latitude: item.latitude,
+        longitude: item.longitude,
       };
       grouped.push(newGroup);
       if (!item.isManualStop && !item.isPoStop) {
