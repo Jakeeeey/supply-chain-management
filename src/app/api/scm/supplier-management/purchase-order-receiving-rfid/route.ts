@@ -697,7 +697,6 @@ export async function POST(req: NextRequest) {
             const po = pj?.data;
             if (!po) return bad("PO not found", 404);
 
-            const isInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
 
             const pUrl = `${base}/items/${PRODUCTS_COLLECTION}/${productId}?fields=cost_per_unit`;
             const productJ = await fetchJson<{ data: ProductRow }>(pUrl).catch(() => null);

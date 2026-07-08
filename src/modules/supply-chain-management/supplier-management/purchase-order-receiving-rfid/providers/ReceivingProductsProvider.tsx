@@ -1125,7 +1125,6 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         
         const pidNum = parseInt(item.productId, 10);
         const bidNum = parseInt(item.branchId, 10);
-        const discountTypeNum = parseInt(item.discountType || "0", 10);
 
         // 1. Optimistic Update
         const tempPorId = `temp-${item.productId}-${item.branchId}-${Date.now()}`;
