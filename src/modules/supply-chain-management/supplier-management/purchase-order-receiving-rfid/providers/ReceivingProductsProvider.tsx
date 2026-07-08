@@ -220,8 +220,8 @@ type Ctx = {
     saveError: string;
 
     // ✅ EXTRA: Add Product via Supplier Picker
-    addExtraProductLocally: (item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number; discountType?: string; discountPercent?: number; uom?: string; sku?: string; }) => void;
-    removeExtraProductLocally: (porId: string) => void;
+    addExtraProductLocally: (item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number; discountType?: string; discountPercent?: number; uom?: string; sku?: string; }) => Promise<void>;
+    removeExtraProductLocally: (porId: string) => Promise<void>;
 
     // ✅ CHECKLIST: Product verification (mirrors manual module)
     verifiedPorIds: string[];
@@ -896,6 +896,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         const poId = selectedPO?.id;
         if (!poId) {
             playBeep("error");
+            toast.error("Select a PO first.");
             return setScanError("Select a PO first.");
         }
 
@@ -908,6 +909,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
 
         if (!activeProductId || !activePorId) {
             playBeep("error");
+            toast.error("Please select a target product from the list above before scanning.");
             return setScanError("Please select a target product from the list above before scanning.");
         }
 
@@ -918,6 +920,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
 
         if (!activeItem) {
             playBeep("error");
+            toast.error("Active product is invalid.");
             return setScanError("Active product is invalid.");
         }
 
@@ -929,7 +932,9 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
             const alreadyBuffered = localScannedRfids.some(r => r.rfid === value);
             if (alreadyVerifiedInSession || alreadyBuffered) {
                 playBeep("error");
-                setScanError(`Already scanned RFID (${value.slice(-6).toUpperCase()}) cannot be duplicated.`);
+                const errorMsg = `Already scanned RFID (${value.slice(-6).toUpperCase()}) cannot be duplicated.`;
+                toast.error(errorMsg);
+                setScanError(errorMsg);
                 return;
             }
 
@@ -949,6 +954,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
             const data = j?.data as ScanRFIDResult | null;
             if (!data) {
                 playBeep("error");
+                toast.error("Failed to fetch scan data.");
                 setScanError("Failed to fetch scan data.");
                 setRfid("");
                 return;
@@ -963,7 +969,9 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 // Mismatch Check for tagged items (only if the tag belongs to a completely different product, not just resolving a temporary ID)
                 if (isTagged && realPorId && targetPorId && realPorId !== targetPorId && !targetPorId.includes("-")) {
                     playBeep("error");
-                    setScanError(`RFID Mismatch: This tag is already assigned to different product. Please use a fresh tag.`);
+                    const errorMsg = `RFID Mismatch: This tag is already assigned to different product. Please use a fresh tag.`;
+                    toast.error(errorMsg);
+                    setScanError(errorMsg);
                     setRfid("");
                     return;
                 }
@@ -1064,6 +1072,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 ]);
 
                 playBeep("success");
+                toast.success("RFID scanned successfully.");
                 setRfid("");
                 return;
             }
@@ -1083,83 +1092,154 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                     ...prev,
                 ]);
                 playBeep("error");
+                toast.error("Duplicate Scan: This tag has already been received and saved.");
                 setScanError("Duplicate Scan: This tag has already been received and saved.");
                 setRfid("");
                 return;
             }
 
             playBeep("success");
+            toast.success("RFID scanned successfully.");
             setRfid("");
         } catch (e: unknown) {
             playBeep("error");
             const msg = e instanceof Error ? e.message : String(e);
-            if (msg.trim().toLowerCase() !== "fetch failed") {
-                setScanError(msg);
-            }
+            toast.error(msg);
+            setScanError(msg);
         }
     }, [selectedPO, rfid, activity, localScannedRfids, activeProductId, activePorId, scannedCountByPorId]);
-    const addExtraProductLocally = React.useCallback((item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number; discountType?: string; discountPercent?: number; uom?: string; sku?: string; }) => {
+
+    const addExtraProductLocally = React.useCallback(async (item: {
+        productId: string;
+        name: string;
+        barcode: string;
+        branchId: string;
+        branchName: string;
+        unitPrice?: number;
+        discountType?: string;
+        discountPercent?: number;
+        uom?: string;
+        sku?: string;
+    }) => {
+        if (!selectedPO) return;
+        
+        const pidNum = parseInt(item.productId, 10);
+        const bidNum = parseInt(item.branchId, 10);
+        const discountTypeNum = parseInt(item.discountType || "0", 10);
+
+        // 1. Optimistic Update
+        const tempPorId = `temp-${item.productId}-${item.branchId}-${Date.now()}`;
         setSelectedPO(prev => {
             if (!prev) return prev;
             const updated = { ...prev };
             const allocs = [...updated.allocations];
-
-            let branchAlloc = allocs.find(a => a.branch.id === item.branchId);
-            if (!branchAlloc) {
-                branchAlloc = { branch: { id: item.branchId, name: item.branchName }, items: [] };
-                allocs.push(branchAlloc);
+            let branchAllocIndex = allocs.findIndex(a => a.branch.id === item.branchId);
+            
+            if (branchAllocIndex === -1) {
+                allocs.push({ branch: { id: item.branchId, name: item.branchName }, items: [] });
+                branchAllocIndex = allocs.length - 1;
             }
-
-            const existingItem = branchAlloc.items.find(i => i.productId === item.productId);
-            if (!existingItem) {
-                const uPrice = item.unitPrice || 0;
-                const dPct = item.discountPercent || 0;
-                const dAmt = Number((uPrice * (dPct / 100)).toFixed(2));
-
-                branchAlloc.items = [...branchAlloc.items, {
-                    id: `${item.productId}-${item.branchId}`,
-                    productId: String(item.productId),
+            
+            const branchAlloc = { ...allocs[branchAllocIndex], items: [...allocs[branchAllocIndex].items] };
+            
+            const existing = branchAlloc.items.find(i => i.productId === item.productId);
+            if (!existing) {
+                branchAlloc.items.push({
+                    id: tempPorId,
+                    porId: tempPorId,
+                    productId: item.productId,
                     name: item.name,
                     barcode: item.sku || item.barcode,
                     uom: item.uom || "BOX",
+                    uomCount: 1,
                     expectedQty: 0,
+                    originalOrderedQty: 0,
                     receivedQty: 0,
                     requiresRfid: true,
                     taggedQty: 0,
                     rfids: [],
                     isReceived: false,
-                    unitPrice: uPrice,
+                    unitPrice: item.unitPrice || 0,
                     discountType: item.discountType || "No Discount",
-                    discountAmount: dAmt,
+                    discountAmount: 0,
                     netAmount: 0,
                     isExtra: true
-                }];
+                });
             }
-
+            
+            allocs[branchAllocIndex] = branchAlloc;
             updated.allocations = allocs;
             return updated;
         });
-    }, []);
 
-    const removeExtraProductLocally = React.useCallback((porId: string) => {
+        try {
+            const res = await fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action: "add_extra_product",
+                    poId: selectedPO.id,
+                    productId: pidNum,
+                    branchId: bidNum
+                })
+            });
+            await asJson(res);
+            
+            // Refetch quietly to get real DB IDs
+            await openPOById(selectedPO.id, { silent: true });
+            
+            toast.success("Extra product added successfully.");
+        } catch (e: unknown) {
+            // Revert on failure
+            await openPOById(selectedPO.id, { silent: true });
+            toast.error("Failed to add extra product", { description: (e as Error).message });
+        }
+    }, [selectedPO, openPOById]);
+
+    const removeExtraProductLocally = React.useCallback(async (porId: string) => {
+        if (!selectedPO || !porId) return;
+        
+        // 1. Optimistic Remove
         setSelectedPO(prev => {
             if (!prev) return prev;
             const updated = { ...prev };
             updated.allocations = updated.allocations.map(a => ({
                 ...a,
-                items: a.items.filter(i => (i.porId || i.id) !== porId || !i.isExtra)
+                items: a.items.filter(i => (i.porId || i.id) !== porId)
             }));
             return updated;
         });
-        setVerifiedPorIds(prev => prev.filter(id => id !== porId));
-        setScannedCountByPorId(prev => {
-            const next = { ...prev };
-            delete next[porId];
-            return next;
-        });
-        setLocalScannedRfids(prev => prev.filter(r => r.porId !== porId));
-        setActivity(prev => prev.filter(a => a.porId !== porId));
-    }, []);
+
+        try {
+            const res = await fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action: "delete_extra_product",
+                    porId
+                })
+            });
+            await asJson(res);
+            
+            // Sync state with backend quietly
+            await openPOById(selectedPO.id, { silent: true });
+            
+            setVerifiedPorIds(prev => prev.filter(id => id !== porId));
+            setScannedCountByPorId(prev => {
+                const next = { ...prev };
+                delete next[porId];
+                return next;
+            });
+            setLocalScannedRfids(prev => prev.filter(r => r.porId !== porId));
+            setActivity(prev => prev.filter(a => a.porId !== porId));
+            
+            toast.success("Extra product removed.");
+        } catch (e: unknown) {
+            // Revert on failure
+            await openPOById(selectedPO.id, { silent: true });
+            toast.error("Failed to remove extra product", { description: (e as Error).message });
+        }
+    }, [selectedPO, openPOById]);
 
     const toggleProductVerification = React.useCallback((porId: string) => {
         setVerifiedPorIds(prev => {
