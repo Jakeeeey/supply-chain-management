@@ -55,8 +55,27 @@ export default function ChartsPanel(props: {
                     data={props.statusChartData}
                     cx="50%"
                     cy="50%"
-                    labelLine
-                    label={({ name, value }) => `${name}: ${value}`}
+                    labelLine={{ strokeWidth: 1.5 }}
+                    label={({ cx, cy, midAngle, outerRadius, value, name, index }: { cx: number; cy: number; midAngle: number; outerRadius: number; value: number; name: string; index: number }) => {
+                      const RADIAN = Math.PI / 180;
+                      const radius = outerRadius + 22;
+                      const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                      const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                      const entry = props.statusChartData[index];
+                      const color = COLORS[entry.colorKey];
+                      return (
+                        <text
+                          x={x}
+                          y={y}
+                          fill={color}
+                          textAnchor={x > cx ? "start" : "end"}
+                          dominantBaseline="central"
+                          style={{ fontSize: "12px", fontWeight: 600 }}
+                        >
+                          {`${name}: ${value}`}
+                        </text>
+                      );
+                    }}
                     outerRadius={85}
                     dataKey="value"
                   >
@@ -65,7 +84,12 @@ export default function ChartsPanel(props: {
                     ))}
                   </Pie>
                   <Tooltip />
-                  <Legend />
+                  <Legend
+                    formatter={(value: string, entry: { color: string }) => {
+                      const color = entry.color;
+                      return <span style={{ color, fontWeight: 500, fontSize: "13px" }}>{value}</span>;
+                    }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             )}

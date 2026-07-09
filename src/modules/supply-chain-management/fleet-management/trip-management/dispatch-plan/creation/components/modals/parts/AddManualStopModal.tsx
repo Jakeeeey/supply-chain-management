@@ -41,7 +41,7 @@ interface AddManualStopModalProps {
 const renderMap = (locationString: string | null | undefined) => {
   if (!locationString || locationString.trim() === "") {
     return (
-      <div className="w-full h-[150px] bg-muted/30 rounded-xl border border-dashed border-border flex flex-col items-center justify-center text-muted-foreground text-xs font-semibold">
+      <div className="w-full h-[300px] bg-muted/30 rounded-xl border border-dashed border-border flex flex-col items-center justify-center text-muted-foreground text-xs font-semibold">
         <MapPin className="h-6 w-6 mb-1 opacity-20" />
         <span>No Location Loaded</span>
       </div>
@@ -55,12 +55,12 @@ const renderMap = (locationString: string | null | undefined) => {
     <div className="w-full rounded-xl border border-border shadow-inner overflow-hidden relative mt-2 group">
       <iframe
         width="100%"
-        height="150"
+        height="300"
         style={{ border: 0 }}
         loading="lazy"
         allowFullScreen
         referrerPolicy="no-referrer-when-downgrade"
-        src={`https://maps.google.com/maps?q=${query}&z=15&output=embed`}
+        src={`https://maps.google.com/maps?q=${query}&z=15&t=k&output=embed`}
       ></iframe>
       
       {/* Top Left: Open in Maps Link */}
@@ -174,7 +174,7 @@ export function AddManualStopModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[400px]">
+      <DialogContent className="sm:max-w-[650px]">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <MapPin className="w-4 h-4 text-primary" />
