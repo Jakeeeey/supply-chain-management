@@ -75,6 +75,7 @@ export async function GET(request: Request) {
             unit_id: number;
             unit_shortcut?: string;
             unit_name?: string;
+            order?: number;
         }
         const products = (productsRes.data || []) as Product[];
         const units = (unitsRes.data || []) as Unit[];
@@ -95,6 +96,7 @@ export async function GET(request: Request) {
                 product_name: product?.product_name || 'Unknown Product',
                 sku: product?.product_code || 'N/A',
                 unit: unit?.unit_shortcut || unit?.unit_name || 'PCS',
+                unit_order: unit?.order || 0,
                 qty: l.quantity || 0,
                 price: l.unit_price || 0,
                 net_total: l.total_amount || 0
