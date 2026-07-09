@@ -85,8 +85,8 @@ export default function ChartsPanel(props: {
                   </Pie>
                   <Tooltip />
                   <Legend
-                    formatter={(value: string, entry: { color: string }) => {
-                      const color = entry.color;
+                    formatter={(value: string, entry: { color?: string }) => {
+                      const color = entry.color || "#000";
                       return <span style={{ color, fontWeight: 500, fontSize: "13px" }}>{value}</span>;
                     }}
                   />
