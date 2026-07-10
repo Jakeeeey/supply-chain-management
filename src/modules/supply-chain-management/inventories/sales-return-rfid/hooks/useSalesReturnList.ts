@@ -76,7 +76,7 @@ export function useSalesReturnList() {
         return {
           ...item,
           customerName: customerName || item.customerCode,
-          salesmanName: salesmanName || `ID: ${item.salesmanId}`,
+          salesmanName: salesmanName || "Deleted Salesman",
         };
       });
 
