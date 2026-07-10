@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // =============================================================================
-// Sales Return Manual â€” Next.js API Route (Server Gateway)
+// Sales Return Manual — Next.js API Route (Server Gateway)
 // Thin wrapper around the service layer.
 // =============================================================================
 
@@ -64,7 +65,7 @@ function json(res: any, status = 200) {
 }
 
 // =============================================================================
-// GET â€” Dispatches based on ?action= query param
+// GET — Dispatches based on ?action= query param
 // =============================================================================
 export async function GET(req: NextRequest) {
   try {
@@ -133,14 +134,14 @@ export async function GET(req: NextRequest) {
 }
 
 // =============================================================================
-// POST â€” Create a new Sales Return
+// POST — Create a new Sales Return
 // =============================================================================
 export async function POST(req: NextRequest) {
   try {
     const token = req.cookies.get("vos_access_token")?.value;
     const userId = getUserIdFromToken(token);
     
-    // ðŸŸ¢ Session token is now mandatory.
+    // 🟢 Session token is now mandatory.
     if (!userId) {
       return json({ error: "Unauthorized: Invalid or missing session" }, 401);
     }
@@ -158,7 +159,7 @@ export async function POST(req: NextRequest) {
 }
 
 // =============================================================================
-// PATCH â€” Update an existing Sales Return or change status
+// PATCH — Update an existing Sales Return or change status
 // =============================================================================
 export async function PATCH(req: NextRequest) {
   try {
@@ -182,7 +183,7 @@ export async function PATCH(req: NextRequest) {
     const token = req.cookies.get("vos_access_token")?.value;
     const userId = getUserIdFromToken(token);
     
-    // ðŸŸ¢ Session token is now mandatory.
+    // 🟢 Session token is now mandatory.
     if (!userId) {
       return json({ error: "Unauthorized: Invalid or missing session" }, 401);
     }
