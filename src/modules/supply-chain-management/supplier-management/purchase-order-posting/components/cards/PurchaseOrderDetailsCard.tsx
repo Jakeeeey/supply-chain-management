@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import * as React from "react";
@@ -17,9 +16,9 @@ function statusBadgeClasses(status?: string) {
 }
 
 export function PurchaseOrderDetailsCard({ po }: { po: PostingPODetail }) {
-    // ✅ Backward-compatible: support either {supplierName, branchName} OR {supplier:{name}, allocations[]}
+    // âœ… Backward-compatible: support either {supplierName, branchName} OR {supplier:{name}, allocations[]}
     const supplierName =
-        (po as any)?.supplier?.name ?? (po as any)?.supplierName ?? "—";
+        (po as any)?.supplier?.name ?? (po as any)?.supplierName ?? "â€”";
 
     const branchName =
         (po as any)?.branchName ??
@@ -28,7 +27,7 @@ export function PurchaseOrderDetailsCard({ po }: { po: PostingPODetail }) {
             const names = allocs
                 .map((a: any) => String(a?.branch?.name || "").trim())
                 .filter(Boolean);
-            return names.length ? Array.from(new Set(names)).join(", ") : "—";
+            return names.length ? Array.from(new Set(names)).join(", ") : "â€”";
         })();
 
     const statusText = String((po as any)?.status || "").trim();
@@ -47,7 +46,7 @@ export function PurchaseOrderDetailsCard({ po }: { po: PostingPODetail }) {
 
             <div className="grid grid-cols-[140px_1fr] gap-y-3 text-sm">
                 <div className="text-muted-foreground">PO Number:</div>
-                <div className="text-right font-medium">{(po as any)?.poNumber ?? "—"}</div>
+                <div className="text-right font-medium">{(po as any)?.poNumber ?? "â€”"}</div>
 
                 <div className="text-muted-foreground">Supplier:</div>
                 <div className="text-right font-medium">{supplierName}</div>
@@ -61,7 +60,7 @@ export function PurchaseOrderDetailsCard({ po }: { po: PostingPODetail }) {
                 </div>
             </div>
 
-            {/* ✅ optional non-breaking helper line */}
+            {/* âœ… optional non-breaking helper line */}
             {(po as any)?.postingReady === false ? (
                 <div className="mt-4 text-xs text-muted-foreground">
                     This PO is not ready for posting yet. Complete receiving (RFID verification) first.

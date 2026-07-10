@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // =============================================================================
-// Sales Return — Core Service Logic
+// Sales Return â€” Core Service Logic
 // =============================================================================
 import type {
   SalesReturn,
@@ -504,7 +503,7 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
   const finalReturnNo = headerData?.return_number || generatedReturnNo;
   const returnId = headerData?.id;
 
-  // 🟢 Handle Optional Junction Link to Invoice
+  // ðŸŸ¢ Handle Optional Junction Link to Invoice
   if (payload.appliedInvoiceId && returnId) {
     try {
       const returnAmount = Math.round(Number(payload.totalAmount) * 100) / 100;
@@ -618,7 +617,7 @@ export async function updateReturn(
 
   await repo.updateReturnHeader(payload.returnId, headerPayload);
 
-  // 🟢 Handle Junction Table with explicit Unlinking (null check)
+  // ðŸŸ¢ Handle Junction Table with explicit Unlinking (null check)
   if (payload.hasOwnProperty("appliedInvoiceId")) {
     try {
       const linkResult = await repo.getJunctionLink(payload.returnId);

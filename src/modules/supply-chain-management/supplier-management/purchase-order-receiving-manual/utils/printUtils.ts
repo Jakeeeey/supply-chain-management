@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import autoTable from "jspdf-autotable";
 import { PdfEngine } from "@/components/pdf-layout-design/PdfEngine";
 import { renderElement } from "@/components/pdf-layout-design/PdfGenerator";
@@ -71,12 +70,12 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
             // Left Column
             doc.text("Supplier:", 10, detailsY);
             doc.setFont("helvetica", "normal");
-            doc.text(data.supplierName || "—", 30, detailsY);
+            doc.text(data.supplierName || "â€”", 30, detailsY);
 
             doc.setFont("helvetica", "bold");
             doc.text("Receipt Type:", 10, detailsY + 5);
             doc.setFont("helvetica", "normal");
-            doc.text(data.receiptType || "—", 30, detailsY + 5);
+            doc.text(data.receiptType || "â€”", 30, detailsY + 5);
 
             doc.setFont("helvetica", "bold");
             doc.text("Status:", 10, detailsY + 10);
@@ -90,17 +89,17 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
             doc.setFont("helvetica", "bold");
             doc.text("PO Number:", rightMarginX - 70, detailsY);
             doc.setFont("helvetica", "normal");
-            doc.text(data.poNumber || "—", rightMarginX, detailsY, { align: "right" });
+            doc.text(data.poNumber || "â€”", rightMarginX, detailsY, { align: "right" });
 
             doc.setFont("helvetica", "bold");
             doc.text("Receipt No:", rightMarginX - 70, detailsY + 5);
             doc.setFont("helvetica", "normal");
-            doc.text(data.receiptNo || "—", rightMarginX, detailsY + 5, { align: "right" });
+            doc.text(data.receiptNo || "â€”", rightMarginX, detailsY + 5, { align: "right" });
 
             doc.setFont("helvetica", "bold");
             doc.text("Date:", rightMarginX - 70, detailsY + 10);
             doc.setFont("helvetica", "normal");
-            doc.text(data.receiptDate || "—", rightMarginX, detailsY + 10, { align: "right" });
+            doc.text(data.receiptDate || "â€”", rightMarginX, detailsY + 10, { align: "right" });
 
             // 1. Prepare Table Data
             const items = Array.isArray(data.items) ? data.items : [];
@@ -122,9 +121,9 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
 
             const tableRows: any[] = [];
             items.forEach((it: any) => {
-                const name = (it.name || "—").trim();
-                const uom = (it.uom || "—").trim();
-                const barcode = (it.barcode || "—").trim();
+                const name = (it.name || "â€”").trim();
+                const uom = (it.uom || "â€”").trim();
+                const barcode = (it.barcode || "â€”").trim();
                 const expected = Math.max(0, toNum(it.expectedQty));
                 const received = Math.max(0, toNum(it.receivedQtyNow));
                 const price = Math.max(0, toNum(it.unitPrice));
@@ -149,7 +148,7 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
                 tableRows.push([
                    barcode,
                    name,
-                   batchExpLines || "—",
+                   batchExpLines || "â€”",
                    uom,
                    String(expected),
                    String(received),
@@ -172,7 +171,7 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
                     { content: "TOTALS", colSpan: 4, styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                     { content: String(sumExpected), styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                     { content: String(sumReceived), styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
-                    { content: "—", styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
+                    { content: "â€”", styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                     { content: formatMoney(sumDiscount), styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                     { content: formatMoney(sumNet), styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                 ]],
@@ -294,7 +293,7 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
             const receivedByX = startX;
             doc.text("Received By:", receivedByX, sigY);
             doc.setFont("helvetica", "bold");
-            doc.text(data.receiverName || "—", receivedByX, sigY + 4);
+            doc.text(data.receiverName || "â€”", receivedByX, sigY + 4);
 
             doc.setDrawColor(150, 150, 150);
             doc.line(receivedByX, sigY + 8, receivedByX + signatureWidth, sigY + 8);
@@ -303,7 +302,7 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
             doc.setTextColor(150, 150, 150);
             doc.text("Signature", receivedByX, sigY + 11);
 
-            // Checked By (empty — no name)
+            // Checked By (empty â€” no name)
             const checkedByX = startX + signatureWidth + spacing;
             doc.setFontSize(7);
             doc.setTextColor(15, 23, 42);
@@ -328,4 +327,3 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
         console.error("Failed to generate PDF", error);
     }
 }
-

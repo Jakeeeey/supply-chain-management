@@ -70,7 +70,7 @@ interface PDPCreateModalProps {
   editDetails?: DispatchPlanDetail[];
 }
 
-// ── Order Status Badge ─────────────────────────────────────────────────────
+// â”€â”€ Order Status Badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function OrderStatusBadge({ status }: { status?: string | null }) {
   if (!status) return null;
 
@@ -96,7 +96,7 @@ function OrderStatusBadge({ status }: { status?: string | null }) {
   );
 }
 
-// ── Available Order Card ───────────────────────────────────────────────────
+// â”€â”€ Available Order Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function AvailableOrderCard({
   order,
   onClick,
@@ -131,10 +131,10 @@ function AvailableOrderCard({
 
       {/* Row 2: Customer name */}
       <p className="text-xs text-foreground font-medium leading-snug mb-1.5 truncate">
-        {order.customer_name || order.store_name || "—"}
+        {order.customer_name || order.store_name || "â€”"}
       </p>
 
-      {/* Row 3: Meta row — PO, status, weight */}
+      {/* Row 3: Meta row â€” PO, status, weight */}
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
           {order.po_no && (
@@ -144,7 +144,7 @@ function AvailableOrderCard({
           )}
           {order.po_no && order.order_status && (
             <span className="text-muted-foreground/40 text-[10px] shrink-0">
-              ·
+              Â·
             </span>
           )}
           <div className="shrink-0">
@@ -164,7 +164,7 @@ function AvailableOrderCard({
         <span className="truncate flex-1 min-w-0" title={[order.brgy, order.city, order.province].filter(Boolean).join(", ")}>
           {[order.brgy, order.city, order.province]
             .filter(Boolean)
-            .join(", ") || "—"}
+            .join(", ") || "â€”"}
         </span>
       </div>
     </div>
@@ -206,7 +206,6 @@ export function PDPCreateModal({
   useEffect(() => {
     if (open) {
       if (editPlan) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const toId = (val: any): number | null => {
           if (val == null) return null;
           if (typeof val === "number") return val;
@@ -250,7 +249,6 @@ export function PDPCreateModal({
               brgy: d.brgy,
               total_amount: d.amount ?? null,
               net_amount: d.amount ?? null,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               po_no: (d as any).po_no || null,
               order_status: d.order_status,
               total_weight: d.weight,
@@ -347,7 +345,6 @@ export function PDPCreateModal({
       brgy: d.brgy,
       total_amount: d.amount ?? null,
       net_amount: d.amount ?? null,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       po_no: (d as any).po_no || null,
       order_status: d.order_status,
       total_weight: d.weight,
@@ -489,14 +486,14 @@ export function PDPCreateModal({
   return (
     <Dialog open={open} onOpenChange={(v: boolean) => !v && onClose()}>
       <DialogContent className="w-full sm:max-w-8xl h-[95vh] max-h-[95vh] flex flex-col p-0 gap-0 overflow-hidden min-h-0 pointer-events-auto">
-        {/* ── Header ──────────────────────────────────────── */}
+        {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <DialogHeader className="px-6 py-4 border-b shrink-0">
           <DialogTitle className="text-base font-semibold">
             {isEditMode ? "Edit Trip Configuration" : "Trip Configuration"}
           </DialogTitle>
         </DialogHeader>
 
-        {/* ── Trip Configuration Form ──────────────────────── */}
+        {/* â”€â”€ Trip Configuration Form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div className="px-6 py-4 border-b shrink-0 bg-muted/5">
           <div className="grid grid-cols-6 gap-4">
             <div className="space-y-1.5 flex flex-col">
@@ -618,7 +615,7 @@ export function PDPCreateModal({
           </div>
         </div>
 
-        {/* ── Main Content ─────────────────────────────────── */}
+        {/* â”€â”€ Main Content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Left Panel: Available Deliveries */}
           <div className="w-[380px] border-r flex flex-col shrink-0 min-h-0">
@@ -643,7 +640,7 @@ export function PDPCreateModal({
                       : null,
                   ]
                     .filter(Boolean)
-                    .join(" · ")}
+                    .join(" Â· ")}
                 </p>
               )}
               <div className="flex items-center gap-2">
@@ -776,7 +773,7 @@ export function PDPCreateModal({
                     <TableHead>Destination</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Weight (kg)</TableHead>
-                    <TableHead className="text-right">Amount (₱)</TableHead>
+                    <TableHead className="text-right">Amount (â‚±)</TableHead>
                     <TableHead className="w-12" />
                   </TableRow>
                 </TableHeader>
@@ -800,15 +797,15 @@ export function PDPCreateModal({
                           {order.order_no}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {order.po_no || "—"}
+                          {order.po_no || "â€”"}
                         </TableCell>
                         <TableCell className="text-sm">
-                          {order.customer_name || order.store_name || "—"}
+                          {order.customer_name || order.store_name || "â€”"}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {[order.brgy, order.city, order.province]
                             .filter(Boolean)
-                            .join(", ") || "—"}
+                            .join(", ") || "â€”"}
                         </TableCell>
                         <TableCell>
                           <OrderStatusBadge status={order.order_status} />
@@ -863,11 +860,11 @@ export function PDPCreateModal({
                 <span className="font-medium text-foreground">
                   {manifestOrders.length}
                 </span>{" "}
-                order(s) &nbsp;·&nbsp; Value:{" "}
+                order(s) &nbsp;Â·&nbsp; Value:{" "}
                 <span className="font-medium text-foreground">
                   {formatPeso(totalAmount)}
                 </span>{" "}
-                &nbsp;·&nbsp; Weight:{" "}
+                &nbsp;Â·&nbsp; Weight:{" "}
                 <span className="font-medium text-foreground">
                   {formatNumber(totalWeight)} kg
                 </span>
@@ -876,7 +873,7 @@ export function PDPCreateModal({
           </div>
         </div>
 
-        {/* ── Footer: Capacity + Actions ───────────────────── */}
+        {/* â”€â”€ Footer: Capacity + Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <Separator />
         <div className="px-6 py-4 flex items-center gap-6 shrink-0">
           <div className="flex-1 space-y-1.5">

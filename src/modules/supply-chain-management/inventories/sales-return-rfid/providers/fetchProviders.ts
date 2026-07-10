@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // =============================================================================
-// Sales Return — Client-Side Provider (Fetch Bridge)
+// Sales Return â€” Client-Side Provider (Fetch Bridge)
 // Calls local API routes instead of Directus directly.
 // =============================================================================
 import type {
@@ -39,7 +38,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 // =============================================================================
-// PUBLIC API — Matching the old SalesReturnProvider interface
+// PUBLIC API â€” Matching the old SalesReturnProvider interface
 // =============================================================================
 
 export const SalesReturnProvider = {

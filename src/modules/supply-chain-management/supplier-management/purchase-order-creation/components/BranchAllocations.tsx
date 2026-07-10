@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import * as React from "react";
@@ -59,8 +58,8 @@ function BranchTable({
 
             return {
                 id: item.id,
-                brand: item.brand || "—",
-                category: item.category || "—",
+                brand: item.brand || "â€”",
+                category: item.category || "â€”",
                 name: item.name,
                 price: item.price,
                 uom: item.uom,
@@ -307,7 +306,7 @@ function BranchTable({
                     </button>
                 ) : (
                     <div className="space-y-4 w-full min-w-0">
-                        {/* ✅ Search Filter within Branch */}
+                        {/* âœ… Search Filter within Branch */}
                         <div className="relative group/search max-w-sm">
                             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within/search:text-primary transition-colors">
                                 <Search className="w-3.5 h-3.5" />

@@ -202,7 +202,6 @@ export const stockAdjustmentManualService = {
         ...header,
         items: headerItems,
         amount: totalAmount > 0 ? totalAmount : (Number(header.amount) || 0),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         supplier_id: resolvedSupplier as any
       };
     });
@@ -311,9 +310,8 @@ export const stockAdjustmentManualService = {
       }
     }
 
-    // Fetch attachments — FK references stock_adjustment.id (items), not the header id.
+    // Fetch attachments â€” FK references stock_adjustment.id (items), not the header id.
     // We use the item IDs belonging to this doc_no to look up attachments.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let attachments: any[] = [];
     try {
       const docItemIdsRes = await directusFetch<{ data: { id: number }[] }>(
@@ -321,7 +319,6 @@ export const stockAdjustmentManualService = {
       );
       const docItemIds = (docItemIdsRes.data || []).map((i) => i.id);
       if (docItemIds.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const attachmentsRes = await directusFetch<{ data: any[] }>(
           `${DIRECTUS_URL}/items/stock_adjustment_attachment?filter={"stock_adjustment_id":{"_in":${JSON.stringify(docItemIds)}}}&limit=-1`
         );
@@ -332,7 +329,6 @@ export const stockAdjustmentManualService = {
         const fileIds = attachments.map(a => typeof a.attachment === 'string' ? a.attachment : null).filter(Boolean);
         if (fileIds.length > 0) {
           try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const filesRes = await directusFetch<{ data: any[] }>(
               `${DIRECTUS_URL}/files?filter={"id":{"_in":${JSON.stringify(fileIds)}}}&fields=id,type,filename_download,filesize`
             );
@@ -355,7 +351,6 @@ export const stockAdjustmentManualService = {
       remarks: cleanedRemarks,
       items,
       amount: totalAmount > 0 ? totalAmount : (Number(header.amount) || 0),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       supplier_id: resolvedSupplier as any,
       stock_adjustment_attachment: attachments,
     } as unknown as StockAdjustmentManualDetail;
@@ -545,16 +540,13 @@ export const stockAdjustmentManualService = {
       body: JSON.stringify(itemsPayload),
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (header.stock_adjustment_attachment && Array.isArray(header.stock_adjustment_attachment) && (header.stock_adjustment_attachment as any[]).length > 0) {
       // Resolve the first created item's id to use as the FK
       const createdItems = Array.isArray(newItemsRes.data) ? newItemsRes.data : [newItemsRes.data];
       const firstItemId = createdItems[0]?.id;
       if (firstItemId) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const atts = (header.stock_adjustment_attachment as any[]).map((att: any) => ({
           stock_adjustment_id: firstItemId,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           attachment: typeof att.attachment === 'object' ? (att.attachment as any).id : att.attachment,
           created_by: payload.userId
         }));
@@ -563,7 +555,7 @@ export const stockAdjustmentManualService = {
           body: JSON.stringify(atts),
         }).catch(err => console.error("Failed to save attachments:", err));
       } else {
-        console.warn("No item id returned — attachments could not be linked.");
+        console.warn("No item id returned â€” attachments could not be linked.");
       }
     }
 
@@ -648,15 +640,12 @@ export const stockAdjustmentManualService = {
     });
 
     // 5. Save new attachments linked to first new item's id
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (payload.header.stock_adjustment_attachment && Array.isArray(payload.header.stock_adjustment_attachment) && (payload.header.stock_adjustment_attachment as any[]).length > 0) {
       const createdItems = Array.isArray(newItemsRes.data) ? newItemsRes.data : [newItemsRes.data];
       const firstItemId = createdItems[0]?.id;
       if (firstItemId) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const atts = (payload.header.stock_adjustment_attachment as any[]).map((att: any) => ({
           stock_adjustment_id: firstItemId,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           attachment: typeof att.attachment === 'object' ? (att.attachment as any).id : att.attachment,
           created_by: payload.userId
         }));
@@ -665,7 +654,7 @@ export const stockAdjustmentManualService = {
           body: JSON.stringify(atts),
         }).catch(err => console.error("Failed to update attachments:", err));
       } else {
-        console.warn("No item id returned on update — attachments could not be linked.");
+        console.warn("No item id returned on update â€” attachments could not be linked.");
       }
     }
 

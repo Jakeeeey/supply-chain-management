@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { directusFetch, getDirectusBase } from "@/modules/supply-chain-management/inventory-management/stock-adjustment-registration/utils/directus";
 import {
   StockAdjustmentHeader,
@@ -222,10 +221,10 @@ export const stockAdjustmentService = {
         }
       }
 
-      // ── Source type detection (priority order) ──────────────────────────
-      // 1. MANUAL  → [SOURCE: MANUAL] tag in remarks (stock-adjustment-manual-registration)
-      // 2. SERIAL  → doc_no contains "-SERIAL-" (IDS stock-adjustment-serial-registration)
-      // 3. RFID    → everything else (standard stock-adjustment-registration)
+      // â”€â”€ Source type detection (priority order) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // 1. MANUAL  â†’ [SOURCE: MANUAL] tag in remarks (stock-adjustment-manual-registration)
+      // 2. SERIAL  â†’ doc_no contains "-SERIAL-" (IDS stock-adjustment-serial-registration)
+      // 3. RFID    â†’ everything else (standard stock-adjustment-registration)
       const sourceType: "RFID" | "MANUAL" | "SERIAL" =
         header.parsed_source_type === "MANUAL"
           ? "MANUAL"
@@ -370,7 +369,7 @@ export const stockAdjustmentService = {
       };
     });
 
-    // Fetch attachments — FK references stock_adjustment.id (items), not the header id.
+    // Fetch attachments â€” FK references stock_adjustment.id (items), not the header id.
     // We use the item IDs belonging to this doc_no to look up attachments.
     let attachments: any[] = [];
     try {
@@ -620,7 +619,7 @@ export const stockAdjustmentService = {
     token: string
   ): Promise<{ valid: boolean; reason?: string }> {
     try {
-      // ── Step 1: Is the RFID currently on-hand at this branch? ──────────
+      // â”€â”€ Step 1: Is the RFID currently on-hand at this branch? â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       const springUrl = new URL(`${SPRING_API_URL}/api/view-rfid-onhand`);
       springUrl.searchParams.set("rfid", rfid);
       springUrl.searchParams.set("branchId", String(branchId));
@@ -644,7 +643,7 @@ export const stockAdjustmentService = {
         }
       }
 
-      // ── Step 1.5: Is this RFID tag registered in any unposted Stock IN transaction? ──
+      // â”€â”€ Step 1.5: Is this RFID tag registered in any unposted Stock IN transaction? â”€â”€
       const rfidRes = await directusFetch<{
         data: {
           id: number;
@@ -683,7 +682,7 @@ export const stockAdjustmentService = {
         }
       }
 
-      // ── Step 2: Ensure the resolved product (or its parent) belongs to the selected supplier ──
+      // â”€â”€ Step 2: Ensure the resolved product (or its parent) belongs to the selected supplier â”€â”€
       // Check product_per_supplier junction table in Directus
       const ppsRes = await directusFetch<{
         data: { id: number }[];
@@ -810,7 +809,7 @@ export const stockAdjustmentService = {
           body: JSON.stringify(atts),
         }).catch(err => console.error("Failed to save attachments:", err));
       } else {
-        console.warn("No item id returned — attachments could not be linked.");
+        console.warn("No item id returned â€” attachments could not be linked.");
       }
     }
 
@@ -926,7 +925,7 @@ export const stockAdjustmentService = {
           body: JSON.stringify(atts),
         }).catch(err => console.error("Failed to update attachments:", err));
       } else {
-        console.warn("No item id returned on update — attachments could not be linked.");
+        console.warn("No item id returned on update â€” attachments could not be linked.");
       }
     }
 

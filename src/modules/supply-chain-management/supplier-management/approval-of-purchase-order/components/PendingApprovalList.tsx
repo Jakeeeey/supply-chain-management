@@ -26,44 +26,42 @@ type Props = {
     disabled?: boolean;
 };
 
-// ✅ default to 10 per page
+// âœ… default to 10 per page
 const DEFAULT_PAGE_SIZE = 10;
 
-function safeStr(v: unknown, fallback = "—") {
+function safeStr(v: unknown, fallback = "â€”") {
     const s = String(v ?? "").trim();
     return s ? s : fallback;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function branchLabel(branch: any) {
-    if (!branch) return "—";
+    if (!branch) return "â€”";
 
     if (Array.isArray(branch)) {
-        if (!branch.length) return "—";
+        if (!branch.length) return "â€”";
         const labels = branch
             .map((b) => {
                 const code = safeStr(b?.branch_code ?? "");
                 const name = safeStr(b?.branch_name ?? b?.branch_description ?? "");
-                if (code !== "—" && name !== "—") return `${code} — ${name}`;
-                if (name !== "—") return name;
-                return "—";
+                if (code !== "â€”" && name !== "â€”") return `${code} â€” ${name}`;
+                if (name !== "â€”") return name;
+                return "â€”";
             })
-            .filter((x) => x !== "—");
+            .filter((x) => x !== "â€”");
 
-        if (!labels.length) return "—";
+        if (!labels.length) return "â€”";
         if (labels.length <= 2) return labels.join(", ");
         return `${labels.slice(0, 2).join(", ")} +${labels.length - 2} more`;
     }
 
     const code = safeStr(branch?.branch_code ?? "");
     const name = safeStr(branch?.branch_name ?? branch?.branch_description ?? "");
-    if (code !== "—" && name !== "—") return `${code} — ${name}`;
-    if (name !== "—") return name;
+    if (code !== "â€”" && name !== "â€”") return `${code} â€” ${name}`;
+    if (name !== "â€”") return name;
 
-    return "—";
+    return "â€”";
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function branchLabelFromRow(row: any) {
     const helper = safeStr(
         row?.branch_name_text ?? row?.branchNameText ?? row?.branchName ?? "",
@@ -75,14 +73,13 @@ function branchLabelFromRow(row: any) {
     );
 
     if (helper) {
-        if (helperCode) return `${helperCode} — ${helper}`;
+        if (helperCode) return `${helperCode} â€” ${helper}`;
         return helper;
     }
 
     return branchLabel(row?.branch_id);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function supplierLabelFromRow(row: any) {
     const helper = safeStr(row?.supplier_name_text ?? "", "");
     if (helper) return helper;
@@ -92,7 +89,7 @@ function supplierLabelFromRow(row: any) {
         row?.supplier_name?.name ??
         row?.supplierName ??
         row?.supplier ??
-        "—"
+        "â€”"
     );
 }
 
@@ -129,7 +126,7 @@ export default function PendingApprovalList({
     const [page, setPage] = React.useState(1);
     const pageSize = DEFAULT_PAGE_SIZE;
 
-    // ✅ Filtered list based on search
+    // âœ… Filtered list based on search
     const filteredItems = React.useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
         if (!q) return items ?? [];
@@ -222,8 +219,8 @@ export default function PendingApprovalList({
                         const row = x as Record<string, unknown>;
 
                         const id = String(row.id ?? row.purchase_order_id ?? "");
-                        const poNo = safeStr(row.poNumber ?? row.purchase_order_no ?? "—");
-                        const date = safeStr(row.date ?? row.date_encoded ?? "—");
+                        const poNo = safeStr(row.poNumber ?? row.purchase_order_no ?? "â€”");
+                        const date = safeStr(row.date ?? row.date_encoded ?? "â€”");
 
                         const supplier = supplierLabelFromRow(row);
                         const br = branchLabelFromRow(row);
@@ -264,12 +261,12 @@ export default function PendingApprovalList({
                 )}
             </div>
 
-            {/* ✅ Standard Pagination Footer */}
+            {/* âœ… Standard Pagination Footer */}
             {items.length > 0 ? (
                 <div className="px-4 py-3 border-t border-border bg-muted/20 space-y-3">
                     <div className="flex items-center justify-between gap-3">
                         <div className="text-[10px] font-black uppercase text-muted-foreground whitespace-nowrap">
-                            Showing {Math.min(filteredItems.length, (page - 1) * pageSize + 1)}–{Math.min(page * pageSize, filteredItems.length)} of {filteredItems.length}
+                            Showing {Math.min(filteredItems.length, (page - 1) * pageSize + 1)}â€“{Math.min(page * pageSize, filteredItems.length)} of {filteredItems.length}
                         </div>
 
                         <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">

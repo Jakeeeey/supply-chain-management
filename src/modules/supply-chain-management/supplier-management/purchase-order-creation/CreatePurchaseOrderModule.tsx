@@ -1,5 +1,4 @@
 // src/modules/supply-chain-management/supplier-management/purchase-order-creation/CreatePurchaseOrderModule.tsx
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import * as React from "react";
@@ -26,7 +25,7 @@ import { toast } from "sonner";
 
 import { BranchAllocations } from "./components/BranchAllocations";
 
-// ✅ Robust imports: works whether components are exported as named OR default
+// âœ… Robust imports: works whether components are exported as named OR default
 import * as ProductPickerDialogModule from "./components/ProductPickerDialog";
 import * as PurchaseOrderSummaryModule from "./components/PurchaseOrderSummary";
 
@@ -43,7 +42,7 @@ import {
 } from "@/components/ui/command";
 import { Separator } from "@/components/ui/separator";
 
-// ✅ NEW: shadcn snippets
+// âœ… NEW: shadcn snippets
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -70,7 +69,7 @@ const FALLBACK_NO_DISCOUNT_ID = "24";
 function normalizeSupplier(raw: RawSupplier): Supplier {
     return {
         id: String(raw?.id ?? raw?.supplier_id ?? ""),
-        name: String(raw?.supplier_name ?? raw?.name ?? "—"),
+        name: String(raw?.supplier_name ?? raw?.name ?? "â€”"),
         terms: String(raw?.payment_terms ?? raw?.delivery_terms ?? ""),
         apBalance: Number(raw?.apBalance ?? raw?.ap_balance ?? 0) || 0,
         supplierType: String(raw?.supplier_type ?? raw?.supplierType ?? "TRADE").toUpperCase(),
@@ -81,7 +80,7 @@ function normalizeBranch(raw: RawBranch) {
     return {
         id: String(raw?.id ?? raw?.branch_id ?? ""),
         code: String(raw?.branch_code ?? ""),
-        name: String(raw?.branch_name ?? raw?.branch_description ?? "—"),
+        name: String(raw?.branch_name ?? raw?.branch_description ?? "â€”"),
     };
 }
 
@@ -94,13 +93,13 @@ function normalizeDiscountType(raw: RawDiscountType): DiscountType {
 }
 
 /**
- * ✅ BOX conversion rules:
+ * âœ… BOX conversion rules:
  * - if baseUomId === 11 (BOX): price already per box
  * - else: compute price per box using parsed pieces per box
  */
 function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product {
     const id = String(raw?.product_id ?? raw?.id ?? "");
-    const name = String(raw?.product_name ?? raw?.name ?? "—");
+    const name = String(raw?.product_name ?? raw?.name ?? "â€”");
     const sku = String(raw?.product_code ?? raw?.barcode ?? raw?.sku ?? "");
 
     const category =
@@ -248,7 +247,7 @@ function SupplierSelect(props: {
                     </Button>
                 </PopoverTrigger>
 
-                {/* ✅ ScrollArea + Separators */}
+                {/* âœ… ScrollArea + Separators */}
                 <PopoverContent
                     className="p-0 w-[--radix-popover-trigger-width] min-w-[280px] max-w-[92vw]"
                     align="start"
@@ -324,7 +323,7 @@ function BranchMultiSelect(props: {
         if (props.value.length === 0) return "Select branches";
         if (props.value.length === 1) {
             const b = props.branches.find((x) => x.id === props.value[0]);
-            return b ? `${b.code} — ${b.name}` : "1 branch selected";
+            return b ? `${b.code} â€” ${b.name}` : "1 branch selected";
         }
         return `${props.value.length} branches selected`;
     }, [props.value, props.branches]);
@@ -371,7 +370,7 @@ function BranchMultiSelect(props: {
                     </Button>
                 </PopoverTrigger>
 
-                {/* ✅ Actions fixed, list scrollable */}
+                {/* âœ… Actions fixed, list scrollable */}
                 <PopoverContent
                     className="p-0 w-[--radix-popover-trigger-width] min-w-[320px] max-w-[92vw]"
                     align="start"
@@ -785,7 +784,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
             prev.map((b) => (b.branchId === branchId ? { ...b, items: normalized as any } : b))
         );
 
-        // ✅ Toast: confirm product selection
+        // âœ… Toast: confirm product selection
         const branchLabel = allocations.find((x) => x.branchId === branchId)?.branchName ?? "branch";
         if (normalized.length > 0) {
             toast.success(`Products confirmed for ${branchLabel}`, {
@@ -913,7 +912,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
         return b?.branchName ?? "Branch";
     }, [allocations, pickerBranchId]);
 
-    // ✅ Allocations pagination
+    // âœ… Allocations pagination
     const [allocPage, setAllocPage] = React.useState(1);
     const allocPerPage = 5;
 
@@ -973,7 +972,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
 
             <Separator />
 
-            {/* ✅ Optimized 2-Column Layout */}
+            {/* âœ… Optimized 2-Column Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-end w-full min-w-0">
                 {/* 1) SUPPLIER SELECT (5/12) */}
                 <div className="lg:col-span-5 min-w-0">
@@ -1109,7 +1108,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                 open={pickerOpen}
                 onOpenChange={setPickerOpen}
                 branchLabel={pickerBranchLabel}
-                supplierName={selectedSupplier?.name ?? "—"}
+                supplierName={selectedSupplier?.name ?? "â€”"}
                 categories={categories}
                 selectedCategory={selectedCategory}
                 onCategoryChange={setSelectedCategory}

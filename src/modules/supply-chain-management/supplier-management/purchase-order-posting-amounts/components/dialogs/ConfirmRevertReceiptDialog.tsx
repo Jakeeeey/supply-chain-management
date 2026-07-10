@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import * as React from "react";
@@ -31,7 +30,7 @@ export function ConfirmRevertReceiptDialog(props: BaseProps) {
                     <AlertDialogTitle>Revert Receipt to Receiving</AlertDialogTitle>
                     <AlertDialogDescription>
                         Are you sure you want to revert receipt{" "}
-                        <span className="font-semibold">{receiptNo || "—"}</span> back
+                        <span className="font-semibold">{receiptNo || "â€”"}</span> back
                         to receiving? The received quantities for this receipt will be
                         reset to zero and you will need to re-receive them in the
                         Receiving module.
