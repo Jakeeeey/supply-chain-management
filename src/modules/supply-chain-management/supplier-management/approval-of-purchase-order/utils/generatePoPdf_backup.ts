@@ -19,7 +19,7 @@ function toNum(v: unknown): number {
     return Number.isFinite(n) ? n : 0;
 }
 
-function safeStr(v: unknown, fallback = "â€”") {
+function safeStr(v: unknown, fallback = "—") {
     const s = String(v ?? "").trim();
     return s ? s : fallback;
 }
@@ -123,6 +123,7 @@ function renderSignatures(doc: jsPDF, startY: number) {
 // 3. MAIN GENERATOR FUNCTION
 // ==========================================
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function generatePurchaseOrderPdf(po: any, branchLabel: string, supplierName: string) {
     if (!po) return;
 
@@ -149,6 +150,7 @@ export function generatePurchaseOrderPdf(po: any, branchLabel: string, supplierN
     let sumDiscount = 0;
     let sumNet = 0;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tableBody = items.map((it: any) => {
         const name = safeStr(it?.item_name ?? it?.name ?? it?.product_name);
         const brand = safeStr(it?.brand);
@@ -187,7 +189,7 @@ export function generatePurchaseOrderPdf(po: any, branchLabel: string, supplierN
         foot: [[
             { content: "COLUMN TOTALS", colSpan: 3, styles: { halign: "right", fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
             { content: String(sumQty), styles: { halign: "right", fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
-            { content: "â€”", styles: { halign: "right", fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
+            { content: "—", styles: { halign: "right", fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
             { content: formatMoney(sumGross), styles: { halign: "right", fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
             { content: formatMoney(sumDiscount), styles: { halign: "right", fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
             { content: formatMoney(sumNet), styles: { halign: "right", fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
@@ -228,6 +230,7 @@ export function generatePurchaseOrderPdf(po: any, branchLabel: string, supplierN
     });
 
     // --- 4. FINANCIAL SUMMARY ---
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let finalY = (doc as any).lastAutoTable.finalY + 12;
 
     // Smart Pagination check: If summary + signatures won't fit, add a new page

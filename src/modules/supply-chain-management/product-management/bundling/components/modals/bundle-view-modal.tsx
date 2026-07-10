@@ -22,6 +22,7 @@ interface BundleViewModalProps {
   masterData: BundleMasterData | null;
   onApprove?: (id: number | string) => Promise<void>;
   onReject?: (id: number | string) => Promise<void>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fetchDetails: (id: number | string) => Promise<any>;
   previewMode?: boolean;
 }
@@ -40,6 +41,7 @@ export function BundleViewModal({
   fetchDetails,
   previewMode = false,
 }: BundleViewModalProps) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [details, setDetails] = useState<any>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const statusValue = String((draft as Record<string, unknown>)?.status || (draft as Record<string, unknown>)?.draft_status || "");
@@ -228,6 +230,7 @@ export function BundleViewModal({
                     </div>
                   ) : details?.items?.length ? (
                     <div className="space-y-2">
+                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                       {details.items.map((item: any, idx: number) => {
                         const productId =
                           typeof item.product_id === "object"

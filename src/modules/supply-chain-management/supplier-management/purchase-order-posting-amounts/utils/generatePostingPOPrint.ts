@@ -12,10 +12,10 @@ export interface PrintData {
     discountTypes: DiscountType[];
 }
 
-// jsPDF core fonts don't support the Peso sign (â‚±) out of the box (they print as Â±).
+// jsPDF core fonts don't support the Peso sign (₱) out of the box (they print as ±).
 // We'll replace it with "PHP" text for the PDF output.
 const safeMoney = (val: number, currency = "PHP") => {
-    return money(val, currency).replace(/â‚±/g, "PHP ");
+    return money(val, currency).replace(/₱/g, "PHP ");
 };
 
 export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
@@ -47,14 +47,14 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
         const margin = config.margins?.left || 14;
         let y = startY + 5;
 
-        /* â”€â”€ Section Title â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* ── Section Title ─────────────────────────────────────────────── */
         doc.setFontSize(14);
         doc.setTextColor(0, 0, 0);
         doc.setFont('helvetica', 'bold');
         doc.text('Posting Of PO Amounts', pageW / 2, y, { align: 'center' });
         y += 8;
 
-        /* â”€â”€ Info Grid (2 columns) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* ── Info Grid (2 columns) ───────────────────────────────── */
         const col1x = margin;
         const col2x = pageW / 2 + 4;
 
@@ -91,11 +91,11 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0, 0, 0);
-        doc.text(po.createdAt ? new Date(po.createdAt).toLocaleDateString('en-PH') : "â€”", col1x, y);
+        doc.text(po.createdAt ? new Date(po.createdAt).toLocaleDateString('en-PH') : "—", col1x, y);
         doc.text(po.poNumber || 'Unknown PO', col2x, y);
         y += 10;
 
-        /* â”€â”€ Items Tables (Per Branch) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* ── Items Tables (Per Branch) ───────────────────────────── */
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0, 0, 0);
@@ -133,7 +133,7 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
                 const receiptDate = items[0]?.receiptDate || "";
                 const isPending = receiptNo === "PENDING";
                 const receiptTitle = isPending ? "Pending Items" : `Receipt #: ${receiptNo}`;
-                const receiptDateLabel = isPending ? "" : (receiptDate ? ` â€¢ ${new Date(receiptDate).toLocaleDateString()}` : "");
+                const receiptDateLabel = isPending ? "" : (receiptDate ? ` • ${new Date(receiptDate).toLocaleDateString()}` : "");
 
                 // Ensure page break before receipt header if we are near the bottom
                 if (y + 20 > pageH) {
@@ -156,7 +156,7 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
                     const qty = item.expectedQty > 0 && item.receivedQty === 0 ? item.expectedQty : (item.receivedQty || item.expectedQty || 0);
                     const gross = item.grossAmount || (uprice * qty);
 
-                    let discountDisplay = "â€”";
+                    let discountDisplay = "—";
                     let discAmtVal = 0;
 
                     if (item.discountTypeId && item.discountTypeId !== "null") {
@@ -186,11 +186,11 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
 
                     return [
                         String(i + 1),
-                        item.barcode || "â€”",
-                        item.name || "â€”",
+                        item.barcode || "—",
+                        item.name || "—",
                         String(qty),
                         safeMoney(uprice, cur),
-                        discountDisplay.replace(/â‚±/g, "PHP "),
+                        discountDisplay.replace(/₱/g, "PHP "),
                         safeMoney(netTotal, cur)
                     ];
                 });
@@ -229,6 +229,7 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
                     }
                 });
 
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 y = (doc as any).lastAutoTable?.finalY + 4;
 
                 // --- Subtotal Block ---
@@ -267,7 +268,7 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
             });
         });
 
-        /* â”€â”€ Financial Summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* ── Financial Summary ─────────────────────────────────── */
         if (y + 40 > pageH) {
             doc.addPage();
             y = (config.bodyStart || 35) + 5;
@@ -340,14 +341,14 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
             doc.text('Note: VAT and EWT figures are for reference and have not been deducted from the total.', pageW - margin, y, { align: 'right' });
         }
 
-        /* â”€â”€ Document Footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* ── Document Footer ─────────────────────────────────────── */
         const footerY = doc.internal.pageSize.getHeight() - 8;
         doc.setFontSize(7);
         doc.setTextColor(180, 180, 180);
         doc.setFont('helvetica', 'normal');
         const printDate = new Date().toLocaleString('en-PH');
         doc.text(
-            `Generated on ${printDate} Â· VOS Web Supply Chain Management System`,
+            `Generated on ${printDate} · VOS Web Supply Chain Management System`,
             pageW / 2,
             footerY,
             { align: 'center' },

@@ -61,7 +61,7 @@ export function PurchaseOrderSummary(props: {
     onReset?: () => void;
     preparerName?: string;
 }) {
-    // âœ… ALL HOOKS MUST BE ABOVE ANY CONDITIONAL RETURN
+    // ✅ ALL HOOKS MUST BE ABOVE ANY CONDITIONAL RETURN
     const money = React.useMemo(() => buildMoneyFormatter(), []);
 
     const discountTypeById = React.useMemo(() => {
@@ -90,7 +90,7 @@ export function PurchaseOrderSummary(props: {
             const dt = dtId ? discountTypeById.get(dtId) : undefined;
             const code = dt?.name ?? "";
             const pct = Number(dt?.percent ?? 0) > 0 ? Number(dt?.percent) : deriveDiscountPercentFromCode(code);
-            const discountLabel = code || "â€”";
+            const discountLabel = code || "—";
             const gross = x.item.price * x.item.orderQty;
             const net = gross * (1 - pct / 100);
             return {
@@ -191,7 +191,7 @@ export function PurchaseOrderSummary(props: {
     ], [money]);
 
     // =========================
-    // âœ… ALLOCATED BRANCHES PAGINATION (NEW)
+    // ✅ ALLOCATED BRANCHES PAGINATION (NEW)
     // =========================
     const [branchPage, setBranchPage] = React.useState(1);
     const branchesPerPage = 5;
@@ -224,7 +224,7 @@ export function PurchaseOrderSummary(props: {
     const [notice, setNotice] = React.useState<Notice | null>(null);
     const [previewOpen, setPreviewOpen] = React.useState(false);
 
-    // âœ… kapag new PO number => new transaction (unlock)
+    // ✅ kapag new PO number => new transaction (unlock)
     React.useEffect(() => {
         setLocked(false);
         setIsSubmitting(false);
@@ -250,6 +250,7 @@ export function PurchaseOrderSummary(props: {
 
         try {
             const res = await Promise.resolve(onSave?.());
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const alreadyExists = Boolean((res as any)?.meta?.alreadyExists);
 
             setNotice({
@@ -262,7 +263,7 @@ export function PurchaseOrderSummary(props: {
                     : "Your purchase order has been saved successfully.",
             });
 
-            // âœ… lock to prevent double submit
+            // ✅ lock to prevent double submit
             setLocked(true);
         } catch (e: unknown) {
             const err = e as Error;
@@ -287,7 +288,7 @@ export function PurchaseOrderSummary(props: {
         return <Info className="h-4 w-4" />;
     }, [notice]);
 
-    // âœ… safe now (no hooks after this)
+    // ✅ safe now (no hooks after this)
     if (!props.visible) return null;
 
     const grossTotal = Number(props.subtotal || 0);
@@ -299,7 +300,7 @@ export function PurchaseOrderSummary(props: {
     const vatTotal = Math.max(0, netTotal - vatExclusive);
     const ewtGoods = Math.max(0, vatExclusive * 0.01);
 
-    // âœ… Updated: Total Payable is always netTotal. VAT/EWT are hidden and don't subtract anymore.
+    // ✅ Updated: Total Payable is always netTotal. VAT/EWT are hidden and don't subtract anymore.
     const totalPayable = netTotal;
 
     return (
@@ -329,7 +330,7 @@ export function PurchaseOrderSummary(props: {
                 </div>
             </div>
 
-            {/* âœ… shadcn Alert */}
+            {/* ✅ shadcn Alert */}
             {notice ? (
                 <div className="mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
                     <Alert variant={notice.variant === "error" ? "destructive" : "default"} className="border-2">
@@ -379,7 +380,7 @@ export function PurchaseOrderSummary(props: {
                             <div className="rounded-lg border border-border bg-card text-card-foreground p-5 shadow-sm space-y-3">
                                 <div className="flex flex-col">
                                     <span className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wider">Entity Name</span>
-                                    <p className="text-sm font-black text-foreground tracking-tight">{props.supplier?.name || "â€”"}</p>
+                                    <p className="text-sm font-black text-foreground tracking-tight">{props.supplier?.name || "—"}</p>
                                 </div>
                             </div>
                         </div>
@@ -410,7 +411,7 @@ export function PurchaseOrderSummary(props: {
                             </div>
                         </div>
 
-                        {/* âœ… Allocated Branches */}
+                        {/* ✅ Allocated Branches */}
                         <div className="space-y-3">
                             <div className="flex items-center justify-between gap-3">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
@@ -674,15 +675,15 @@ export function PurchaseOrderSummary(props: {
                     poNumber: props.poNumber,
                     poDate: props.poDate,
                     supplierName: props.supplier?.name || "N/A",
-                    preparerName: props.preparerName || "â€”",
+                    preparerName: props.preparerName || "—",
                     items: props.allItemsFlat.map(x => {
                         const dt = discountTypeById.get(x.item.discountTypeId || "");
                         const gross = x.item.price * x.item.orderQty;
                         const disc = gross * ((dt?.percent ?? 0) / 100);
                         return {
                             name: x.item.name,
-                            brand: x.item.brand || "â€”",
-                            category: x.item.category || "â€”",
+                            brand: x.item.brand || "—",
+                            category: x.item.category || "—",
                             barcode: x.item.sku,
                             orderQty: x.item.orderQty,
                             uom: x.item.selectedUom,

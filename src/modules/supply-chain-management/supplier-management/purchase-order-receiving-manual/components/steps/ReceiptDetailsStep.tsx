@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import * as React from "react";
@@ -48,7 +49,7 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
     const [checkingDup, setCheckingDup] = React.useState(false);
     const dupCheckTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // âœ… Debounced receipt number duplicate check
+    // ✅ Debounced receipt number duplicate check
     const checkReceiptNoDuplicate = React.useCallback((value: string) => {
         if (dupCheckTimer.current) clearTimeout(dupCheckTimer.current);
         const trimmed = value.trim();
@@ -71,7 +72,7 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                     setReceiptNoDupError(null);
                 }
             } catch {
-                // Silently fail â€” backend will catch on save
+                // Silently fail — backend will catch on save
                 setReceiptNoDupError(null);
             } finally {
                 setCheckingDup(false);
@@ -89,7 +90,7 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
         const names = allocs
             .map((a) => String(a?.branch?.name || "").trim())
             .filter(Boolean);
-        if (!names.length) return "â€”";
+        if (!names.length) return "—";
         return Array.from(new Set(names)).join(", ");
     }, [selectedPO]);
 
@@ -121,7 +122,7 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
         if (!receiptType.trim()) errs.push("Receipt Type is required.");
         if (!receiptDate.trim()) errs.push("Receipt Date is required.");
 
-        // âœ… Date year range validation
+        // ✅ Date year range validation
         if (receiptDate.trim()) {
             const parsedYear = new Date(receiptDate.trim()).getFullYear();
             if (isNaN(parsedYear) || parsedYear < 2000 || parsedYear > 3000) {
@@ -129,7 +130,7 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
             }
         }
 
-        // âœ… Block if duplicate receipt number detected (sync check for race conditions)
+        // ✅ Block if duplicate receipt number detected (sync check for race conditions)
         const trimmedReceiptNo = receiptNo.trim();
         if (trimmedReceiptNo && Array.isArray(selectedPO?.history)) {
             const exists = selectedPO.history.some((h: { receiptNo: string }) => h.receiptNo === trimmedReceiptNo);
@@ -170,10 +171,10 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
 
                 <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                     <div className="text-muted-foreground">PO Number</div>
-                    <div className="text-right font-medium">{selectedPO?.poNumber ?? "â€”"}</div>
+                    <div className="text-right font-medium">{selectedPO?.poNumber ?? "—"}</div>
 
                     <div className="text-muted-foreground">Supplier</div>
-                    <div className="text-right font-medium">{selectedPO?.supplier?.name ?? "â€”"}</div>
+                    <div className="text-right font-medium">{selectedPO?.supplier?.name ?? "—"}</div>
 
                     <div className="text-muted-foreground">Delivery Branches</div>
                     <div className="text-right font-medium">{branchesLabel}</div>
@@ -189,7 +190,7 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                 ) : null}
             </Card>
 
-            {/* âœ… MERGED: Previous Receipts History */}
+            {/* ✅ MERGED: Previous Receipts History */}
             {selectedPO?.history && selectedPO.history.length > 0 && (
                 <Card className="p-4 border-amber-500/20 bg-amber-500/5">
                     <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">

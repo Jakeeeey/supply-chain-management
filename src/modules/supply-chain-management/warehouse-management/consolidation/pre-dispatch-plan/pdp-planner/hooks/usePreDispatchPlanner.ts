@@ -17,25 +17,26 @@ export function usePreDispatchPlanner() {
   const { clusterId, status, search, setSearch, branchId, dateRange } =
     usePDPFilter();
 
-  // â”€â”€â”€ Plans State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Plans State ──────────────────────────────────
   const [plansData, setPlansData] = useState<DispatchPlan[]>([]);
   const [plansTotal, setPlansTotal] = useState(0);
 
-  // â”€â”€â”€ Pagination State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Pagination State ─────────────────────────────
   const [pagination, setPagination] = useState({
     pageIndex: 0,
     pageSize: 25,
   });
 
-  // â”€â”€â”€ Master Data (for filters) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Master Data (for filters) ───────────────────
   const [masterData, setMasterData] = useState<DispatchPlanMasterData | null>(
     null,
   );
 
-  // â”€â”€â”€ Metrics State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Metrics State ────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [metrics, setMetrics] = useState<any>(null);
 
-  // â”€â”€â”€ Shared State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Shared State ─────────────────────────────────
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,7 +53,7 @@ export function usePreDispatchPlanner() {
     }
   }, []);
 
-  // â”€â”€â”€ Fetch All Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Fetch All Data ──────────────────────────────
   const refresh = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -109,7 +110,7 @@ export function usePreDispatchPlanner() {
     loadMasterData();
   }, [loadMasterData]);
 
-  // â”€â”€â”€ Fetch Plan Details â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Fetch Plan Details ───────────────────────────
   const fetchPlanDetails = useCallback(
     async (
       id: number | string,

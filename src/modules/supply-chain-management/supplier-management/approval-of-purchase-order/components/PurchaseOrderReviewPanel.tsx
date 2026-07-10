@@ -64,11 +64,12 @@ function toNum(v: unknown): number {
     return Number.isFinite(n) ? n : 0;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function unwrap(po: any) {
     return po?.data ?? po;
 }
 
-function safeStr(v: unknown, fallback = "â€”") {
+function safeStr(v: unknown, fallback = "—") {
     const s = String(v ?? "").trim();
     return s ? s : fallback;
 }
@@ -87,6 +88,7 @@ function pickText(v: unknown): string {
     return "";
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatBranchOne(raw: any): string {
     if (!raw) return "";
 
@@ -96,7 +98,7 @@ function formatBranchOne(raw: any): string {
     const code = pickText(raw?.branch_code ?? raw?.code ?? allocCode);
     const name = pickText(raw?.branch_name ?? raw?.name ?? raw?.branch_description ?? allocName);
 
-    if (code && name) return `${code} â€” ${name}`;
+    if (code && name) return `${code} — ${name}`;
     if (name) return name;
     if (code) return code;
 
@@ -109,6 +111,7 @@ function formatBranchOne(raw: any): string {
     return "";
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatBranches(raw: any): string {
     if (Array.isArray(raw)) {
         const labels = raw
@@ -116,13 +119,13 @@ function formatBranches(raw: any): string {
             .map((x) => x.trim())
             .filter(Boolean);
 
-        if (!labels.length) return "â€”";
+        if (!labels.length) return "—";
         if (labels.length <= 2) return labels.join(", ");
         return `${labels.slice(0, 2).join(", ")} +${labels.length - 2} more`;
     }
 
     const one = formatBranchOne(raw);
-    return one ? one : "â€”";
+    return one ? one : "—";
 }
 
 type NormalizedLine = {
@@ -140,21 +143,23 @@ type NormalizedLine = {
     total: number;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeLines(rawItems: any[]): NormalizedLine[] {
     if (!Array.isArray(rawItems)) return [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return rawItems.map((it: any, idx: number) => {
         const key = String(it?.po_item_id ?? it?.id ?? idx);
         const name = safeStr(it?.item_name ?? it?.name ?? it?.product_name ?? `Item ${idx + 1}`);
-        const brand = safeStr(it?.brand ?? "â€”");
-        const category = safeStr(it?.category ?? "â€”");
-        const uom = safeStr(it?.uom ?? it?.unit ?? "â€”");
+        const brand = safeStr(it?.brand ?? "—");
+        const category = safeStr(it?.category ?? "—");
+        const uom = safeStr(it?.uom ?? it?.unit ?? "—");
         
         // Use exact DB column names as primary source
         const qty = Math.max(0, toNum(it?.ordered_quantity ?? it?.qty ?? it?.quantity ?? 0));
         const price = Math.max(0, toNum(it?.unit_price ?? it?.price ?? 0));
         
         const gross = toNum(it?.gross) || Math.max(0, qty * price);
-        const discountType = safeStr(it?.discount_type ?? "â€”");
+        const discountType = safeStr(it?.discount_type ?? "—");
         
         // Calculate discount amount from unit_price vs discounted_price
         const discPriceLine = toNum(it?.discounted_price);
@@ -204,6 +209,7 @@ export default function PurchaseOrderReviewPanel(props: {
     const [pageSize, setPageSize] = React.useState(10);
     const [companyData, setCompanyData] = React.useState<CompanyData | null>(null);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const poAny: any = React.useMemo(() => unwrap(props.po), [props.po]);
 
     React.useEffect(() => {
@@ -260,7 +266,7 @@ export default function PurchaseOrderReviewPanel(props: {
         const helperCode = pickText(poAny?.branch_code_text ?? poAny?.branchCodeText ?? poAny?.branchCode ?? "");
 
         if (helperName) {
-            return helperCode ? `${helperCode} â€” ${helperName}` : helperName;
+            return helperCode ? `${helperCode} — ${helperName}` : helperName;
         }
 
         if (Array.isArray(poAny?.allocations) && poAny.allocations.length) {
@@ -277,7 +283,7 @@ export default function PurchaseOrderReviewPanel(props: {
         const raw = poAny?.branch_id_value ?? poAny?.branchId ?? "";
         if (raw && !isNumericString(raw)) return String(raw).trim();
 
-        return "â€”";
+        return "—";
     }, [poAny]);
 
     const supplierName = React.useMemo(() => {
@@ -285,7 +291,7 @@ export default function PurchaseOrderReviewPanel(props: {
             poAny?.supplier_name?.supplier_name ??
             poAny?.supplierName ??
             poAny?.supplier ??
-            "â€”"
+            "—"
         );
     }, [poAny]);
 
@@ -452,13 +458,13 @@ export default function PurchaseOrderReviewPanel(props: {
                                         <div className="flex justify-between gap-3">
                                             <span className="text-muted-foreground">PO Number</span>
                                             <span className="font-mono font-bold text-foreground">
-                                                {String(poAny?.purchase_order_no ?? poAny?.poNumber ?? "â€”")}
+                                                {String(poAny?.purchase_order_no ?? poAny?.poNumber ?? "—")}
                                             </span>
                                         </div>
                                         <div className="flex justify-between gap-3">
                                             <span className="text-muted-foreground">Date</span>
                                             <span className="font-medium text-foreground">
-                                                {String(poAny?.date ?? poAny?.date_encoded ?? "â€”")}
+                                                {String(poAny?.date ?? poAny?.date_encoded ?? "—")}
                                             </span>
                                         </div>
                                         <div className="flex justify-between gap-3">
@@ -742,7 +748,7 @@ export default function PurchaseOrderReviewPanel(props: {
                                             disabled={!poAny?.purchase_order_id || !companyData}
                                             onClick={async () => {
                                                 try {
-                                                    await generatePurchaseOrderPdf(poAny, branchLabel, supplierName, companyData as CompanyData, props.approverName || "â€”");
+                                                    await generatePurchaseOrderPdf(poAny, branchLabel, supplierName, companyData as CompanyData, props.approverName || "—");
                                                 } catch (err) {
                                                     console.error("PDF Generation failed:", err);
                                                     toast.error("Failed to generate PDF.");

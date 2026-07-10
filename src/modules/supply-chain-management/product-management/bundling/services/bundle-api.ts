@@ -62,7 +62,9 @@ export async function request<T>(
  */
 export async function fetchItems<T>(
   endpoint: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params: Record<string, any> = {},
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<{ data: T[]; meta?: any }> {
   const baseUrl = API_BASE_URL?.replace(/\/$/, "");
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
@@ -76,5 +78,6 @@ export async function fetchItems<T>(
 
   const queryString = new URLSearchParams(cleanParams).toString();
   const url = `${baseUrl}${cleanEndpoint}${queryString ? `?${queryString}` : ""}`;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return request<{ data: T[]; meta?: any }>(url);
 }

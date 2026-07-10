@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as React from "react";
 import * as provider from "../providers/fetchProviders";
 import type { Branch, CartItem, CartLineItem, Product, Supplier } from "../types";
@@ -6,7 +7,7 @@ import type { Branch, CartItem, CartLineItem, Product, Supplier } from "../types
 function normalizeSupplier(raw: any): Supplier {
     return {
         id: String(raw?.id ?? ""),
-        name: raw?.supplier_name ?? raw?.name ?? "â€”",
+        name: raw?.supplier_name ?? raw?.name ?? "—",
         terms: raw?.payment_terms ?? raw?.terms ?? null,
         apBalance: Number(raw?.apBalance ?? raw?.ap_balance ?? raw?.ap_balance_total ?? 0),
         supplierType: String(raw?.supplier_type ?? raw?.supplierType ?? "TRADE").toUpperCase(),
@@ -61,7 +62,7 @@ function normalizeProduct(raw: any): Product {
         id,
         name: raw?.product_name ?? raw?.name ?? "(No Name)",
         sku: raw?.product_code ?? raw?.sku ?? "",
-        brand: raw?.brand ?? raw?.brand_name ?? "â€”",
+        brand: raw?.brand ?? raw?.brand_name ?? "—",
         category: extractCategory(raw),
         price: Number(raw?.price_per_unit ?? raw?.price ?? 0),
         uom,

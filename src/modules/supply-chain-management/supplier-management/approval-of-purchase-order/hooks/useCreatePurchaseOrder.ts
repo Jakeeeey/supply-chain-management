@@ -2,16 +2,18 @@ import * as React from "react";
 import * as provider from "../../purchase-order-creation/providers/fetchProviders";
 import type { Branch, CartItem, CartLineItem, Product, Supplier } from "../types";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeSupplier(raw: any): Supplier {
     return {
         id: String(raw?.id ?? ""),
-        name: raw?.supplier_name ?? raw?.name ?? "â€”",
+        name: raw?.supplier_name ?? raw?.name ?? "—",
         terms: raw?.payment_terms ?? raw?.terms ?? null,
         apBalance: Number(raw?.apBalance ?? raw?.ap_balance ?? raw?.ap_balance_total ?? 0),
         raw,
     };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeBranch(raw: any): Branch {
     return {
         id: Number(raw?.id),
@@ -21,6 +23,7 @@ function normalizeBranch(raw: any): Branch {
     };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractCategory(raw: any): string {
     const c = raw?.product_category;
     if (typeof c === "string") return c;
@@ -31,6 +34,7 @@ function extractCategory(raw: any): string {
     return raw?.category ?? raw?.category_name ?? "Uncategorized";
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractUom(raw: any): string {
     const u = raw?.unit_of_measurement;
     if (typeof u === "string") return u;
@@ -41,6 +45,7 @@ function extractUom(raw: any): string {
     return raw?.uom ?? raw?.uom_name ?? "pc";
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeProduct(raw: any): Product {
     const id = String(raw?.product_id ?? raw?.id ?? "");
     const uom = extractUom(raw);
@@ -55,7 +60,7 @@ function normalizeProduct(raw: any): Product {
         id,
         name: raw?.product_name ?? raw?.name ?? "(No Name)",
         sku: raw?.product_code ?? raw?.sku ?? "",
-        brand: raw?.brand ?? raw?.brand_name ?? "â€”",
+        brand: raw?.brand ?? raw?.brand_name ?? "—",
         category: extractCategory(raw),
         price: Number(raw?.price_per_unit ?? raw?.price ?? 0),
         uom,
@@ -64,6 +69,7 @@ function normalizeProduct(raw: any): Product {
     };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function unwrapDirectusArray(res: any): any[] {
     if (Array.isArray(res)) return res;
     if (res && Array.isArray(res.data)) return res.data;
@@ -76,6 +82,7 @@ export const useCreatePurchaseOrder = () => {
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
     const [branches, setBranches] = React.useState<Branch[]>([]);
     const [allProducts, setAllProducts] = React.useState<Product[]>([]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [supplierLinks, setSupplierLinks] = React.useState<any[]>([]);
 
     const [selectedSupplierId, setSelectedSupplierId] = React.useState<string>("");
@@ -139,6 +146,7 @@ export const useCreatePurchaseOrder = () => {
 
         const allowedIds = new Set(
             supplierLinks
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 .map((link: any) => {
                     const raw = link?.product_id;
                     if (raw && typeof raw === "object") return String(raw?.product_id ?? raw?.id ?? "");

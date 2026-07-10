@@ -41,6 +41,7 @@ interface BundleCreateModalProps {
   masterData: BundleMasterData | null;
   loading?: boolean;
   editDraftId?: number | string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fetchDetails?: (id: number | string) => Promise<any>;
 }
 
@@ -60,7 +61,9 @@ export function BundleCreateModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingDetails, setIsFetchingDetails] = useState(false);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const form = useForm<any>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(bundleDraftSchema) as any,
     defaultValues: {
       bundle_name: "",
@@ -87,6 +90,7 @@ export function BundleCreateModal({
               typeof data.bundle_type_id === "object"
                 ? data.bundle_type_id?.id
                 : data.bundle_type_id,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             items: data.items?.map((item: any) => ({
               product_id:
                 item.product_id?.product_id ||
@@ -129,6 +133,7 @@ export function BundleCreateModal({
 
   const items = form.watch("items") || [];
   const totalQuantity = items.reduce(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (sum: number, item: any) => sum + (Number(item.quantity) || 0),
     0,
   );
@@ -263,6 +268,7 @@ export function BundleCreateModal({
                     </div> */}
 
                       <div className="space-y-3">
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {fields.map((fieldItem: any, index: number) => (
                           <div
                             key={fieldItem.id}

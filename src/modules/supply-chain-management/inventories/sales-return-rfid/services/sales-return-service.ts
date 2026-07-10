@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // =============================================================================
-// Sales Return â€” Core Service Logic
+// Sales Return — Core Service Logic
 // =============================================================================
 import type {
   SalesReturn,
@@ -528,7 +529,7 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
   const finalReturnNo = headerData?.return_number || generatedReturnNo;
   const returnId = headerData?.id;
 
-  // ðŸŸ¢ Handle Optional Junction Link to Invoice
+  // 🟢 Handle Optional Junction Link to Invoice
   if (payload.appliedInvoiceId && returnId) {
     try {
       const returnAmount = Math.round(Number(payload.totalAmount) * 100) / 100;
@@ -656,7 +657,7 @@ export async function updateReturn(
 
   await repo.updateReturnHeader(payload.returnId, headerPayload);
 
-  // ðŸŸ¢ Handle Junction Table with explicit Unlinking (null check)
+  // 🟢 Handle Junction Table with explicit Unlinking (null check)
   if (payload.hasOwnProperty("appliedInvoiceId")) {
     try {
       const linkResult = await repo.getJunctionLink(payload.returnId);
@@ -781,7 +782,7 @@ export async function updateReturn(
     } else {
       await repo.updateReturnDetail(item.id, detailPayload);
 
-      // ðŸŸ¢ Sync RFID Tags for existing items
+      // 🟢 Sync RFID Tags for existing items
       if (item.rfidTags && Array.isArray(item.rfidTags)) {
         // 1. Fetch current tags from DB
         const existingTagsRes = await repo.getRfidTagsByDetailId(item.id);
