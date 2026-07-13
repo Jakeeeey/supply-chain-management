@@ -334,7 +334,7 @@ export async function getSummaryReturnsWithItems(
       returnStatus: String(r["status"] || ""),
       customerName: String(cust?.["customer_name"] || ""),
       storeName: String(cust?.["store_name"] || ""),
-      salesmanName: String(sm?.["salesman_name"] || ""),
+      salesmanName: sm?.["salesman_name"] ? String(sm["salesman_name"]) : "Deleted Salesman",
       salesmanCode: String(sm?.["salesman_code"] || ""),
       invoiceNo: mappedInvoiceNo,
       netTotal: Helpers.toNum(r["total_amount"]),
