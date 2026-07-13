@@ -25,6 +25,7 @@ export const skuQueryService = {
       itemType?: string;
       brandId?: number;
       status?: string;
+      uomId?: number;
     },
   ): Promise<PaginatedSKU> {
     const filter: { _and: (Record<string, object> | { _or: Record<string, object>[] })[] } = {
@@ -51,6 +52,9 @@ export const skuQueryService = {
       filter._and.push({ isActive: { _eq: 1 } });
     } else if (facets?.status === "inactive") {
       filter._and.push({ isActive: { _eq: 0 } });
+    }
+    if (facets?.uomId) {
+      filter._and.push({ unit_of_measurement: { _eq: facets.uomId } });
     }
     
     if (supplierId) {

@@ -169,23 +169,65 @@ export function useStockAdjustmentForm() {
     }
   }, []);
 
-  const validateRFIDAvailability = useCallback(async (rfid: string, branchId?: number): Promise<{ exists: boolean; location?: string }> => {
-    try {
-      const params = new URLSearchParams();
-      params.set("rfid", rfid);
-      if (branchId) params.set("branchId", String(branchId));
+  const validateRFIDAvailability = useCallback(
+    async (
+      rfid: string,
+      branchId?: number,
+      type?: "IN" | "OUT",
+      supplierId?: number,
+      productId?: number
+    ): Promise<{ exists: boolean; location?: string }> => {
+      try {
+        const params = new URLSearchParams();
+        params.set("rfid", rfid);
+        if (branchId) params.set("branchId", String(branchId));
+        if (type) params.set("type", type);
+        if (supplierId) params.set("supplierId", String(supplierId));
+        if (productId) params.set("productId", String(productId));
 
-      const response = await fetch(
-        `/api/scm/inventory-management/stock-adjustment-registration/check-available-rfid?${params.toString()}`
-      );
-      if (!response.ok) return { exists: false };
-      const result = await response.json();
-      return { exists: !!result.exists, location: result.location };
-    } catch (err) {
-      console.error("Failed to validate RFID availability:", err);
-      return { exists: false };
-    }
-  }, []);
+        const response = await fetch(
+          `/api/scm/inventory-management/stock-adjustment-registration/check-available-rfid?${params.toString()}`
+        );
+        if (!response.ok) return { exists: false };
+        const result = await response.json();
+        return { exists: !!result.exists, location: result.location };
+      } catch (err) {
+        console.error("Failed to validate RFID availability:", err);
+        return { exists: false };
+      }
+    },
+    []
+  );
+
+  const resolveRFID = useCallback(
+    async (
+      rfid: string,
+      branchId: number,
+      supplierId: number,
+      type: "IN" | "OUT"
+    ): Promise<{ valid: boolean; product?: StockAdjustmentProduct; error?: string }> => {
+      try {
+        const params = new URLSearchParams();
+        params.set("rfid", rfid);
+        params.set("branchId", String(branchId));
+        params.set("supplierId", String(supplierId));
+        params.set("type", type);
+
+        const response = await fetch(
+          `/api/scm/inventory-management/stock-adjustment-registration/resolve-rfid?${params.toString()}`
+        );
+        const result = await response.json();
+        if (!response.ok) {
+          return { valid: false, error: result.error || "Failed to resolve RFID tag." };
+        }
+        return { valid: true, product: result.product };
+      } catch (err) {
+        console.error("Failed to resolve RFID:", err);
+        return { valid: false, error: "Network error while resolving RFID tag." };
+      }
+    },
+    []
+  );
 
   const fetchNextDocNo = useCallback(async (type: "IN" | "OUT"): Promise<string> => {
     try {
@@ -215,6 +257,7 @@ export function useStockAdjustmentForm() {
             (acc, item) => acc + item.quantity * (item.cost_per_unit || 0),
             0
           ),
+          stock_adjustment_attachment: values.stock_adjustment_attachment,
         },
         items: values.items,
       }),
@@ -239,6 +282,7 @@ export function useStockAdjustmentForm() {
             (acc, item) => acc + item.quantity * (item.cost_per_unit || 0),
             0
           ),
+          stock_adjustment_attachment: values.stock_adjustment_attachment,
         },
         items: values.items,
       }),
@@ -293,6 +337,7 @@ export function useStockAdjustmentForm() {
     fetchInventory,
     checkRFID,
     validateRFIDAvailability,
+    resolveRFID,
     fetchNextDocNo,
     createAdjustment,
     updateAdjustment,

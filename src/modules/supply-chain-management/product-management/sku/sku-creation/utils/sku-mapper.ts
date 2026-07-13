@@ -1,3 +1,5 @@
+import { formatInTimeZone } from "@/modules/supply-chain-management/product-management/utils/timezone";
+
 /**
  * Normalizes raw master data from various Directus collections into a standard format
  */
@@ -34,6 +36,7 @@ export const prepareSKUPayload = (
   draft: Record<string, unknown>,
   pMasterId?: number | null,
   code?: string,
+  dbTime?: string,
 ) => {
   /* eslint-disable @typescript-eslint/no-unused-vars */
   const {
@@ -48,7 +51,7 @@ export const prepareSKUPayload = (
   /* eslint-enable @typescript-eslint/no-unused-vars */
 
   const payload = restPayload as Record<string, unknown>;
-  const nowGMT = new Date().toISOString();
+  const nowPHT = dbTime || formatInTimeZone(new Date(), "Asia/Manila");
 
   return {
     ...payload,
@@ -56,10 +59,10 @@ export const prepareSKUPayload = (
     isActive: 1,
     status: "ACTIVE",
     parent_id: draft.parent_id ? pMasterId : null,
-    date_added: draft.date_added || nowGMT,
-    last_updated: nowGMT,
-    created_at: draft.created_at || nowGMT,
-    updated_at: nowGMT,
+    date_added: draft.date_added || nowPHT,
+    last_updated: nowPHT,
+    created_at: draft.created_at || nowPHT,
+    updated_at: nowPHT,
     created_by: draft.created_by || null,
     updated_by: draft.updated_by || null,
     user_created: draft.user_created || draft.created_by || null,

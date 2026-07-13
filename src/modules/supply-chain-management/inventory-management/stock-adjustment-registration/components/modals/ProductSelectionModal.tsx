@@ -23,7 +23,6 @@ export function ProductSelectionModal({
   branchName,
   products,
   isLoading,
-  rfidProductIds,
   initialSelectedItems,
   onConfirm,
 }: ProductSelectionModalProps) {
@@ -53,7 +52,7 @@ export function ProductSelectionModal({
     const productId = product.product_id || product.id;
     if (addedProductIds.has(Number(productId))) return;
 
-    const hasRfid = rfidProductIds.has(Number(productId)) || product.unit_of_measurement?.order === 3;
+    const hasRfid = product.unit_of_measurement?.order === 3;
 
     const newItem: StockAdjustmentItem = {
       product_id: Number(productId),
@@ -148,7 +147,7 @@ export function ProductSelectionModal({
                   {filteredProducts.map((product) => {
                     const pid = Number(product.product_id || product.id);
                     const isAdded = addedProductIds.has(pid);
-                    const isProductRfid = rfidProductIds.has(pid) || product.unit_of_measurement?.order === 3;
+                    const isProductRfid = product.unit_of_measurement?.order === 3;
                     
                     return (
                       <div
@@ -253,7 +252,7 @@ export function ProductSelectionModal({
                   const cost = Number(item.cost_per_unit || 0);
                   const qty = item.quantity || 1;
                   const total = cost * qty;
-                  const isItemRfid = item.has_rfid || item.unit_order === 3;
+                  const isItemRfid = item.unit_order === 3;
                   
                   return (
                     <div key={pid} className="bg-card rounded-2xl border border-border p-4 shadow-sm relative">

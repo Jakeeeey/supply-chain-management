@@ -15,6 +15,7 @@ import {
   ProductOption,
 } from "../types/bundle.schema";
 import { API_BASE_URL, fetchItems, request } from "./bundle-api";
+import { getDatabaseTimeISO } from "@/modules/supply-chain-management/product-management/utils/timezone";
 
 export const bundleService = {
   // ─── Master Data ──────────────────────────────────────────
@@ -655,11 +656,12 @@ export const bundleService = {
    * @param id - Draft bundle ID
    */
   async rejectDraft(id: number | string) {
+    const dbTime = await getDatabaseTimeISO();
     await request(`${API_BASE_URL}/items/product_bundles_draft/${id}`, {
       method: "PATCH",
       body: JSON.stringify({
         draft_status: "REJECTED",
-        updated_at: new Date().toISOString(),
+        updated_at: dbTime,
       }),
     });
     return true;

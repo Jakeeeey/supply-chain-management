@@ -95,29 +95,29 @@ function ClusterMultiSelect({
             </PopoverTrigger>
             <PopoverContent className="w-[300px] p-0" align="start">
                 <div className="max-h-64 overflow-auto p-1">
-                    <Button
-                        variant="ghost"
+                    <div
+                        role="button"
                         onClick={() => onChange([])}
-                        className={`w-full justify-start font-normal text-sm gap-2 ${isAll ? "bg-accent text-accent-foreground" : ""
+                        className={`w-full flex items-center px-3 py-2 text-sm font-normal rounded-md cursor-pointer hover:bg-accent hover:text-accent-foreground gap-2 ${isAll ? "bg-accent text-accent-foreground" : ""
                             }`}
                     >
                         <Checkbox checked={isAll} className="pointer-events-none" />
                         <span className="truncate">{allLabel}</span>
-                    </Button>
+                    </div>
 
                     {options.map((c) => {
                         const checked = value.includes(c);
                         return (
-                            <Button
+                            <div
                                 key={c}
-                                variant="ghost"
+                                role="button"
                                 onClick={() => toggle(c)}
-                                className={`w-full justify-start font-normal text-sm gap-2 ${checked ? "bg-accent text-accent-foreground" : ""
+                                className={`w-full flex items-center px-3 py-2 text-sm font-normal rounded-md cursor-pointer hover:bg-accent hover:text-accent-foreground gap-2 ${checked ? "bg-accent text-accent-foreground" : ""
                                     }`}
                             >
                                 <Checkbox checked={checked} className="pointer-events-none" />
                                 <span className="truncate">{c}</span>
-                            </Button>
+                            </div>
                         );
                     })}
                 </div>

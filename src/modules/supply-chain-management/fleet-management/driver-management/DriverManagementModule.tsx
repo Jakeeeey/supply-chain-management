@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useDriverManagement } from "./hooks/useDriverManagement";
 import { DriverTable } from "./components/DriverTable";
 import { DriverModal } from "./components/DriverModal";
+import { DriverDetailsModal } from "./components/DriverDetailsModal";
 import {
     Command,
     CommandEmpty,
@@ -45,6 +46,7 @@ export default function DriverManagementModule() {
         totalPages,
         itemsPerPage,
         setItemsPerPage,
+        driverContactFieldsSupported,
     } = useDriverManagement();
 
     const slicedDrivers = React.useMemo(() => {
@@ -76,8 +78,12 @@ export default function DriverManagementModule() {
         ];
     }, [branches]);
 
+    const hasActiveCriteria = searchQuery.trim() !== "" || filterGoodBranch !== "all" || filterBadBranch !== "all";
+    const emptyMessage = hasActiveCriteria ? "No drivers match your search or filters." : "No drivers found.";
+
     const [isModalOpen, setIsModalOpen] = React.useState(false);
     const [editingDriver, setEditingDriver] = React.useState<DriverWithDetails | null>(null);
+    const [viewingDriver, setViewingDriver] = React.useState<DriverWithDetails | null>(null);
 
     const [openGood, setOpenGood] = React.useState(false);
     const [openBad, setOpenBad] = React.useState(false);
@@ -90,6 +96,10 @@ export default function DriverManagementModule() {
     const handleEdit = (driver: DriverWithDetails) => {
         setEditingDriver(driver);
         setIsModalOpen(true);
+    };
+
+    const handleView = (driver: DriverWithDetails) => {
+        setViewingDriver(driver);
     };
 
     return (
@@ -116,10 +126,11 @@ export default function DriverManagementModule() {
             </div>
 
             {/* Filters & Search Section */}
-            <div className="bg-card/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-center gap-6">
+            <div className="bg-card/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-stretch md:items-center gap-6">
                 <div className="relative flex-1 w-full flex gap-2">
                     <Input
-                        placeholder="Search Drivers (ID or Name)..."
+                        placeholder="Search ID, driver, contact, or emergency contact..."
+                        aria-label="Search drivers by ID, name, phone, email, or emergency contact"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="flex-1 h-12 bg-background border-input rounded-xl transition-all outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 focus-visible:border-ring"
@@ -135,14 +146,14 @@ export default function DriverManagementModule() {
                     </Button>
                 </div>
 
-                <div className="flex items-center gap-3 w-full md:w-auto">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full md:w-auto">
                     <Popover open={openGood} onOpenChange={setOpenGood}>
                         <PopoverTrigger asChild>
                             <Button
                                 variant="outline"
                                 role="combobox"
                                 aria-expanded={openGood}
-                                className="w-[220px] h-12 bg-background border border-input rounded-xl font-medium justify-between shadow-sm hover:border-primary/50"
+                                className="w-full sm:w-[220px] h-12 bg-background border border-input rounded-xl font-medium justify-between shadow-sm hover:border-primary/50"
                             >
                                 {filterGoodBranch !== "all"
                                     ? goodBranchOptions.find((opt) => opt.value === filterGoodBranch)?.label
@@ -150,7 +161,7 @@ export default function DriverManagementModule() {
                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-[220px] p-0">
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[220px] p-0">
                             <Command>
                                 <CommandInput placeholder="Search Good Branch..." />
                                 <CommandList>
@@ -186,7 +197,7 @@ export default function DriverManagementModule() {
                                 variant="outline"
                                 role="combobox"
                                 aria-expanded={openBad}
-                                className="w-[220px] h-12 bg-background border border-input rounded-xl font-medium justify-between shadow-sm hover:border-primary/50"
+                                className="w-full sm:w-[220px] h-12 bg-background border border-input rounded-xl font-medium justify-between shadow-sm hover:border-primary/50"
                             >
                                 {filterBadBranch !== "all"
                                     ? badBranchOptions.find((opt) => opt.value === filterBadBranch)?.label
@@ -194,7 +205,7 @@ export default function DriverManagementModule() {
                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-[220px] p-0">
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[220px] p-0">
                             <Command>
                                 <CommandInput placeholder="Search Bad Branch..." />
                                 <CommandList>
@@ -244,6 +255,7 @@ export default function DriverManagementModule() {
                     <DriverTable
                         drivers={slicedDrivers}
                         loading={loading}
+                        onView={handleView}
                         onEdit={handleEdit}
                         currentPage={currentPage}
                         totalPages={totalPages}
@@ -253,6 +265,8 @@ export default function DriverManagementModule() {
                             setItemsPerPage(value);
                             setCurrentPage(1);
                         }}
+                        driverContactFieldsSupported={driverContactFieldsSupported}
+                        emptyMessage={emptyMessage}
                     />
                 )}
             </div>
@@ -269,6 +283,14 @@ export default function DriverManagementModule() {
                 branches={branches}
                 drivers={drivers}
                 onSuccess={refresh}
+                driverContactFieldsSupported={driverContactFieldsSupported}
+            />
+
+            <DriverDetailsModal
+                isOpen={viewingDriver !== null}
+                onClose={() => setViewingDriver(null)}
+                driver={viewingDriver}
+                driverContactFieldsSupported={driverContactFieldsSupported}
             />
         </div>
     );

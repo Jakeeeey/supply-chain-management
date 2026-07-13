@@ -42,6 +42,7 @@ export interface ConsolidatorDto {
     status: 'Pending' | 'Picking' | 'Picked' | 'Audited';
     branchId: number;     // 🚀 NEW
     branchName: string;   // 🚀 NEW
+    totalSalesOrderAmount?: number;
     createdBy: number;
     checkedBy?: number;
     createdAt: string;
@@ -92,6 +93,7 @@ export interface BranchDto {
     branchName: string;
     branchCode: string;
     city?: string;
+    isActive?: number;
 }
 
 export interface ConsolidationPreviewItem {

@@ -293,7 +293,7 @@ async function fetchPOProductsByPOId(base: string, poId: number) {
     const url =
         `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
         `&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}` +
-        `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount,received`;
+        `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount,received,discount_type.*`;
     const j = await fetchJson(url) as { data: PoProductRow[] };
     return (Array.isArray(j?.data) ? j.data : []) as PoProductRow[];
 }
@@ -911,10 +911,16 @@ export async function POST(req: NextRequest) {
                     let discountTypeId = "";
                     let resolvedLabel = "—";
                     if (srcRow) {
-                        discountTypeId = toStr(srcRow.discount_type);
-                        if (discountTypeId) {
-                            const dt = discountTypesMap.get(toNum(discountTypeId));
+                        const rawDt = srcRow.discount_type;
+                        const dtId = rawDt 
+                            ? (typeof rawDt === "object" && rawDt !== null && "id" in rawDt 
+                                ? toNum((rawDt as { id: unknown }).id) 
+                                : toNum(rawDt)) 
+                            : 0;
+                        if (dtId > 0) {
+                            const dt = discountTypesMap.get(dtId);
                             resolvedLabel = toStr(dt?.name, "—");
+                            discountTypeId = String(dtId);
                         }
                     }
 

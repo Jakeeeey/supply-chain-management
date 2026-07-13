@@ -21,13 +21,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Trash2, Box } from "lucide-react";
@@ -146,34 +139,26 @@ const UnitRow = ({
               <FormLabel className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">
                 Unit
               </FormLabel>
-              <Select
-                onValueChange={(v) => field.onChange(parseInt(v))}
-                value={field.value?.toString()}
-                disabled={index === 0 && !initialData}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Unit" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {unitsMaster.map((u: SKUUnit) => {
-                    const isSelectedElsewhere = watchedUnits.some(
-                      (unit: Record<string, unknown>, i: number) =>
-                        unit.unit_id === u.id && i !== index,
-                    );
-                    return (
-                      <SelectItem
-                        key={u.id}
-                        value={u.id.toString()}
-                        disabled={isSelectedElsewhere}
-                      >
-                        {u.name}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <FormControl>
+                <Combobox
+                  options={unitsMaster
+                    .filter((u: SKUUnit) => {
+                      const isSelectedElsewhere = watchedUnits.some(
+                        (unit: Record<string, unknown>, i: number) =>
+                          unit.unit_id === u.id && i !== index,
+                      );
+                      return !isSelectedElsewhere;
+                    })
+                    .map((u: SKUUnit) => ({
+                      value: u.id.toString(),
+                      label: u.name,
+                    }))}
+                  value={field.value?.toString() || ""}
+                  onValueChange={(v: string) => field.onChange(v ? parseInt(v) : null)}
+                  placeholder="Select Unit"
+                  disabled={index === 0 && !initialData}
+                />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}
