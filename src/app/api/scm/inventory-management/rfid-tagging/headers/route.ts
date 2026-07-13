@@ -53,45 +53,54 @@ export async function GET() {
             });
         }
 
-        // --- Fetch and Map Products ---
+        // --- Fetch and Map Products & Branches in Parallel ---
         const productIds = Array.from(new Set(headersData.map((h: Record<string, unknown>) => h.product_id).filter(Boolean)));
-        if (productIds.length > 0) {
-            const productsUrl = `${directusUrl}/items/products?filter[product_id][_in]=${productIds.join(",")}&fields=product_id,product_name,description,product_code`;
-            const pRes = await fetch(productsUrl, {
-                method: "GET",
-                headers: { "Authorization": `Bearer ${directusToken}`, "Content-Type": "application/json" },
-                cache: "no-store",
-            });
-            if (pRes.ok) {
-                const pJson = await pRes.json();
-                const pData = pJson.data || [];
-                headersData = headersData.map((h: Record<string, unknown>) => {
-                    const p = pData.find((x: Record<string, unknown>) => x.product_id == h.product_id);
-                    if (p) h.product = p;
-                    return h;
-                });
-            }
-        }
-
-        // --- Fetch and Map Branches ---
         const springBaseUrl = (process.env.SPRING_API_BASE_URL || "http://goatedcodoer:8083").replace(/\/$/, "");
-        try {
-            const bRes = await fetch(`${springBaseUrl}/api/branches`, {
-                method: "GET",
-                headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-                cache: "no-store"
-            });
-            if (bRes.ok) {
-                const bData = await bRes.json();
-                headersData = headersData.map((h: Record<string, unknown>) => {
-                    const b = Array.isArray(bData) ? bData.find((x: Record<string, unknown>) => x.id == h.branch_id || x.branch_id == h.branch_id || x.branchId == h.branch_id) : null;
-                    if (b) h.branch = b;
-                    return h;
+
+        const fetchProducts = async () => {
+            if (productIds.length === 0) return;
+            const productsUrl = `${directusUrl}/items/products?filter[product_id][_in]=${productIds.join(",")}&fields=product_id,product_name,description,product_code`;
+            try {
+                const pRes = await fetch(productsUrl, {
+                    method: "GET",
+                    headers: { "Authorization": `Bearer ${directusToken}`, "Content-Type": "application/json" },
+                    cache: "no-store",
                 });
+                if (pRes.ok) {
+                    const pJson = await pRes.json();
+                    const pData = pJson.data || [];
+                    headersData = headersData.map((h: Record<string, unknown>) => {
+                        const p = pData.find((x: Record<string, unknown>) => x.product_id == h.product_id);
+                        if (p) h.product = p;
+                        return h;
+                    });
+                }
+            } catch (e) {
+                console.error("Failed to fetch products to join", e);
             }
-        } catch(e) {
-            console.error("Failed to fetch branches to join", e);
-        }
+        };
+
+        const fetchBranches = async () => {
+            try {
+                const bRes = await fetch(`${springBaseUrl}/api/branches`, {
+                    method: "GET",
+                    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+                    cache: "no-store"
+                });
+                if (bRes.ok) {
+                    const bData = await bRes.json();
+                    headersData = headersData.map((h: Record<string, unknown>) => {
+                        const b = Array.isArray(bData) ? bData.find((x: Record<string, unknown>) => x.id == h.branch_id || x.branch_id == h.branch_id || x.branchId == h.branch_id) : null;
+                        if (b) h.branch = b;
+                        return h;
+                    });
+                }
+            } catch(e) {
+                console.error("Failed to fetch branches to join", e);
+            }
+        };
+
+        await Promise.all([fetchProducts(), fetchBranches()]);
 
         return NextResponse.json(headersData);
     } catch (err) {
