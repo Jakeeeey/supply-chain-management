@@ -1,12 +1,26 @@
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { CompensationFailure, CompensationStack } from "./_compensation";
+import {
+  INVENTORY_SUMMARY_COLLECTION,
+  logSummaryRefreshError,
+  refreshInventorySummary,
+} from "./_inventorySummary";
 import { deriveReservationStatus } from "./_reservation-status";
 
 export { deriveReservationStatus } from "./_reservation-status";
 
 const DIRECTUS_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
 const DIRECTUS_TOKEN = process.env.DIRECTUS_SERVICE_TOKEN || process.env.DIRECTUS_STATIC_TOKEN || "";
+
+async function refreshInventorySummaryAfterWrite(partId: number | null | undefined) {
+  if (partId == null) return;
+  try {
+    await refreshInventorySummary(partId);
+  } catch (error) {
+    logSummaryRefreshError(error, { partId });
+  }
+}
 
 const PART_FIELDS = [
   "id",
@@ -124,6 +138,37 @@ const COMPATIBILITY_FIELDS = [
   "notes",
 ] as const;
 
+const INVENTORY_SUMMARY_FIELDS = [
+  "summary_key",
+  "scope",
+  "part_id",
+  "branch_id",
+  "branch_name",
+  "part_code",
+  "part_name",
+  "category_id",
+  "category_name",
+  "unit",
+  "minimum_quantity",
+  "storage_location",
+  "description",
+  "is_active",
+  "created_at",
+  "updated_at",
+  "deleted_at",
+  "stock_on_hand",
+  "reserved_quantity",
+  "damaged_quantity",
+  "available_quantity",
+  "last_movement_at",
+  "stock_status",
+  "compatibility_count",
+  "compatible_vehicle_type_keys",
+  "has_stock",
+  "has_any_stock",
+  "synced_at",
+] as const;
+
 type UnknownRecord = Record<string, unknown>;
 type ActorId = number | string | null;
 type MovementType = "Receiving" | "Issue" | "Return" | "Adjustment" | "Damage" | "Reservation";
@@ -218,6 +263,37 @@ type DirectusCompatibilityRow = {
   part_id?: unknown;
   vehicle_type_id?: unknown;
   notes?: string | null;
+};
+
+type DirectusInventorySummaryRow = {
+  summary_key?: string | null;
+  scope?: "all" | "branch" | string | null;
+  part_id?: number | string | null;
+  branch_id?: number | string | null;
+  branch_name?: string | null;
+  part_code?: string | null;
+  part_name?: string | null;
+  category_id?: number | string | null;
+  category_name?: string | null;
+  unit?: string | null;
+  minimum_quantity?: number | string | null;
+  storage_location?: string | null;
+  description?: string | null;
+  is_active?: boolean | number | string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  deleted_at?: string | null;
+  stock_on_hand?: number | string | null;
+  reserved_quantity?: number | string | null;
+  damaged_quantity?: number | string | null;
+  available_quantity?: number | string | null;
+  last_movement_at?: string | null;
+  stock_status?: PartStockStatus | string | null;
+  compatibility_count?: number | string | null;
+  compatible_vehicle_type_keys?: string | null;
+  has_stock?: boolean | number | string | null;
+  has_any_stock?: boolean | number | string | null;
+  synced_at?: string | null;
 };
 
 type PartInventoryQuery = z.infer<typeof PartsInventoryQuerySchema>;
@@ -828,44 +904,6 @@ async function fetchPart(partId: number) {
   }
 }
 
-function partListFilter(query?: Partial<PartInventoryFilterQuery>) {
-  const filter: UnknownRecord = { deleted_at: { _null: true } };
-  if (query?.active === "true") filter.is_active = { _eq: true };
-  if (query?.active === "false") filter.is_active = { _eq: false };
-  if (query?.categoryId) filter.category_id = { _eq: query.categoryId };
-
-  const search = query?.search?.trim();
-  if (search) {
-    filter._or = [
-      { part_code: { _icontains: search } },
-      { part_name: { _icontains: search } },
-      { category: { _icontains: search } },
-      { storage_location: { _icontains: search } },
-      { category_id: { category_name: { _icontains: search } } },
-    ];
-  }
-
-  return filter;
-}
-
-async function fetchPartsBatched(filter: UnknownRecord) {
-  const params = {
-    fields: fields(PART_FIELDS),
-    filter: filterParam(filter),
-    sort: "part_code",
-  };
-
-  try {
-    return await listItemsBatched<DirectusPartRow>("fleet_parts", params);
-  } catch (error) {
-    if (!isMinimumQuantityFieldError(error)) throw error;
-    return listItemsBatched<DirectusPartRow>("fleet_parts", {
-      ...params,
-      fields: fields(LEGACY_PART_FIELDS),
-    });
-  }
-}
-
 async function fetchStockRows(partIds: number[]) {
   if (!partIds.length) return [];
   return listItemsBatched<DirectusStockRow>("fleet_part_stock", {
@@ -1331,93 +1369,160 @@ async function mapReservationWithPart(row: DirectusReservationRow) {
   return reservation;
 }
 
-function matchesVehicleTypeFilter(row: ReturnType<typeof mapPartRow>, vehicleTypeId?: number) {
-  if (!vehicleTypeId) return true;
-  if (!row.compatibleVehicleTypes.length) return true;
-  return row.compatibleVehicleTypes.some((type) => type.id === vehicleTypeId);
-}
-
-function matchesStockStatusFilter(
-  row: ReturnType<typeof mapPartRow>,
-  stockStatusFilter: PartInventoryFilterQuery["stockStatus"],
-) {
-  if (stockStatusFilter === "all") return true;
-  if (stockStatusFilter === "needs_attention") return row.stockStatus !== "available";
-  return row.stockStatus === stockStatusFilter;
-}
-
-async function getFilteredPartRows(
+function inventorySummaryFilter(
   query: PartInventoryFilterQuery,
-  pagination?: { page: number; limit: number },
+  scope: "all" | "branch",
 ) {
-  const parts = await fetchPartsBatched(partListFilter(query));
+  const filter: UnknownRecord = {
+    scope: { _eq: scope },
+    deleted_at: { _null: true },
+  };
+  if (scope === "branch" && query.branchId) filter.branch_id = { _eq: query.branchId };
+  if (query.active === "true") filter.is_active = { _eq: true };
+  if (query.active === "false") filter.is_active = { _eq: false };
+  if (query.categoryId) filter.category_id = { _eq: query.categoryId };
 
-  const partIds = parts.map((part) => part.id);
-  const [stockRows, compatibilityRows, vehicleTypeNameMap] = await Promise.all([
-    fetchStockRows(partIds),
-    fetchCompatibilityRows(partIds),
-    fetchVehicleTypeNameMap(),
-  ]);
+  const search = query.search.trim();
+  if (search) {
+    filter._or = [
+      { part_code: { _icontains: search } },
+      { part_name: { _icontains: search } },
+      { category_name: { _icontains: search } },
+      { storage_location: { _icontains: search } },
+    ];
+  }
+  if (query.vehicleTypeId) {
+    const compatibilityFilter = {
+      _or: [
+        { compatibility_count: { _eq: 0 } },
+        { compatible_vehicle_type_keys: { _contains: `|${query.vehicleTypeId}|` } },
+      ],
+    };
+    const existingOr = filter._or;
+    if (existingOr) {
+      delete filter._or;
+      filter._and = [{ _or: existingOr }, compatibilityFilter];
+    } else {
+      Object.assign(filter, compatibilityFilter);
+    }
+  }
+  if (query.stockStatus === "needs_attention") {
+    filter.stock_status = { _in: ["low_stock", "out_of_stock"] };
+  } else if (query.stockStatus !== "all") {
+    filter.stock_status = { _eq: query.stockStatus };
+  }
+  return filter;
+}
 
-  const search = query.search.trim().toLowerCase();
-  const rows: Array<ReturnType<typeof mapPartRow>> = [];
+function aggregateValue(row: UnknownRecord, aggregate: "count" | "sum", field: string) {
+  const value = row[aggregate];
+  const record = asRecord(value);
+  return asNumber(record?.[field] ?? value);
+}
+
+async function inventorySummaryMetrics(filter: UnknownRecord) {
+  const response = await directusRequest<DirectusListResponse<UnknownRecord>>(
+    `/items/${INVENTORY_SUMMARY_COLLECTION}`,
+    undefined,
+    {
+      "aggregate[count]": "part_id",
+      "aggregate[sum]": "available_quantity",
+      groupBy: "stock_status",
+      filter: filterParam(filter),
+    },
+  );
   const summary = {
     totalParts: 0,
     lowStockCount: 0,
     outOfStockCount: 0,
     totalAvailableQuantity: 0,
   };
-  const pageStart = pagination ? (pagination.page - 1) * pagination.limit : 0;
-  const pageEnd = pagination ? pageStart + pagination.limit : Number.POSITIVE_INFINITY;
+  for (const row of response.data || []) {
+    const count = aggregateValue(row, "count", "part_id");
+    summary.totalParts += count;
+    summary.totalAvailableQuantity += aggregateValue(row, "sum", "available_quantity");
+    if (row.stock_status === "low_stock") summary.lowStockCount += count;
+    if (row.stock_status === "out_of_stock") summary.outOfStockCount += count;
+  }
+  return summary;
+}
 
-  for (const part of parts) {
+async function fetchPartRowsByIds(partIds: number[]) {
+  const params = {
+    fields: fields(PART_FIELDS),
+    filter: filterParam({ id: { _in: partIds }, deleted_at: { _null: true } }),
+  };
+  try {
+    return await listItems<DirectusPartRow>("fleet_parts", params);
+  } catch (error) {
+    if (!isMinimumQuantityFieldError(error)) throw error;
+    return listItems<DirectusPartRow>("fleet_parts", { ...params, fields: fields(LEGACY_PART_FIELDS) });
+  }
+}
+
+async function hydrateInventorySummaryRows(
+  summaryRows: DirectusInventorySummaryRow[],
+  branchId?: number,
+) {
+  const partIds = uniqueNumbers(summaryRows.map((row) => asNullableNumber(row.part_id)));
+  if (!partIds.length) return [];
+  const [parts, stockRows, compatibilityRows, vehicleTypeNameMap] = await Promise.all([
+    fetchPartRowsByIds(partIds),
+    fetchStockRows(partIds),
+    fetchCompatibilityRows(partIds),
+    fetchVehicleTypeNameMap(),
+  ]);
+  const partMap = new Map(parts.map((part) => [part.id, part]));
+
+  return summaryRows.flatMap((summaryRow) => {
+    const partId = asNullableNumber(summaryRow.part_id);
+    const part = partId == null ? null : partMap.get(partId);
+    if (!part) return [];
     let row = mapPartRow(part, stockRows, compatibilityRows, vehicleTypeNameMap);
-    if (query.branchId) {
-      const branchStock = row.branchStock.filter((stock) => stock.branchId === query.branchId);
-      const totalStockOnHand = branchStock.reduce((sum, stock) => sum + stock.stockOnHand, 0);
-      const totalReservedQuantity = branchStock.reduce((sum, stock) => sum + stock.reservedQuantity, 0);
-      const totalDamagedQuantity = branchStock.reduce((sum, stock) => sum + stock.damagedQuantity, 0);
-      const totalAvailableQuantity = branchStock.reduce((sum, stock) => sum + stock.availableQuantity, 0);
-      const computedStatus = stockStatus(totalAvailableQuantity, row.minimumQuantity);
+    if (branchId) {
+      const branchStock = row.branchStock.filter((stock) => stock.branchId === branchId);
       row = {
         ...row,
         branchStock,
-        totalStockOnHand,
-        totalReservedQuantity,
-        totalDamagedQuantity,
-        totalAvailableQuantity,
-        stockStatus: computedStatus,
-        stockStatusLabel: statusLabel(computedStatus),
+        totalStockOnHand: asNumber(summaryRow.stock_on_hand),
+        totalReservedQuantity: asNumber(summaryRow.reserved_quantity),
+        totalDamagedQuantity: asNumber(summaryRow.damaged_quantity),
+        totalAvailableQuantity: asNumber(summaryRow.available_quantity),
+        stockStatus: asString(summaryRow.stock_status) as PartStockStatus,
+        stockStatusLabel: statusLabel(asString(summaryRow.stock_status) as PartStockStatus),
       };
     }
+    return [row];
+  });
+}
 
-    if (query.active === "true" && !row.isActive) continue;
-    if (query.active === "false" && row.isActive) continue;
-    if (query.categoryId && row.categoryId !== query.categoryId) continue;
-    if (!matchesVehicleTypeFilter(row, query.vehicleTypeId)) continue;
-    if (!matchesStockStatusFilter(row, query.stockStatus)) continue;
-    if (search) {
-      const haystack = [
-        row.partCode,
-        row.partName,
-        row.categoryName || "",
-        row.storageLocation || "",
-      ]
-        .join(" ")
-        .toLowerCase();
-      if (!haystack.includes(search)) continue;
-    }
+async function getSummaryPartRows(
+  query: PartInventoryFilterQuery,
+  pagination: { page: number; limit: number },
+) {
+  const scope = query.branchId ? "branch" : "all";
+  const filter = inventorySummaryFilter(query, scope);
+  const [page, summary] = await Promise.all([
+    listItemsPage<DirectusInventorySummaryRow>(INVENTORY_SUMMARY_COLLECTION, {
+      page: pagination.page,
+      limit: pagination.limit,
+      fields: fields(INVENTORY_SUMMARY_FIELDS),
+      filter: filterParam(filter),
+      sort: "part_code",
+    }),
+    inventorySummaryMetrics(filter),
+  ]);
+  return {
+    rows: await hydrateInventorySummaryRows(page.data, query.branchId),
+    summary: { ...summary, totalParts: page.total },
+  };
+}
 
-    const rowIndex = summary.totalParts;
-    summary.totalParts += 1;
-    if (row.stockStatus === "low_stock") summary.lowStockCount += 1;
-    if (row.stockStatus === "out_of_stock") summary.outOfStockCount += 1;
-    summary.totalAvailableQuantity += row.totalAvailableQuantity;
-
-    if (rowIndex >= pageStart && rowIndex < pageEnd) rows.push(row);
-  }
-
-  return { rows, summary };
+async function getFilteredPartRows(
+  query: PartInventoryFilterQuery,
+  pagination: { page: number; limit: number },
+) {
+  return getSummaryPartRows(query, pagination);
 }
 
 export async function listParts(query: PartInventoryQuery) {
@@ -1586,6 +1691,7 @@ export async function createPart(body: CreatePartRequest, actorId: ActorId) {
     await tx.compensate(error);
   }
 
+  await refreshInventorySummaryAfterWrite(part.id);
   return getPartDetail(part.id);
 }
 
@@ -1659,6 +1765,19 @@ export async function updatePart(partId: number, body: UpdatePartRequest, actorI
   } catch (error) {
     await tx.compensate(error);
   }
+
+  const summaryFieldsChanged =
+    body.partCode !== undefined
+    || body.partName !== undefined
+    || body.isActive !== undefined
+    || body.categoryId !== undefined
+    || body.category !== undefined
+    || body.unit !== undefined
+    || body.minimumQuantity !== undefined
+    || body.storageLocation !== undefined
+    || body.description !== undefined
+    || body.compatibleVehicleTypeIds !== undefined;
+  if (summaryFieldsChanged) await refreshInventorySummaryAfterWrite(partId);
 
   return getPartDetail(partId);
 }
@@ -1927,6 +2046,7 @@ export async function createMovement(body: CreateMovementRequest, actorId: Actor
         "link movement reservation",
       );
       const enriched = await enrichRowsWithVehicles(await enrichMovementRowsWithParts([mapMovement(await fetchMovement(movement.id))]));
+      await refreshInventorySummaryAfterWrite(body.partId);
       return { data: enriched[0] };
     } catch (error) {
       await tx.compensate(error);
@@ -1935,6 +2055,7 @@ export async function createMovement(body: CreateMovementRequest, actorId: Actor
 
   const movement = await applyStockMovement(body, actorId);
   const enriched = await enrichMovementRowsWithParts([mapMovement(movement)]);
+  await refreshInventorySummaryAfterWrite(body.partId);
   return { data: enriched[0] };
 }
 
@@ -2074,6 +2195,7 @@ export async function createReservation(body: CreateReservationRequest, actorId:
       created_by: actorId,
     }, "create reservation movement");
 
+    await refreshInventorySummaryAfterWrite(body.partId);
     return { data: await mapReservationWithPart(await fetchReservation(reservation.id)) };
   } catch (error) {
     await tx.compensate(error);
@@ -2170,6 +2292,7 @@ async function applyReservationAction(
         reservationRollbackPayload(reservation, actorId),
         "update reservation issue",
       );
+      await refreshInventorySummaryAfterWrite(partId);
       return { data: await mapReservationWithPart(await fetchReservation(updated.id)) };
     } catch (error) {
       await tx.compensate(error);
@@ -2233,6 +2356,7 @@ async function applyReservationAction(
         reservationRollbackPayload(reservation, actorId),
         "update reservation return",
       );
+      await refreshInventorySummaryAfterWrite(partId);
       return { data: await mapReservationWithPart(await fetchReservation(updated.id)) };
     } catch (error) {
       await tx.compensate(error);
@@ -2311,6 +2435,7 @@ async function applyReservationAction(
         reservationRollbackPayload(reservation, actorId),
         "update reservation damaged return",
       );
+      await refreshInventorySummaryAfterWrite(partId);
       return { data: await mapReservationWithPart(await fetchReservation(updated.id)) };
     } catch (error) {
       await tx.compensate(error);
@@ -2363,6 +2488,7 @@ async function applyReservationAction(
       reservationRollbackPayload(reservation, actorId),
       "update reservation cancellation",
     );
+    await refreshInventorySummaryAfterWrite(partId);
     return { data: await mapReservationWithPart(await fetchReservation(updated.id)) };
   } catch (error) {
     await tx.compensate(error);
@@ -2669,45 +2795,43 @@ export async function listLookups() {
   };
 }
 
-function reportRowsFromParts(
-  parts: Awaited<ReturnType<typeof listParts>>["data"],
+async function getStockReportFromSummaryCollection(
+  query: ReportQuery,
   stockStatusFilter?: PartStockStatus,
 ) {
-  return parts.flatMap((part) => {
-    const rows = !part.branchStock.length
-      ? [
-        {
-          partCode: part.partCode,
-          partName: part.partName,
-          categoryName: part.categoryName,
-          branchName: null,
-          stockOnHand: 0,
-          reservedQuantity: 0,
-          damagedQuantity: 0,
-          availableQuantity: 0,
-          minimumQuantity: part.minimumQuantity,
-          stockStatus: part.stockStatus,
-          shortageQuantity: Math.max(0, part.minimumQuantity),
-          lastMovementAt: null,
-        },
-      ]
-      : part.branchStock.map((stock) => ({
-        partCode: part.partCode,
-        partName: part.partName,
-        categoryName: part.categoryName,
-        branchName: stock.branchName,
-        stockOnHand: stock.stockOnHand,
-        reservedQuantity: stock.reservedQuantity,
-        damagedQuantity: stock.damagedQuantity,
-        availableQuantity: stock.availableQuantity,
-        minimumQuantity: part.minimumQuantity,
-        stockStatus: stockStatus(stock.availableQuantity, part.minimumQuantity),
-        shortageQuantity: Math.max(0, part.minimumQuantity - stock.availableQuantity),
-        lastMovementAt: stock.lastMovementAt,
-      }));
+  const filter: UnknownRecord = {
+    scope: { _eq: query.branchId ? "branch" : "all" },
+    deleted_at: { _null: true },
+    is_active: { _eq: true },
+  };
+  if (query.branchId) filter.branch_id = { _eq: query.branchId };
+  if (query.categoryId) filter.category_id = { _eq: query.categoryId };
+  if (stockStatusFilter) filter.stock_status = { _eq: stockStatusFilter };
 
-    return stockStatusFilter ? rows.filter((row) => row.stockStatus === stockStatusFilter) : rows;
+  const page = await listItemsPage<DirectusInventorySummaryRow>(INVENTORY_SUMMARY_COLLECTION, {
+    page: query.page,
+    limit: query.limit,
+    fields: fields(INVENTORY_SUMMARY_FIELDS),
+    filter: filterParam(filter),
+    sort: "part_code,branch_name",
   });
+  return {
+    rows: page.data.map((row) => ({
+      partCode: asString(row.part_code),
+      partName: asString(row.part_name),
+      categoryName: asNullableString(row.category_name),
+      branchName: asNullableString(row.branch_name),
+      stockOnHand: asNumber(row.stock_on_hand),
+      reservedQuantity: asNumber(row.reserved_quantity),
+      damagedQuantity: asNumber(row.damaged_quantity),
+      availableQuantity: asNumber(row.available_quantity),
+      minimumQuantity: asNumber(row.minimum_quantity),
+      stockStatus: asString(row.stock_status) as PartStockStatus,
+      shortageQuantity: Math.max(0, asNumber(row.minimum_quantity) - asNumber(row.available_quantity)),
+      lastMovementAt: row.last_movement_at ?? null,
+    })),
+    total: page.total,
+  };
 }
 
 function usageByVehicle(movements: Awaited<ReturnType<typeof listMovements>>["data"]) {
@@ -2795,19 +2919,8 @@ export async function getReport(query: ReportQuery) {
 
   if (["stock_on_hand", "low_stock", "out_of_stock"].includes(type)) {
     const stockStatusFilter = type === "low_stock" || type === "out_of_stock" ? type : undefined;
-    const { rows } = await getFilteredPartRows({
-      search: "",
-      categoryId: query.categoryId,
-      branchId: query.branchId,
-      stockStatus: stockStatusFilter ? "needs_attention" : "all",
-      active: "true",
-    });
-    const reportRows = reportRowsFromParts(rows, stockStatusFilter);
-    return {
-      type,
-      data: pageRows(reportRows),
-      meta: meta(reportRows.length),
-    };
+    const report = await getStockReportFromSummaryCollection(query, stockStatusFilter);
+    return { type, data: report.rows, meta: meta(report.total) };
   }
 
   const movementQuery = {

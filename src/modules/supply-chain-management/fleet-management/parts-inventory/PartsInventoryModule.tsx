@@ -2181,11 +2181,11 @@ function ReservationActionDialog({
 }
 
 export default function PartsInventoryModule() {
-  const inventory = usePartsInventory();
+  const [activeTab, setActiveTab] = React.useState("parts");
+  const inventory = usePartsInventory(activeTab === "parts");
   const movements = usePartMovements();
   const reservations = usePartReservations();
 
-  const [activeTab, setActiveTab] = React.useState("parts");
   const [partDialog, setPartDialog] = React.useState<DialogState<PartInventoryRow>>({ open: false, item: null });
   const [partViewOpen, setPartViewOpen] = React.useState(false);
   const [partView, setPartView] = React.useState<PartDetailRow | null>(null);
@@ -2241,7 +2241,7 @@ export default function PartsInventoryModule() {
   React.useEffect(() => {
     setLowStockPage(1);
   }, [
-    inventory.filters.search,
+    inventory.debouncedSearch,
     inventory.filters.categoryId,
     inventory.filters.vehicleTypeId,
     inventory.filters.branchId,
@@ -2249,11 +2249,13 @@ export default function PartsInventoryModule() {
   ]);
 
   React.useEffect(() => {
+    if (activeTab !== "low-stock") return;
+
     let alive = true;
     setLowStockLoading(true);
 
     api.fetchLowStockParts({
-      search: inventory.filters.search,
+      search: inventory.debouncedSearch,
       categoryId: inventory.filters.categoryId,
       vehicleTypeId: inventory.filters.vehicleTypeId,
       branchId: inventory.filters.branchId,
@@ -2280,7 +2282,8 @@ export default function PartsInventoryModule() {
       alive = false;
     };
   }, [
-    inventory.filters.search,
+    activeTab,
+    inventory.debouncedSearch,
     inventory.filters.categoryId,
     inventory.filters.vehicleTypeId,
     inventory.filters.branchId,
@@ -2328,6 +2331,8 @@ export default function PartsInventoryModule() {
   ]);
 
   React.useEffect(() => {
+    if (activeTab !== "reports") return;
+
     let alive = true;
     setReportLoading(true);
 
@@ -2359,6 +2364,7 @@ export default function PartsInventoryModule() {
       alive = false;
     };
   }, [
+    activeTab,
     reportType,
     reportFilters.branchId,
     reportFilters.categoryId,

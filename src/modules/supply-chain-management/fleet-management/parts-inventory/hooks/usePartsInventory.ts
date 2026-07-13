@@ -41,12 +41,41 @@ const emptyLookups: PartsLookupData = {
   vehicles: [],
 };
 
-export function usePartsInventory() {
+export function usePartsInventory(enabled = true) {
   const [filters, setFilters] = React.useState<PartsInventoryFilters>(initialFilters);
   const [response, setResponse] = React.useState<PartsInventoryListResponse>(emptyResponse);
   const [lookups, setLookups] = React.useState<PartsLookupData>(emptyLookups);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
+  const [debouncedSearch, setDebouncedSearch] = React.useState(initialFilters.search);
+
+  React.useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearch(filters.search), 300);
+    return () => window.clearTimeout(timeout);
+  }, [filters.search]);
+
+  const requestFilters = React.useMemo(
+    () => ({
+      search: debouncedSearch,
+      active: filters.active,
+      branchId: filters.branchId,
+      categoryId: filters.categoryId,
+      limit: filters.limit,
+      page: filters.page,
+      stockStatus: filters.stockStatus,
+      vehicleTypeId: filters.vehicleTypeId,
+    }),
+    [
+      debouncedSearch,
+      filters.active,
+      filters.branchId,
+      filters.categoryId,
+      filters.limit,
+      filters.page,
+      filters.stockStatus,
+      filters.vehicleTypeId,
+    ],
+  );
 
   const loadLookups = React.useCallback(async () => {
     setLookups(await api.fetchLookups());
@@ -55,7 +84,7 @@ export function usePartsInventory() {
   const loadParts = React.useCallback(async () => {
     setLoading(true);
     try {
-      setResponse(await api.fetchParts(filters));
+      setResponse(await api.fetchParts(requestFilters));
     } catch (error) {
       toast.error("Failed to load parts inventory", {
         description: error instanceof Error ? error.message : String(error),
@@ -63,7 +92,7 @@ export function usePartsInventory() {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [requestFilters]);
 
   React.useEffect(() => {
     loadLookups().catch((error) => {
@@ -74,8 +103,12 @@ export function usePartsInventory() {
   }, [loadLookups]);
 
   React.useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     void loadParts();
-  }, [loadParts]);
+  }, [enabled, loadParts]);
 
   const updateFilters = React.useCallback((patch: Partial<PartsInventoryFilters>) => {
     setFilters((current) => ({ ...current, ...patch, page: patch.page ?? 1 }));
@@ -112,6 +145,7 @@ export function usePartsInventory() {
     lookups,
     loading,
     saving,
+    debouncedSearch,
     refresh: loadParts,
     refreshLookups: loadLookups,
     savePart,
