@@ -103,7 +103,7 @@ type MovementDialogState = {
 type ReservationActionState = {
   open: boolean;
   reservation: PartReservationRow | null;
-  action: "issue" | "return" | "cancel";
+  action: "issue" | "return" | "return_damage" | "cancel";
 };
 
 type PartDetailRow = PartInventoryRow & {
@@ -318,32 +318,31 @@ function movementDisplaySnapshot(movement: PartMovementRow) {
   };
 }
 
-function reservationActionButtonClasses(action: "issue" | "return" | "cancel") {
+function reservationActionButtonClasses(action: "issue" | "return" | "return_damage" | "cancel") {
   if (action === "issue") {
     return "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-900 disabled:border-border disabled:bg-transparent disabled:text-muted-foreground dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-950/50";
   }
   if (action === "return") {
     return "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 disabled:border-border disabled:bg-transparent disabled:text-muted-foreground dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50";
   }
+  if (action === "return_damage") {
+    return "border-orange-200 bg-orange-50 text-orange-800 hover:bg-orange-100 hover:text-orange-900 disabled:border-border disabled:bg-transparent disabled:text-muted-foreground dark:border-orange-900/60 dark:bg-orange-950/30 dark:text-orange-300 dark:hover:bg-orange-950/50";
+  }
   return "border-red-200 bg-red-50 text-red-800 hover:bg-red-100 hover:text-red-900 disabled:border-border disabled:bg-transparent disabled:text-muted-foreground dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50";
 }
 
 function reservationDisplayQuantities(reservation: PartReservationRow) {
-  if (reservation.status === "Cancelled") {
-    return {
-      reserved: 0,
-      issued: 0,
-      returned: 0,
-      remaining: 0,
-    };
-  }
-
   return {
     reserved: reservation.remainingQuantity,
     issued: Math.max(0, reservation.issuedQuantity - reservation.returnedQuantity),
-    returned: reservation.returnedQuantity,
+    returned: Math.max(0, reservation.returnedQuantity - reservation.damagedReturnedQuantity),
+    damaged: reservation.damagedQuantity,
     remaining: reservation.remainingQuantity,
   };
+}
+
+function reservationDamageableQuantity(reservation: PartReservationRow) {
+  return reservation.remainingQuantity + reservation.returnableQuantity;
 }
 
 function movementQuantityLabel(quantity: number, stockBefore: number, stockAfter: number) {
@@ -1267,11 +1266,12 @@ function PartViewDialog({
                     <TableHead className="text-right">Reserved</TableHead>
                     <TableHead className="text-right">Issued</TableHead>
                     <TableHead className="text-right">Returned</TableHead>
+                    <TableHead className="text-right">Damaged</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {activeReservations.length === 0 ? <EmptyRows colSpan={7} label="No active reservations found." /> : null}
+                  {activeReservations.length === 0 ? <EmptyRows colSpan={8} label="No active reservations found." /> : null}
                   {activeReservations.map((reservation) => {
                     const displayQuantities = reservationDisplayQuantities(reservation);
                     return (
@@ -1285,6 +1285,7 @@ function PartViewDialog({
                         <TableCell className="text-right">{formatNumber(displayQuantities.reserved)}</TableCell>
                         <TableCell className="text-right">{formatNumber(displayQuantities.issued)}</TableCell>
                         <TableCell className="text-right">{formatNumber(displayQuantities.returned)}</TableCell>
+                        <TableCell className="text-right">{formatNumber(displayQuantities.damaged)}</TableCell>
                         <TableCell><StatusBadge status={reservation.status} label={reservation.status} /></TableCell>
                       </TableRow>
                     );
@@ -2067,7 +2068,9 @@ function ReservationActionDialog({
       ? reservation?.remainingQuantity
       : state.action === "return"
         ? reservation?.returnableQuantity
-        : reservation?.remainingQuantity;
+        : state.action === "return_damage"
+          ? reservation ? reservationDamageableQuantity(reservation) : 0
+          : reservation?.remainingQuantity;
     setForm({
       quantity: defaultQuantity ? String(defaultQuantity) : "",
       referenceNo: "",
@@ -2079,7 +2082,7 @@ function ReservationActionDialog({
   React.useEffect(() => {
     if (!state.open || state.action === "cancel") return;
     let cancelled = false;
-    const movementType = state.action === "issue" ? "Issue" : "Return";
+    const movementType = state.action === "issue" ? "Issue" : state.action === "return" ? "Return" : "Damage";
     setReferenceLoading(true);
     setForm((current) => ({ ...current, referenceNo: "" }));
     api.fetchNextMovementReference(movementType)
@@ -2121,7 +2124,13 @@ function ReservationActionDialog({
     onOpenChange(false);
   }
 
-  const title = state.action === "issue" ? "Issue Reserved Part" : state.action === "return" ? "Return Reserved Part" : "Cancel Reservation";
+  const title = state.action === "issue"
+    ? "Issue Reserved Part"
+    : state.action === "return"
+      ? "Return Reserved Part"
+      : state.action === "return_damage"
+        ? "Return Damaged Part"
+        : "Cancel Reservation";
 
   return (
     <Dialog open={state.open} onOpenChange={onOpenChange}>
@@ -2152,13 +2161,16 @@ function ReservationActionDialog({
           )}
           <div className="grid gap-2">
             <Label htmlFor="actionRemarks">Remarks</Label>
-            <Textarea id="actionRemarks" value={form.remarks} onChange={(event) => update("remarks", event.target.value)} />
+            <Textarea id="actionRemarks" value={form.remarks} onChange={(event) => update("remarks", event.target.value)} required={state.action === "return_damage"} />
+            {state.action === "return_damage" ? (
+              <div className="text-xs text-muted-foreground">Required. Describe why this returned stock is damaged.</div>
+            ) : null}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={saving || (state.action !== "cancel" && (referenceLoading || !form.referenceNo))} variant={state.action === "cancel" ? "destructive" : "default"}>
+            <Button type="submit" disabled={saving || (state.action !== "cancel" && (referenceLoading || !form.referenceNo)) || (state.action === "return_damage" && !form.remarks.trim())} variant={state.action === "cancel" ? "destructive" : "default"}>
               {saving ? "Saving..." : "Confirm"}
             </Button>
           </DialogFooter>
@@ -2214,7 +2226,7 @@ export default function PartsInventoryModule() {
   const reportDefinition = reportDefinitions[reportType];
   const reportRows = report?.type === reportType ? report.data : [];
   const reportLimit = 25;
-  const reportPageRows = reportRows.slice((reportPage - 1) * reportLimit, reportPage * reportLimit);
+  const reportPageRows = reportRows;
   const reportMetrics = report ? reportDefinition.metrics(reportRows) : [];
   const selectedOperationPart = movementDialog.open
     ? movementDialog.part
@@ -2304,9 +2316,20 @@ export default function PartsInventoryModule() {
   }, [movementDialog.open, operationPartSearch, reservationDialog.open]);
 
   React.useEffect(() => {
+    setReportPage(1);
+  }, [
+    reportType,
+    reportFilters.branchId,
+    reportFilters.categoryId,
+    reportFilters.vehicleId,
+    reportFilters.movementType,
+    reportFilters.dateFrom,
+    reportFilters.dateTo,
+  ]);
+
+  React.useEffect(() => {
     let alive = true;
     setReportLoading(true);
-    setReportPage(1);
 
     api.fetchReport(reportType, {
       branchId: reportFilters.branchId,
@@ -2315,6 +2338,8 @@ export default function PartsInventoryModule() {
       movementType: reportFilters.movementType,
       dateFrom: reportFilters.dateFrom,
       dateTo: reportFilters.dateTo,
+      page: reportPage,
+      limit: reportLimit,
     })
       .then((response) => {
         if (alive) setReport(response);
@@ -2341,6 +2366,8 @@ export default function PartsInventoryModule() {
     reportFilters.movementType,
     reportFilters.dateFrom,
     reportFilters.dateTo,
+    reportPage,
+    reportLimit,
   ]);
 
   function openMovementDialog(part: PartInventoryRow | null, movementType: ManualPartMovementType) {
@@ -2683,14 +2710,15 @@ export default function PartsInventoryModule() {
                       <TableHead className="text-right">Reserved</TableHead>
                       <TableHead className="text-right">Issued</TableHead>
                       <TableHead className="text-right">Returned</TableHead>
+                      <TableHead className="text-right">Damaged</TableHead>
                       <TableHead className="text-right">Remaining</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {reservations.loading ? <LoadingRows colSpan={10} /> : null}
-                    {!reservations.loading && reservations.response.data.length === 0 ? <EmptyRows colSpan={10} label="No reservations found." /> : null}
+                    {reservations.loading ? <LoadingRows colSpan={11} /> : null}
+                    {!reservations.loading && reservations.response.data.length === 0 ? <EmptyRows colSpan={11} label="No reservations found." /> : null}
                     {!reservations.loading && reservations.response.data.map((reservation) => {
                       const displayQuantities = reservationDisplayQuantities(reservation);
                       return (
@@ -2711,17 +2739,21 @@ export default function PartsInventoryModule() {
                           <TableCell className="text-right">{formatNumber(displayQuantities.reserved)}</TableCell>
                           <TableCell className="text-right">{formatNumber(displayQuantities.issued)}</TableCell>
                           <TableCell className="text-right">{formatNumber(displayQuantities.returned)}</TableCell>
+                          <TableCell className="text-right">{formatNumber(displayQuantities.damaged)}</TableCell>
                           <TableCell className="text-right">{formatNumber(displayQuantities.remaining)}</TableCell>
                           <TableCell><StatusBadge status={reservation.status} label={reservation.status} /></TableCell>
                           <TableCell>
                             <div className="flex justify-end gap-1">
-                              <Button variant="outline" size="sm" className={cn("h-8 font-medium", reservationActionButtonClasses("issue"))} disabled={reservation.partId == null || reservation.remainingQuantity <= 0 || reservation.status === "Cancelled"} onClick={() => setReservationAction({ open: true, reservation, action: "issue" })}>
+                              <Button variant="outline" size="sm" className={cn("h-8 font-medium", reservationActionButtonClasses("issue"))} disabled={reservation.partId == null || reservation.remainingQuantity <= 0} onClick={() => setReservationAction({ open: true, reservation, action: "issue" })}>
                                 Issue
                               </Button>
-                              <Button variant="outline" size="sm" className={cn("h-8 font-medium", reservationActionButtonClasses("return"))} disabled={reservation.partId == null || reservation.returnableQuantity <= 0 || reservation.status === "Cancelled"} onClick={() => setReservationAction({ open: true, reservation, action: "return" })}>
+                              <Button variant="outline" size="sm" className={cn("h-8 font-medium", reservationActionButtonClasses("return"))} disabled={reservation.partId == null || reservation.returnableQuantity <= 0} onClick={() => setReservationAction({ open: true, reservation, action: "return" })}>
                                 Return
                               </Button>
-                              <Button variant="outline" size="sm" className={cn("h-8 font-medium", reservationActionButtonClasses("cancel"))} disabled={reservation.status === "Cancelled" || reservation.remainingQuantity <= 0} onClick={() => setReservationAction({ open: true, reservation, action: "cancel" })}>
+                              <Button variant="outline" size="sm" className={cn("h-8 font-medium", reservationActionButtonClasses("return_damage"))} disabled={reservation.partId == null || reservationDamageableQuantity(reservation) <= 0} onClick={() => setReservationAction({ open: true, reservation, action: "return_damage" })}>
+                                Return Damaged
+                              </Button>
+                              <Button variant="outline" size="sm" className={cn("h-8 font-medium", reservationActionButtonClasses("cancel"))} disabled={reservation.remainingQuantity <= 0} onClick={() => setReservationAction({ open: true, reservation, action: "cancel" })}>
                                 Cancel
                               </Button>
                             </div>
@@ -2910,7 +2942,7 @@ export default function PartsInventoryModule() {
                   <PaginationControls
                     page={reportPage}
                     limit={reportLimit}
-                    total={reportRows.length}
+                    total={report?.meta.total ?? 0}
                     onPageChange={setReportPage}
                   />
                 ) : null}

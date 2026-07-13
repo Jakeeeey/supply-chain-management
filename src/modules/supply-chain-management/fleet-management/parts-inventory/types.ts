@@ -114,6 +114,9 @@ export type PartReservationRow = {
   issuedQuantity: number;
   returnedQuantity: number;
   cancelledQuantity: number;
+  damagedQuantity: number;
+  damagedReturnedQuantity: number;
+  damagedReservedQuantity: number;
   remainingQuantity: number;
   returnableQuantity: number;
   status: PartReservationStatus | string;
@@ -226,7 +229,7 @@ export type CreateReservationInput = {
 
 export type UpdateReservationInput = {
   id: number;
-  action: "issue" | "return" | "cancel";
+  action: "issue" | "return" | "return_damage" | "cancel";
   quantity?: number;
   referenceNo?: string | null;
   remarks?: string | null;
@@ -236,4 +239,9 @@ export type UpdateReservationInput = {
 export type ReportResponse = {
   type: string;
   data: Array<Record<string, unknown>>;
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+  };
 };

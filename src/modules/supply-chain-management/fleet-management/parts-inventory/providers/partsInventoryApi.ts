@@ -193,6 +193,8 @@ export async function fetchReport(
     movementType?: string;
     dateFrom?: string;
     dateTo?: string;
+    page?: number;
+    limit?: number;
   },
 ) {
   const params = new URLSearchParams();
@@ -203,5 +205,7 @@ export async function fetchReport(
   appendIfPresent(params, "movementType", filters.movementType);
   appendIfPresent(params, "dateFrom", filters.dateFrom);
   appendIfPresent(params, "dateTo", filters.dateTo);
+  if (filters.page) params.set("page", String(filters.page));
+  if (filters.limit) params.set("limit", String(filters.limit));
   return request<ReportResponse>(`${BASE}/reports?${params}`);
 }
