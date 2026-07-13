@@ -25,7 +25,7 @@ export function EditHeader({ headerId, onCancel, onSuccess }: EditHeaderProps) {
         if (!res.ok) throw new Error("Failed to load header details");
         const data = await res.json();
         setHeader(data.header);
-        setExistingTags(data.tags.map((t: Record<string, unknown>) => t.rfid));
+        setExistingTags((data.tags || []).map((t: Record<string, unknown>) => t.rfid));
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error loading batch");
         onCancel();
