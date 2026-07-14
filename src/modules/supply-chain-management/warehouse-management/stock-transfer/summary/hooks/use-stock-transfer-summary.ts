@@ -176,8 +176,19 @@ export function useStockTransferSummary() {
         };
       }
       
+      const product = typeof st.product_id === 'object' && st.product_id !== null ? (st.product_id as ProductRow) : null;
+      let amount = Number(st.amount || 0);
+      let unitPrice = st.ordered_quantity > 0 ? amount / st.ordered_quantity : 0;
+      
+      if (amount === 0 && product?.cost_per_unit) {
+        unitPrice = Number(product.cost_per_unit);
+        const qty = st.received_quantity || st.allocated_quantity || st.ordered_quantity || 0;
+        amount = qty * unitPrice;
+      }
+
       const item: OrderGroupItem = {
         ...st,
+        amount,
         scannedQty: 0,
         receivedQty: 0,
         scannedRfids: [],
@@ -187,8 +198,7 @@ export function useStockTransferSummary() {
       };
       
       localGroups[st.order_no].items.push(item);
-      const qty = st.allocated_quantity ?? st.ordered_quantity ?? 0;
-      const unitPrice = st.ordered_quantity > 0 ? Number(st.amount || 0) / st.ordered_quantity : 0;
+      const qty = st.received_quantity ?? st.allocated_quantity ?? st.ordered_quantity ?? 0;
       localGroups[st.order_no].totalAmount += Number((qty * unitPrice).toFixed(2));
     });
 

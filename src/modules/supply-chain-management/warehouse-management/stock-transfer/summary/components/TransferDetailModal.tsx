@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ClipboardList, Package, Printer } from 'lucide-react';
 import type { OrderGroup, OrderGroupItem, ProductRow } from '../../types/stock-transfer.types';
+import { calculateUnitPrice } from '../../services/stock-transfer.helpers';
 import { SummaryPrintPreview } from './SummaryPrintPreview';
 
 /** Local extended OrderGroup for audit trail fields. */
@@ -158,7 +159,7 @@ export function TransferDetailModal({
                   const product = typeof item.product_id === 'object' ? (item.product_id as ProductRow) : null;
                   const productName = product?.product_name || `PRD-${item.product_id}`;
                   const barcode = product?.barcode || '—';
-                  const unitPrice = item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0;
+                  const unitPrice = calculateUnitPrice(item);
 
                   return (
                     <TableRow key={item.id} className="border-b border-border/50 hover:bg-muted/5">

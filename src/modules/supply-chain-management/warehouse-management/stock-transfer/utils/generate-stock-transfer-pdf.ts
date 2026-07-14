@@ -297,8 +297,12 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
   const grandTotal = items.reduce((sum, item) => {
     const qty = safeNum(item.allocated_quantity ?? item.ordered_quantity);
     const ordQty = safeNum(item.ordered_quantity);
+    const product = typeof item.product_id === 'object' && item.product_id !== null ? (item.product_id as ProductRow) : null;
     const amount = safeNum(item.amount);
-    const unitPrice = ordQty > 0 ? (amount / ordQty) : 0;
+    let unitPrice = ordQty > 0 ? (amount / ordQty) : 0;
+    if (amount === 0 && product?.cost_per_unit) {
+      unitPrice = Number(product.cost_per_unit);
+    }
     return sum + (qty * unitPrice);
   }, 0);
 
@@ -436,8 +440,12 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
     const groupSubtotal = groupItems.reduce((sum, item) => {
       const qty = safeNum(item.allocated_quantity ?? item.ordered_quantity);
       const ordQty = safeNum(item.ordered_quantity);
+      const product = typeof item.product_id === 'object' && item.product_id !== null ? (item.product_id as ProductRow) : null;
       const amount = safeNum(item.amount);
-      const unitPrice = ordQty > 0 ? (amount / ordQty) : 0;
+      let unitPrice = ordQty > 0 ? (amount / ordQty) : 0;
+      if (amount === 0 && product?.cost_per_unit) {
+        unitPrice = Number(product.cost_per_unit);
+      }
       return sum + (qty * unitPrice);
     }, 0);
 
