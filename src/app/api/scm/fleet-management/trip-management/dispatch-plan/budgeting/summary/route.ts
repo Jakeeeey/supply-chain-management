@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
       ),
       fetchDirectus(`/items/salesman?limit=-1&fields=id,salesman_name`),
       fetchDirectus(
-        `/items/post_dispatch_plan_others?limit=${encodeURIComponent(limit)}&fields=id,post_dispatch_plan_id,remarks,distance,status`,
+        `/items/post_dispatch_plan_others?limit=${encodeURIComponent(limit)}&fields=id,post_dispatch_plan_id,remarks,distance,status,latitude,longitude`,
       ),
       fetchDirectus(
         `/items/post_dispatch_purchases?limit=${encodeURIComponent(limit)}&fields=id,post_dispatch_plan_id,po_id.purchase_order_id,po_id.purchase_order_no,status`,
@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
     interface User { user_id: number | string; user_fname: string; user_lname: string; }
     interface Customer { customer_code: string; customer_name: string; city: string; province: string; }
     interface Salesman { id: number; salesman_name: string; }
-    interface PlanOther { id: number; post_dispatch_plan_id: number; remarks: string; distance: number; status: string; }
+    interface PlanOther { id: number; post_dispatch_plan_id: number; remarks: string; distance: number; status: string; latitude: number | null; longitude: number | null; }
     interface PlanPurchase {
         id: number;
         post_dispatch_plan_id: number;
@@ -309,7 +309,7 @@ export async function GET(req: NextRequest) {
         customerTransactions.push({
           id: `other-${o.id}`,
           customerName: String(o.remarks || "Manual Route Stop").trim(),
-          address: `Distance: ${o.distance || 0} km`,
+          address: `Distance: ${o.distance || 0} km${o.latitude != null && o.longitude != null ? ` · (${Number(o.latitude).toFixed(5)}, ${Number(o.longitude).toFixed(5)})` : ""}`,
           itemsOrdered: "N/A",
           amount: 0,
           status: String(o.status ?? "Not Fulfilled"),

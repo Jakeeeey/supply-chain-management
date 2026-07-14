@@ -176,7 +176,7 @@ function DraggableGroupedStop({
           <div className="flex items-center justify-between gap-2 mt-0.5 min-h-[20px]">
             <p className="text-[11px] text-muted-foreground font-medium truncate">
               {stop.isManualStop 
-                ? `Manual Route Stop · ${stop.distance || 0} km` 
+                ? `Manual Route Stop · ${stop.distance || 0} km${stop.latitude != null && stop.longitude != null ? ` · (${Number(stop.latitude).toFixed(5)}, ${Number(stop.longitude).toFixed(5)})` : ""}` 
                 : stop.isPoStop 
                   ? `Purchase Order · ${stop.distance || 0} km`
                   : `${itemCount} Invoice${itemCount !== 1 ? "s" : ""}`}
@@ -281,7 +281,7 @@ export function InvoiceItemsSidebar({
     }
   }
 
-  const handleAddStop = (stop: { remarks: string; distance: number }) => {
+  const handleAddStop = (stop: { remarks: string; distance: number; latitude: number | null; longitude: number | null }) => {
     const newStop: PlanDetailItem = {
       detail_id: `manual-${Date.now()}`,
       amount: 0,
@@ -289,6 +289,8 @@ export function InvoiceItemsSidebar({
       remarks: stop.remarks,
       distance: stop.distance,
       status: "Not Fulfilled",
+      latitude: stop.latitude,
+      longitude: stop.longitude,
     };
     onReorder([...planDetails, newStop]);
   };

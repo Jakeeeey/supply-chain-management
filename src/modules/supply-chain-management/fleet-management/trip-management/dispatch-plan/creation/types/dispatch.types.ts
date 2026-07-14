@@ -145,6 +145,8 @@ export interface PostDispatchOtherRow {
   distance?: number;
   sequence: number;
   status: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 /** Row from the `post_dispatch_purchases` collection. */
@@ -212,6 +214,8 @@ export interface PostDispatchOtherRowDetail {
   distance: number;
   sequence: number;
   status: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 // ─── Enriched / Composed Return Shapes ──────────────────────
@@ -247,6 +251,8 @@ export interface EnrichedPlanDetail {
   isPoStop?: boolean;
   po_id?: number;
   po_no?: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 /** Shape of the payload sent to Directus to create a plan header. */

@@ -23,6 +23,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { InvoiceLine, RFIDMapping } from '../types';
 
 interface ScanningModalProps {
@@ -132,10 +133,10 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
                 return;
             }
 
-            const item = items.find(i => Number(i.product_id) === Number(mapping.product_id));
+            const item = items.find(i => Number(i.product_id) === Number(mapping.product_id) && i.unit_order === 3);
 
             if (!item) {
-                toast.error(`Product for Tag ${tag.substring(0, 8)}... not in manifest.`);
+                toast.error(`Product for Tag ${tag.substring(0, 8)}... not in manifest or not valid for RFID.`);
                 playSound('error');
                 return;
             }
@@ -324,17 +325,49 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
                                                 </TableCell>
                                                 <TableCell className="text-center font-bold text-muted-foreground text-xs md:text-sm py-3 md:py-4 tabular-nums">{item.qty}</TableCell>
                                                 <TableCell className="text-center py-3 md:py-4">
-                                                    <div className="flex flex-col items-center gap-1">
-                                                        <span className={`text-base md:text-lg font-black tabular-nums ${isComplete ? 'text-emerald-500' : 'text-foreground'}`}>
-                                                            {scanned}
-                                                        </span>
-                                                        <div className="w-10 md:w-12 h-1 bg-muted rounded-full overflow-hidden border border-border">
-                                                            <div
-                                                                className={`h-full transition-all duration-300 ${isComplete ? 'bg-emerald-500' : 'bg-primary'}`}
-                                                                style={{ width: `${Math.min(100, (scanned / item.qty) * 100)}%` }}
+                                                    {item.unit_order === 3 ? (
+                                                        <div className="flex flex-col items-center gap-1">
+                                                            <span className={`text-base md:text-lg font-black tabular-nums ${isComplete ? 'text-emerald-500' : 'text-foreground'}`}>
+                                                                {scanned}
+                                                            </span>
+                                                            <div className="w-10 md:w-12 h-1 bg-muted rounded-full overflow-hidden border border-border">
+                                                                <div
+                                                                    className={`h-full transition-all duration-300 ${isComplete ? 'bg-emerald-500' : 'bg-primary'}`}
+                                                                    style={{ width: `${Math.min(100, (scanned / item.qty) * 100)}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex justify-center">
+                                                            <Input
+                                                                type="text"
+                                                                inputMode="numeric"
+                                                                pattern="[0-9]*"
+                                                                value={scannedQtys[item.id] !== undefined ? scannedQtys[item.id] : ''}
+                                                                onChange={(e) => {
+                                                                    const valStr = e.target.value;
+                                                                    if (valStr && !/^\d+$/.test(valStr)) return;
+                                                                    
+                                                                    let numValue = parseInt(valStr, 10);
+                                                                    if (isNaN(numValue)) {
+                                                                        const newQtys = { ...scannedQtys };
+                                                                        delete newQtys[item.id];
+                                                                        setScannedQtys(newQtys);
+                                                                        const newQtysRef = { ...scannedQtysRef.current };
+                                                                        delete newQtysRef[item.id];
+                                                                        scannedQtysRef.current = newQtysRef;
+                                                                        return;
+                                                                    }
+                                                                    if (numValue > item.qty) numValue = item.qty;
+                                                                    
+                                                                    setScannedQtys(prev => ({ ...prev, [item.id]: numValue }));
+                                                                    scannedQtysRef.current = { ...scannedQtysRef.current, [item.id]: numValue };
+                                                                }}
+                                                                className="w-20 text-center font-black h-10 border-border focus-visible:ring-primary rounded-lg text-lg bg-primary/5 tabular-nums text-foreground"
+                                                                placeholder="0"
                                                             />
                                                         </div>
-                                                    </div>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell className="text-right py-3 md:py-4 pr-6">
                                                     {isComplete ? (

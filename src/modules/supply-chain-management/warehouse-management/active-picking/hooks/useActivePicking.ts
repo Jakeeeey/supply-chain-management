@@ -248,10 +248,70 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
         }
     };
 
+    const handleAdjustQuantity = async (detailId: number, delta: number) => {
+        const target = localDetails.find(d => d.id === detailId);
+        if (!target) return;
+
+        const currentQty = target.pickedQuantity || 0;
+        const newQty = currentQty + delta;
+        if (newQty < 0 || newQty > (target.orderedQuantity || 0)) {
+            soundFX.error();
+            toast.error("Invalid quantity adjustment");
+            return;
+        }
+
+        setIsScanning(true);
+        try {
+            await submitManualPick({
+                batchId: batch.id!,
+                productId: target.productId,
+                quantity: delta
+            });
+
+            // Optimistic UI Update
+            const updatedDetails = detailsRef.current.map(d =>
+                d.id === detailId ? { ...d, pickedQuantity: newQty } : d
+            );
+            detailsRef.current = updatedDetails;
+            setLocalDetails(updatedDetails);
+
+            // Clear RFID scan cache references if reset to 0
+            if (newQty === 0) {
+                scannedTagsRef.current.clear();
+            }
+
+            logScan(`MANUAL-${delta}`, "success", `Adjusted ${target.productName} by ${delta}`);
+            soundFX.success();
+
+            if (delta < 0 && newQty === 0) {
+                toast.success(`Reset ${target.productName} quantity to 0`, {
+                    action: {
+                        label: "Undo",
+                        onClick: () => {
+                            handleAdjustQuantity(detailId, currentQty);
+                        }
+                    },
+                    duration: 5000
+                });
+            } else {
+                toast.success(`Updated ${target.productName} quantity to ${newQty}`);
+            }
+
+            router.refresh();
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Adjustment failed";
+            logScan("MANUAL", "error", message);
+            soundFX.error();
+            toast.error(message);
+        } finally {
+            setIsScanning(false);
+        }
+    };
+
     return {
         groupedDetails, activeDetailId, activeDetail, scanLogs, isScanning,
         totalItems, totalPicked, progressPercent, isBatchComplete,
         isManualModalOpen, manualQuantity, setIsManualModalOpen,
-        setManualQuantity, setActiveDetailId, handleManualSubmit
+        setManualQuantity, setActiveDetailId, handleManualSubmit, handleAdjustQuantity
     };
 }

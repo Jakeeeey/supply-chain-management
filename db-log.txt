@@ -1,0 +1,11 @@
+{
+  "data": [
+    {
+      "created_at": "2026-05-09T02:54:02.000Z",
+      "id": 1,
+      "setting_key": "time_zone",
+      "setting_value": "Asia/Manila",
+      "updated_at": "2026-05-09T02:54:02.000Z"
+    }
+  ]
+}

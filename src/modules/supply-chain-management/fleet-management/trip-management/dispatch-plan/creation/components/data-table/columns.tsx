@@ -127,6 +127,12 @@ export const getDispatchPlanColumns = (
     meta: { label: "Departure" },
     cell: ({ row }) => {
       const etod = new Date(row.original.estimatedDispatch);
+      const valid = !isNaN(etod.getTime());
+      if (!valid) {
+        return (
+          <span className="text-xs text-muted-foreground/50 italic">—</span>
+        );
+      }
       return (
         <div>
           <p className="text-sm text-foreground">
@@ -147,6 +153,12 @@ export const getDispatchPlanColumns = (
     meta: { label: "Arrival" },
     cell: ({ row }) => {
       const etoa = new Date(row.original.estimatedArrival);
+      const valid = !isNaN(etoa.getTime());
+      if (!valid) {
+        return (
+          <span className="text-xs text-muted-foreground/50 italic">—</span>
+        );
+      }
       return (
         <div>
           <p className="text-sm text-foreground">

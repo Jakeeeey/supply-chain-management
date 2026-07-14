@@ -68,6 +68,7 @@ export default function BarCodeScannerModule() {
     allBarcodes,
     error,
     refresh,
+    timezone,
   } = useBarcodeScanner();
 
   // UI States for Comboboxes
@@ -192,7 +193,9 @@ export default function BarCodeScannerModule() {
                         />
                         All Products
                       </CommandItem>
-                      {allProducts.map((product: Product) => (
+                      {allProducts
+                        .filter((p: Product) => !p.parent_id)
+                        .map((product: Product) => (
                         <CommandItem
                           key={product.product_id}
                           value={product.product_name || ""}
@@ -341,6 +344,7 @@ export default function BarCodeScannerModule() {
           cbmUnits={cbmUnits}
           onClose={() => setSelectedProduct(null)}
           onSave={handleUpdateBarcode}
+          timezone={timezone}
         />
       </Suspense>
     </div>

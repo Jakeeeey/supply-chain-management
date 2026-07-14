@@ -16,7 +16,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     if (type === "duplicate-check") {
       const name = searchParams.get("name") || "";
-      const isDuplicate = await productRegistrationService.checkDuplicateName(name);
+      const excludeId = searchParams.get("excludeId") || undefined;
+      const isDuplicate = await productRegistrationService.checkDuplicateName(name, excludeId);
       return NextResponse.json({ isDuplicate });
     }
 
@@ -33,6 +34,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const itemType = searchParams.get("itemType") || undefined;
     const brandId = searchParams.get("brand") ? parseInt(searchParams.get("brand")!) : undefined;
     const statusParam = searchParams.get("status") || undefined;
+    const uomParam = searchParams.get("uom");
+    const uomId = uomParam ? parseInt(uomParam) : undefined;
 
     const paginated = await productRegistrationService.fetchProducts(
       limit,
@@ -40,7 +43,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       search,
       sort,
       supplierId,
-      { categoryId, classId, segmentId, itemType, brandId, status: statusParam },
+      { categoryId, classId, segmentId, itemType, brandId, status: statusParam, uomId },
     );
 
     return NextResponse.json(paginated);

@@ -17,6 +17,7 @@ export function useBarcodeScanner() {
   const [barcodeTypes, setBarcodeTypes] = useState<RefData[]>([]);
   const [weightUnits, setWeightUnits] = useState<RefData[]>([]);
   const [cbmUnits, setCbmUnits] = useState<RefData[]>([]);
+  const [timezone, setTimezone] = useState<string>("Asia/Manila");
 
   // All existing barcodes for duplicate checking (includes linked products)
   const [allBarcodes, setAllBarcodes] = useState<
@@ -27,7 +28,7 @@ export function useBarcodeScanner() {
     setIsLoading(true);
     setError(null);
     try {
-      const [productsRes, btRes, wuRes, cuRes, bundlesRes] =
+      const [productsRes, btRes, wuRes, cuRes, bundlesRes, tzRes] =
         await Promise.all([
           fetch(
             "/api/scm/product-management/barcode-management/barcode-linking",
@@ -43,6 +44,9 @@ export function useBarcodeScanner() {
           ),
           fetch(
             "/api/scm/product-management/barcode-management/barcode-linking?scope=bundles",
+          ),
+          fetch(
+            "/api/scm/product-management/barcode-management/barcode-linking?scope=timezone",
           ),
         ]);
 
@@ -117,6 +121,12 @@ export function useBarcodeScanner() {
         const data = await cuRes.json();
         setCbmUnits(Array.isArray(data.data) ? data.data : []);
       }
+      if (tzRes.ok) {
+        const data = await tzRes.json();
+        if (data.data) {
+          setTimezone(data.data);
+        }
+      }
     } catch (err: unknown) {
       console.error("Fetch error", err);
       const message = err instanceof Error ? err.message : "Failed to load barcode linking data.";
@@ -142,7 +152,8 @@ export function useBarcodeScanner() {
 
 
       const matchesProduct =
-        productFilter === "all" || String(product.product_id) === productFilter;
+        productFilter === "all" ||
+        String(product.parent_id ?? product.product_id) === productFilter;
 
       const matchesRecordType =
         recordTypeFilter === "all" || product.record_type === recordTypeFilter;
@@ -262,5 +273,6 @@ export function useBarcodeScanner() {
     allBarcodes,
     error,
     refresh: fetchData,
+    timezone,
   };
 }
