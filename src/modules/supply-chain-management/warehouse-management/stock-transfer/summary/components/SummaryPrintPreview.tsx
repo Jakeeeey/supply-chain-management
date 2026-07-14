@@ -13,7 +13,8 @@ import { Printer, Download, X, Loader2, FileText, AlertCircle } from 'lucide-rea
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { SummaryOrderGroup } from '../hooks/use-stock-transfer-summary';
-import { CompanyData } from '../../types/stock-transfer.types';
+import { CompanyData, StockTransferRow } from '../../types/stock-transfer.types';
+import { calculateUnitPrice } from '../../services/stock-transfer.helpers';
 import { PrintTemplate } from './PrintTemplate';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -144,31 +145,21 @@ export function SummaryPrintPreview({
       // Info Grid
       doc.setDrawColor(200, 200, 200);
       doc.setLineWidth(0.3);
-      doc.roundedRect(margin, y - 3, contentW, 14, 1.5, 1.5, 'S');
+      doc.roundedRect(margin, y - 3, contentW, 28, 1.5, 1.5, 'S');
 
-      const colW = contentW / 4;
+      const colW = contentW / 2;
       
+      // Grid dividers
+      doc.line(margin + colW, y - 3, margin + colW, y + 25);
+      doc.line(margin, y + 11, pageW - margin, y + 11);
+
+      // Row 1 Labels
       doc.setFontSize(7);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(100, 100, 100);
       doc.text('SOURCE BRANCH', margin + 3, y + 2);
       doc.text('TARGET BRANCH', margin + colW + 3, y + 2);
-      doc.text('DATE REQUESTED', margin + colW * 2 + 3, y + 2);
-      doc.text('STATUS', margin + colW * 3 + 3, y + 2);
 
-      // Grid dividers
-      doc.setDrawColor(200, 200, 200);
-      doc.setLineWidth(0.2);
-      doc.line(margin + colW, y - 3, margin + colW, y + 11);
-      doc.line(margin + colW * 2, y - 3, margin + colW * 2, y + 11);
-      doc.line(margin + colW * 3, y - 3, margin + colW * 3, y + 11);
-      doc.line(margin, y + 4, pageW - margin, y + 4);
-
-      y += 8;
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(0, 0, 0);
-      
       const formatDate = (dateStr: string | null | undefined) => {
         if (!dateStr) return '—';
         try {
@@ -176,61 +167,107 @@ export function SummaryPrintPreview({
         } catch { return dateStr; }
       };
 
-      doc.text(getBranchName(group.sourceBranch), margin + 3, y);
-      doc.text(getBranchName(group.targetBranch), margin + colW + 3, y);
-      doc.text(formatDate(group.dateRequested), margin + colW * 2 + 3, y);
-      doc.text((group.status || 'PENDING').toUpperCase(), margin + colW * 3 + 3, y);
-      
-      y += 10;
+      // Row 1 Values
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text(getBranchName(group.sourceBranch), margin + 3, y + 8);
+      doc.text(getBranchName(group.targetBranch), margin + colW + 3, y + 8);
+
+      // Row 2 Labels
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(100, 100, 100);
+      doc.text('DATE REQUESTED', margin + 3, y + 16);
+      doc.text('STATUS', margin + colW + 3, y + 16);
+
+      // Row 2 Values
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text(formatDate(group.dateRequested), margin + 3, y + 22);
+      doc.text((group.status || 'PENDING').toUpperCase(), margin + colW + 3, y + 22);
+
+      y += 32;
 
       // Table
-      const grandTotal = group.totalAmount;
+      const grandTotal = group.items.reduce((sum, item) => {
+        const unitPrice = calculateUnitPrice(item as unknown as StockTransferRow);
+        const qty = item.received_quantity || item.allocated_quantity || item.ordered_quantity || 0;
+        return sum + (qty * unitPrice);
+      }, 0);
       const rows = group.items.map((item) => {
          const product = typeof item.product_id === 'object' && item.product_id !== null 
            ? (item.product_id as { product_brand?: { brand_name?: string }, product_name?: string, unit_of_measurement?: unknown }) 
            : null;
          const brand = typeof product?.product_brand === 'object' ? product.product_brand?.brand_name : 'N/A';
          const unit = getUnitName(product?.unit_of_measurement);
+         const unitPrice = calculateUnitPrice(item as unknown as StockTransferRow);
+         const qty = item.received_quantity || item.allocated_quantity || item.ordered_quantity || 0;
+         const rowTotal = qty * unitPrice;
          return [
            brand || 'N/A',
            product?.product_name || `ID: ${item.product_id}`,
            unit,
            String(item.ordered_quantity),
-           `PHP ${Number(item.amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+           String(item.allocated_quantity ?? '—'),
+           String(item.received_quantity ?? '—'),
+           `PHP ${rowTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
          ];
       });
 
       autoTable(doc, {
         startY: y,
         margin: { left: margin, right: margin },
-        head: [['Brand', 'Product Name', 'Unit', 'Qty', 'Total']],
-        body: rows.length > 0 ? rows : [['No items found.', '', '', '', '']],
+        head: [['BRAND', 'PRODUCT NAME', 'UNIT', 'ORDERED', 'ALLOCATED', 'RECEIVED', 'TOTAL']],
+        body: rows.length > 0 ? rows : [['No items found.', '', '', '', '', '', '']],
         foot: rows.length > 0 ? [[
-          { content: '', colSpan: 3, styles: { fillColor: [255, 255, 255], lineColor: [255, 255, 255] } },
+          { content: '', colSpan: 5, styles: { fillColor: [255, 255, 255] } },
           { content: 'GRAND TOTAL', colSpan: 1, styles: { halign: 'right', fontStyle: 'bold', fontSize: 8, fillColor: [255, 255, 255], textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: { top: 0.5 } } },
           { content: `PHP ${grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, colSpan: 1, styles: { halign: 'right', fontStyle: 'bold', fontSize: 9, fillColor: [255, 255, 255], textColor: [5, 150, 105], lineColor: [0, 0, 0], lineWidth: { top: 0.5 } } }
         ]] : [],
         styles: {
-          fontSize: 8,
-          cellPadding: { top: 3, bottom: 3, left: 3, right: 3 },
+          fontSize: 7.5,
+          cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
           textColor: [0, 0, 0],
-          lineColor: [238, 238, 238],
-          lineWidth: 0.1,
+          lineWidth: 0,
         },
         headStyles: {
-          fillColor: [245, 245, 245],
+          fillColor: [249, 249, 249],
           textColor: [0, 0, 0],
           fontStyle: 'bold',
           lineColor: [0, 0, 0],
-          lineWidth: { bottom: 0.5 },
+          lineWidth: { bottom: 0.8 },
         },
         columnStyles: {
-          0: { cellWidth: 35 },
+          0: { cellWidth: 22 },
           1: { cellWidth: 'auto' },
-          2: { cellWidth: 25, halign: 'center' },
-          3: { cellWidth: 20, halign: 'center' },
-          4: { cellWidth: 35, halign: 'right', fontStyle: 'bold' },
+          2: { cellWidth: 12, halign: 'center' },
+          3: { cellWidth: 16, halign: 'center' },
+          4: { cellWidth: 20, halign: 'center' },
+          5: { cellWidth: 20, halign: 'center' },
+          6: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },
         },
+        didParseCell: (data) => {
+          if (data.section === 'body') {
+            if (data.column.index === 4) {
+              data.cell.styles.textColor = [217, 119, 6];
+              data.cell.styles.fontStyle = 'bold';
+            }
+            if (data.column.index === 5) {
+              data.cell.styles.textColor = [5, 150, 105];
+              data.cell.styles.fontStyle = 'bold';
+            }
+          }
+        },
+        didDrawCell: (data) => {
+          if (data.section === 'body') {
+            const doc = data.doc;
+            doc.setDrawColor(238, 238, 238);
+            doc.setLineWidth(0.1);
+            doc.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
+          }
+        }
       });
 
       y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 15;
