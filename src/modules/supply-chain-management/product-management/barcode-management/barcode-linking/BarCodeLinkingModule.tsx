@@ -193,7 +193,9 @@ export default function BarCodeScannerModule() {
                         />
                         All Products
                       </CommandItem>
-                      {allProducts.map((product: Product) => (
+                      {allProducts
+                        .filter((p: Product) => !p.parent_id)
+                        .map((product: Product) => (
                         <CommandItem
                           key={product.product_id}
                           value={product.product_name || ""}

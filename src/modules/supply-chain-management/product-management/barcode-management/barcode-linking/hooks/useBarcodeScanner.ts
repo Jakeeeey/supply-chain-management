@@ -152,7 +152,8 @@ export function useBarcodeScanner() {
 
 
       const matchesProduct =
-        productFilter === "all" || String(product.product_id) === productFilter;
+        productFilter === "all" ||
+        String(product.parent_id ?? product.product_id) === productFilter;
 
       const matchesRecordType =
         recordTypeFilter === "all" || product.record_type === recordTypeFilter;
