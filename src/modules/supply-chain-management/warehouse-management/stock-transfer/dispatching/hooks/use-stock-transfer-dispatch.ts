@@ -4,17 +4,25 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useStockTransferBase } from '../../shared/hooks/use-stock-transfer-base';
 import { stockTransferLifecycleService } from '../../services/stock-transfer.lifecycle';
 import { toast } from 'sonner';
-import type { OrderGroup, OrderGroupItem, ProductRow, ScanLog } from '../../types/stock-transfer.types';
+import type { OrderGroup, OrderGroupItem, ProductRow, ScanLog, CurrentUser } from '../../types/stock-transfer.types';
 
 const LOCAL_STORAGE_KEY = 'scm_dispatching_scans_v1';
 
 /**
  * Hook for managing the "Stock Transfer Dispatch" phase (RFID Scanning at Source).
  */
-export function useStockTransferDispatch() {
+export function useStockTransferDispatch({ currentUser }: { currentUser?: CurrentUser } = {}) {
   const base = useStockTransferBase({ 
     statuses: ['For Picking', 'Picking', 'Picked'] 
   });
+
+  const storageKey = currentUser?.email 
+    ? `${LOCAL_STORAGE_KEY}_user_${currentUser.email}`
+    : LOCAL_STORAGE_KEY;
+
+  const manualStorageKey = currentUser?.email
+    ? `warehouse_dispatch_manual_scans_user_${currentUser.email}`
+    : 'warehouse_dispatch_manual_scans';
 
   const [fetchingAvailable, setFetchingAvailable] = useState(false);
   const [scannedInventory, setScannedInventory] = useState<Record<number, number>>({});
@@ -27,7 +35,7 @@ export function useStockTransferDispatch() {
   const [scannedItemsState, setScannedItemsState] = useState<Record<string, ScanLog[]>>(() => {
     if (typeof window === 'undefined') return {};
     try {
-      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      const saved = localStorage.getItem(storageKey);
       if (!saved) return {};
       
       const parsed = JSON.parse(saved);
@@ -46,17 +54,21 @@ export function useStockTransferDispatch() {
     }
   });
 
-  // Sync scans to localStorage
+  // Sync scans to localStorage (Filtering out failed/error scans)
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(scannedItemsState));
+      const successScansOnly: Record<string, ScanLog[]> = {};
+      Object.entries(scannedItemsState).forEach(([orderNo, scans]) => {
+        successScansOnly[orderNo] = scans.filter(s => s.status === 'SUCCESS');
+      });
+      localStorage.setItem(storageKey, JSON.stringify(successScansOnly));
     }
-  }, [scannedItemsState]);
+  }, [scannedItemsState, storageKey]);
 
   const [manualQtysState, setManualQtysState] = useState<Record<string, Record<number, number>>>(() => {
     try {
       if (typeof window === 'undefined') return {};
-      const saved = localStorage.getItem('warehouse_dispatch_manual_scans');
+      const saved = localStorage.getItem(manualStorageKey);
       return saved ? JSON.parse(saved) : {};
     } catch {
       return {};
@@ -65,9 +77,9 @@ export function useStockTransferDispatch() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('warehouse_dispatch_manual_scans', JSON.stringify(manualQtysState));
+      localStorage.setItem(manualStorageKey, JSON.stringify(manualQtysState));
     }
-  }, [manualQtysState]);
+  }, [manualQtysState, manualStorageKey]);
 
   // Garbage-collect orphaned localStorage entries for canceled/rejected orders
   useEffect(() => {
@@ -273,6 +285,7 @@ export function useStockTransferDispatch() {
         items: itemsPayload, 
         status: 'For Loading',
         rfids: rfidsPayload,
+        scanType: 'DISPATCH',
       });
 
       toast.success(`Order ${orderNo} successfully dispatched.`);

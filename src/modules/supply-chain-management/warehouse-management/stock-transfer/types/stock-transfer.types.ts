@@ -251,6 +251,8 @@ export interface UpdateTransferPayload {
   scanType?: "DISPATCH" | "RECEIVE";
   /** ID of the user performing the update. */
   userId?: number;
+  /** Directus file IDs attached to the receiving transaction. */
+  attachments?: string[];
 }
 
 /** Directus payload for batch-inserting a stock_transfer row. */
@@ -268,6 +270,7 @@ export interface StockTransferInsertPayload {
   remarks: string;
   date_requested: string;
   date_encoded: string;
+  encoder_id?: number | null;
 }
 
 // ─── Valid Statuses ─────────────────────────────────────────

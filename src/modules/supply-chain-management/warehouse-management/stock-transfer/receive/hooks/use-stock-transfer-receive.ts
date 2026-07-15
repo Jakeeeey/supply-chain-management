@@ -4,22 +4,30 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useStockTransferBase } from '../../shared/hooks/use-stock-transfer-base';
 import { stockTransferLifecycleService } from '../../services/stock-transfer.lifecycle';
 import { toast } from 'sonner';
-import type { OrderGroup, OrderGroupItem, ProductRow, ScanLog } from '../../types/stock-transfer.types';
+import type { OrderGroup, OrderGroupItem, ProductRow, ScanLog, CurrentUser } from '../../types/stock-transfer.types';
 
 const LOCAL_STORAGE_KEY_RECEIVE = 'scm_receive_scans_v1';
 
 /**
  * Hook for managing the "Stock Transfer Receive" phase (RFID Verification at Target).
  */
-export function useStockTransferReceive() {
+export function useStockTransferReceive({ currentUser }: { currentUser?: CurrentUser } = {}) {
   const base = useStockTransferBase({ 
     statuses: ['For Loading'] 
   });
 
+  const storageKey = currentUser?.email 
+    ? `${LOCAL_STORAGE_KEY_RECEIVE}_user_${currentUser.email}`
+    : LOCAL_STORAGE_KEY_RECEIVE;
+
+  const manualStorageKey = currentUser?.email
+    ? `scm_receive_manual_v1_user_${currentUser.email}`
+    : 'scm_receive_manual_v1';
+
   const [receivedItemsState, setReceivedItemsState] = useState<Record<string, ScanLog[]>>(() => {
     if (typeof window === 'undefined') return {};
     try {
-      const saved = localStorage.getItem(LOCAL_STORAGE_KEY_RECEIVE);
+      const saved = localStorage.getItem(storageKey);
       return saved ? JSON.parse(saved) : {};
     } catch { return {}; }
   });
@@ -27,7 +35,7 @@ export function useStockTransferReceive() {
   const [manualQtysState, setManualQtysState] = useState<Record<string, Record<number, number>>>(() => {
     if (typeof window === 'undefined') return {};
     try {
-      const saved = localStorage.getItem('scm_receive_manual_v1');
+      const saved = localStorage.getItem(manualStorageKey);
       return saved ? JSON.parse(saved) : {};
     } catch { return {}; }
   });
@@ -37,15 +45,19 @@ export function useStockTransferReceive() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(LOCAL_STORAGE_KEY_RECEIVE, JSON.stringify(receivedItemsState));
+      const successScansOnly: Record<string, ScanLog[]> = {};
+      Object.entries(receivedItemsState).forEach(([orderNo, scans]) => {
+        successScansOnly[orderNo] = scans.filter(s => s.status === 'SUCCESS');
+      });
+      localStorage.setItem(storageKey, JSON.stringify(successScansOnly));
     }
-  }, [receivedItemsState]);
+  }, [receivedItemsState, storageKey]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('scm_receive_manual_v1', JSON.stringify(manualQtysState));
+      localStorage.setItem(manualStorageKey, JSON.stringify(manualQtysState));
     }
-  }, [manualQtysState]);
+  }, [manualQtysState, manualStorageKey]);
 
   // Garbage-collect orphaned localStorage entries for canceled/rejected orders
   useEffect(() => {
@@ -167,6 +179,7 @@ export function useStockTransferReceive() {
         items: itemsPayload, 
         status: 'Received',
         rfids: rfidsPayload,
+        scanType: 'RECEIVE',
       });
 
       toast.success(`Order ${orderNo} successfully received!`);
