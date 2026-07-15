@@ -19,7 +19,10 @@ import {
   ChevronsRight,
   Paperclip,
   AlertCircle,
+  Printer,
 } from "lucide-react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Badge } from "@/components/ui/badge";
 import {
   StockAdjustmentManualFormSchema,
@@ -28,6 +31,7 @@ import {
 } from "../../types/stock-adjustment-manual.schema";
 import { useStockAdjustmentManualForm } from "../../hooks/useStockAdjustmentManualForm";
 import { isPostedStatus } from "../../utils/status-utils";
+import { decodeJwtPayload } from "../../utils/auth-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,6 +58,10 @@ import {
 } from "@/components/ui/combobox";
 import { ProductSelectionModal } from "../modals/ProductSelectionModal";
 import { AttachmentUpload } from "../AttachmentUpload";
+import { PdfEngine } from "@/components/pdf-layout-design/PdfEngine";
+import { pdfTemplateService } from "@/components/pdf-layout-design/services/pdf-template";
+import { PAPER_SIZES } from "@/components/pdf-layout-design/constants";
+import { CompanyData } from "@/components/pdf-layout-design/types";
 
 // ——————————————————————————————————————————————————————————————————————————————
 interface StockAdjustmentManualFormProps {
@@ -63,6 +71,7 @@ interface StockAdjustmentManualFormProps {
   mode?: "creation" | "posting";
   unpostedList?: { id?: number; doc_no: string }[];
   onSelectId?: (id: number) => void;
+  userFullName?: string;
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
@@ -116,13 +125,18 @@ const ProductTableRow = React.memo(function ProductTableRow({
         </div>
       </td>
       <td className="p-3">
+        <span className="text-[10px] font-bold text-primary bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded uppercase shrink-0">
+          {unitName || "-"}
+        </span>
+      </td>
+      <td className="p-3">
         <span className="text-xs font-bold text-foreground">
           ₱{Number(costPerUnit || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       </td>
       <td className="p-3">
-        <span className="text-[10px] font-bold text-primary bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded uppercase shrink-0">
-          {unitName || "-"}
+        <span className="text-xs font-bold text-primary dark:text-primary/70">
+          ₱{Number(totalCost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       </td>
       <td className="p-3 w-32">
@@ -161,11 +175,6 @@ const ProductTableRow = React.memo(function ProductTableRow({
         {rowError?.quantity && (
           <p className="text-[10px] text-red-500 font-bold mt-1">{rowError.quantity.message}</p>
         )}
-      </td>
-      <td className="p-3">
-        <span className="text-xs font-bold text-primary dark:text-primary/70">
-          ₱{Number(totalCost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </span>
       </td>
       <td className="p-3 text-center w-16">
         {!isReadOnly && (
@@ -252,6 +261,7 @@ export function StockAdjustmentManualForm({
   onSuccess,
   unpostedList,
   onSelectId,
+  userFullName,
 }: StockAdjustmentManualFormProps) {
   const router = useRouter();
   const {
@@ -284,6 +294,23 @@ export function StockAdjustmentManualForm({
   const [supplierSearch, setSupplierSearch] = useState("");
   const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [companyData, setCompanyData] = useState<CompanyData | null>(null);
+
+  useEffect(() => {
+    const fetchCompanyData = async () => {
+      try {
+        const res = await fetch("/api/pdf/company");
+        if (res.ok) {
+          const result = await res.json();
+          const company = result.data?.[0] || (Array.isArray(result.data) ? null : result.data);
+          setCompanyData(company);
+        }
+      } catch (err) {
+        console.error("Error fetching company data:", err);
+      }
+    };
+    fetchCompanyData();
+  }, []);
 
   const [tableSearch, setTableSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -308,6 +335,241 @@ export function StockAdjustmentManualForm({
     control: form.control,
     name: "items",
   });
+
+  const handleClearForm = useCallback(async () => {
+    form.reset({
+      doc_no: "",
+      branch_id: 0,
+      supplier_id: 0,
+      type: "IN",
+      remarks: "",
+      items: [],
+      isPosted: false,
+      stock_adjustment_attachment: [],
+    });
+    setBranchInputValue("");
+    setSupplierInputValue("");
+
+    // Fetch and set the new doc_no for type "IN"
+    const nextDocNo = await fetchNextDocNo("IN");
+    form.setValue("doc_no", nextDocNo);
+
+    // Update initial values ref to match the reset state
+    initialValuesRef.current = JSON.stringify({
+      doc_no: nextDocNo,
+      branch_id: 0,
+      supplier_id: 0,
+      type: "IN",
+      remarks: "",
+      items: [],
+      isPosted: false,
+      stock_adjustment_attachment: [],
+    });
+  }, [form, fetchNextDocNo]);
+
+  const generatePDF = useCallback(async () => {
+    const values = form.getValues();
+    if (!values) return;
+
+    // Retrieve currently logged-in user name from prop or fallback to JWT cookie
+    let currentUserName = userFullName || "System User";
+    if (!userFullName) {
+      try {
+        const getCookie = (name: string): string | null => {
+          if (typeof window === "undefined") return null;
+          const value = `; ${document.cookie}`;
+          const parts = value.split(`; ${name}=`);
+          if (parts.length === 2) return parts.pop()?.split(";").shift() || null;
+          return null;
+        };
+        const token = getCookie("vos_access_token");
+        if (token) {
+          const decoded = decodeJwtPayload(token);
+          if (decoded) {
+            const first = String(decoded.Firstname ?? decoded.FirstName ?? decoded.firstName ?? decoded.firstname ?? decoded.first_name ?? "").trim();
+            const last = String(decoded.LastName ?? decoded.Lastname ?? decoded.lastName ?? decoded.lastname ?? decoded.last_name ?? "").trim();
+            const email = String(decoded.email ?? decoded.Email ?? "").trim();
+            currentUserName = [first, last].filter(Boolean).join(" ") || email || "System User";
+          }
+        }
+      } catch (e) {
+        console.error("Failed to decode token for PDF Prepared By:", e);
+      }
+    }
+
+    // --- Find Best Match Template ---
+    const templates = await pdfTemplateService.fetchTemplates();
+    const template = templates.find(t => t.name === "MEN2")
+                  || templates.find(t => t.name.toLowerCase().includes("men2"))
+                  || templates[0];
+    const templateName = template?.name || "MEN2";
+
+    const doc = await PdfEngine.generateWithFrame(templateName, companyData, (doc, startY, config) => {
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margins = {
+        top: config.margins?.top ?? 10,
+        bottom: config.margins?.bottom ?? 10,
+        left: 15,
+        right: 15
+      };
+
+      // --- Title ---
+      const titleY = startY + 5;
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(37, 99, 235);
+      doc.text("STOCK ADJUSTMENT SLIP", pageWidth / 2, titleY, { align: "center" });
+
+      doc.setDrawColor(37, 99, 235);
+      doc.setLineWidth(0.5);
+      doc.line(pageWidth / 2 - 40, titleY + 3, pageWidth / 2 + 40, titleY + 3);
+
+      // --- Metadata Section ---
+      const metaY = titleY + 10;
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+
+      // Left Column
+      doc.setFont("helvetica", "bold");
+      doc.text("Document No:", margins.left, metaY);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(15, 23, 42);
+      doc.text(values.doc_no || "-", margins.left + 30, metaY);
+
+      doc.setTextColor(100, 116, 139);
+      doc.setFont("helvetica", "bold");
+      doc.text("Date Created:", margins.left, metaY + 6);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(15, 23, 42);
+      const dateStr = values.postedAt || new Date().toISOString();
+      doc.text(format(new Date(dateStr), "yyyy-MM-dd h:mm a"), margins.left + 30, metaY + 6);
+
+      // Right Column
+      const rightColX = pageWidth / 2 + 10;
+      doc.setTextColor(100, 116, 139);
+      doc.setFont("helvetica", "bold");
+      doc.text("Branch:", rightColX, metaY);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(15, 23, 42);
+      const branchObj = branches.find(b => b.id === Number(values.branch_id));
+      const branchName = branchObj ? branchObj.branch_name : "Main Warehouse";
+      doc.text(String(branchName).toUpperCase(), rightColX + 35, metaY);
+
+      doc.setTextColor(100, 116, 139);
+      doc.setFont("helvetica", "bold");
+      doc.text("Adjustment Type:", rightColX, metaY + 6);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(values.type === "IN" ? 22 : 185, values.type === "IN" ? 101 : 28, values.type === "IN" ? 52 : 28);
+      const adjTypeFull = values.type === "IN" ? "Stock In" : values.type === "OUT" ? "Stock Out" : (values.type || "-");
+      doc.text(adjTypeFull, rightColX + 35, metaY + 6);
+
+      // --- Product Table ---
+      const tableRows = values.items?.map((item, index) => {
+        const price = Number(item.cost_per_unit || 0);
+        const totalAmount = Number(item.quantity || 0) * price;
+        return [
+          index + 1,
+          item.brand_name || "N/A",
+          `${item.product_name || "Unknown"}\n(${item.product_code || "N/A"})`,
+          item.unit_name || "pcs",
+          `PHP ${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          `PHP ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          item.quantity || 0
+        ];
+      }) || [];
+
+      // Dynamic bottom margin
+      const baseSize = config.paperSize === "Custom" ? config.customSize : (PAPER_SIZES[config.paperSize] || PAPER_SIZES.A4);
+      const paperHeight = config.orientation === "landscape" ? baseSize.width : baseSize.height;
+      const bottomMargin = config.bodyEnd ? (paperHeight - config.bodyEnd) : margins.bottom;
+
+      autoTable(doc, {
+        startY: metaY + 12,
+        margin: { ...margins, bottom: bottomMargin },
+        head: [["#", "Brand", "Product Name", "UOM", "Unit Price", "Total Amount", "Qty"]],
+        body: tableRows,
+        headStyles: { fillColor: [248, 250, 252], textColor: [71, 85, 105], fontSize: 8, fontStyle: "bold" },
+        bodyStyles: { fontSize: 7, textColor: [30, 41, 59] },
+        columnStyles: {
+          0: { halign: "center", cellWidth: 8 },
+          1: { halign: "left", cellWidth: 25 },
+          2: { halign: "left" },
+          3: { halign: "center", cellWidth: 15 },
+          4: { halign: "right", cellWidth: 25 },
+          5: { halign: "right", fontStyle: "bold", cellWidth: 30 },
+          6: { halign: "center", fontStyle: "bold", cellWidth: 15 }
+        },
+        theme: "grid",
+        styles: { cellPadding: 1.5 }
+      });
+
+      const finalY = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 100) + 8;
+
+      // --- Totals & Remarks Section ---
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.setFont("helvetica", "normal");
+      doc.text("Total Adjusted Amount", pageWidth - margins.right, finalY, { align: "right" });
+
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.setFont("helvetica", "bold");
+      doc.text("REMARKS:", margins.left, finalY);
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(30, 41, 59);
+      const remarks = values.remarks || "N/A";
+      const splitRemarks = doc.splitTextToSize(remarks.toUpperCase(), 100);
+      doc.text(splitRemarks, margins.left, finalY + 5);
+
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 58, 138);
+      const totalAmountSum = values.items?.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.cost_per_unit || 0)), 0) || 0;
+      const formattedAmount = totalAmountSum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      doc.text(`PHP ${formattedAmount}`, pageWidth - margins.right, finalY + 7, { align: "right" });
+
+      // --- Signatures Section ---
+      let sigY = finalY + 25;
+
+      if (sigY + 20 > paperHeight) {
+        doc.addPage();
+        sigY = 30;
+      }
+
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.3);
+      doc.line(margins.left, sigY - 5, pageWidth - margins.right, sigY - 5);
+
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.setFont("helvetica", "normal");
+      doc.setLineWidth(0.2);
+      doc.setDrawColor(148, 163, 184);
+
+      // Prepared By
+      doc.text("PREPARED BY:", margins.left, sigY);
+      doc.line(margins.left, sigY + 12, margins.left + 50, sigY + 12);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42);
+      doc.text(currentUserName, margins.left, sigY + 10);
+
+      // Approved By
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 116, 139);
+      doc.text("APPROVED BY:", pageWidth / 2 - 25, sigY);
+      doc.line(pageWidth / 2 - 25, sigY + 12, pageWidth / 2 + 25, sigY + 12);
+
+      // Received By
+      doc.text("RECEIVED BY:", pageWidth - margins.right - 50, sigY);
+      doc.line(pageWidth - margins.right - 50, sigY + 12, pageWidth - margins.right, sigY + 12);
+    });
+
+    doc.save(`StockAdjustmentManual_${values.doc_no}.pdf`);
+  }, [branches, companyData, form, userFullName]);
+
 
   // ——————————————————————————————————————————————————————————————————————————————
   // Unlock body scroll/pointer-events when save/post loading clears.
@@ -556,8 +818,18 @@ export function StockAdjustmentManualForm({
     }
   };
 
-  const onInvalid = () => {
-    toast.error("Please fill in all required fields correctly.");
+  const onInvalid = (errors: FieldErrors<StockAdjustmentManualFormValues>) => {
+    console.warn("Validation failed errors:", errors);
+    const errorDetails = Object.entries(errors)
+      .map(([key, value]) => {
+        const msg = (value as { message?: string })?.message || "Invalid field value";
+        return `${key}: ${msg}`;
+      })
+      .join(", ");
+    toast.error("Please fill in all required fields correctly.", {
+      description: errorDetails || undefined,
+      duration: 6000,
+    });
   };
 
   const isFormModified = useCallback(() => {
@@ -612,7 +884,7 @@ export function StockAdjustmentManualForm({
       } else if (typeof action === "string") {
         router.push(action);
       } else {
-        router.push("/scm/inventory-management/stock-adjustment-manual-summary");
+        router.push("/scm/inventory-management/stock-adjustment-summary");
       }
     }
   }, [isFormModified, router]);
@@ -624,7 +896,7 @@ export function StockAdjustmentManualForm({
     } else if (typeof pendingExitAction === "string") {
       router.push(pendingExitAction);
     } else {
-      router.push("/scm/inventory-management/stock-adjustment-manual-summary");
+      router.push("/scm/inventory-management/stock-adjustment-summary");
     }
     setPendingExitAction(null);
   }, [pendingExitAction, router]);
@@ -649,7 +921,7 @@ export function StockAdjustmentManualForm({
           } else if (typeof pendingExitAction === "string") {
             router.push(pendingExitAction);
           } else {
-            router.push("/scm/inventory-management/stock-adjustment-manual-summary");
+            router.push("/scm/inventory-management/stock-adjustment-summary");
           }
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : "Failed to save adjustment";
@@ -671,12 +943,13 @@ export function StockAdjustmentManualForm({
         if (id) {
           await updateAdjustment(id, values);
           toast.success("Adjustment Updated Successfully");
+          initialValuesRef.current = JSON.stringify(values);
+          onSuccess?.();
         } else {
           await createAdjustment(values);
           toast.success("Adjustment Created Successfully");
+          await handleClearForm();
         }
-        initialValuesRef.current = JSON.stringify(values);
-        onSuccess?.();
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to save adjustment";
         toast.error(message);
@@ -684,7 +957,7 @@ export function StockAdjustmentManualForm({
         setLoading(false);
       }
     },
-    [id, createAdjustment, updateAdjustment, onSuccess]
+    [id, createAdjustment, updateAdjustment, onSuccess, handleClearForm]
   );
 
   // ——————————————————————————————————————————————————————————————————————————————
@@ -770,7 +1043,18 @@ export function StockAdjustmentManualForm({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {onCancel ? (
+          {id && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={generatePDF}
+              className="gap-2 h-10 border-border bg-card shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg transition-all"
+            >
+              <Printer className="h-4 w-4" />
+              Print
+            </Button>
+          )}
+          {onCancel && (
             <Button
               variant="outline"
               onClick={() => handleCancelOrExit(onCancel)}
@@ -778,15 +1062,6 @@ export function StockAdjustmentManualForm({
             >
               <ArrowLeft className="h-4 w-4" />
               Back to List
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              onClick={() => handleCancelOrExit("/scm/inventory-management/stock-adjustment-manual-summary")}
-              className="gap-2 h-10 border-border bg-card shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Summary
             </Button>
           )}
         </div>
@@ -1097,6 +1372,15 @@ export function StockAdjustmentManualForm({
                   className="pl-9 h-9 text-sm border-input"
                 />
               </div>
+              <Button
+                type="button"
+                onClick={generatePDF}
+                className="font-bold h-9 px-4 rounded-full shadow-sm flex items-center gap-2 text-sm transition-all border-primary/20 text-primary/90 bg-primary/10 hover:bg-primary/20"
+                variant="outline"
+              >
+                <Printer className="h-4 w-4" />
+                Print
+              </Button>
               {!isReadOnly && (
                 <Button
                   type="button"
@@ -1152,10 +1436,10 @@ export function StockAdjustmentManualForm({
                       <th className="p-3 text-center w-12 border-r border-border/50">#</th>
                       <th className="p-3">Brand</th>
                       <th className="p-3">Product Name</th>
-                      <th className="p-3">Price</th>
                       <th className="p-3">UOM</th>
-                      <th className="p-3 w-32 text-center">Qty</th>
-                      <th className="p-3">Net Total</th>
+                      <th className="p-3">Price</th>
+                      <th className="p-3">Total Amount</th>
+                      <th className="p-3 w-32 text-center">Quantity</th>
                       <th className="p-3 text-center w-16">Action</th>
                     </tr>
                   </thead>
@@ -1307,10 +1591,10 @@ export function StockAdjustmentManualForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() => handleCancelOrExit(onSuccess)}
+              onClick={() => handleCancelOrExit(handleClearForm)}
               className="h-10 px-8 font-bold border-border text-muted-foreground hover:bg-card rounded-lg"
             >
-              Cancel
+              Clear Form
             </Button>
           )}
           {!isReadOnly && (

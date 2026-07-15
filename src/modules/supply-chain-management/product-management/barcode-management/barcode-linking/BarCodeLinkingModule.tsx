@@ -49,6 +49,7 @@ export default function BarCodeScannerModule() {
   const {
     products,
     allProducts,
+    allProductsRaw,
     selectedProduct,
     setSelectedProduct,
     handleUpdateBarcode,
@@ -68,6 +69,7 @@ export default function BarCodeScannerModule() {
     allBarcodes,
     error,
     refresh,
+    timezone,
   } = useBarcodeScanner();
 
   // UI States for Comboboxes
@@ -161,9 +163,10 @@ export default function BarCodeScannerModule() {
                   {/* Added truncate class to handle long product names */}
                   <span className="truncate">
                     {productFilter && productFilter !== "all"
-                      ? allProducts.find(
-                        (p: Product) => String(p.product_id) === productFilter,
-                      )?.product_name || "Unknown"
+                      ? (() => {
+                          const selected = allProductsRaw.find((p: Product) => String(p.product_id) === productFilter);
+                          return selected ? (selected.description || selected.product_name) : "Unknown";
+                        })()
                       : "All Products"}
                   </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -192,10 +195,17 @@ export default function BarCodeScannerModule() {
                         />
                         All Products
                       </CommandItem>
-                      {allProducts.map((product: Product) => (
+                      {allProductsRaw
+                        .filter((p: Product) => !p.parent_id)
+                        .filter((parent: Product) => 
+                          allProducts.some(
+                            (ap) => String(ap.product_id) === String(parent.product_id) || String(ap.parent_id) === String(parent.product_id)
+                          )
+                        )
+                        .map((product: Product) => (
                         <CommandItem
                           key={product.product_id}
-                          value={product.product_name || ""}
+                          value={product.description || product.product_name || ""}
                           onSelect={() => {
                             setProductFilter(String(product.product_id));
                             setOpenProduct(false);
@@ -210,7 +220,7 @@ export default function BarCodeScannerModule() {
                             )}
                           />
                           <div className="flex flex-col">
-                            <span>{product.product_name}</span>
+                            <span>{product.description || product.product_name}</span>
                             <span className="text-[10px] text-muted-foreground">
                               {product.product_code}
                             </span>
@@ -341,6 +351,7 @@ export default function BarCodeScannerModule() {
           cbmUnits={cbmUnits}
           onClose={() => setSelectedProduct(null)}
           onSave={handleUpdateBarcode}
+          timezone={timezone}
         />
       </Suspense>
     </div>

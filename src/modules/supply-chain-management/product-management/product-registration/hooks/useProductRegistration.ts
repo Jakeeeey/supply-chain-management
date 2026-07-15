@@ -30,6 +30,7 @@ export function useProductRegistration() {
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [brandFilter, setBrandFilter] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [uomFilter, setUomFilter] = useState<string>("");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [parentImages, setParentImages] = useState<Record<number, string | null>>({});
@@ -57,6 +58,7 @@ export function useProductRegistration() {
       if (typeFilter) filterParams.set("itemType", typeFilter);
       if (brandFilter) filterParams.set("brand", brandFilter);
       if (statusFilter) filterParams.set("status", statusFilter);
+      if (uomFilter) filterParams.set("uom", uomFilter);
 
       const [productsRes, masterRes] = await Promise.all([
         fetch(`${API_PATH}?${filterParams.toString()}`).then((res) => res.json()),
@@ -117,7 +119,7 @@ export function useProductRegistration() {
     } finally {
       setIsLoading(false);
     }
-  }, [limit, page, search, sorting, supplierFilter, categoryFilter, classFilter, segmentFilter, typeFilter, brandFilter, statusFilter]);
+  }, [limit, page, search, sorting, supplierFilter, categoryFilter, classFilter, segmentFilter, typeFilter, brandFilter, statusFilter, uomFilter]);
 
   // ─── Mutations ──────────────────────────────────────────────────────────────
 
@@ -234,10 +236,10 @@ export function useProductRegistration() {
     }
   };
 
-  const checkDuplicate = async (name: string): Promise<boolean> => {
-    const response = await fetch(
-      `${API_PATH}?type=duplicate-check&name=${encodeURIComponent(name)}`,
-    );
+  const checkDuplicate = async (name: string, excludeId?: number | string): Promise<boolean> => {
+    let url = `${API_PATH}?type=duplicate-check&name=${encodeURIComponent(name)}`;
+    if (excludeId) url += `&excludeId=${excludeId}`;
+    const response = await fetch(url);
     const result = await response.json();
     if (result.error) throw new Error(result.error);
     return result.isDuplicate as boolean;
@@ -272,6 +274,8 @@ export function useProductRegistration() {
     setBrandFilter,
     statusFilter,
     setStatusFilter,
+    uomFilter,
+    setUomFilter,
     sorting,
     setSorting,
     masterData,

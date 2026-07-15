@@ -195,6 +195,8 @@ export function DispatchEditModal({
         po_id: details.po_id,
         po_no: details.po_no,
         status: details.status,
+        latitude: details.latitude,
+        longitude: details.longitude,
       })),
     };
 

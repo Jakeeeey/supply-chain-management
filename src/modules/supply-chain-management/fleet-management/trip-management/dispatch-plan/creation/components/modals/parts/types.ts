@@ -18,4 +18,6 @@ export interface GroupedPlanDetailItem {
   po_no?: string;
   totalAmount: number;
   status?: string; // Summary status
+  latitude?: number | null;
+  longitude?: number | null;
 }

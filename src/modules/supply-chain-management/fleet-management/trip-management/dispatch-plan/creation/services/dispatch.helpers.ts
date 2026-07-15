@@ -20,6 +20,8 @@ export interface RouteStopInput {
   isPoStop?: boolean;
   po_id?: number;
   status?: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 /** Result of processing route stops into per-collection payloads. */
@@ -100,6 +102,8 @@ export function processRouteStops(
         distance: item.distance || 0,
         sequence: item.sequence,
         status: item.status || "Not Fulfilled",
+        latitude: item.latitude || null,
+        longitude: item.longitude || null,
       });
     }
 

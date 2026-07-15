@@ -23,7 +23,15 @@ interface RFIDScannerModalProps {
   initialTags?: string[];
   type: "IN" | "OUT";
   branchId?: number;
-  validateRFID?: (rfid: string, branchId?: number) => Promise<{ exists: boolean; location?: string }>;
+  supplierId?: number;
+  productId?: number;
+  validateRFID?: (
+    rfid: string,
+    branchId?: number,
+    type?: "IN" | "OUT",
+    supplierId?: number,
+    productId?: number
+  ) => Promise<{ exists: boolean; location?: string }>;
 }
 
 export function RFIDScannerModal({
@@ -34,6 +42,8 @@ export function RFIDScannerModal({
   initialTags = [],
   type,
   branchId,
+  supplierId,
+  productId,
   validateRFID,
 }: RFIDScannerModalProps) {
   const [tags, setTags] = useState<string[]>(initialTags);
@@ -52,16 +62,7 @@ export function RFIDScannerModal({
   const [isValidating, setIsValidating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (open) {
-      // Focus input when modal opens with a very short delay
-      requestAnimationFrame(() => {
-        inputRef.current?.focus();
-      });
-    }
-  }, [open]);
-
-  const handleAddTag = async (tag: string) => {
+  const handleAddTag = React.useCallback(async (tag: string) => {
     let rawTag = tag.trim().toUpperCase();
     if (!rawTag) return;
 
@@ -92,11 +93,11 @@ export function RFIDScannerModal({
       return;
     }
 
-    // --- Backend Validation for EXISTING tags during Stock In ---
+    // --- Backend Validation for Stock IN: block tags that already exist ---
     if (type === "IN" && validateRFID) {
       setIsValidating(true);
       try {
-        const { exists, location } = await validateRFID(rawTag, branchId);
+        const { exists, location } = await validateRFID(rawTag, branchId, "IN");
         if (exists) {
           toast.error("Process Blocked", {
             description: `RFID tag ${rawTag} already exists (${location || "Unknown Location"}).`,
@@ -112,12 +113,87 @@ export function RFIDScannerModal({
       }
     }
 
+    // --- Backend Validation for Stock OUT: tag must come from a registered Stock IN ---
+    if (type === "OUT" && validateRFID) {
+      setIsValidating(true);
+      try {
+        const { exists: isBlocked, location: reason } = await validateRFID(
+          rawTag,
+          branchId,
+          "OUT",
+          supplierId,
+          productId
+        );
+        if (isBlocked) {
+          toast.error("RFID Tag Not Allowed", {
+            description: reason || `RFID tag ${rawTag} is not registered in a Stock IN for this branch, supplier, and product.`,
+            duration: 6000,
+          });
+          setCurrentInput("");
+          return;
+        }
+      } catch (err) {
+        console.error("RFID Stock OUT Validation failed:", err);
+      } finally {
+        setIsValidating(false);
+      }
+    }
+
     setTags((prev) => [...prev, rawTag]);
     setLastScanned(rawTag);
     setIsSuccess(true);
     setTimeout(() => setIsSuccess(false), 800);
     setCurrentInput("");
-  };
+  }, [tags, type, validateRFID, branchId, supplierId, productId]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    // Focus input when modal opens with a very short delay
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (isValidating) return;
+
+      const activeTag = (document.activeElement?.tagName || "").toLowerCase();
+      // Skip if user is actively typing in a standard visible input/textarea/select
+      if (
+        (activeTag === "input" && document.activeElement !== inputRef.current) ||
+        activeTag === "textarea" ||
+        activeTag === "select"
+      ) {
+        return;
+      }
+
+      // If it is Enter, we handle submission of the tag
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const val = inputRef.current ? inputRef.current.value : "";
+        if (inputRef.current) {
+          inputRef.current.value = "";
+        }
+        setCurrentInput("");
+        handleAddTag(val);
+        return;
+      }
+
+      // If a single character is pressed, and focus is not on the hidden input, focus it and append the character manually
+      if (e.key.length === 1) {
+        if (document.activeElement !== inputRef.current) {
+          inputRef.current?.focus();
+          setCurrentInput((prev) => prev + e.key);
+          e.preventDefault();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeyDown, { capture: true });
+    };
+  }, [open, isValidating, handleAddTag]);
 
   const handleContainerClick = () => {
     inputRef.current?.focus();

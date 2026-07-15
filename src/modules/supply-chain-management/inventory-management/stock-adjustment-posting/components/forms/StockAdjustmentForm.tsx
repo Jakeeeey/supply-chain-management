@@ -9,7 +9,6 @@ import {
   Trash2,
   Save,
   AlertCircle,
-  Tag,
   ArrowLeft,
   Package,
   Send,
@@ -18,11 +17,13 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  ClipboardList
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { RFIDScannerModal } from "../modals/RFIDScannerModal";
 import { ProductSelectionModal } from "../modals/ProductSelectionModal";
+import { AttachmentViewerModal } from "../modals/AttachmentViewerModal";
+import { FileText, Image as ImageIcon } from "lucide-react";
 import {
   StockAdjustmentFormSchema,
   StockAdjustmentFormValues,
@@ -49,12 +50,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Combobox,
   ComboboxInput,
+  ComboboxTrigger,
   ComboboxContent,
   ComboboxList,
   ComboboxItem,
   ComboboxEmpty,
 } from "@/components/ui/combobox";
-
 
 // ——————————————————————————————————————————————————————————————————————————————
 interface StockAdjustmentFormProps {
@@ -66,36 +67,38 @@ interface StockAdjustmentFormProps {
   onSelectId?: (id: number) => void;
 }
 
+interface LocalAttachmentFile {
+  id: string;
+  type?: string;
+  filename_download?: string;
+  filesize?: number | string;
+}
+
+interface LocalAttachment {
+  attachment: LocalAttachmentFile | string;
+}
+
 // ——————————————————————————————————————————————————————————————————————————————
 // Memoised item row (renders only when *its own* data changes)
 interface ItemRowProps {
   index: number;
   control: Control<StockAdjustmentFormValues>;
-  onRemove: (index: number) => void;
   setValue: UseFormSetValue<StockAdjustmentFormValues>;
-  onOpenScanner: (index: number) => void;
   isReadOnly?: boolean;
 }
 
 const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   index,
   control,
-  onRemove,
   setValue,
-  onOpenScanner,
   isReadOnly = false,
 }: ItemRowProps) {
   const product_name = useWatch({ control, name: `items.${index}.product_name` });
   const unitName = useWatch({ control, name: `items.${index}.unit_name` });
   const quantity = useWatch({ control, name: `items.${index}.quantity` });
   const costPerUnit = useWatch({ control, name: `items.${index}.cost_per_unit` });
-  const hasRfid = useWatch({ control, name: `items.${index}.has_rfid` });
   const brandName = useWatch({ control, name: `items.${index}.brand_name` });
   const barcode = useWatch({ control, name: `items.${index}.barcode` });
-  const unitOrder = useWatch({ control, name: `items.${index}.unit_order` });
-
-  const rfidTags = useWatch({ control, name: `items.${index}.rfid_tags` });
-  const isRfidMissing = (hasRfid || unitOrder === 3) && (!rfidTags || rfidTags.length === 0);
 
   const { errors } = useFormState({ control });
   const rowError = Array.isArray(errors.items)
@@ -126,49 +129,14 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
           <span className="text-[10px] font-bold text-primary bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded uppercase shrink-0">
             {unitName || "-"}
           </span>
-          {hasRfid && (
-            <span className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded uppercase shrink-0 flex items-center gap-1">
-              <Tag className="h-2.5 w-2.5 fill-amber-500" />
-              RFID
-            </span>
-          )}
         </div>
       </td>
-      <td className="p-3 w-40">
+      <td className="p-3 w-40 text-center">
         {isReadOnly ? (
-          <span className="text-xs font-bold px-3 py-1 bg-muted rounded-md border border-border/50">{quantity}</span>
-        ) : hasRfid || unitOrder === 3 ? (
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold px-3 py-1 rounded-md border min-w-10 text-center select-none ${
-                isRfidMissing 
-                  ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400"
-                  : "bg-muted/50 border-border/50"
-              }`}>{isRfidMissing ? 0 : quantity}</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onOpenScanner(index)}
-                className={`h-8 font-bold gap-1 px-2 transition-all duration-200 shadow-sm rounded-lg text-[10px] ${
-                  isRfidMissing
-                    ? "border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 hover:bg-red-100 hover:border-red-300 dark:hover:bg-red-900/40"
-                    : "border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700"
-                }`}
-              >
-                <Tag className={`h-3 w-3 ${isRfidMissing ? "text-red-500 animate-pulse" : "text-blue-500"}`} />
-                SCAN
-              </Button>
-            </div>
-            {isRfidMissing && (
-              <span className="text-[9px] text-red-500 font-black animate-pulse leading-none mt-1 uppercase tracking-wider pl-1 block">
-                Scan Required
-              </span>
-            )}
-          </div>
+          <span className="text-xs font-bold px-3 py-1 bg-muted rounded-md border border-border/50 inline-block text-center min-w-10">{quantity}</span>
         ) : (
-          <div className="flex items-center gap-0 w-min bg-background border border-border rounded-md overflow-hidden">
-            <button 
+          <div className="flex items-center gap-0 w-min bg-background border border-border rounded-md overflow-hidden mx-auto">
+            <button
               type="button"
               className="w-7 h-7 flex items-center justify-center hover:bg-muted text-muted-foreground disabled:opacity-50 transition-colors"
               onClick={() => setValue(`items.${index}.quantity`, Math.max(1, Number(quantity || 0) - 1), { shouldValidate: true })}
@@ -187,7 +155,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
               className="w-12 h-7 text-center text-xs font-bold border-x border-border focus:outline-none focus:ring-0 bg-transparent p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               min={1}
             />
-            <button 
+            <button
               type="button"
               className="w-7 h-7 flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors"
               onClick={() => setValue(`items.${index}.quantity`, Number(quantity || 0) + 1, { shouldValidate: true })}
@@ -197,27 +165,13 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
           </div>
         )}
         {rowError?.quantity && (
-          <p className="text-[10px] text-red-500 font-bold mt-1">{rowError.quantity.message}</p>
+          <p className="text-[10px] text-red-500 font-bold mt-1 text-center">{rowError.quantity.message}</p>
         )}
       </td>
       <td className="p-3">
         <span className="text-xs font-bold text-primary dark:text-primary/70">
           ₱{Number(totalCost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
-      </td>
-      <td className="p-3 text-center w-16">
-        {!isReadOnly && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => onRemove(index)}
-            className="h-7 w-7 rounded-full text-red-400/50 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all mx-auto"
-            title="Remove item"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        )}
       </td>
     </tr>
   );
@@ -227,27 +181,23 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
 function FormSummary({
   control,
   fieldCount,
-  isRfidLoading,
 }: {
   control: Control<StockAdjustmentFormValues>;
   fieldCount: number;
-  isRfidLoading: boolean;
 }) {
   const items = useWatch({ control, name: "items" });
 
-  const { totalQuantity, totalAmount, rfidItemsCount } = useMemo(() => {
+  const { totalQuantity, totalAmount } = useMemo(() => {
     const currentItems = items || [];
     let qty = 0;
     let amt = 0;
-    let rfid = 0;
     for (const item of currentItems) {
       const q = Number(item?.quantity || 0);
       const c = Number(item?.cost_per_unit || 0);
       qty += q;
       amt += q * c;
-      if (item?.has_rfid) rfid++;
     }
-    return { totalQuantity: qty, totalAmount: amt, rfidItemsCount: rfid };
+    return { totalQuantity: qty, totalAmount: amt };
   }, [items]);
 
   return (
@@ -279,63 +229,11 @@ function FormSummary({
             })}
           </span>
         </div>
-
-        {(rfidItemsCount > 0 || isRfidLoading) && (
-          <>
-            <div className="h-px bg-border w-full" />
-            <div className="flex justify-between items-center text-sm">
-              <span className="font-bold text-amber-600 dark:text-amber-400">
-                Items with RFID:
-              </span>
-              {isRfidLoading ? (
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-4 w-16 bg-amber-100/20 dark:bg-amber-900/20 animate-pulse" />
-                  <span className="text-[10px] text-amber-400 animate-pulse">
-                    Checking...
-                  </span>
-                </div>
-              ) : (
-                <span className="font-bold text-amber-700 dark:text-amber-400">
-                  {rfidItemsCount} product(s)
-                </span>
-              )}
-            </div>
-          </>
-        )}
       </div>
     </div>
   );
 }
 
-// ——————————————————————————————————————————————————————————————————————————————
-function RfidBanner({ control }: { control: Control<StockAdjustmentFormValues> }) {
-  const items = useWatch({ control, name: "items" });
-  const rfidItemsCount = useMemo(() => {
-    const currentItems = (items || []) as StockAdjustmentItem[];
-    return currentItems.filter((item) => item?.has_rfid).length;
-  }, [items]);
-
-  if (rfidItemsCount === 0) return null;
-
-  return (
-    <div className="bg-amber-500/5 border border-amber-200/30 px-6 py-4 rounded-xl flex items-start gap-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
-      <div className="p-2 bg-amber-500/10 rounded-lg">
-        <AlertCircle className="h-5 w-5 text-amber-500" />
-      </div>
-      <div>
-        <h4 className="font-bold text-amber-600">
-          RFID Tracked Items Detected
-        </h4>
-        <p className="text-xs text-amber-700/80 dark:text-amber-500/80 font-semibold mt-1">
-          {rfidItemsCount} item(s) in this adjustment have RFID tags in
-          inventory. Please ensure proper RFID tag scanning.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ——————————————————————————————————————————————————————————————————————————————
 export function StockAdjustmentForm({
   id,
   onCancel,
@@ -354,7 +252,6 @@ export function StockAdjustmentForm({
     suppliers = [],
     isProductsLoading,
     isSuppliersLoading,
-    isRfidLoading,
     branches,
     fetchInventory,
     fetchBranchRfidData,
@@ -363,20 +260,18 @@ export function StockAdjustmentForm({
     inventoryMap,
     fetchNextDocNo,
     postAdjustment,
-    validateRFIDAvailability,
     deleteAdjustment,
   } = useStockAdjustmentForm();
 
   const [loading, setLoading] = useState(false);
-  const [showRFIDScanner, setShowRFIDScanner] = useState(false);
   const [showPostConfirmation, setShowPostConfirmation] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [scannerContext, setScannerContext] = useState<{ index: number; productName: string } | null>(null);
-  const [isScannerPreparing, setIsScannerPreparing] = useState(false);
   const [branchInputValue, setBranchInputValue] = useState("");
   const [supplierInputValue, setSupplierInputValue] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
+  const [docSearch, setDocSearch] = useState("");
+  const [sourceType, setSourceType] = useState<string>("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [tableSearch, setTableSearch] = useState("");
@@ -387,17 +282,21 @@ export function StockAdjustmentForm({
   const [pendingExitAction, setPendingExitAction] = useState<string | (() => void) | null>(null);
   const initialValuesRef = useRef<string>("");
 
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [activeAttachment, setActiveAttachment] = useState<{ fileUrl: string; filename?: string; isImage?: boolean } | null>(null);
+
 
   const form = useForm<StockAdjustmentFormValues>({
     resolver: zodResolver(StockAdjustmentFormSchema),
     defaultValues: {
-      doc_no: "", 
+      doc_no: "",
       branch_id: 0,
       supplier_id: 0,
       type: "IN",
       remarks: "",
       items: [],
       isPosted: false,
+      stock_adjustment_attachment: [],
     },
   });
 
@@ -442,6 +341,10 @@ export function StockAdjustmentForm({
 
           const resolvedIsPosted = isPostedStatus(data.isPosted);
 
+          // Determine the source type (RFID vs MANUAL vs SERIAL)
+          const srcType = (data as { source_type?: string }).source_type || (data.remarks?.includes("MANUAL") ? "MANUAL" : /-(SERIAL)-/i.test(data.doc_no) ? "SERIAL" : "RFID");
+          setSourceType(srcType);
+
           const resetObj = {
             doc_no: data.doc_no || "",
             branch_id:
@@ -454,6 +357,7 @@ export function StockAdjustmentForm({
             isPosted: resolvedIsPosted,
             postedAt: data.postedAt || undefined,
             posted_by: data.posted_by || undefined,
+            stock_adjustment_attachment: (data as { stock_adjustment_attachment?: unknown[] }).stock_adjustment_attachment || [],
             items: data.items.map((item) => ({
               ...item,
               quantity: Number(item.quantity || 0),
@@ -505,6 +409,8 @@ export function StockAdjustmentForm({
 
   const watchedBranchId = useWatch({ control: form.control, name: "branch_id" });
   const watchedSupplierId = useWatch({ control: form.control, name: "supplier_id" });
+  const watchedDocNo = useWatch({ control: form.control, name: "doc_no" });
+  const watchedAttachments = useWatch({ control: form.control, name: "stock_adjustment_attachment" }) || [];
 
   useEffect(() => {
     if (watchedBranchId && branches.length > 0) {
@@ -557,7 +463,7 @@ export function StockAdjustmentForm({
 
   const isFormLoading = id ? loading : false;
   const isPosted = useWatch({ control: form.control, name: "isPosted" });
-  const isReadOnly = !!isPosted;
+  const isReadOnly = !!isPosted || mode === "posting";
 
   const isFormModified = useCallback(() => {
     if (isReadOnly) return false;
@@ -633,19 +539,6 @@ export function StockAdjustmentForm({
 
     form.handleSubmit(
       async (values) => {
-        // Validate that all items requiring RFID have scanned tags
-        const missingRfidItem = values.items.find(
-          (item) => (item.has_rfid || item.unit_order === 3) && (!item.rfid_tags || item.rfid_tags.length === 0)
-        );
-
-        if (missingRfidItem) {
-          toast.error("RFID Scan Required", {
-            description: `Product "${missingRfidItem.product_name || "Unknown"}" is tracked via RFID. Please complete scanning tags before saving.`,
-            duration: 5000,
-          });
-          return;
-        }
-
         setLoading(true);
         try {
           // 1. Save/update the adjustment with current form values (e.g. added products)
@@ -686,19 +579,7 @@ export function StockAdjustmentForm({
 
   const onSubmit = useCallback(
     async (values: StockAdjustmentFormValues) => {
-      // Validate that all items requiring RFID have scanned tags
-      const missingRfidItem = values.items.find(
-        (item) => (item.has_rfid || item.unit_order === 3) && (!item.rfid_tags || item.rfid_tags.length === 0)
-      );
-
-      if (missingRfidItem) {
-        toast.error("RFID Scan Required", {
-          description: `Product "${missingRfidItem.product_name || "Unknown"}" is tracked via RFID. Please complete scanning tags before saving.`,
-          duration: 5000,
-        });
-        return;
-      }
-
+      if (mode === "posting") return;
       setLoading(true);
       try {
         if (id) {
@@ -720,26 +601,13 @@ export function StockAdjustmentForm({
         setLoading(false);
       }
     },
-    [id, createAdjustment, updateAdjustment, onSuccess, form]
+    [id, createAdjustment, updateAdjustment, onSuccess, form, mode]
   );
 
   const handleSaveAndExit = useCallback(async () => {
     setShowUnsavedChangesModal(false);
     await form.handleSubmit(
       async (values: StockAdjustmentFormValues) => {
-        // Validate that all items requiring RFID have scanned tags
-        const missingRfidItem = values.items.find(
-          (item) => (item.has_rfid || item.unit_order === 3) && (!item.rfid_tags || item.rfid_tags.length === 0)
-        );
-
-        if (missingRfidItem) {
-          toast.error("RFID Scan Required", {
-            description: `Product "${missingRfidItem.product_name || "Unknown"}" is tracked via RFID. Please complete scanning tags before saving.`,
-            duration: 5000,
-          });
-          return;
-        }
-
         setLoading(true);
         try {
           if (id) {
@@ -773,57 +641,32 @@ export function StockAdjustmentForm({
     (newItems: StockAdjustmentItem[]) => {
       const branchId = form.getValues("branch_id");
       const currentType = form.getValues("type");
-      
+
       const mapped = newItems.map((item) => ({
         ...item,
         branch_id: branchId,
         type: currentType
       }));
-      
+
       form.setValue("items", mapped, { shouldValidate: true });
-      
+
       // Async stock fetch
       mapped.forEach((item, idx) => {
         const pid = Number(item.product_id);
         const cachedStock = inventoryMap.get(pid) ?? 0;
         if (cachedStock === 0) {
-           fetchInventory(pid, branchId).then(stock => {
-              form.setValue(`items.${idx}.current_stock`, stock);
-           }).catch(console.error);
+          fetchInventory(pid, branchId).then(stock => {
+            form.setValue(`items.${idx}.current_stock`, stock);
+          }).catch(console.error);
         } else {
-           form.setValue(`items.${idx}.current_stock`, cachedStock);
+          form.setValue(`items.${idx}.current_stock`, cachedStock);
         }
       });
     },
     [form, fetchInventory, inventoryMap]
   );
 
-  const handleRFIDSave = useCallback((tags: string[]) => {
-    if (scannerContext) {
-      const { index } = scannerContext;
-      form.setValue(`items.${index}.rfid_tags`, tags);
-      form.setValue(`items.${index}.quantity`, tags.length, { shouldValidate: true });
-      form.setValue(`items.${index}.rfid_count`, tags.length);
-      setScannerContext(null);
-    }
-  }, [scannerContext, form]);
 
-
-  const handleOpenScanner = useCallback((index: number) => {
-    const productName = form.getValues(`items.${index}.product_name`) ?? "Product";
-    setScannerContext({ index, productName });
-
-    setIsScannerPreparing(true);
-    toast.info(`Opening RFID Scanner`, {
-      description: `Preparing scanner for ${productName}...`,
-      duration: 1500,
-    });
-
-    setTimeout(() => {
-      setIsScannerPreparing(false);
-      setShowRFIDScanner(true);
-    }, 600);
-  }, [form]);
 
   const watchedBranchIdForSelect = useWatch({ control: form.control, name: "branch_id" });
   const watchedSupplierIdForSelect = useWatch({ control: form.control, name: "supplier_id" });
@@ -874,7 +717,7 @@ export function StockAdjustmentForm({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {onCancel ? (
+          {onCancel && (
             <Button
               variant="outline"
               onClick={() => handleCancelOrExit(onCancel)}
@@ -883,15 +726,6 @@ export function StockAdjustmentForm({
               <ArrowLeft className="h-4 w-4" />
               Back to List
             </Button>
-          ) : (
-            <Button
-              variant="outline"
-              onClick={() => handleCancelOrExit("/scm/inventory-management/stock-adjustment-summary")}
-              className="gap-2 h-10 border-border bg-card shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg transition-all"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Summary
-            </Button>
           )}
         </div>
       </div>
@@ -899,7 +733,13 @@ export function StockAdjustmentForm({
       <div className="flex flex-col gap-1 mb-2">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {id ? "Edit Stock Adjustment" : "New Stock Adjustment"}
+            {mode === "posting"
+              ? id
+                ? "Review & Post Stock Adjustment"
+                : "Select Stock Adjustment"
+              : id
+                ? "Edit Stock Adjustment"
+                : "New Stock Adjustment"}
           </h1>
           {id && (
             <Badge
@@ -912,9 +752,22 @@ export function StockAdjustmentForm({
               {isPosted ? 'Posted' : 'Draft / Unposted'}
             </Badge>
           )}
+          {id && sourceType && (
+            <Badge
+              variant="outline"
+              className={`px-3 py-1 font-bold shadow-sm ${sourceType === "RFID"
+                  ? "bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400 border-violet-200 dark:border-violet-800/50"
+                  : "bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800/50"
+                } uppercase tracking-wider`}
+            >
+              {sourceType === "RFID" ? "RFID Base" : "Non-RFID"}
+            </Badge>
+          )}
         </div>
         <p className="text-sm text-muted-foreground">
-          Record stock movement and adjust inventory levels
+          {mode === "posting"
+            ? "Review unposted stock adjustment details before posting to inventory"
+            : "Record stock movement and adjust inventory levels"}
         </p>
 
         {isPosted && (
@@ -938,27 +791,7 @@ export function StockAdjustmentForm({
         )}
       </div>
 
-      <RfidBanner control={form.control} />
 
-      {isScannerPreparing && (
-        <div className="fixed inset-0 bg-background/40 backdrop-blur-[1px] z-[100] flex items-center justify-center animate-in fade-in duration-300">
-          <Card className="w-full max-w-sm border-none shadow-2xl bg-card/90 overflow-hidden p-0 backdrop-blur-md">
-            <div className="bg-primary h-1.5 w-full">
-              <div className="bg-blue-400 h-full animate-[loading_1.5s_infinite_linear]" style={{ width: '40%' }} />
-            </div>
-            <CardContent className="p-8 flex flex-col items-center gap-4">
-              <div className="relative">
-                <div className="h-16 w-16 rounded-full border-4 border-muted border-t-blue-500 animate-spin" />
-                <Tag className="h-6 w-6 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-              </div>
-              <div className="text-center space-y-1">
-                <h3 className="font-bold text-foreground">Preparing RFID Scanner</h3>
-                <p className="text-sm text-muted-foreground">Please wait a moment...</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
         <Card className="border-border shadow-sm bg-card border border-border/40">
@@ -977,23 +810,39 @@ export function StockAdjustmentForm({
                   <Combobox
                     value={id ? String(id) : ""}
                     onValueChange={(v: string | null) => {
-                      if (v) onSelectId(Number(v));
+                      if (v) {
+                        onSelectId(Number(v));
+                        setDocSearch("");
+                      }
                     }}
-                    inputValue={form.watch("doc_no") || ""}
-                    onInputValueChange={() => {}}
                   >
-                    <ComboboxInput
-                      placeholder="Select Document"
-                      className="text-xs h-11 border-input font-bold"
-                      showTrigger={true}
-                    />
-                    <ComboboxContent>
+                    <ComboboxTrigger className="flex h-11 w-full items-center justify-between rounded-md border border-input bg-card px-3 py-2 text-xs font-bold shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring select-none text-left">
+                      <span>{watchedDocNo || "Select Document"}</span>
+                    </ComboboxTrigger>
+                    <ComboboxContent className="min-w-[240px]">
+                      <div className="p-2 border-b border-border/50">
+                        <Input
+                          placeholder="Search document..."
+                          value={docSearch}
+                          onChange={(e) => setDocSearch(e.target.value)}
+                          className="h-8 text-xs bg-muted/30"
+                          autoFocus
+                        />
+                      </div>
                       <ComboboxList>
-                        {unpostedList.map((item) => (
-                          <ComboboxItem key={item.id} value={String(item.id)}>
-                            <span className="font-bold text-xs">{item.doc_no}</span>
-                          </ComboboxItem>
-                        ))}
+                        {(() => {
+                          const filtered = unpostedList.filter((item) =>
+                            item.doc_no.toLowerCase().includes(docSearch.toLowerCase())
+                          );
+                          if (filtered.length === 0) {
+                            return <ComboboxEmpty>No documents found.</ComboboxEmpty>;
+                          }
+                          return filtered.map((item) => (
+                            <ComboboxItem key={item.id} value={String(item.id)}>
+                              <span className="font-bold text-xs">{item.doc_no}</span>
+                            </ComboboxItem>
+                          ));
+                        })()}
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
@@ -1006,457 +855,527 @@ export function StockAdjustmentForm({
                   />
                 )}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="branch" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  Branch <span className="text-red-500">*</span>
-                </Label>
-                <Combobox
-                  value={watchedBranchIdForSelect ? String(watchedBranchIdForSelect) : ""}
-                  onValueChange={(v: string | null) => {
-                    if (!v) {
-                      setBranchInputValue("");
-                      form.setValue("branch_id", 0, { shouldValidate: true });
-                      return;
-                    }
-                    const found = branches.find(b => String(b.id) === v);
-                    if (found) setBranchInputValue(`${found.branch_name} (${found.branch_code})`);
-                    form.setValue("branch_id", Number(v), { shouldValidate: true });
-                  }}
-                  inputValue={branchInputValue}
-                  onInputValueChange={(v: string) => {
-                    const matched = branches.find(b => String(b.id) === v);
-                    if (matched) {
-                      setBranchInputValue(`${matched.branch_name} (${matched.branch_code})`);
-                      setBranchSearch("");
-                    } else {
-                      setBranchInputValue(v);
-                      setBranchSearch(v);
-                    }
-                  }}
-                >
-                  <ComboboxInput
-                    placeholder="Select Branch"
-                    disabled={isReadOnly || !!id || fields.length > 0}
-                    className={form.formState.errors.branch_id ? "border-red-500 bg-red-50 dark:bg-red-900/10 text-xs" : "text-xs"}
-                    showTrigger={!id && fields.length === 0}
-                    showClear={!id && !isReadOnly && fields.length === 0}
-                  />
-                  <ComboboxContent>
-                    <ComboboxList>
-                      {(() => {
-                        const filtered = branches.filter(b =>
-                          b.branch_name.toLowerCase().includes(branchSearch.toLowerCase()) ||
-                          (b.branch_code ?? "").toLowerCase().includes(branchSearch.toLowerCase())
-                        );
-                        if (filtered.length === 0) return <ComboboxEmpty>No branches found.</ComboboxEmpty>;
-                        return filtered.map(b => {
-                          const bCode = b.branch_code ?? "";
-                          return (
-                            <ComboboxItem key={b.id} value={String(b.id)}>
-                              <div className="flex items-center justify-between w-full">
-                                <span className="font-medium text-xs">{b.branch_name}</span>
-                                <span className="text-[10px] font-bold text-muted-foreground/40 font-mono">
-                                  {bCode}
-                                </span>
-                              </div>
-                            </ComboboxItem>
-                          );
-                        });
-                      })()}
-                    </ComboboxList>
-                  </ComboboxContent>
-                </Combobox>
-                {form.formState.errors.branch_id && (
-                  <p className="text-xs text-red-500 font-medium mt-1">
-                    {String(form.formState.errors.branch_id.message)}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="supplier" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  Supplier <span className="text-red-500">*</span>
-                </Label>
-                <Combobox
-                  value={watchedSupplierIdForSelect ? String(watchedSupplierIdForSelect) : ""}
-                  onValueChange={(v: string | null) => {
-                    if (!v) {
-                      setSupplierInputValue("");
-                      form.setValue("supplier_id", 0, { shouldValidate: true });
-                      return;
-                    }
-                    const found = suppliers.find(s => String(s.id) === v);
-                    if (found) setSupplierInputValue(`${found.supplier_name}${found.supplier_shortcut ? ` (${found.supplier_shortcut})` : ""}`);
-                    form.setValue("supplier_id", Number(v), { shouldValidate: true });
-                  }}
-                  inputValue={supplierInputValue}
-                  onInputValueChange={(v: string) => {
-                    const matched = suppliers.find(s => String(s.id) === v);
-                    if (matched) {
-                      setSupplierInputValue(`${matched.supplier_name}${matched.supplier_shortcut ? ` (${matched.supplier_shortcut})` : ""}`);
-                      setSupplierSearch("");
-                    } else {
-                      setSupplierInputValue(v);
-                      setSupplierSearch(v);
-                    }
-                  }}
-                >
-                  <ComboboxInput
-                    placeholder={isSuppliersLoading ? "Loading suppliers..." : "Select Supplier"}
-                    disabled={isReadOnly || !!id || fields.length > 0}
-                    className={form.formState.errors.supplier_id ? "border-red-500 bg-red-50 dark:bg-red-900/10 text-xs" : "text-xs"}
-                    showTrigger={!id && fields.length === 0}
-                    showClear={!id && !isReadOnly && fields.length === 0}
-                  />
-                  <ComboboxContent>
-                    <ComboboxList>
-                      {(() => {
-                        const filtered = suppliers.filter(s =>
-                          s.supplier_name.toLowerCase().includes(supplierSearch.toLowerCase()) ||
-                          (s.supplier_shortcut ?? "").toLowerCase().includes(supplierSearch.toLowerCase())
-                        );
-                        if (filtered.length === 0) {
-                          return (
-                            <ComboboxEmpty>
-                              {isSuppliersLoading ? "Fetching supplier list..." : "No suppliers found."}
-                            </ComboboxEmpty>
-                          );
+              {(id !== null || mode !== "posting") && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="branch" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      Branch <span className="text-red-500">*</span>
+                    </Label>
+                    <Combobox
+                      value={watchedBranchIdForSelect ? String(watchedBranchIdForSelect) : ""}
+                      onValueChange={(v: string | null) => {
+                        if (!v) {
+                          setBranchInputValue("");
+                          form.setValue("branch_id", 0, { shouldValidate: true });
+                          return;
                         }
-                        return filtered.map(s => (
-                          <ComboboxItem key={s.id} value={String(s.id)}>
-                            <span className="font-medium text-xs">{s.supplier_name}</span>
-                            <span className="text-[10px] font-bold text-muted-foreground/40 font-mono italic ml-2">
-                              {s.supplier_shortcut || ""}
-                            </span>
-                          </ComboboxItem>
-                        ));
-                      })()}
-                    </ComboboxList>
-                  </ComboboxContent>
-                </Combobox>
-                {form.formState.errors.supplier_id && (
-                  <p className="text-xs text-red-500 font-medium mt-1">
-                    {String(form.formState.errors.supplier_id.message)}
-                  </p>
-                )}
-              </div>
-            </div>
+                        const found = branches.find(b => String(b.id) === v);
+                        if (found) setBranchInputValue(`${found.branch_name} (${found.branch_code})`);
+                        form.setValue("branch_id", Number(v), { shouldValidate: true });
+                      }}
+                      inputValue={branchInputValue}
+                      onInputValueChange={(v: string) => {
+                        const matched = branches.find(b => String(b.id) === v);
+                        if (matched) {
+                          setBranchInputValue(`${matched.branch_name} (${matched.branch_code})`);
+                          setBranchSearch("");
+                        } else {
+                          setBranchInputValue(v);
+                          setBranchSearch(v);
+                        }
+                      }}
+                    >
+                      <ComboboxInput
+                        placeholder="Select Branch"
+                        disabled={isReadOnly || !!id || fields.length > 0}
+                        className={form.formState.errors.branch_id ? "border-red-500 bg-red-50 dark:bg-red-900/10 text-xs" : "text-xs"}
+                        showTrigger={!id && fields.length === 0}
+                        showClear={!id && !isReadOnly && fields.length === 0}
+                      />
+                      <ComboboxContent>
+                        <ComboboxList>
+                          {(() => {
+                            const filtered = branches.filter(b =>
+                              b.branch_name.toLowerCase().includes(branchSearch.toLowerCase()) ||
+                              (b.branch_code ?? "").toLowerCase().includes(branchSearch.toLowerCase())
+                            );
+                            if (filtered.length === 0) return <ComboboxEmpty>No branches found.</ComboboxEmpty>;
+                            return filtered.map(b => {
+                              const bCode = b.branch_code ?? "";
+                              return (
+                                <ComboboxItem key={b.id} value={String(b.id)}>
+                                  <div className="flex items-center justify-between w-full">
+                                    <span className="font-medium text-xs">{b.branch_name}</span>
+                                    <span className="text-[10px] font-bold text-muted-foreground/40 font-mono">
+                                      {bCode}
+                                    </span>
+                                  </div>
+                                </ComboboxItem>
+                              );
+                            });
+                          })()}
+                        </ComboboxList>
+                      </ComboboxContent>
+                    </Combobox>
+                    {form.formState.errors.branch_id && (
+                      <p className="text-xs text-red-500 font-medium mt-1">
+                        {String(form.formState.errors.branch_id.message)}
+                      </p>
+                    )}
+                  </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                Adjustment Type <span className="text-red-500">*</span>
-              </Label>
-              <RadioGroup
-                value={watchedType}
-                onValueChange={(v) => form.setValue("type", v as "IN" | "OUT")}
-                className="flex gap-4 pt-1"
-                disabled={isReadOnly || !!id || fields.length > 0}
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem
-                    value="IN"
-                    id="type-in"
-                    className="border-primary text-primary h-4 w-4"
-                  />
-                  <Label htmlFor="type-in" className="text-xs font-bold text-foreground/80 uppercase">
-                    Stock In
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem
-                    value="OUT"
-                    id="type-out"
-                    className="border-input text-primary h-4 w-4"
-                  />
-                  <Label htmlFor="type-out" className="text-xs font-bold text-foreground/80 uppercase">
-                    Stock Out
-                  </Label>
-                </div>
-              </RadioGroup>
-              {form.formState.errors.type && (
-                <p className="text-xs text-red-500 font-medium mt-1">
-                  {String(form.formState.errors.type.message)}
-                </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="supplier" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      Supplier <span className="text-red-500">*</span>
+                    </Label>
+                    <Combobox
+                      value={watchedSupplierIdForSelect ? String(watchedSupplierIdForSelect) : ""}
+                      onValueChange={(v: string | null) => {
+                        if (!v) {
+                          setSupplierInputValue("");
+                          form.setValue("supplier_id", 0, { shouldValidate: true });
+                          return;
+                        }
+                        const found = suppliers.find(s => String(s.id) === v);
+                        if (found) setSupplierInputValue(`${found.supplier_name}${found.supplier_shortcut ? ` (${found.supplier_shortcut})` : ""}`);
+                        form.setValue("supplier_id", Number(v), { shouldValidate: true });
+                      }}
+                      inputValue={supplierInputValue}
+                      onInputValueChange={(v: string) => {
+                        const matched = suppliers.find(s => String(s.id) === v);
+                        if (matched) {
+                          setSupplierInputValue(`${matched.supplier_name}${matched.supplier_shortcut ? ` (${matched.supplier_shortcut})` : ""}`);
+                          setSupplierSearch("");
+                        } else {
+                          setSupplierInputValue(v);
+                          setSupplierSearch(v);
+                        }
+                      }}
+                    >
+                      <ComboboxInput
+                        placeholder={isSuppliersLoading ? "Loading suppliers..." : "Select Supplier"}
+                        disabled={isReadOnly || !!id || fields.length > 0}
+                        className={form.formState.errors.supplier_id ? "border-red-500 bg-red-50 dark:bg-red-900/10 text-xs" : "text-xs"}
+                        showTrigger={!id && fields.length === 0}
+                        showClear={!id && !isReadOnly && fields.length === 0}
+                      />
+                      <ComboboxContent>
+                        <ComboboxList>
+                          {(() => {
+                            const filtered = suppliers.filter(s =>
+                              s.supplier_name.toLowerCase().includes(supplierSearch.toLowerCase()) ||
+                              (s.supplier_shortcut ?? "").toLowerCase().includes(supplierSearch.toLowerCase())
+                            );
+                            if (filtered.length === 0) {
+                              return (
+                                <ComboboxEmpty>
+                                  {isSuppliersLoading ? "Fetching supplier list..." : "No suppliers found."}
+                                </ComboboxEmpty>
+                              );
+                            }
+                            return filtered.map(s => (
+                              <ComboboxItem key={s.id} value={String(s.id)}>
+                                <span className="font-medium text-xs">{s.supplier_name}</span>
+                                <span className="text-[10px] font-bold text-muted-foreground/40 font-mono italic ml-2">
+                                  {s.supplier_shortcut || ""}
+                                </span>
+                              </ComboboxItem>
+                            ));
+                          })()}
+                        </ComboboxList>
+                      </ComboboxContent>
+                    </Combobox>
+                    {form.formState.errors.supplier_id && (
+                      <p className="text-xs text-red-500 font-medium mt-1">
+                        {String(form.formState.errors.supplier_id.message)}
+                      </p>
+                    )}
+                  </div>
+                </>
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="remarks" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                Remarks
-              </Label>
-              <Textarea
-                id="remarks"
-                {...form.register("remarks")}
-                placeholder="Additional information about this adjustment..."
-                className="min-h-[120px] bg-background border-input focus:ring-primary rounded-xl p-4 text-xs font-medium"
-                disabled={isReadOnly}
-              />
-            </div>
+            {(id !== null || mode !== "posting") && (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                    Adjustment Type <span className="text-red-500">*</span>
+                  </Label>
+                  <RadioGroup
+                    value={watchedType}
+                    onValueChange={(v) => form.setValue("type", v as "IN" | "OUT")}
+                    className="flex gap-4 pt-1"
+                    disabled={isReadOnly || !!id || fields.length > 0}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem
+                        value="IN"
+                        id="type-in"
+                        className="border-primary text-primary h-4 w-4"
+                      />
+                      <Label htmlFor="type-in" className="text-xs font-bold text-foreground/80 uppercase">
+                        Stock In
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem
+                        value="OUT"
+                        id="type-out"
+                        className="border-input text-primary h-4 w-4"
+                      />
+                      <Label htmlFor="type-out" className="text-xs font-bold text-foreground/80 uppercase">
+                        Stock Out
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                  {form.formState.errors.type && (
+                    <p className="text-xs text-red-500 font-medium mt-1">
+                      {String(form.formState.errors.type.message)}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="remarks" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                    Remarks
+                  </Label>
+                  <Textarea
+                    id="remarks"
+                    {...form.register("remarks")}
+                    placeholder="Additional information about this adjustment..."
+                    className="min-h-[120px] bg-background border-input focus:ring-primary rounded-xl p-4 text-xs font-medium"
+                    disabled={isReadOnly}
+                  />
+                </div>
+
+                {/* Attachments Section (ReadOnly) */}
+                {(() => {
+                  const attachments = watchedAttachments as unknown as LocalAttachment[];
+                  if (!attachments || attachments.length === 0) return null;
+                  return (
+                    <div className="space-y-3 mt-6">
+                      <div className="flex items-center gap-2 text-foreground">
+                        <ImageIcon className="h-4.5 w-4.5 text-rose-600" />
+                        <h3 className="font-bold text-sm">Attachments ({attachments.length})</h3>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {attachments.map((att, idx) => {
+                          const file = att.attachment;
+                          if (!file) return null;
+                          const fileId = typeof file === 'object' ? file.id : file;
+                          const isImage = typeof file === 'object' && file.type?.startsWith('image');
+                          const filename = typeof file === 'object' ? file.filename_download : `Attachment ${idx + 1}`;
+                          const sizeInMb = typeof file === 'object' && file.filesize 
+                            ? (Number(file.filesize) / (1024 * 1024)).toFixed(2)
+                            : null;
+
+                          const directusBase = process.env.NEXT_PUBLIC_DIRECTUS_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "";
+                          const cleanBase = directusBase.trim().replace(/\/$/, "");
+                          const fileUrl = `${cleanBase}/assets/${fileId}`;
+
+                          return (
+                            <div key={idx} className="flex items-center justify-between p-3 bg-background border border-border rounded-xl hover:bg-muted/10 transition-colors">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveAttachment({ fileUrl, filename, isImage });
+                                  setViewerOpen(true);
+                                }}
+                                className="flex items-center gap-3 flex-1 min-w-0 text-left bg-transparent border-none p-0 cursor-pointer focus:outline-none"
+                                title="Click to view file"
+                              >
+                                <div className="h-9 w-9 shrink-0 bg-rose-50 dark:bg-rose-950/20 rounded-lg flex items-center justify-center text-rose-600">
+                                  {isImage ? <ImageIcon className="h-4.5 w-4.5" /> : <FileText className="h-4.5 w-4.5" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-bold truncate text-foreground hover:text-rose-600 transition-colors">{filename}</p>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    {sizeInMb && (
+                                      <span className="text-[9px] text-muted-foreground font-semibold">
+                                        {sizeInMb} MB
+                                      </span>
+                                    )}
+                                    <span className="text-[9px] text-rose-600 font-bold uppercase tracking-wider hover:underline">
+                                      VIEW FILE
+                                    </span>
+                                  </div>
+                                </div>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </>
+            )}
           </CardContent>
         </Card>
 
-        {/* Product Items Table Workspace */}
-        <Card className="border-border shadow-sm bg-card border border-border/40">
-          <CardHeader className="bg-card border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4 py-4 px-6">
-            <div>
-              <CardTitle className="text-base font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
-                <Package className="w-5 h-5 text-primary" />
-                Product Items
-              </CardTitle>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="relative w-full md:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <Input
-                  type="text"
-                  placeholder="Search products in cart..."
-                  value={tableSearch}
-                  onChange={(e) => {
-                    setTableSearch(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="pl-9 h-9 text-xs border-input font-semibold"
+        {(id !== null || mode !== "posting") ? (
+          <>
+            {/* Product Items Table Workspace */}
+            <Card className="border-border shadow-sm bg-card border border-border/40">
+              <CardHeader className="bg-card border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4 py-4 px-6">
+                <div>
+                  <CardTitle className="text-base font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+                    <Package className="w-5 h-5 text-primary" />
+                    Product Items
+                  </CardTitle>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="relative w-full md:w-64">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      type="text"
+                      placeholder="Search products in cart..."
+                      value={tableSearch}
+                      onChange={(e) => {
+                        setTableSearch(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="pl-9 h-9 text-xs border-input font-semibold"
+                    />
+                  </div>
+                  {!isReadOnly && (
+                    <Button
+                      type="button"
+                      onClick={() => setIsModalOpen(true)}
+                      disabled={!watchedSupplierIdForSelect}
+                      className="font-bold h-9 px-4 rounded-full shadow-sm flex items-center gap-2 text-xs transition-all border-primary/20 text-primary bg-primary/10 hover:bg-primary/20 dark:bg-primary/20 dark:border-primary/40 shrink-0"
+                      variant="outline"
+                    >
+                      <Plus className="h-4 w-4" />
+                      ADD MORE PRODUCTS
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {isFormLoading || (isProductsLoading && fields.length === 0) ? (
+                  <div className="p-6 space-y-6">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex gap-4">
+                        <Skeleton className="h-10 flex-[3]" />
+                        <Skeleton className="h-10 flex-1" />
+                        <Skeleton className="h-10 flex-1" />
+                        <Skeleton className="h-10 flex-1" />
+                      </div>
+                    ))}
+                  </div>
+                ) : fields.length === 0 ? (
+                  <div className="bg-muted/10 border-2 border-dashed border-border rounded-xl m-6 p-16 text-center">
+                    <div className="flex justify-center mb-4">
+                      <div className="p-5 rounded-full border border-dashed bg-muted border-border">
+                        <Package className="h-10 w-10 text-muted-foreground/30" />
+                      </div>
+                    </div>
+                    <h3 className="text-lg font-bold text-foreground mb-1">
+                      {watchedSupplierIdForSelect ? "Empty Cart" : "Supplier required"}
+                    </h3>
+                    <p className="text-muted-foreground font-semibold max-w-xs mx-auto text-xs">
+                      {watchedSupplierIdForSelect
+                        ? "Click \"ADD MORE PRODUCTS\" to browse and add items."
+                        : "Select a supplier first to browse and add products."}
+                    </p>
+                    {form.formState.errors.items && form.formState.errors.items.message && (
+                      <p className="text-sm text-red-500 font-bold mt-4 animate-in fade-in">
+                        {form.formState.errors.items.message}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto min-h-[300px]">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-[10px] font-bold uppercase text-muted-foreground bg-muted/40 border-b border-border">
+                        <tr>
+                          <th className="p-3 text-center w-12 border-r border-border/50">#</th>
+                          <th className="p-3">Brand</th>
+                          <th className="p-3">Product Name</th>
+                          <th className="p-3">Price</th>
+                          <th className="p-3">UOM</th>
+                          <th className="p-3 w-40 text-center">Qty</th>
+                          <th className="p-3">Net Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedFields.length === 0 && tableSearch ? (
+                          <tr>
+                            <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
+                              No products found matching &quot;{tableSearch}&quot;.
+                            </td>
+                          </tr>
+                        ) : (
+                          paginatedFields.map(({ field, index }) => (
+                            <StockAdjustmentItemRow
+                              key={field.id}
+                              index={index}
+                              control={form.control}
+                              setValue={form.setValue}
+                              isReadOnly={isReadOnly}
+                            />
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                    <div className="p-4 bg-muted/10 border-t border-border/50 text-xs font-semibold text-muted-foreground flex justify-between items-center">
+                      <span>{filteredFields.length} total rows</span>
+                      <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs">Rows per page</span>
+                          <select
+                            className="h-8 border border-border rounded-md bg-card px-2 text-xs focus:outline-none font-bold"
+                            value={rowsPerPage}
+                            onChange={(e) => {
+                              setRowsPerPage(Number(e.target.value));
+                              setCurrentPage(1);
+                            }}
+                          >
+                            <option value={5}>5</option>
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                          </select>
+                        </div>
+                        <span className="text-xs font-bold text-foreground">Page {currentPage} of {totalPages}</span>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground bg-card"
+                            disabled={currentPage === 1}
+                            onClick={() => setCurrentPage(1)}
+                          >
+                            <ChevronsLeft className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground bg-card"
+                            disabled={currentPage === 1}
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground bg-card"
+                            disabled={currentPage === totalPages}
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground bg-card"
+                            disabled={currentPage === totalPages}
+                            onClick={() => setCurrentPage(totalPages)}
+                          >
+                            <ChevronsRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Summary Block */}
+                <FormSummary
+                  control={form.control}
+                  fieldCount={fields.length}
                 />
-              </div>
-              {!isReadOnly && (
+              </CardContent>
+            </Card>
+
+
+
+            {/* Action Workspace buttons */}
+            <div className="flex items-center justify-end gap-3 pb-8">
+              {onCancel ? (
                 <Button
                   type="button"
-                  onClick={() => setIsModalOpen(true)}
-                  disabled={!watchedSupplierIdForSelect}
-                  className="font-bold h-9 px-4 rounded-full shadow-sm flex items-center gap-2 text-xs transition-all border-primary/20 text-primary bg-primary/10 hover:bg-primary/20 dark:bg-primary/20 dark:border-primary/40 shrink-0"
                   variant="outline"
+                  onClick={() => handleCancelOrExit(onCancel)}
+                  className="h-10 px-8 font-bold border-border text-muted-foreground hover:bg-card rounded-lg transition-colors text-xs"
                 >
-                  <Plus className="h-4 w-4" />
-                  ADD MORE PRODUCTS
+                  Cancel
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleCancelOrExit("/scm/inventory-management/stock-adjustment-summary")}
+                  className="h-10 px-8 font-bold border-border text-muted-foreground hover:bg-card rounded-lg transition-colors text-xs"
+                >
+                  Cancel
+                </Button>
+              )}
+              {!isReadOnly && (mode as string) !== "posting" && (
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="h-10 px-8 font-bold bg-primary hover:bg-primary/95 text-primary-foreground gap-2 shadow-sm rounded-lg transition-all duration-300 hover:scale-[1.02] text-xs"
+                >
+                  {loading ? (
+                    <span className="animate-spin mr-2">â—Œ</span>
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  {id ? "Update Adjustment" : "Save Adjustment"}
+                </Button>
+              )}
+
+              {id && !isPosted && mode === "posting" && (
+                <Button
+                  type="button"
+                  onClick={() => setShowDeleteConfirmation(true)}
+                  disabled={loading}
+                  className="h-10 px-8 font-bold bg-red-600 hover:bg-red-700 text-white gap-2 shadow-sm rounded-lg animate-in fade-in zoom-in-95 duration-200 transition-all duration-300 hover:scale-[1.02] text-xs"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Adjustment
+                </Button>
+              )}
+
+              {id && !isPosted && mode === "posting" && (
+                <Button
+                  type="button"
+                  onClick={handlePost}
+                  disabled={loading}
+                  className="h-10 px-8 font-bold bg-green-600 hover:bg-green-700 text-white gap-2 shadow-sm rounded-lg animate-in fade-in zoom-in-95 duration-200 transition-all duration-300 hover:scale-[1.02] text-xs"
+                >
+                  {loading ? (
+                    <span className="animate-spin mr-2">â—Œ</span>
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  Post Adjustment
                 </Button>
               )}
             </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {isFormLoading || (isProductsLoading && fields.length === 0) ? (
-              <div className="p-6 space-y-6">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex gap-4">
-                    <Skeleton className="h-10 flex-[3]" />
-                    <Skeleton className="h-10 flex-1" />
-                    <Skeleton className="h-10 flex-1" />
-                    <Skeleton className="h-10 flex-1" />
-                  </div>
-                ))}
-              </div>
-            ) : fields.length === 0 ? (
-              <div className="bg-muted/10 border-2 border-dashed border-border rounded-xl m-6 p-16 text-center">
-                <div className="flex justify-center mb-4">
-                  <div className="p-5 rounded-full border border-dashed bg-muted border-border">
-                    <Package className="h-10 w-10 text-muted-foreground/30" />
-                  </div>
-                </div>
-                <h3 className="text-lg font-bold text-foreground mb-1">
-                  {watchedSupplierIdForSelect ? "Empty Cart" : "Supplier required"}
-                </h3>
-                <p className="text-muted-foreground font-semibold max-w-xs mx-auto text-xs">
-                  {watchedSupplierIdForSelect
-                    ? "Click \"ADD MORE PRODUCTS\" to browse and add items."
-                    : "Select a supplier first to browse and add products."}
-                </p>
-                {form.formState.errors.items && form.formState.errors.items.message && (
-                  <p className="text-sm text-red-500 font-bold mt-4 animate-in fade-in">
-                    {form.formState.errors.items.message}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="overflow-x-auto min-h-[300px]">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-[10px] font-bold uppercase text-muted-foreground bg-muted/40 border-b border-border">
-                    <tr>
-                      <th className="p-3 text-center w-12 border-r border-border/50">#</th>
-                      <th className="p-3">Brand</th>
-                      <th className="p-3">Product Name</th>
-                      <th className="p-3">Price</th>
-                      <th className="p-3">UOM</th>
-                      <th className="p-3 w-40 text-center">Qty</th>
-                      <th className="p-3">Net Total</th>
-                      <th className="p-3 text-center w-16">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedFields.length === 0 && tableSearch ? (
-                      <tr>
-                        <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
-                          No products found matching &quot;{tableSearch}&quot;.
-                        </td>
-                      </tr>
-                    ) : (
-                      paginatedFields.map(({ field, index }) => (
-                        <StockAdjustmentItemRow
-                          key={field.id}
-                          index={index}
-                          control={form.control}
-                          onRemove={(idx) => setDeletingIndex(idx)}
-                          setValue={form.setValue}
-                          onOpenScanner={handleOpenScanner}
-                          isReadOnly={isReadOnly}
-                        />
-                      ))
-                    )}
-                  </tbody>
-                </table>
-                <div className="p-4 bg-muted/10 border-t border-border/50 text-xs font-semibold text-muted-foreground flex justify-between items-center">
-                  <span>{filteredFields.length} total rows</span>
-                  <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs">Rows per page</span>
-                      <select 
-                        className="h-8 border border-border rounded-md bg-card px-2 text-xs focus:outline-none font-bold"
-                        value={rowsPerPage}
-                        onChange={(e) => {
-                          setRowsPerPage(Number(e.target.value));
-                          setCurrentPage(1);
-                        }}
-                      >
-                        <option value={5}>5</option>
-                        <option value={10}>10</option>
-                        <option value={20}>20</option>
-                        <option value={50}>50</option>
-                        <option value={100}>100</option>
-                      </select>
-                    </div>
-                    <span className="text-xs font-bold text-foreground">Page {currentPage} of {totalPages}</span>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground bg-card"
-                        disabled={currentPage === 1}
-                        onClick={() => setCurrentPage(1)}
-                      >
-                        <ChevronsLeft className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground bg-card"
-                        disabled={currentPage === 1}
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground bg-card"
-                        disabled={currentPage === totalPages}
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground bg-card"
-                        disabled={currentPage === totalPages}
-                        onClick={() => setCurrentPage(totalPages)}
-                      >
-                        <ChevronsRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Summary Block */}
-            <FormSummary
-              control={form.control}
-              fieldCount={fields.length}
-              isRfidLoading={isRfidLoading}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Action Workspace buttons */}
-        <div className="flex items-center justify-end gap-3 pb-8">
-          {onCancel ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleCancelOrExit(onCancel)}
-              className="h-10 px-8 font-bold border-border text-muted-foreground hover:bg-card rounded-lg transition-colors text-xs"
-            >
-              Cancel
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleCancelOrExit("/scm/inventory-management/stock-adjustment-summary")}
-              className="h-10 px-8 font-bold border-border text-muted-foreground hover:bg-card rounded-lg transition-colors text-xs"
-            >
-              Cancel
-            </Button>
-          )}
-          {!isReadOnly && (
-            <Button
-              type="submit"
-              disabled={loading}
-              className="h-10 px-8 font-bold bg-primary hover:bg-primary/95 text-primary-foreground gap-2 shadow-sm rounded-lg transition-all duration-300 hover:scale-[1.02] text-xs"
-            >
-              {loading ? (
-                <span className="animate-spin mr-2">â—Œ</span>
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              {id ? "Update Adjustment" : "Save Adjustment"}
-            </Button>
-          )}
-
-          {id && !isPosted && mode === "posting" && (
-            <Button
-              type="button"
-              onClick={() => setShowDeleteConfirmation(true)}
-              disabled={loading}
-              className="h-10 px-8 font-bold bg-red-600 hover:bg-red-700 text-white gap-2 shadow-sm rounded-lg animate-in fade-in zoom-in-95 duration-200 transition-all duration-300 hover:scale-[1.02] text-xs"
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete Adjustment
-            </Button>
-          )}
-
-          {id && !isPosted && mode === "posting" && (
-            <Button
-              type="button"
-              onClick={handlePost}
-              disabled={loading}
-              className="h-10 px-8 font-bold bg-green-600 hover:bg-green-700 text-white gap-2 shadow-sm rounded-lg animate-in fade-in zoom-in-95 duration-200 transition-all duration-300 hover:scale-[1.02] text-xs"
-            >
-              {loading ? (
-                <span className="animate-spin mr-2">â—Œ</span>
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-              Post Adjustment
-            </Button>
-          )}
-        </div>
+          </>
+        ) : (
+          <Card className="border-dashed border-2 border-border/60 bg-muted/5 flex flex-col items-center justify-center p-16 text-center">
+            <div className="p-4 bg-muted rounded-full mb-4">
+              <ClipboardList className="h-8 w-8 text-muted-foreground/50" />
+            </div>
+            <h3 className="text-base font-bold text-foreground mb-2">No Document Selected</h3>
+            <p className="text-xs text-muted-foreground font-semibold max-w-sm">
+              Please select a Document Number from the review dropdown above to populate and view the stock adjustment details.
+            </p>
+          </Card>
+        )}
       </form>
 
-      {scannerContext && (
-        <RFIDScannerModal
-          open={showRFIDScanner}
-          onOpenChange={setShowRFIDScanner}
-          productName={scannerContext.productName}
-          onSave={handleRFIDSave}
-          type={form.getValues("type")}
-          initialTags={form.getValues(`items.${scannerContext.index}.rfid_tags`) || []}
-          branchId={Number(form.getValues("branch_id"))}
-          validateRFID={validateRFIDAvailability}
-        />
-      )}
+
 
       {isModalOpen && (
         <ProductSelectionModal
@@ -1627,6 +1546,17 @@ export function StockAdjustmentForm({
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Attachment Viewer Modal */}
+      {activeAttachment && (
+        <AttachmentViewerModal
+          open={viewerOpen}
+          fileUrl={activeAttachment.fileUrl}
+          filename={activeAttachment.filename}
+          isImage={activeAttachment.isImage}
+          onClose={() => setViewerOpen(false)}
+        />
+      )}
     </div>
   );
 }

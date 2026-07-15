@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Product, RefData, UpdateBarcodeDTO } from "../types";
 
 export function useBarcodeScanner() {
+  const [allProductsRaw, setAllProductsRaw] = useState<Product[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,6 +18,7 @@ export function useBarcodeScanner() {
   const [barcodeTypes, setBarcodeTypes] = useState<RefData[]>([]);
   const [weightUnits, setWeightUnits] = useState<RefData[]>([]);
   const [cbmUnits, setCbmUnits] = useState<RefData[]>([]);
+  const [timezone, setTimezone] = useState<string>("Asia/Manila");
 
   // All existing barcodes for duplicate checking (includes linked products)
   const [allBarcodes, setAllBarcodes] = useState<
@@ -27,7 +29,7 @@ export function useBarcodeScanner() {
     setIsLoading(true);
     setError(null);
     try {
-      const [productsRes, btRes, wuRes, cuRes, bundlesRes] =
+      const [productsRes, btRes, wuRes, cuRes, bundlesRes, tzRes] =
         await Promise.all([
           fetch(
             "/api/scm/product-management/barcode-management/barcode-linking",
@@ -44,6 +46,9 @@ export function useBarcodeScanner() {
           fetch(
             "/api/scm/product-management/barcode-management/barcode-linking?scope=bundles",
           ),
+          fetch(
+            "/api/scm/product-management/barcode-management/barcode-linking?scope=timezone",
+          ),
         ]);
 
       if (!productsRes.ok)
@@ -51,10 +56,11 @@ export function useBarcodeScanner() {
 
       const productsData = await productsRes.json();
 
-      const allProductsRaw: Product[] = productsData.data || [];
+      const rawProducts: Product[] = productsData.data || [];
+      setAllProductsRaw(rawProducts);
 
       // Extract ALL existing barcodes for duplicate checking
-      const existingBarcodes = allProductsRaw
+      const existingBarcodes = rawProducts
         .filter((p: Product) => p.barcode && p.barcode.trim() !== "")
         .map((p: Product) => ({
           product_id: String(p.product_id),
@@ -64,7 +70,7 @@ export function useBarcodeScanner() {
       setAllBarcodes(existingBarcodes);
 
       // STRICT FILTER: Must have SKU, Must NOT have Barcode
-      const eligibleProducts: Product[] = allProductsRaw
+      const eligibleProducts: Product[] = rawProducts
         .filter((p: Product) => {
           const hasSku =
             p.product_code &&
@@ -117,6 +123,12 @@ export function useBarcodeScanner() {
         const data = await cuRes.json();
         setCbmUnits(Array.isArray(data.data) ? data.data : []);
       }
+      if (tzRes.ok) {
+        const data = await tzRes.json();
+        if (data.data) {
+          setTimezone(data.data);
+        }
+      }
     } catch (err: unknown) {
       console.error("Fetch error", err);
       const message = err instanceof Error ? err.message : "Failed to load barcode linking data.";
@@ -142,7 +154,9 @@ export function useBarcodeScanner() {
 
 
       const matchesProduct =
-        productFilter === "all" || String(product.product_id) === productFilter;
+        productFilter === "all" ||
+        String(product.product_id) === productFilter ||
+        String(product.parent_id) === productFilter;
 
       const matchesRecordType =
         recordTypeFilter === "all" || product.record_type === recordTypeFilter;
@@ -165,6 +179,10 @@ export function useBarcodeScanner() {
   // ✅ FIXED: Correct URL and DTO Payload — now bundle-aware
   const handleUpdateBarcode = async (payload: UpdateBarcodeDTO) => {
     if (!selectedProduct) return;
+
+    if (productFilter === String(selectedProduct.product_id)) {
+      setProductFilter("all");
+    }
 
     const isBundle = selectedProduct.record_type === "bundle";
 
@@ -242,6 +260,7 @@ export function useBarcodeScanner() {
   return {
     products,
     allProducts,
+    allProductsRaw,
     isLoading,
     selectedProduct,
     setSelectedProduct,
@@ -262,5 +281,6 @@ export function useBarcodeScanner() {
     allBarcodes,
     error,
     refresh: fetchData,
+    timezone,
   };
 }

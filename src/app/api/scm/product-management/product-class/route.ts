@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
+function getPHTDateTime(): string {
+  const d = new Date();
+  d.setUTCHours(d.getUTCHours() + 8);
+  return d.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split(".");
@@ -98,8 +104,12 @@ async function proxyRequest(req: NextRequest, method: string) {
     
     if (method === "POST") {
       body.created_by = userId;
+      const pht = getPHTDateTime();
+      body.created_at = pht;
+      body.updated_at = pht;
     } else if (method === "PATCH") {
       body.updated_by = userId;
+      body.updated_at = getPHTDateTime();
     }
 
     options.body = JSON.stringify(body);

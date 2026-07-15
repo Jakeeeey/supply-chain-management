@@ -69,10 +69,22 @@ async function proxyRequest(req: NextRequest, method: string) {
 
     // Inject audit fields
     if (userId) body.updated_by = typeof userId === "string" ? parseInt(userId) : userId;
-    // Save as PHT (UTC+8) — Directus stores datetime without timezone info,
-    // so we must provide the value already in Philippine Standard Time
+    // Fetch timezone dynamically from database
+    let tz = "Asia/Manila";
+    try {
+      const settings = (await fetchDirectus("/items/general_setting", {
+        limit: "100",
+      })) as { setting_key: string; setting_value: string }[] | undefined;
+      const tzSetting = settings?.find((s) => s.setting_key === "time_zone");
+      if (tzSetting?.setting_value) {
+        tz = tzSetting.setting_value;
+      }
+    } catch (e) {
+      console.warn("Failed to fetch timezone from general_setting, falling back to Asia/Manila", e);
+    }
+
     body.updated_at = new Date().toLocaleString("sv-SE", {
-      timeZone: "Asia/Manila",
+      timeZone: tz,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -164,6 +176,20 @@ async function proxyRequest(req: NextRequest, method: string) {
         sort: "supplier_name",
       });
       return json({ data });
+    } else if (scope === "timezone") {
+      let tz = "Asia/Manila";
+      try {
+        const settings = (await fetchDirectus("/items/general_setting", {
+          limit: "100",
+        })) as { setting_key: string; setting_value: string }[] | undefined;
+        const tzSetting = settings?.find((s) => s.setting_key === "time_zone");
+        if (tzSetting?.setting_value) {
+          tz = tzSetting.setting_value;
+        }
+      } catch (e) {
+        console.warn("Failed to fetch timezone from general_setting, falling back to Asia/Manila", e);
+      }
+      return json({ data: tz });
     } else if (scope === "barcode_type") {
       const data = await fetchDirectus("/items/barcode_type", {
         fields: "id,name",
@@ -219,7 +245,7 @@ async function proxyRequest(req: NextRequest, method: string) {
       // 1. Fetch Products (FIXED: product_code instead of sku_code)
       const productsPromise = fetchDirectus("/items/products", {
         fields:
-          "product_id,product_name,barcode,barcode_date,description,product_code,product_category.category_name,unit_of_measurement.unit_name,unit_of_measurement.unit_shortcut",
+          "product_id,parent_id,product_name,barcode,barcode_date,description,product_code,product_category.category_name,unit_of_measurement.unit_name,unit_of_measurement.unit_shortcut",
         limit: "-1",
         "filter[isActive][_eq]": "1",
       });

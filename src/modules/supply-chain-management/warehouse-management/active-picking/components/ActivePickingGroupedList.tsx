@@ -3,7 +3,7 @@
 import React, {useState, useMemo, useEffect} from "react";
 import {
     CheckCircle2, ChevronRight, ChevronDown, Factory, Keyboard, ListTodo, ScanLine, Barcode,
-    Send, Search, PackageX, Zap, FilterX
+    Send, Search, PackageX, Zap, FilterX, Minus, RotateCcw
 } from "lucide-react";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
@@ -20,11 +20,14 @@ interface Props {
     setActiveDetailId: (id: number | null) => void;
     onOpenManualModal: () => void;
     onFinalizeBatch: () => void;
+    onAdjustQuantity: (detailId: number, delta: number) => void;
+    hideManualForRFIDItems?: boolean;
 }
 
 export function ActivePickingGroupedList({
                                              cldtoNo, groupedDetails, activeDetailId,
-                                             setActiveDetailId, onOpenManualModal, onFinalizeBatch
+                                             setActiveDetailId, onOpenManualModal, onFinalizeBatch,
+                                             onAdjustQuantity, hideManualForRFIDItems = false
                                          }: Props) {
     const {
         searchQuery,
@@ -176,8 +179,8 @@ export function ActivePickingGroupedList({
                                                                                 <div
                                                                                     key={detail.id}
                                                                                     id={`pick-card-${detail.id}`}
-                                                                                    onClick={() => !isComplete && setActiveDetailId(detail.id || null)}
-                                                                                    className={`relative flex flex-col p-3 rounded-xl border-2 transition-all cursor-pointer overflow-hidden group ${isComplete ? "bg-emerald-500/5 border-emerald-500/20 opacity-60 grayscale-[50%]" : isActive ? "bg-primary/5 border-primary shadow-md shadow-primary/10 z-10" : "bg-card border-border/60 hover:border-primary/30"
+                                                                                    onClick={() => setActiveDetailId(detail.id || null)}
+                                                                                    className={`relative flex flex-col p-3 rounded-xl border-2 transition-all cursor-pointer overflow-hidden group ${isComplete ? "bg-emerald-500/5 border-emerald-500/20 opacity-80" : isActive ? "bg-primary/5 border-primary shadow-md shadow-primary/10 z-10" : "bg-card border-border/60 hover:border-primary/30"
                                                                                     }`}
                                                                                 >
                                                                                     {isActive && <div
@@ -217,24 +220,50 @@ export function ActivePickingGroupedList({
                                                                                                 className="text-xs font-bold text-muted-foreground/60">/ {detail.orderedQuantity}</span>
                                                                                         </div>
 
-                                                                                        <div
-                                                                                            className="flex items-center gap-1 shrink-0">
-                                                                                            {isComplete ? (
-                                                                                                <CheckCircle2
-                                                                                                    className="h-6 w-6 text-emerald-500"/>
-                                                                                            ) : isActive ? (
+                                                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                                                            {isActive ? (
                                                                                                 <>
-                                                                                                    <Button
-                                                                                                        variant="outline"
-                                                                                                        size="icon"
-                                                                                                        onClick={(e) => {
-                                                                                                            e.stopPropagation();
-                                                                                                            onOpenManualModal();
-                                                                                                        }}
-                                                                                                        className="h-7 w-7 rounded-md border-blue-500/30 text-blue-500 hover:bg-blue-500/10">
-                                                                                                        <Keyboard
-                                                                                                            className="h-3 w-3"/>
-                                                                                                    </Button>
+                                                                                                    {(detail.pickedQuantity || 0) > 0 && (
+                                                                                                        <>
+                                                                                                            <Button
+                                                                                                                variant="outline"
+                                                                                                                size="icon"
+                                                                                                                onClick={(e) => {
+                                                                                                                    e.stopPropagation();
+                                                                                                                    onAdjustQuantity(detail.id!, -1);
+                                                                                                                }}
+                                                                                                                className="h-7 w-7 rounded-md border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
+                                                                                                                title="Decrement -1"
+                                                                                                            >
+                                                                                                                <Minus className="h-3 w-3" />
+                                                                                                            </Button>
+                                                                                                            <Button
+                                                                                                                variant="outline"
+                                                                                                                size="icon"
+                                                                                                                onClick={(e) => {
+                                                                                                                    e.stopPropagation();
+                                                                                                                    onAdjustQuantity(detail.id!, -(detail.pickedQuantity || 0));
+                                                                                                                }}
+                                                                                                                className="h-7 w-7 rounded-md border-red-500/30 text-red-500 hover:bg-red-500/10"
+                                                                                                                title="Reset to 0"
+                                                                                                            >
+                                                                                                                <RotateCcw className="h-3 w-3" />
+                                                                                                            </Button>
+                                                                                                        </>
+                                                                                                    )}
+                                                                                                    {!(hideManualForRFIDItems && isRFIDPreferred) && (
+                                                                                                        <Button
+                                                                                                            variant="outline"
+                                                                                                            size="icon"
+                                                                                                            onClick={(e) => {
+                                                                                                                e.stopPropagation();
+                                                                                                                onOpenManualModal();
+                                                                                                            }}
+                                                                                                            className="h-7 w-7 rounded-md border-blue-500/30 text-blue-500 hover:bg-blue-500/10">
+                                                                                                            <Keyboard
+                                                                                                                className="h-3 w-3"/>
+                                                                                                        </Button>
+                                                                                                    )}
                                                                                                     <div
                                                                                                         className={`h-7 w-7 rounded-md flex items-center justify-center ${isRFIDPreferred ? 'bg-amber-500/10 text-amber-500' : 'bg-blue-500/10 text-blue-500'}`}>
                                                                                                         {isRFIDPreferred ?
@@ -244,6 +273,9 @@ export function ActivePickingGroupedList({
                                                                                                                 className="h-3 w-3"/>}
                                                                                                     </div>
                                                                                                 </>
+                                                                                            ) : isComplete ? (
+                                                                                                <CheckCircle2
+                                                                                                    className="h-6 w-6 text-emerald-500"/>
                                                                                             ) : (
                                                                                                 <div
                                                                                                     className="h-7 w-7 rounded-md border border-dashed border-border/50"/>

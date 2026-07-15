@@ -133,3 +133,57 @@ export function clusterLabel(selected: string[], allLabel = "All Clusters") {
     if (selected.length <= 2) return selected.join(", ");
     return `${selected.length} clusters`;
 }
+
+export const getDateRangeBounds = (
+    range: DateRange,
+    customFrom?: string,
+    customTo?: string
+): { startDate?: string; endDate?: string } => {
+    const now = new Date();
+    const formatDateLocal = (d: Date) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+    };
+
+    if (range === "custom") {
+        if (!customFrom || !customTo) return {};
+        return { startDate: customFrom, endDate: customTo };
+    }
+
+    if (range === "today") {
+        const todayStr = formatDateLocal(now);
+        return { startDate: todayStr, endDate: todayStr };
+    }
+
+    if (range === "yesterday") {
+        const yesterday = new Date();
+        yesterday.setDate(now.getDate() - 1);
+        const yesterdayStr = formatDateLocal(yesterday);
+        return { startDate: yesterdayStr, endDate: yesterdayStr };
+    }
+
+    if (range === "this-week") {
+        const startOfWeek = new Date();
+        const dayOfWeek = now.getDay();
+        const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        startOfWeek.setDate(diff);
+        return { startDate: formatDateLocal(startOfWeek) };
+    }
+
+    if (range === "this-month") {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        return { startDate: formatDateLocal(startOfMonth), endDate: formatDateLocal(endOfMonth) };
+    }
+
+    if (range === "this-year") {
+        const startOfYear = new Date(now.getFullYear(), 0, 1);
+        const endOfYear = new Date(now.getFullYear(), 11, 31);
+        return { startDate: formatDateLocal(startOfYear), endDate: formatDateLocal(endOfYear) };
+    }
+
+    return {};
+};
+

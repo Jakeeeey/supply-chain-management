@@ -52,7 +52,7 @@ export function Combobox({
   }, [options, value])
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={true}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -72,7 +72,7 @@ export function Combobox({
           <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
           <CommandList>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
-            <CommandGroup className="max-h-[300px] overflow-auto">
+            <CommandGroup>
               {options.map((option) => (
                 <CommandItem
                   key={option.value}
@@ -85,7 +85,7 @@ export function Combobox({
                   <Check
                     className={cn(
                       "mr-2 h-4 w-4 shrink-0",
-                      value === option.value ? "opacity-100" : "opacity-0"
+                      value === option.value ? "opacity-100" : "opacity-0" 
                     )}
                   />
                   {renderItem ? renderItem(option) : option.label}
