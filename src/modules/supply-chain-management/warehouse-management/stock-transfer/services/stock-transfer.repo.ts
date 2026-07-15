@@ -249,6 +249,8 @@ export async function updateTransfersStatus(
     dispatched_by?: number | null;
     dispatched_at?: string | null;
     approved_by?: number | null;
+    rejected_by?: number | null;
+    rejected_at?: string | null;
   }[]
 ): Promise<void> {
   if (items.length === 0) return;
@@ -267,6 +269,8 @@ export async function updateTransfersStatus(
       ...(item.dispatched_by !== undefined ? { dispatched_by: item.dispatched_by } : {}),
       ...(item.dispatched_at !== undefined ? { dispatched_at: item.dispatched_at } : {}),
       ...(item.approved_by !== undefined ? { approved_by: item.approved_by } : {}),
+      ...(item.rejected_by !== undefined ? { rejected_by: item.rejected_by } : {}),
+      ...(item.rejected_at !== undefined ? { rejected_at: item.rejected_at } : {}),
     });
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push(item.id);
@@ -291,7 +295,15 @@ export async function updateTransfer(id: number, data: Partial<StockTransferRow>
 /**
  * Records RFID scan events in the tracking table.
  */
-export async function insertRfidTracking(entries: { stock_transfer_id: number; rfid_tag: string; scan_type: string }[]): Promise<void> {
+export async function insertRfidTracking(
+  entries: { 
+    stock_transfer_id: number; 
+    rfid_tag: string; 
+    scan_type: string; 
+    created_by?: number | null; 
+    created_at?: string; 
+  }[]
+): Promise<void> {
   if (entries.length === 0) return;
   await createItems("items/stock_transfer_rfid", entries);
 }
@@ -348,3 +360,18 @@ export async function fallbackRfidLookup(rfid: string): Promise<ProductRow | nul
 
   return null;
 }
+
+/**
+ * Inserts rows into the stock_transfer_attachment table.
+ */
+export async function insertStockTransferAttachments(
+  entries: { 
+    stock_transfer_id: number; 
+    directus_file_id: string; 
+    created_by?: number | null; 
+  }[]
+): Promise<void> {
+  if (entries.length === 0) return;
+  await createItems("items/stock_transfer_attachment", entries);
+}
+

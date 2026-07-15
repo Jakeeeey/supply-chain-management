@@ -95,12 +95,20 @@ export async function getEnrichedProducts(
 /**
  * Handles the creation of a new stock transfer request.
  */
-export async function createTransfer(payload: CreateTransferPayload): Promise<{ success: boolean; orderNo: string }> {
+export async function createTransfer(payload: CreateTransferPayload, userId?: number): Promise<{ success: boolean; orderNo: string }> {
   // 1. Validate payload
   const validated = CreateStockTransferSchema.parse(payload);
   
   const orderNo = helpers.generateOrderNo(validated.sourceBranch, validated.targetBranch);
-  const now = new Date().toISOString();
+  const nowPHT = new Date().toLocaleString("sv-SE", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).replace(" ", "T");
 
   // 2. Prepare Directus payloads
   const insertPayloads: StockTransferInsertPayload[] = validated.scannedItems
@@ -116,8 +124,9 @@ export async function createTransfer(payload: CreateTransferPayload): Promise<{ 
       amount: item.totalAmount,
       status: "Requested",
       remarks: item.rfid, // RFID stored in remarks for the request stage
-      date_requested: now,
-      date_encoded: now,
+      date_requested: nowPHT,
+      date_encoded: nowPHT,
+      encoder_id: userId || null,
     }));
 
   if (insertPayloads.length === 0) {
@@ -130,39 +139,36 @@ export async function createTransfer(payload: CreateTransferPayload): Promise<{ 
   return { success: true, orderNo };
 }
 
-/**
- * Helper to return current PH Manila Time (UTC+8) as an ISO-like string
- * but without the 'Z' suffix to ensure correct local interpretation.
- */
-function nowPH(): string {
-  const date = new Date();
-  const phOffset = 8 * 60; // 8 hours in minutes
-  const localOffset = date.getTimezoneOffset(); // in minutes
-  const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
-  return phTime.toISOString().replace("Z", "");
-}
-
-/**
- * Updates status and handles optional RFID tracking logic.
- */
 export async function updateTransferStatus(payload: UpdateTransferPayload): Promise<{ success: boolean }> {
   // 1. Validate payload
   const validated = UpdateStockTransferSchema.parse(payload);
-  
+
   // 2. Normalize updates (handle both 'items' and 'ids' formats)
-  const phNow = nowPH();
+  const nowPHT = new Date().toLocaleString("sv-SE", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).replace(" ", "T");
   const updates = (validated.items || (validated.ids || []).map(id => ({
     id,
     status: validated.status || "Unknown"
   }))).map(u => ({
     ...u,
-    ...(u.status === "Received" ? { date_received: phNow, receiver_id: validated.userId || null } : {}),
+    ...(u.status === "Received" ? { date_received: nowPHT, receiver_id: validated.userId || null } : {}),
     ...(u.status === "For Picking" ? { 
       approved_by: validated.userId || null
     } : {}),
     ...(u.status === "For Loading" ? { 
-      dispatched_at: phNow, 
+      dispatched_at: nowPHT, 
       dispatched_by: validated.userId || null 
+    } : {}),
+    ...(u.status === "Rejected" ? { 
+      rejected_at: nowPHT, 
+      rejected_by: validated.userId || null 
     } : {})
   }));
 
@@ -178,9 +184,23 @@ export async function updateTransferStatus(payload: UpdateTransferPayload): Prom
     const trackingEntries = validated.rfids.map(r => ({
       stock_transfer_id: r.stock_transfer_id,
       rfid_tag: r.rfid_tag,
-      scan_type: validated.scanType!
+      scan_type: validated.scanType!,
+      created_by: validated.userId || null,
+      created_at: nowPHT
     }));
     await repo.insertRfidTracking(trackingEntries);
+  }
+
+  // 5. Record attachments if provided
+  if (validated.attachments && validated.attachments.length > 0) {
+    const attachmentEntries = updates.flatMap(u => 
+      validated.attachments!.map(fileId => ({
+        stock_transfer_id: u.id,
+        directus_file_id: fileId,
+        created_by: validated.userId || null
+      }))
+    );
+    await repo.insertStockTransferAttachments(attachmentEntries);
   }
 
   return { success: true };

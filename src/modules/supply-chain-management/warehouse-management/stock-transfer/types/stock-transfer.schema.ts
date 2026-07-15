@@ -97,6 +97,8 @@ export const UpdateStockTransferSchema = z.object({
   scanType: RfidScanTypeSchema.optional(),
   /** ID of the user performing the update. */
   userId: z.number().optional(),
+  /** Directus file IDs attached to the receiving transaction. */
+  attachments: z.array(z.string()).optional(),
 }).superRefine((data, ctx) => {
   const hasItems = data.items && data.items.length > 0;
   const hasIds = data.ids && data.ids.length > 0;
