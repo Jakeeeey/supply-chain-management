@@ -49,6 +49,7 @@ export default function BarCodeScannerModule() {
   const {
     products,
     allProducts,
+    allProductsRaw,
     selectedProduct,
     setSelectedProduct,
     handleUpdateBarcode,
@@ -163,7 +164,7 @@ export default function BarCodeScannerModule() {
                   <span className="truncate">
                     {productFilter && productFilter !== "all"
                       ? (() => {
-                          const selected = allProducts.find((p: Product) => String(p.product_id) === productFilter);
+                          const selected = allProductsRaw.find((p: Product) => String(p.product_id) === productFilter);
                           return selected ? (selected.description || selected.product_name) : "Unknown";
                         })()
                       : "All Products"}
@@ -194,8 +195,13 @@ export default function BarCodeScannerModule() {
                         />
                         All Products
                       </CommandItem>
-                      {allProducts
+                      {allProductsRaw
                         .filter((p: Product) => !p.parent_id)
+                        .filter((parent: Product) => 
+                          allProducts.some(
+                            (ap) => String(ap.product_id) === String(parent.product_id) || String(ap.parent_id) === String(parent.product_id)
+                          )
+                        )
                         .map((product: Product) => (
                         <CommandItem
                           key={product.product_id}
