@@ -463,6 +463,7 @@ export default function StockTransferSummaryView() {
         getBranchName={getBranchName}
         getUserName={getUserName}
         getUnitName={getUnitName}
+        branches={branches}
       />
     </div>
   );

@@ -24,7 +24,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ClipboardList, Package, Printer } from 'lucide-react';
-import type { OrderGroup, OrderGroupItem, ProductRow } from '../../types/stock-transfer.types';
+import type { OrderGroup, OrderGroupItem, ProductRow, BranchRow } from '../../types/stock-transfer.types';
 import { calculateUnitPrice } from '../../services/stock-transfer.helpers';
 import { SummaryPrintPreview } from './SummaryPrintPreview';
 
@@ -46,6 +46,7 @@ interface TransferDetailModalProps {
   getBranchName: (id: number | null) => string;
   getUserName: (id: number | null | undefined) => string;
   getUnitName: (id: unknown) => string;
+  branches?: BranchRow[];
 }
 
 export function TransferDetailModal({
@@ -55,6 +56,7 @@ export function TransferDetailModal({
   getBranchName,
   getUserName,
   getUnitName,
+  branches,
 }: TransferDetailModalProps) {
   const [showPrintPreview, setShowPrintPreview] = React.useState(false);
 
@@ -245,7 +247,12 @@ export function TransferDetailModal({
         getBranchName={getBranchName}
         getUserName={getUserName}
         getUnitName={getUnitName}
-        salesmanName={getUserName(group.encoderId)}
+        salesmanName={(() => {
+          const targetBranchObj = branches?.find(b => b.id === group.targetBranch);
+          return (targetBranchObj && (targetBranchObj.branch_description || targetBranchObj.branch_head))
+            ? (targetBranchObj.branch_description || getUserName(targetBranchObj.branch_head))
+            : getUserName(group.encoderId);
+        })()}
       />
     </Dialog>
   );
