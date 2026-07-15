@@ -36,10 +36,6 @@ export const PrintTemplate = React.forwardRef<HTMLDivElement, PrintTemplateProps
     }
   };
 
-  const grandTotal = group.items.reduce((sum, item) => {
-    const unitPrice = calculateUnitPrice(item);
-    return sum + (item.ordered_quantity * unitPrice);
-  }, 0);
 
   return (
     <div 
@@ -156,15 +152,6 @@ export const PrintTemplate = React.forwardRef<HTMLDivElement, PrintTemplateProps
              );
           })}
         </tbody>
-        <tfoot>
-          <tr>
-            <td colSpan={5} style={{ padding: '15px 8px 8px' }}></td>
-            <td style={{ padding: '15px 8px 8px', textAlign: 'right', fontSize: '10px', fontWeight: 'bold', borderTop: '2px solid #333' }}>GRAND TOTAL</td>
-            <td style={{ padding: '15px 8px 8px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold', borderTop: '2px solid #333', color: '#059669' }}>
-              PHP {grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-            </td>
-          </tr>
-        </tfoot>
       </table>
 
       {/* Signature Section */}
