@@ -162,9 +162,10 @@ export default function BarCodeScannerModule() {
                   {/* Added truncate class to handle long product names */}
                   <span className="truncate">
                     {productFilter && productFilter !== "all"
-                      ? allProducts.find(
-                        (p: Product) => String(p.product_id) === productFilter,
-                      )?.product_name || "Unknown"
+                      ? (() => {
+                          const selected = allProducts.find((p: Product) => String(p.product_id) === productFilter);
+                          return selected ? (selected.description || selected.product_name) : "Unknown";
+                        })()
                       : "All Products"}
                   </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -198,7 +199,7 @@ export default function BarCodeScannerModule() {
                         .map((product: Product) => (
                         <CommandItem
                           key={product.product_id}
-                          value={product.product_name || ""}
+                          value={product.description || product.product_name || ""}
                           onSelect={() => {
                             setProductFilter(String(product.product_id));
                             setOpenProduct(false);
@@ -213,7 +214,7 @@ export default function BarCodeScannerModule() {
                             )}
                           />
                           <div className="flex flex-col">
-                            <span>{product.product_name}</span>
+                            <span>{product.description || product.product_name}</span>
                             <span className="text-[10px] text-muted-foreground">
                               {product.product_code}
                             </span>

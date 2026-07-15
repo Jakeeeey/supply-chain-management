@@ -153,7 +153,8 @@ export function useBarcodeScanner() {
 
       const matchesProduct =
         productFilter === "all" ||
-        String(product.parent_id ?? product.product_id) === productFilter;
+        String(product.product_id) === productFilter ||
+        String(product.parent_id) === productFilter;
 
       const matchesRecordType =
         recordTypeFilter === "all" || product.record_type === recordTypeFilter;
@@ -176,6 +177,10 @@ export function useBarcodeScanner() {
   // ✅ FIXED: Correct URL and DTO Payload — now bundle-aware
   const handleUpdateBarcode = async (payload: UpdateBarcodeDTO) => {
     if (!selectedProduct) return;
+
+    if (productFilter === String(selectedProduct.product_id)) {
+      setProductFilter("all");
+    }
 
     const isBundle = selectedProduct.record_type === "bundle";
 
