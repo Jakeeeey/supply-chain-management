@@ -9,6 +9,8 @@ export interface BranchRow {
   id: number;
   branch_name?: string;
   name?: string;
+  branch_description?: string;
+  branch_head?: number | null;
 }
 
 /** Resolved unit-of-measurement object from Directus relational expansion. */

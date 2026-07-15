@@ -191,11 +191,6 @@ export function SummaryPrintPreview({
       y += 32;
 
       // Table
-      const grandTotal = group.items.reduce((sum, item) => {
-        const unitPrice = calculateUnitPrice(item as unknown as StockTransferRow);
-        const qty = item.received_quantity || item.allocated_quantity || item.ordered_quantity || 0;
-        return sum + (qty * unitPrice);
-      }, 0);
       const rows = group.items.map((item) => {
          const product = typeof item.product_id === 'object' && item.product_id !== null 
            ? (item.product_id as { product_brand?: { brand_name?: string }, product_name?: string, unit_of_measurement?: unknown }) 
@@ -221,11 +216,7 @@ export function SummaryPrintPreview({
         margin: { left: margin, right: margin },
         head: [['BRAND', 'PRODUCT NAME', 'UNIT', 'ORDERED', 'ALLOCATED', 'RECEIVED', 'TOTAL']],
         body: rows.length > 0 ? rows : [['No items found.', '', '', '', '', '', '']],
-        foot: rows.length > 0 ? [[
-          { content: '', colSpan: 5, styles: { fillColor: [255, 255, 255] } },
-          { content: 'GRAND TOTAL', colSpan: 1, styles: { halign: 'right', fontStyle: 'bold', fontSize: 8, fillColor: [255, 255, 255], textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: { top: 0.5 } } },
-          { content: `PHP ${grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, colSpan: 1, styles: { halign: 'right', fontStyle: 'bold', fontSize: 9, fillColor: [255, 255, 255], textColor: [5, 150, 105], lineColor: [0, 0, 0], lineWidth: { top: 0.5 } } }
-        ]] : [],
+        foot: [],
         styles: {
           fontSize: 7.5,
           cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
@@ -240,10 +231,10 @@ export function SummaryPrintPreview({
           lineWidth: { bottom: 0.8 },
         },
         columnStyles: {
-          0: { cellWidth: 22 },
+          0: { cellWidth: 20 },
           1: { cellWidth: 'auto' },
-          2: { cellWidth: 12, halign: 'center' },
-          3: { cellWidth: 16, halign: 'center' },
+          2: { cellWidth: 10, halign: 'center' },
+          3: { cellWidth: 20, halign: 'center' },
           4: { cellWidth: 20, halign: 'center' },
           5: { cellWidth: 20, halign: 'center' },
           6: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },
