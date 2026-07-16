@@ -160,6 +160,7 @@ export async function fetchReturnDetails(
   // Fetch all RFIDs associated with these detail lines
   const detailIds = rawItems.map((item: any) => item.detail_id || item.id);
   const rfidMap = new Map<number, string[]>();
+  const rfidTagIdMap = new Map<number, number[]>();
 
   if (detailIds.length > 0) {
     try {
@@ -170,10 +171,13 @@ export async function fetchReturnDetails(
       for (const row of rfidData) {
         const dId = Number(row.sales_return_detail_id);
         const tag = String(row.rfid_tag);
+        const tagId = Number(row.id);
         if (!rfidMap.has(dId)) {
           rfidMap.set(dId, []);
+          rfidTagIdMap.set(dId, []);
         }
         rfidMap.get(dId)!.push(tag);
+        rfidTagIdMap.get(dId)!.push(tagId);
       }
     } catch (err) {
       console.error("Failed to fetch rfids for details:", err);
@@ -233,6 +237,7 @@ export async function fetchReturnDetails(
         : "",
       returnType: returnTypeObj ? returnTypeObj.type_name : "Good Order",
       rfidTags: rfidMap.get(detail.detail_id || detail.id) || [],
+      rfidTagIds: rfidTagIdMap.get(detail.detail_id || detail.id) || [],
       priceA: product.priceA,
       priceB: product.priceB,
       priceC: product.priceC,
@@ -479,6 +484,17 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
   // Fetch line discounts for discount calculation
   const refsResult = await repo.getRawReferences();
   const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
+  const salesmenData = (refsResult[0].data || []) as any[];
+
+  const salesman = salesmenData.find(s => String(s.id) === String(payload.salesmanId));
+  const branchId = salesman?.branch_code;
+
+  if (payload.items && payload.items.length > 0) {
+    if (!branchId) {
+      throw new Error("Cannot determine branch for RFID lookup.");
+    }
+    await validateRfidTagsPayload(payload, token, branchId);
+  }
 
   // Build aggregate discount percentage map from junction + line_discount tables
   const lineDiscountMap = await buildDiscountPercentMap();
@@ -902,4 +918,88 @@ export async function lookupRfid(
     console.error("[Sales Return RFID] Product lookup failed:", err);
     throw err instanceof Error ? err : new Error(String(err));
   }
+}
+
+/**
+ * Pre-saves (creates or updates) a single detail item.
+ */
+export async function presaveDetail(
+  payload: {
+    returnNo: string;
+    id?: number | string; // temp string if new
+    productId: number;
+    quantity: number;
+    unitPrice: number;
+    discountType?: string | number | null;
+    returnType?: string;
+    reason?: string;
+  },
+  userId: number
+): Promise<{ detailId: number }> {
+  const refsResult = await repo.getRawReferences();
+  const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
+  const lineDiscountMap = await buildDiscountPercentMap();
+
+  const matchedType = returnTypes.find(
+    (t: API_SalesReturnType) => t.type_name === payload.returnType,
+  );
+  const typeId = matchedType ? matchedType.type_id : (returnTypes[0]?.type_id || 1);
+
+  const gross = Math.round(Number(payload.quantity) * Number(payload.unitPrice) * 100) / 100;
+  const discId = payload.discountType && payload.discountType !== "No Discount" && payload.discountType !== ""
+    ? Number(payload.discountType)
+    : null;
+  const percentage = discId ? lineDiscountMap.get(discId) || 0 : 0;
+  const discountAmt = Math.round(gross * (percentage / 100) * 100) / 100;
+
+  const detailPayload = {
+    quantity: Number(payload.quantity),
+    unit_price: Number(payload.unitPrice),
+    gross_amount: gross,
+    discount_amount: discountAmt,
+    total_amount: Math.round((gross - discountAmt) * 100) / 100,
+    sales_return_type_id: typeId,
+    discount_type: discId,
+    reason: payload.reason || null,
+    updated_at: nowPH(),
+  };
+
+  if (!payload.id || (typeof payload.id === "string" && payload.id.startsWith("added-"))) {
+    const detailResult = await repo.createReturnDetail({
+      ...detailPayload,
+      return_no: payload.returnNo,
+      product_id: Number(payload.productId),
+      created_at: nowPH(),
+    });
+    return { detailId: Number((detailResult.data as any)?.detail_id || (detailResult.data as any)?.id) };
+  } else {
+    await repo.updateReturnDetail(Number(payload.id), detailPayload);
+    return { detailId: Number(payload.id) };
+  }
+}
+
+/**
+ * Pre-saves a new RFID tag.
+ */
+export async function presaveRfidTag(
+  payload: {
+    detailId: number;
+    rfidTag: string;
+  },
+  userId: number
+): Promise<{ tagId: number }> {
+  const result = await repo.createRfidTag({
+    sales_return_detail_id: payload.detailId,
+    rfid_tag: payload.rfidTag,
+    created_by: userId,
+  });
+  return { tagId: Number((result.data as any)?.id) };
+}
+
+/**
+ * Deletes an RFID tag by its DB row ID.
+ */
+export async function deleteRfidTagById(tagId: number): Promise<{ success: boolean }> {
+  await repo.deleteRfidTag(tagId);
+  return { success: true };
 }

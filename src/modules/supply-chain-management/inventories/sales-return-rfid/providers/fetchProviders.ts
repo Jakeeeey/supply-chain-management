@@ -167,6 +167,31 @@ export const SalesReturnProvider = {
     return handleResponse(res);
   },
 
+  async presaveDetail(payload: Record<string, any>): Promise<{ detailId: number }> {
+    const res = await fetch(`${API_BASE}?action=presave-detail`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<{ detailId: number }>(res);
+  },
+
+  async presaveRfidTag(payload: Record<string, any>): Promise<{ tagId: number }> {
+    const res = await fetch(`${API_BASE}?action=presave-rfid`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<{ tagId: number }>(res);
+  },
+
+  async deleteRfidTagById(tagId: number): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}?action=delete-rfid&id=${tagId}`, {
+      method: "DELETE",
+    });
+    return handleResponse<{ success: boolean }>(res);
+  },
+
   async updateReturn(payload: {
     returnId: number;
     returnNo: string;

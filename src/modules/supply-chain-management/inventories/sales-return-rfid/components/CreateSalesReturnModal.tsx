@@ -23,6 +23,17 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -231,6 +242,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   // Success Modal State
   const [isSuccessOpen, setSuccessOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isConfirmCreateOpen, setIsConfirmCreateOpen] = useState(false);
 
   // UI State for Validation
   const [returnTypeError, setReturnTypeError] = useState(false);
@@ -819,39 +831,33 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       toast.error("Return Date is required.");
       return;
     }
-    if (items.length === 0) {
-      toast.error("Please add at least one product.");
-      return;
-    }
 
     if (isBranchLockedError) {
       toast.error("Invalid Branch: Clear the products or revert the salesman to proceed.");
       return;
     }
 
-    // 🟢 REVISION: Added Validation for Order No.
-    if (!orderNo.trim()) {
-      toast.error("Order No. is required.");
-      setOrderError(true);
-      return;
+    if (items.length > 0) {
+      const invalidItems = items.some(
+        (item) => !item.returnType || item.returnType === "",
+      );
+      if (invalidItems) {
+        toast.error("Please select a Return Type for all items.");
+        setReturnTypeError(true);
+        return;
+      }
     }
 
-    if (!invoiceNo.trim()) {
-      toast.error("Invoice No. is required.");
-      setInvoiceError(true);
-      return;
+    const hasNewTags = items.some(item => item.rfidTags && item.rfidTags.length > 0);
+    if (hasNewTags) {
+      setIsConfirmCreateOpen(true);
+    } else {
+      handleConfirmCreate();
     }
+  };
 
-    const invalidItems = items.some(
-      (item) => !item.returnType || item.returnType === "",
-    );
-
-    if (invalidItems) {
-      toast.error("Please select a Return Type for all items.");
-      setReturnTypeError(true);
-      return;
-    }
-
+  const handleConfirmCreate = async () => {
+    setIsConfirmCreateOpen(false);
     try {
       setIsSubmitting(true);
       const selectedSalesmanObj = salesmen.find(
@@ -1589,9 +1595,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
               </h4>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5" ref={orderWrapperRef}>
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                    Order No. <span className="text-destructive">*</span>
-                  </label>
+                  <Label className="text-xs uppercase font-bold text-muted-foreground">
+                    Order No.
+                  </Label>
+                  {/* Order No Dropdown */}
                   <div className="relative group">
                     <input
                       type="text"
@@ -1656,9 +1663,9 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
                 {/* INVOICE NO DROPDOWN */}
                 <div className="space-y-1.5" ref={invoiceWrapperRef}>
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                    Invoice No. <span className="text-destructive">*</span>
-                  </label>
+                  <Label className="text-xs uppercase font-bold text-muted-foreground">
+                    Invoice No.
+                  </Label>
                   <div className="relative group">
                     <input
                       type="text"
@@ -1727,7 +1734,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 onChange={setRemarks}
               />
             </div>
-
             <div className="bg-background rounded-lg border border-border p-0 shadow-sm overflow-hidden h-fit">
               <div className="p-4 bg-muted/30 border-b border-border">
                 <h4 className="font-bold text-foreground">Financial Summary</h4>
@@ -1799,6 +1805,46 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         customerCode={customerCode} // 🟢 Pass prop
         lineDiscounts={lineDiscountOptions}
       />
+
+      {/* CONFIRM CREATE DIALOG */}
+      <AlertDialog open={isConfirmCreateOpen} onOpenChange={setIsConfirmCreateOpen}>
+        <AlertDialogContent className="max-w-md bg-background border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-bold flex items-center gap-2">
+              <span className="bg-primary/10 text-primary p-2 rounded-full">
+                <FileText className="h-5 w-5" />
+              </span>
+              Create Sales Return?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-base mt-2">
+              Once this Sales Return is saved, you will no longer be able to delete any tagged RFID items. 
+              <br /><br />
+              Please review your entries before confirming.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6">
+            <AlertDialogCancel
+              disabled={isSubmitting}
+              onClick={() => setIsConfirmCreateOpen(false)}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-primary hover:bg-primary/90 text-white"
+              onClick={handleConfirmCreate}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...
+                </>
+              ) : (
+                "Confirm & Create"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* SUCCESS MODAL */}
       <Dialog
