@@ -94,6 +94,29 @@ async function buildDiscountPercentMap(): Promise<Map<number, number>> {
   return discountMap;
 }
 
+async function validateRfidTagsPayload(payload: any, token: string, branchId: number) {
+  if (!token) return;
+  if (!payload.items || !Array.isArray(payload.items)) return;
+
+  for (const item of payload.items) {
+    if (item.rfidTags && Array.isArray(item.rfidTags)) {
+      for (const tag of item.rfidTags) {
+        // 1. Check duplicate across other returns
+        const dupCheck = await checkRfidDuplicate(tag);
+        if (dupCheck.isDuplicate) {
+          throw new Error(`RFID Tag ${tag} is already associated with return ${dupCheck.returnNo}`);
+        }
+        
+        // 2. Check if valid in inventory for this branch
+        const lookup = await lookupRfid(tag, branchId, token);
+        if (!lookup || !lookup.isOnInventory) {
+          throw new Error(`RFID Tag ${tag} is not found in inventory for this branch.`);
+        }
+      }
+    }
+  }
+}
+
 // =============================================================================
 // PUBLIC SERVICE METHODS
 // =============================================================================
@@ -472,7 +495,7 @@ export async function fetchStatusCard(
 /**
  * Creates a new sales return (header + details).
  */
-export async function submitReturn(payload: any, userId: number): Promise<any> {
+export async function submitReturn(payload: any, userId: number, token: string = ""): Promise<any> {
   if (payload.appliedInvoiceId) {
     const invoiceData = await repo.getInvoiceStatus(payload.appliedInvoiceId);
     const isPosted = parseBoolean(invoiceData?.data?.isPosted);

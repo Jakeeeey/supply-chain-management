@@ -718,7 +718,8 @@ export function UpdateSalesReturnModal({
         if (existingIdx !== -1) {
           // It exists! Increment the quantity of the existing row.
           const existing = updated[existingIdx];
-          const newQty = (Number(existing.quantity) || 0) + (Number(item.quantity) || 1);
+          const incomingQty = item.unitOrder === 3 ? 0 : (Number(item.quantity) || 1);
+          const newQty = (Number(existing.quantity) || 0) + incomingQty;
           const newGross = Math.round(newQty * Number(existing.unitPrice || 0) * 100) / 100;
 
           // Re-calculate discount for new gross
@@ -749,7 +750,7 @@ export function UpdateSalesReturnModal({
             discountType: incomingDiscountType || null,
             discountAmount: initialDiscountAmt,
             totalAmount,
-            quantity: Number(item.quantity) || 1,
+            quantity: item.unitOrder === 3 ? 0 : (Number(item.quantity) || 1),
             returnType: item.returnType || "Good Order",
           };
           updated.push(newItemObj);
@@ -873,7 +874,7 @@ export function UpdateSalesReturnModal({
     }
 
     const hasIncompleteItems = details.some(
-      (item) => !item.returnType || item.returnType === "",
+      (item) => item.quantity > 0 && (!item.returnType || item.returnType === ""),
     );
     if (hasIncompleteItems) {
       toast.error("Please select a 'Return Type' for all items.");
@@ -906,7 +907,7 @@ export function UpdateSalesReturnModal({
     }
 
     const hasIncompleteItems = details.some(
-      (item) => !item.returnType || item.returnType === "",
+      (item) => item.quantity > 0 && (!item.returnType || item.returnType === ""),
     );
     if (hasIncompleteItems) {
       toast.error("Please select a 'Return Type' for all items.");

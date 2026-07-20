@@ -839,7 +839,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
     if (items.length > 0) {
       const invalidItems = items.some(
-        (item) => !item.returnType || item.returnType === "",
+        (item) => item.quantity > 0 && (!item.returnType || item.returnType === ""),
       );
       if (invalidItems) {
         toast.error("Please select a Return Type for all items.");
@@ -1418,12 +1418,27 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                             </td>
                             <td className="px-4 py-2 text-center">
                               <div className="flex flex-col items-center gap-1">
-                                <Badge variant="outline" className={cn(
-                                  "font-bold transition-all min-w-[40px] flex justify-center",
-                                  item.unitOrder === 3 ? "border-primary/40 bg-primary/10 text-primary shadow-sm" : "border-muted-foreground/30 bg-muted/10 text-muted-foreground opacity-70"
-                                )}>
-                                  {item.quantity}
-                                </Badge>
+                                {item.unitOrder === 3 ? (
+                                  <Badge variant="outline" className={cn(
+                                    "font-bold transition-all min-w-[40px] flex justify-center",
+                                    "border-primary/40 bg-primary/10 text-primary shadow-sm"
+                                  )}>
+                                    {item.quantity}
+                                  </Badge>
+                                ) : (
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={item.quantity}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value, 10);
+                                      if (!isNaN(val) && val > 0) {
+                                        handleItemChange(idx, "quantity", val);
+                                      }
+                                    }}
+                                    className="w-16 h-7 text-center text-xs font-bold text-foreground border border-border rounded-md shadow-sm outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all bg-background"
+                                  />
+                                )}
                                 <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-tighter">
                                   {item.unitOrder === 3 ? "Box Units" : "Manual Qty"}
                                 </span>

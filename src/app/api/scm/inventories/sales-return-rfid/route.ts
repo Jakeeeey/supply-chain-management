@@ -210,7 +210,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const data = await submitReturn(body, userId);
+    const data = await submitReturn(body, userId, token || "");
     return json({ data }, 201);
   } catch (error: any) {
     console.error("Sales Return RFID API POST Error:", error);
