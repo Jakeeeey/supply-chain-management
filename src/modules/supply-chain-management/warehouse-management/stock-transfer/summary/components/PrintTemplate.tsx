@@ -3,6 +3,7 @@
 import React from 'react';
 import { SummaryOrderGroup } from '../hooks/use-stock-transfer-summary';
 import { CompanyData, ProductRow } from '../../types/stock-transfer.types';
+import { calculateUnitPrice } from '../../services/stock-transfer.helpers';
 
 interface PrintTemplateProps {
   group: SummaryOrderGroup;
@@ -35,7 +36,6 @@ export const PrintTemplate = React.forwardRef<HTMLDivElement, PrintTemplateProps
     }
   };
 
-  const grandTotal = group.totalAmount;
 
   return (
     <div 
@@ -122,7 +122,9 @@ export const PrintTemplate = React.forwardRef<HTMLDivElement, PrintTemplateProps
             <th style={{ textAlign: 'left', padding: '8px', fontSize: '10px', textTransform: 'uppercase' }}>Brand</th>
             <th style={{ textAlign: 'left', padding: '8px', fontSize: '10px', textTransform: 'uppercase' }}>Product Name</th>
             <th style={{ textAlign: 'center', padding: '8px', fontSize: '10px', textTransform: 'uppercase' }}>Unit</th>
-            <th style={{ textAlign: 'center', padding: '8px', fontSize: '10px', textTransform: 'uppercase' }}>Qty</th>
+            <th style={{ textAlign: 'center', padding: '8px', fontSize: '10px', textTransform: 'uppercase' }}>Ordered</th>
+            <th style={{ textAlign: 'center', padding: '8px', fontSize: '10px', textTransform: 'uppercase' }}>Allocated</th>
+            <th style={{ textAlign: 'center', padding: '8px', fontSize: '10px', textTransform: 'uppercase' }}>Received</th>
             <th style={{ textAlign: 'right', padding: '8px', fontSize: '10px', textTransform: 'uppercase' }}>Total</th>
           </tr>
         </thead>
@@ -131,6 +133,9 @@ export const PrintTemplate = React.forwardRef<HTMLDivElement, PrintTemplateProps
              const product = typeof item.product_id === 'object' ? (item.product_id as ProductRow) : null;
              const brand = typeof product?.product_brand === 'object' ? product.product_brand?.brand_name : 'N/A';
              const unit = getUnitName(product?.unit_of_measurement);
+             const unitPrice = calculateUnitPrice(item);
+             const qty = item.received_quantity || item.allocated_quantity || item.ordered_quantity || 0;
+             const rowTotal = qty * unitPrice;
              
              return (
                <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
@@ -138,22 +143,15 @@ export const PrintTemplate = React.forwardRef<HTMLDivElement, PrintTemplateProps
                  <td style={{ padding: '8px', fontSize: '11px' }}>{product?.product_name || `ID: ${item.product_id}`}</td>
                  <td style={{ padding: '8px', fontSize: '11px', textAlign: 'center' }}>{unit}</td>
                  <td style={{ padding: '8px', fontSize: '11px', textAlign: 'center' }}>{item.ordered_quantity}</td>
+                 <td style={{ padding: '8px', fontSize: '11px', textAlign: 'center', color: '#d97706', fontWeight: 'bold' }}>{item.allocated_quantity ?? '—'}</td>
+                 <td style={{ padding: '8px', fontSize: '11px', textAlign: 'center', color: '#059669', fontWeight: 'bold' }}>{item.received_quantity ?? '—'}</td>
                  <td style={{ padding: '8px', fontSize: '11px', textAlign: 'right', fontWeight: 'bold' }}>
-                   PHP {Number(item.amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                   PHP {rowTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                  </td>
                </tr>
              );
           })}
         </tbody>
-        <tfoot>
-          <tr>
-            <td colSpan={3} style={{ padding: '15px 8px 8px' }}></td>
-            <td style={{ padding: '15px 8px 8px', textAlign: 'right', fontSize: '10px', fontWeight: 'bold', borderTop: '2px solid #333' }}>GRAND TOTAL</td>
-            <td style={{ padding: '15px 8px 8px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold', borderTop: '2px solid #333', color: '#059669' }}>
-              PHP {grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-            </td>
-          </tr>
-        </tfoot>
       </table>
 
       {/* Signature Section */}

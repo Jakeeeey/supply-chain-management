@@ -1,7 +1,7 @@
 // ─── Stock Transfer Module — Pure Helpers ───────────────────
 // No I/O — only pure functions that produce values.
 
-import type { BranchRow, OrderGroup, OrderGroupItem, StockTransferRow } from "../types/stock-transfer.types";
+import type { BranchRow, OrderGroup, OrderGroupItem, StockTransferRow, ProductRow } from "../types/stock-transfer.types";
 
 /**
  * Generates a unique order number: ST-YYYYMMDDHHMMSS-{src}-{tgt}
@@ -54,9 +54,20 @@ export function groupByOrderNo(transfers: StockTransferRow[]): OrderGroup[] {
       };
     }
 
+    const product = typeof st.product_id === 'object' && st.product_id !== null ? (st.product_id as ProductRow) : null;
+    let amount = Number(st.amount || 0);
+    let unitPrice = st.ordered_quantity > 0 ? amount / st.ordered_quantity : 0;
+    
+    if (amount === 0 && product?.cost_per_unit) {
+      unitPrice = Number(product.cost_per_unit);
+      const qty = st.received_quantity || st.allocated_quantity || st.ordered_quantity || 0;
+      amount = qty * unitPrice;
+    }
+
     // Cast to OrderGroupItem with defaults for enrichment fields
     const item: OrderGroupItem = {
       ...st,
+      amount,
       scannedQty: 0,
       receivedQty: 0,
       scannedRfids: [],
@@ -67,12 +78,8 @@ export function groupByOrderNo(transfers: StockTransferRow[]): OrderGroup[] {
 
     groups[st.order_no].items.push(item);
 
-    // Calculate total using allocated or ordered quantity
-    const qty = st.allocated_quantity ?? st.ordered_quantity ?? 0;
-    const unitPrice =
-      st.ordered_quantity > 0
-        ? Number(st.amount || 0) / st.ordered_quantity
-        : 0;
+    // Calculate total using received, allocated, or ordered quantity
+    const qty = st.received_quantity ?? st.allocated_quantity ?? st.ordered_quantity ?? 0;
     groups[st.order_no].totalAmount += Number((qty * unitPrice).toFixed(2));
   });
 
@@ -87,8 +94,18 @@ export function groupByOrderNo(transfers: StockTransferRow[]): OrderGroup[] {
  * Calculates the unit price for a stock transfer line item.
  */
 export function calculateUnitPrice(item: StockTransferRow): number {
+  const product = typeof item.product_id === 'object' && item.product_id !== null ? (item.product_id as ProductRow) : null;
+  const amount = Number(item.amount || 0);
+  
+  if (product?.cost_per_unit) {
+    const qty = item.received_quantity || item.allocated_quantity || item.ordered_quantity || 0;
+    if (amount === 0 || amount === qty * Number(product.cost_per_unit)) {
+      return Number(product.cost_per_unit);
+    }
+  }
+  
   return item.ordered_quantity > 0
-    ? Number(item.amount || 0) / item.ordered_quantity
+    ? amount / item.ordered_quantity
     : 0;
 }
 

@@ -23,6 +23,7 @@ export interface ProductSupplierJunction {
 
 export interface Product {
   product_id: string;
+  parent_id?: number | null;
   description?: string | null;
   product_name: string;
   barcode: string | null;

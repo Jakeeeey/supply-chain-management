@@ -37,7 +37,7 @@ export default function StockTransferReceiveView({ currentUser }: { currentUser:
     isThrottled,
     clearHistory,
     updateManualQty,
-  } = useStockTransferReceive();
+  } = useStockTransferReceive({ currentUser });
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
