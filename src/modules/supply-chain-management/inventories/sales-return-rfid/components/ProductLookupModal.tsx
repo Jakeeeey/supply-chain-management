@@ -760,15 +760,40 @@ export function ProductLookupModal({
                                         (1 {baseUnitShortcut})
                                       </span>
                                     </div>
-                                    <Button
-                                      size="sm"
-                                      className="h-8 shadow-sm shadow-primary/20"
-                                      onClick={() =>
-                                        handleAddItem(product, baseUnitShortcut.toUpperCase(), safePrice)
+                                    {(() => {
+                                      const existingItem = selectedItems.find(
+                                        (i) =>
+                                          i.productId === product.product_id &&
+                                          i.unit === baseUnitShortcut.toUpperCase() &&
+                                          i.unitPrice === safePrice,
+                                      );
+                                      const unitOrder = unitObj ? unitObj.order : 0;
+                                      
+                                      if (existingItem && unitOrder === 3) {
+                                        return (
+                                          <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            className="h-8 shadow-sm shadow-destructive/20"
+                                            onClick={() => handleRemoveItem(existingItem.tempId)}
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove
+                                          </Button>
+                                        );
                                       }
-                                    >
-                                      <Plus className="h-3.5 w-3.5 mr-1" /> Add
-                                    </Button>
+
+                                      return (
+                                        <Button
+                                          size="sm"
+                                          className="h-8 shadow-sm shadow-primary/20"
+                                          onClick={() =>
+                                            handleAddItem(product, baseUnitShortcut.toUpperCase(), safePrice)
+                                          }
+                                        >
+                                          <Plus className="h-3.5 w-3.5 mr-1" /> Add
+                                        </Button>
+                                      );
+                                    })()}
                                   </div>
                                </div>
                             );
