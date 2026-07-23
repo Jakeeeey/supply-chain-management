@@ -15,6 +15,7 @@ import {
   Loader2,
   Check,
   ChevronsUpDown,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,17 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -231,6 +243,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   // Success Modal State
   const [isSuccessOpen, setSuccessOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isConfirmCreateOpen, setIsConfirmCreateOpen] = useState(false);
 
   // UI State for Validation
   const [returnTypeError, setReturnTypeError] = useState(false);
@@ -466,22 +479,21 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       const result = await SalesReturnProvider.lookupRfid(cleanedTag, branchId);
 
       if (result?.isOnInventory) {
-        const itemProductId = selectedRow.product_id || selectedRow.productId;
-        if (Number(result.productId) !== Number(itemProductId)) {
+        if (Number(result.currentBranchId) === Number(branchId)) {
           setLastScannedRfid("");
-          toast.error("Product Mismatch", {
-            description: "This RFID tag belongs to a different product on-hand in inventory.",
+          toast.error("Already in Stock", {
+            description: "This item is already in the branch's inventory. Sales Return is not allowed for on-hand items.",
+            duration: 5000,
+          });
+          return;
+        } else {
+          setLastScannedRfid("");
+          toast.error("Invalid Branch Location", {
+            description: `This product belongs to ${result.currentBranchName || 'another branch'}. It cannot be returned to the selected salesman's branch.`,
             duration: 5000,
           });
           return;
         }
-
-        setLastScannedRfid("");
-        toast.error("Already in Stock", {
-          description: "This item is already in the branch's inventory. Sales Return is not allowed for on-hand items.",
-          duration: 5000,
-        });
-        return;
       }
 
       // 3. Local Duplicate Check (Is it already in our current session?)
@@ -820,39 +832,33 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       toast.error("Return Date is required.");
       return;
     }
-    if (items.length === 0) {
-      toast.error("Please add at least one product.");
-      return;
-    }
 
     if (isBranchLockedError) {
       toast.error("Invalid Branch: Clear the products or revert the salesman to proceed.");
       return;
     }
 
-    // 🟢 REVISION: Added Validation for Order No.
-    if (!orderNo.trim()) {
-      toast.error("Order No. is required.");
-      setOrderError(true);
-      return;
+    if (items.length > 0) {
+      const invalidItems = items.some(
+        (item) => item.quantity > 0 && (!item.returnType || item.returnType === ""),
+      );
+      if (invalidItems) {
+        toast.error("Please select a Return Type for all items.");
+        setReturnTypeError(true);
+        return;
+      }
     }
 
-    if (!invoiceNo.trim()) {
-      toast.error("Invoice No. is required.");
-      setInvoiceError(true);
-      return;
+    const hasNewTags = items.some(item => item.rfidTags && item.rfidTags.length > 0);
+    if (hasNewTags) {
+      setIsConfirmCreateOpen(true);
+    } else {
+      handleConfirmCreate();
     }
+  };
 
-    const invalidItems = items.some(
-      (item) => !item.returnType || item.returnType === "",
-    );
-
-    if (invalidItems) {
-      toast.error("Please select a Return Type for all items.");
-      setReturnTypeError(true);
-      return;
-    }
-
+  const handleConfirmCreate = async () => {
+    setIsConfirmCreateOpen(false);
     try {
       setIsSubmitting(true);
       const selectedSalesmanObj = salesmen.find(
@@ -973,6 +979,39 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
   const handleRemoveItem = (index: number) => {
     setItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSplitRow = (index: number) => {
+    setItems((prev) => {
+      const updated = [...prev];
+      const source = updated[index];
+      const qty = source.unitOrder === 3 ? 0 : 1;
+      const unitPrice = Number(source.unitPrice) || 0;
+      const grossAmount = Math.round(qty * unitPrice * 100) / 100;
+      let discountAmount = 0;
+      if (source.discountType && qty > 0) {
+        const selectedOption = lineDiscountOptions.find(
+          (d) => d.id.toString() === source.discountType?.toString(),
+        );
+        if (selectedOption) {
+          const percentage = parseFloat(selectedOption.total_percent) || 0;
+          discountAmount = Math.round(grossAmount * (percentage / 100) * 100) / 100;
+        }
+      }
+      const duplicate: SalesReturnItem = {
+        ...source,
+        id: `added-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        quantity: qty,
+        grossAmount,
+        discountAmount,
+        totalAmount: Math.round((grossAmount - discountAmount) * 100) / 100,
+        returnType: "",
+        reason: "",
+        rfidTags: [],
+      };
+      updated.splice(index + 1, 0, duplicate);
+      return updated;
+    });
   };
 
   const handleItemChange = (
@@ -1374,11 +1413,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                       {items.map((item, idx) => {
                         const isSelected = selectedRowIndex === idx;
                         return (
-                          <React.Fragment key={item.id || idx}>
-                            <tr 
-                              onClick={() => {
+                          <tr 
+                            key={item.id || idx} 
+                            onClick={() => {
                               if (item.unitOrder === 3) {
-                                setSelectedRowIndex(prev => prev === idx ? null : idx);
+                                setSelectedRowIndex(idx);
                               } else {
                                 toast.info("RFID tagging is limited to Box units (Order 3).", {
                                   description: `"${item.description}" uses "${item.unit}", which must be handled manually.`
@@ -1411,7 +1450,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 {item.unit}
                               </span>
                             </td>
-                            <td className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                            <td className="px-4 py-2 text-center">
                               <div className="flex flex-col items-center gap-1">
                                 {item.unitOrder === 3 ? (
                                   <Badge variant="outline" className={cn(
@@ -1434,6 +1473,9 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                     className="w-16 h-7 text-center text-xs font-bold text-foreground border border-border rounded-md shadow-sm outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all bg-background"
                                   />
                                 )}
+                                <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-tighter">
+                                  {item.unitOrder === 3 ? "Box Units" : "Manual Qty"}
+                                </span>
                               </div>
                             </td>
                             <td className="px-3 py-2 text-right text-sm whitespace-nowrap">
@@ -1442,7 +1484,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                             <td className="px-3 py-2 text-right text-muted-foreground font-mono text-sm whitespace-nowrap">
                               ₱{(item.grossAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
-                            <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                            <td className="px-4 py-2">
                               {(() => {
                                 const noDiscountOpt = lineDiscountOptions.find(o => o.discount_type === "No Discount");
                                 const defaultVal = noDiscountOpt ? noDiscountOpt.id.toString() : "";
@@ -1477,13 +1519,13 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                             <td className="px-3 py-2 text-right font-bold text-sm text-foreground whitespace-nowrap">
                               ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
-                             <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                             <td className="px-4 py-2">
                                <ReasonInputSection
                                  value={item.reason || ""}
                                  onChange={(val) => handleItemChange(idx, "reason", val)}
                                />
                              </td>
-                            <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                            <td className="px-3 py-2">
                               <SearchableSelect
                                 value={item.returnType || ""}
                                 onValueChange={(val) => { handleItemChange(idx, "returnType", val); setReturnTypeError(false); }}
@@ -1502,95 +1544,31 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               />
                             </td>
                             <td className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRemoveItem(idx);
-                                  if (selectedRowIndex === idx) setSelectedRowIndex(null);
-                                }}
-                                className="text-destructive/70 hover:text-destructive h-7 w-7 rounded-md flex items-center justify-center transition-colors"
-                                title="Remove Item"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSplitRow(idx);
+                                  }}
+                                  className="text-primary/70 hover:text-primary hover:bg-primary/10 h-7 w-7 rounded-md flex items-center justify-center transition-colors"
+                                  title="Split Row"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveItem(idx);
+                                    if (selectedRowIndex === idx) setSelectedRowIndex(null);
+                                  }}
+                                  className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 h-7 w-7 rounded-md flex items-center justify-center transition-colors"
+                                  title="Remove Item"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
                             </td>
-                            </tr>
-
-                            {/* 🟢 EXPANDABLE TAG MANAGEMENT SUB-ROW */}
-                            {isSelected && item.unitOrder === 3 && (
-                              <tr>
-                                <td colSpan={12} className="p-0 border-b border-border bg-muted/5 border-l-2 border-l-primary/30">
-                                  <div className="p-4 animate-in fade-in duration-200">
-                                    <div className="flex justify-between items-center mb-4">
-                                      <h4 className="font-bold text-foreground flex items-center gap-2 text-base">
-                                        <div className="bg-emerald-500/10 p-1.5 rounded text-emerald-600">
-                                          <ScanLine className="h-5 w-5" />
-                                        </div>
-                                        Tagged RFIDs for: <span className="text-primary underline decoration-primary/30 underline-offset-4">{item.description}</span>
-                                      </h4>
-                                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-3 py-1 font-bold">
-                                        {item.rfidTags?.length || 0} ITEMS SCANNED
-                                      </Badge>
-                                    </div>
-                      
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                                      {(!item.rfidTags || item.rfidTags.length === 0) ? (
-                                        <div className="col-span-full py-12 text-center border border-dashed rounded-lg text-muted-foreground bg-muted/5">
-                                          <div className="flex flex-col items-center gap-2">
-                                            <ScanLine className="h-8 w-8 opacity-20" />
-                                            <p className="font-medium">No RFIDs tagged yet</p>
-                                            <span className="text-xs">Start scanning to add items to this row.</span>
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        item.rfidTags.map((tag, tIdx) => (
-                                          <div key={tag} className="flex items-center justify-between bg-muted/20 border border-border p-2.5 rounded-md hover:border-primary/30 transition-all group hover:shadow-sm">
-                                            <div className="flex flex-col">
-                                              <span className="text-xs font-mono font-bold text-foreground">{tag}</span>
-                                              <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-black">Tag #{tIdx + 1}</span>
-                                            </div>
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setItems(prev => {
-                                                  const next = [...prev];
-                                                  const row = next[idx];
-                                                  const newTags = row.rfidTags!.filter(t => t !== tag);
-                                                  const newQty = newTags.length;
-                                                  
-                                                  const unitPrice = Number(row.unitPrice) || 0;
-                                                  const gross = Math.round(unitPrice * newQty * 100) / 100;
-                                                  let discAmt = 0;
-                                                  if (row.discountType) {
-                                                    const opt = lineDiscountOptions.find(d => d.id.toString() === row.discountType?.toString());
-                                                    if (opt) discAmt = Math.round(gross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
-                                                  }
-                      
-                                                  next[idx] = {
-                                                    ...row,
-                                                    rfidTags: newTags,
-                                                    quantity: newQty,
-                                                    grossAmount: gross,
-                                                    discountAmount: discAmt,
-                                                    totalAmount: Math.round((gross - discAmt) * 100) / 100
-                                                  };
-                                                  return next;
-                                                });
-                                              }}
-                                              className="p-1.5 text-destructive/50 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
-                                              title="Remove Tag"
-                                            >
-                                              <Trash2 className="h-4 w-4" />
-                                            </button>
-                                          </div>
-                                        ))
-                                      )}
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
+                          </tr>
                         );
                       })}
                     </>
@@ -1600,6 +1578,76 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             </div>
           </div>
 
+          {/* 🟢 NEW: TAG MANAGEMENT SECTION */}
+          {selectedRowIndex !== null && items[selectedRowIndex] && (
+            <div className="bg-background rounded-lg border-2 border-primary/20 shadow-md p-5 mb-6 animate-in slide-in-from-bottom-4 duration-300">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="font-bold text-foreground flex items-center gap-2 text-base">
+                  <div className="bg-emerald-500/10 p-1.5 rounded text-emerald-600">
+                    <ScanLine className="h-5 w-5" />
+                  </div>
+                  Tagged RFIDs for: <span className="text-primary underline decoration-primary/30 underline-offset-4">{items[selectedRowIndex].description}</span>
+                </h4>
+                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-3 py-1 font-bold">
+                  {items[selectedRowIndex].rfidTags?.length || 0} ITEMS SCANNED
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {(!items[selectedRowIndex].rfidTags || items[selectedRowIndex].rfidTags!.length === 0) ? (
+                  <div className="col-span-full py-12 text-center border border-dashed rounded-lg text-muted-foreground bg-muted/5">
+                    <div className="flex flex-col items-center gap-2">
+                      <ScanLine className="h-8 w-8 opacity-20" />
+                      <p className="font-medium">No RFIDs tagged yet</p>
+                      <span className="text-xs">Start scanning to add items to this row.</span>
+                    </div>
+                  </div>
+                ) : (
+                  items[selectedRowIndex].rfidTags!.map((tag, tIdx) => (
+                    <div key={tag} className="flex items-center justify-between bg-muted/20 border border-border p-2.5 rounded-md hover:border-primary/30 transition-all group hover:shadow-sm">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-mono font-bold text-foreground">{tag}</span>
+                        <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-black">Tag #{tIdx + 1}</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setItems(prev => {
+                            const next = [...prev];
+                            const row = next[selectedRowIndex];
+                            const newTags = row.rfidTags!.filter(t => t !== tag);
+                            const newQty = newTags.length;
+                            
+                            const unitPrice = Number(row.unitPrice) || 0;
+                            const gross = Math.round(unitPrice * newQty * 100) / 100;
+                            let discAmt = 0;
+                            if (row.discountType) {
+                              const opt = lineDiscountOptions.find(d => d.id.toString() === row.discountType?.toString());
+                              if (opt) discAmt = Math.round(gross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
+                            }
+
+                            next[selectedRowIndex] = {
+                              ...row,
+                              rfidTags: newTags,
+                              quantity: newQty,
+                              grossAmount: gross,
+                              discountAmount: discAmt,
+                              totalAmount: Math.round((gross - discAmt) * 100) / 100
+                            };
+                            return next;
+                          });
+                        }}
+                        className="p-1.5 text-destructive/50 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                        title="Remove Tag"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
           {/* 3. BOTTOM SUMMARY */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
             <div className="space-y-4 bg-background p-5 rounded-lg border border-border shadow-sm h-full">
@@ -1608,9 +1656,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
               </h4>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5" ref={orderWrapperRef}>
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                    Order No. <span className="text-destructive">*</span>
-                  </label>
+                  <Label className="text-xs uppercase font-bold text-muted-foreground">
+                    Order No.
+                  </Label>
+                  {/* Order No Dropdown */}
                   <div className="relative group">
                     <input
                       type="text"
@@ -1675,9 +1724,9 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
                 {/* INVOICE NO DROPDOWN */}
                 <div className="space-y-1.5" ref={invoiceWrapperRef}>
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                    Invoice No. <span className="text-destructive">*</span>
-                  </label>
+                  <Label className="text-xs uppercase font-bold text-muted-foreground">
+                    Invoice No.
+                  </Label>
                   <div className="relative group">
                     <input
                       type="text"
@@ -1746,7 +1795,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 onChange={setRemarks}
               />
             </div>
-
             <div className="bg-background rounded-lg border border-border p-0 shadow-sm overflow-hidden h-fit">
               <div className="p-4 bg-muted/30 border-b border-border">
                 <h4 className="font-bold text-foreground">Financial Summary</h4>
@@ -1818,6 +1866,46 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         customerCode={customerCode} // 🟢 Pass prop
         lineDiscounts={lineDiscountOptions}
       />
+
+      {/* CONFIRM CREATE DIALOG */}
+      <AlertDialog open={isConfirmCreateOpen} onOpenChange={setIsConfirmCreateOpen}>
+        <AlertDialogContent className="max-w-md bg-background border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-bold flex items-center gap-2">
+              <span className="bg-primary/10 text-primary p-2 rounded-full">
+                <FileText className="h-5 w-5" />
+              </span>
+              Create Sales Return?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-base mt-2">
+              Once this Sales Return is saved, you will no longer be able to delete any tagged RFID items. 
+              <br /><br />
+              Please review your entries before confirming.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6">
+            <AlertDialogCancel
+              disabled={isSubmitting}
+              onClick={() => setIsConfirmCreateOpen(false)}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-primary hover:bg-primary/90 text-white"
+              onClick={handleConfirmCreate}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...
+                </>
+              ) : (
+                "Confirm & Create"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* SUCCESS MODAL */}
       <Dialog

@@ -21,6 +21,7 @@ export interface SalesReturnItem {
   reason?: string;
   returnType?: string;
   rfidTags?: string[];
+  rfidTagIds?: number[]; // Parallel array: rfidTagIds[i] is the DB row ID for rfidTags[i]
   // 🟢 Fields for Price Type Recalculation
   priceA?: number;
   priceB?: number;

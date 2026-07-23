@@ -18,6 +18,9 @@ import {
   submitReturn,
   updateReturn,
   updateStatus,
+  presaveDetail,
+  presaveRfidTag,
+  deleteRfidTagById,
 } from "@/modules/supply-chain-management/inventories/sales-return-rfid/services/sales-return-service";
 /**
  * Decodes the base64url payload of a JWT without verifying the signature.
@@ -187,12 +190,27 @@ export async function POST(req: NextRequest) {
     const userId = getUserIdFromToken(token);
     
     // 🟢 Session token is now mandatory.
-    if (!userId || !token) {
+    if (!userId) {
       return json({ error: "Unauthorized: Invalid or missing session" }, 401);
     }
 
+    const url = new URL(req.url);
+    const action = url.searchParams.get("action");
+
+    if (action === "presave-detail") {
+      const body = await req.json().catch(() => ({}));
+      const data = await presaveDetail(body, userId);
+      return json({ data }, 201);
+    }
+
+    if (action === "presave-rfid") {
+      const body = await req.json().catch(() => ({}));
+      const data = await presaveRfidTag(body, userId);
+      return json({ data }, 201);
+    }
+
     const body = await req.json().catch(() => ({}));
-    const data = await submitReturn(body, userId, token);
+    const data = await submitReturn(body, userId, token || "");
     return json({ data }, 201);
   } catch (error: any) {
     console.error("Sales Return RFID API POST Error:", error);
@@ -229,17 +247,49 @@ export async function PATCH(req: NextRequest) {
     const userId = getUserIdFromToken(token);
     
     // 🟢 Session token is now mandatory.
-    if (!userId || !token) {
+    if (!userId) {
       return json({ error: "Unauthorized: Invalid or missing session" }, 401);
     }
 
     const body = await req.json().catch(() => ({}));
-    const data = await updateReturn(body, userId, token);
+    const data = await updateReturn(body, userId);
     return json({ data });
   } catch (error: any) {
     console.error("Sales Return RFID API PATCH Error:", error);
     return json(
       { error: error.message || "Failed to update sales return" },
+      500,
+    );
+  }
+}
+
+// =============================================================================
+// DELETE — Delete an existing Sales Return or RFID tag
+// =============================================================================
+export async function DELETE(req: NextRequest) {
+  try {
+    const url = new URL(req.url);
+    const action = url.searchParams.get("action");
+
+    if (action === "delete-rfid") {
+      const id = url.searchParams.get("id");
+      if (!id) return json({ error: "id is required" }, 400);
+
+      const token = req.cookies.get("vos_access_token")?.value;
+      const userId = getUserIdFromToken(token);
+      if (!userId) {
+        return json({ error: "Unauthorized: Invalid or missing session" }, 401);
+      }
+
+      const data = await deleteRfidTagById(Number(id));
+      return json({ data });
+    }
+
+    return json({ error: `Unknown action: ${action}` }, 400);
+  } catch (error: any) {
+    console.error("Sales Return RFID API DELETE Error:", error);
+    return json(
+      { error: error.message || "Failed to delete" },
       500,
     );
   }

@@ -94,6 +94,29 @@ async function buildDiscountPercentMap(): Promise<Map<number, number>> {
   return discountMap;
 }
 
+async function validateRfidTagsPayload(payload: any, token: string, branchId: number) {
+  if (!token) return;
+  if (!payload.items || !Array.isArray(payload.items)) return;
+
+  for (const item of payload.items) {
+    if (item.rfidTags && Array.isArray(item.rfidTags)) {
+      for (const tag of item.rfidTags) {
+        // 1. Check duplicate across other returns
+        const dupCheck = await checkRfidDuplicate(tag);
+        if (dupCheck.isDuplicate) {
+          throw new Error(`RFID Tag ${tag} is already associated with return ${dupCheck.returnNo}`);
+        }
+        
+        // 2. Check if valid in inventory for this branch
+        const lookup = await lookupRfid(tag, branchId, token);
+        if (!lookup || !lookup.isOnInventory) {
+          throw new Error(`RFID Tag ${tag} is not found in inventory for this branch.`);
+        }
+      }
+    }
+  }
+}
+
 // =============================================================================
 // PUBLIC SERVICE METHODS
 // =============================================================================
@@ -160,6 +183,7 @@ export async function fetchReturnDetails(
   // Fetch all RFIDs associated with these detail lines
   const detailIds = rawItems.map((item: any) => item.detail_id || item.id);
   const rfidMap = new Map<number, string[]>();
+  const rfidTagIdMap = new Map<number, number[]>();
 
   if (detailIds.length > 0) {
     try {
@@ -170,10 +194,13 @@ export async function fetchReturnDetails(
       for (const row of rfidData) {
         const dId = Number(row.sales_return_detail_id);
         const tag = String(row.rfid_tag);
+        const tagId = Number(row.id);
         if (!rfidMap.has(dId)) {
           rfidMap.set(dId, []);
+          rfidTagIdMap.set(dId, []);
         }
         rfidMap.get(dId)!.push(tag);
+        rfidTagIdMap.get(dId)!.push(tagId);
       }
     } catch (err) {
       console.error("Failed to fetch rfids for details:", err);
@@ -233,6 +260,7 @@ export async function fetchReturnDetails(
         : "",
       returnType: returnTypeObj ? returnTypeObj.type_name : "Good Order",
       rfidTags: rfidMap.get(detail.detail_id || detail.id) || [],
+      rfidTagIds: rfidTagIdMap.get(detail.detail_id || detail.id) || [],
       priceA: product.priceA,
       priceB: product.priceB,
       priceC: product.priceC,
@@ -464,45 +492,10 @@ export async function fetchStatusCard(
   }
 }
 
-async function validateRfidTagsPayload(payload: any, token: string, branchId: number, currentReturnNo?: string) {
-  if (!token) throw new Error("Missing token for RFID validation.");
-  
-  for (const item of payload.items) {
-    if (item.rfidTags && Array.isArray(item.rfidTags) && item.rfidTags.length > 0) {
-      for (const tag of item.rfidTags) {
-        // 1. Global Duplicate Check
-        const dupCheck = await repo.checkRfidDuplicate(tag);
-        let isFromCurrentReturn = false;
-        if (dupCheck.data && dupCheck.data.length > 0) {
-          const returnNo = (dupCheck.data[0].sales_return_detail_id as any)?.return_no || "Unknown";
-          if (currentReturnNo && returnNo === currentReturnNo) {
-             // It's allowed to be in the current SR being updated
-             isFromCurrentReturn = true;
-          } else {
-             throw new Error(`Duplicate RFID: Tag "${tag}" is already returned in SR #${returnNo}`);
-          }
-        }
-        
-        // 2. Inventory Check
-        if (!isFromCurrentReturn) {
-          const lookup = await lookupRfid(tag, branchId, token);
-          if (lookup?.isOnInventory) {
-            const productId = Number(item.productId || item.product_id || item.id);
-            if (Number(lookup.productId) !== productId) {
-               throw new Error(`Product Mismatch: RFID "${tag}" belongs to a different product on-hand.`);
-            }
-            throw new Error(`Already in Stock: RFID "${tag}" is already in inventory.`);
-          }
-        }
-      }
-    }
-  }
-}
-
 /**
  * Creates a new sales return (header + details).
  */
-export async function submitReturn(payload: any, userId: number, token: string): Promise<any> {
+export async function submitReturn(payload: any, userId: number, token: string = ""): Promise<any> {
   if (payload.appliedInvoiceId) {
     const invoiceData = await repo.getInvoiceStatus(payload.appliedInvoiceId);
     const isPosted = parseBoolean(invoiceData?.data?.isPosted);
@@ -511,7 +504,7 @@ export async function submitReturn(payload: any, userId: number, token: string):
     }
   }
 
-  // Fetch line discounts for discount calculation and branch info for validation
+  // Fetch line discounts for discount calculation
   const refsResult = await repo.getRawReferences();
   const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
   const salesmenData = (refsResult[0].data || []) as any[];
@@ -519,11 +512,12 @@ export async function submitReturn(payload: any, userId: number, token: string):
   const salesman = salesmenData.find(s => String(s.id) === String(payload.salesmanId));
   const branchId = salesman?.branch_code;
 
-  if (!branchId) {
-    throw new Error("Cannot determine branch for RFID lookup.");
+  if (payload.items && payload.items.length > 0) {
+    if (!branchId) {
+      throw new Error("Cannot determine branch for RFID lookup.");
+    }
+    await validateRfidTagsPayload(payload, token, branchId);
   }
-
-  await validateRfidTagsPayload(payload, token, branchId);
 
   // Build aggregate discount percentage map from junction + line_discount tables
   const lineDiscountMap = await buildDiscountPercentMap();
@@ -618,6 +612,7 @@ export async function submitReturn(payload: any, userId: number, token: string):
       sales_return_type_id: typeId,
       discount_type: discId,
       reason: item.reason || null,
+      created_by: userId,
       created_at: nowPH(),
     };
 
@@ -657,23 +652,10 @@ export async function updateReturn(
     isThirdParty?: boolean;
   },
   userId: number,
-  token: string,
 ): Promise<any> {
-  // Fetch line discounts and existing record for validation
+  // Fetch line discounts
   const refsResult = await repo.getRawReferences();
   const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
-
-  const existingHeader = await repo.getRawReturnById(payload.returnId);
-  const salesmanId = existingHeader?.data?.salesman_id;
-  const salesmenData = (refsResult[0].data || []) as any[];
-  const salesman = salesmenData.find(s => String(s.id) === String(salesmanId));
-  const branchId = salesman?.branch_code;
-
-  if (!branchId) {
-    throw new Error("Cannot determine branch for RFID lookup.");
-  }
-
-  await validateRfidTagsPayload(payload, token, branchId, payload.returnNo);
 
   // Build aggregate discount percentage map from junction + line_discount tables
   const lineDiscountMap = await buildDiscountPercentMap();
@@ -923,7 +905,7 @@ export async function lookupRfid(
   const SPRING_URL = process.env.SPRING_API_BASE_URL;
   if (!SPRING_URL) throw new Error("SPRING_API_BASE_URL is not defined");
 
-  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-rfid-onhand?rfid=${encodeURIComponent(rfidTag)}&branch_id=${branchId}`;
+  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-rfid-onhand?rfid=${encodeURIComponent(rfidTag)}`;
 
   try {
     const res = await fetch(targetUrl, {
@@ -950,10 +932,6 @@ export async function lookupRfid(
     const rfidBranchName = matchedRow.branch_name ?? matchedRow.branchName ?? "Unknown Branch";
     const productId = Number(matchedRow.productId ?? matchedRow.product_id);
 
-    if (rfidBranchId !== branchId) {
-      return { isOnInventory: false };
-    }
-
     return {
       isOnInventory,
       productId,
@@ -964,4 +942,90 @@ export async function lookupRfid(
     console.error("[Sales Return RFID] Product lookup failed:", err);
     throw err instanceof Error ? err : new Error(String(err));
   }
+}
+
+/**
+ * Pre-saves (creates or updates) a single detail item.
+ */
+export async function presaveDetail(
+  payload: {
+    returnNo: string;
+    id?: number | string; // temp string if new
+    productId: number;
+    quantity: number;
+    unitPrice: number;
+    discountType?: string | number | null;
+    returnType?: string;
+    reason?: string;
+  },
+  userId: number
+): Promise<{ detailId: number }> {
+  const refsResult = await repo.getRawReferences();
+  const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
+  const lineDiscountMap = await buildDiscountPercentMap();
+
+  const matchedType = returnTypes.find(
+    (t: API_SalesReturnType) => t.type_name === payload.returnType,
+  );
+  const typeId = matchedType ? matchedType.type_id : (returnTypes[0]?.type_id || 1);
+
+  const gross = Math.round(Number(payload.quantity) * Number(payload.unitPrice) * 100) / 100;
+  const discId = payload.discountType && payload.discountType !== "No Discount" && payload.discountType !== ""
+    ? Number(payload.discountType)
+    : null;
+  const percentage = discId ? lineDiscountMap.get(discId) || 0 : 0;
+  const discountAmt = Math.round(gross * (percentage / 100) * 100) / 100;
+
+  const detailPayload: any = {
+    quantity: Number(payload.quantity),
+    unit_price: Number(payload.unitPrice),
+    gross_amount: gross,
+    discount_amount: discountAmt,
+    total_amount: Math.round((gross - discountAmt) * 100) / 100,
+    sales_return_type_id: typeId,
+    discount_type: discId,
+    reason: payload.reason || null,
+    updated_at: nowPH(),
+  };
+
+  if (!payload.id || (typeof payload.id === "string" && payload.id.startsWith("added-"))) {
+    const detailResult = await repo.createReturnDetail({
+      ...detailPayload,
+      return_no: payload.returnNo,
+      product_id: Number(payload.productId),
+      created_by: userId,
+      created_at: nowPH(),
+    });
+    return { detailId: Number((detailResult.data as any)?.detail_id || (detailResult.data as any)?.id) };
+  } else {
+    detailPayload.updated_by = userId;
+    await repo.updateReturnDetail(Number(payload.id), detailPayload);
+    return { detailId: Number(payload.id) };
+  }
+}
+
+/**
+ * Pre-saves a new RFID tag.
+ */
+export async function presaveRfidTag(
+  payload: {
+    detailId: number;
+    rfidTag: string;
+  },
+  userId: number
+): Promise<{ tagId: number }> {
+  const result = await repo.createRfidTag({
+    sales_return_detail_id: payload.detailId,
+    rfid_tag: payload.rfidTag,
+    created_by: userId,
+  });
+  return { tagId: Number((result.data as any)?.id) };
+}
+
+/**
+ * Deletes an RFID tag by its DB row ID.
+ */
+export async function deleteRfidTagById(tagId: number): Promise<{ success: boolean }> {
+  await repo.deleteRfidTag(tagId);
+  return { success: true };
 }
