@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import { Truck } from "lucide-react";
 
 import { useForDispatchSummary } from "./hooks/useForDispatchSummary";
