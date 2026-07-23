@@ -37,7 +37,13 @@ export function TagRFIDStep() {
     const [activityPage, setActivityPage] = React.useState(1);
     const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState("");
+    const [rfidSearchQuery, setRfidSearchQuery] = React.useState("");
     const ITEMS_PER_PAGE = 5;
+
+    React.useEffect(() => {
+        setActivityPage(1);
+        setRfidSearchQuery("");
+    }, [activePorId]);
 
     // Auto-scan RFID
     const handleAutoScan = React.useCallback((scannedValue: string) => {
@@ -79,7 +85,7 @@ export function TagRFIDStep() {
         return () => clearTimeout(timer);
     }, [scanError, setRfid]);
 
-    // Construct all products in PO allocations (excluding expectedQty <= 0)
+    // Construct all products in PO allocations (keeping all items visible)
     const allItems = React.useMemo(() => {
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
         return allocs.flatMap((a) => {
@@ -89,8 +95,7 @@ export function TagRFIDStep() {
                     ...it,
                     porId: String(it.porId || it.id),
                     branchName: a?.branch?.name ?? "Unassigned",
-                }))
-                .filter((it) => Number(it.expectedQty || 0) > 0 || it.isExtra);
+                }));
         });
     }, [selectedPO]);
 
@@ -167,12 +172,18 @@ export function TagRFIDStep() {
         return [...currentScans, ...historicalScans];
     }, [activity, activePorId, activeItem]);
 
+    const finalFilteredActivity = React.useMemo(() => {
+        const query = rfidSearchQuery.trim().toLowerCase();
+        if (!query) return filteredActivity;
+        return filteredActivity.filter((a) => a.rfid.toLowerCase().includes(query));
+    }, [filteredActivity, rfidSearchQuery]);
+
     const activityPaginated = React.useMemo(() => {
         const start = (activityPage - 1) * ITEMS_PER_PAGE;
-        return filteredActivity.slice(start, start + ITEMS_PER_PAGE);
-    }, [filteredActivity, activityPage]);
+        return finalFilteredActivity.slice(start, start + ITEMS_PER_PAGE);
+    }, [finalFilteredActivity, activityPage]);
 
-    const totalActivityPages = Math.ceil(filteredActivity.length / ITEMS_PER_PAGE);
+    const totalActivityPages = Math.ceil(finalFilteredActivity.length / ITEMS_PER_PAGE);
 
     // ========== NO PRODUCT SELECTED: Product List View ==========
     if (!activeProductId) {
@@ -310,11 +321,11 @@ export function TagRFIDStep() {
                                     </tr>
                                 ) : (
                                     activeProducts.map((p) => {
-                                        const expected = Number(p.expectedQty || 0);
-                                        const target = expected > 0 ? expected : 1;
-                                        const scanned = safeCounts[p.porId] || 0;
-                                        const isDone = scanned >= target;
-                                        const isOver = expected > 0 && scanned > expected;
+                                        const expected = p.isExtra ? 0 : Number(p.originalOrderedQty ?? p.expectedQty ?? 0);
+                                        const target = expected;
+                                        const scanned = Number(p.taggedQty || 0) + (safeCounts[p.porId] || 0);
+                                        const isDone = p.isExtra ? true : scanned >= target;
+                                        const isOver = !p.isExtra && scanned > target;
 
                                         return (
                                             <tr 
@@ -370,7 +381,7 @@ export function TagRFIDStep() {
                                                         >
                                                             {isDone ? "Review Tags" : "Tag Item"}
                                                         </Button>
-                                                        {p.isExtra && (
+                                                        {p.isExtra && scanned === 0 && (
                                                             <Button
                                                                 size="icon"
                                                                 variant="ghost"
@@ -414,7 +425,7 @@ export function TagRFIDStep() {
     // ========== ACTIVE PRODUCT: Tagging View ==========
     const activeExpected = Number((activeItem as ReceivingPOItem)?.expectedQty || 0);
     const activeTarget = activeExpected > 0 ? activeExpected : 1;
-    const activeScanned = safeCounts[String((activeItem as ReceivingPOItem)?.porId || "")] || 0;
+    const activeScanned = filteredActivity.length;
     const activeDone = activeScanned >= activeTarget;
     const activeIsOver = activeExpected > 0 && activeScanned > activeExpected;
 
@@ -479,15 +490,28 @@ export function TagRFIDStep() {
             </Card>
 
             <Card className="p-4">
-                <div className="mb-2 flex items-center justify-between">
-                    <div className="text-sm font-semibold">Activity Log for {activeItem?.name}</div>
-                    <div className="flex gap-1">
-                        <Button variant="outline" size="icon" className="h-6 w-6 font-black" disabled={activityPage <= 1} onClick={() => setActivityPage(x => x - 1)}>
-                            &lt;
-                        </Button>
-                        <Button variant="outline" size="icon" className="h-6 w-6 font-black" disabled={activityPage >= totalActivityPages} onClick={() => setActivityPage(x => x + 1)}>
-                            &gt;
-                        </Button>
+                <div className="mb-3 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                        <div className="text-sm font-semibold">Activity Log for {activeItem?.name}</div>
+                        <div className="flex gap-1">
+                            <Button variant="outline" size="icon" className="h-6 w-6 font-black" disabled={activityPage <= 1} onClick={() => setActivityPage(x => x - 1)}>
+                                &lt;
+                            </Button>
+                            <Button variant="outline" size="icon" className="h-6 w-6 font-black" disabled={activityPage >= totalActivityPages} onClick={() => setActivityPage(x => x + 1)}>
+                                &gt;
+                            </Button>
+                        </div>
+                    </div>
+                    <div>
+                        <Input
+                            placeholder="Search RFID tag..."
+                            value={rfidSearchQuery}
+                            onChange={(e) => {
+                                setRfidSearchQuery(e.target.value);
+                                setActivityPage(1);
+                            }}
+                            className="h-9 text-xs bg-background"
+                        />
                     </div>
                 </div>
                 <div className="border border-dashed bg-muted/30 rounded-lg p-3 text-xs min-h-[150px]">

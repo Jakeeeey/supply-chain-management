@@ -132,30 +132,29 @@ async function getData() {
             
             // Only override if not permanently closed (14) or cancelled (7)
             if (dbStatus !== 14 && dbStatus !== 7) {
+                const receipts = poReceipts.get(poId) || [];
+                const hasUnpostedReceipts = receipts.some(r => Number(r.isPosted) === 0);
+                const hasAnyPostedReceipts = receipts.some(r => Number(r.isPosted) === 1);
+
                 // If PO is already fully posted, mark as Received (6)
                 if (Number(po.is_posted) === 1 || po.is_posted === true) {
                     effectiveStatus = 6;
                 }
-                // If there's receiving activity, it takes precedence
-                else if (hasReceipt) {
-                    const fullyReceived = totalOrdered > 0 && totalReceived >= totalOrdered;
-                    if (fullyReceived) {
-                        const invPosted = allInvPostedByPo.get(poId) || false;
-                        const amtPosted = Number(po.is_posted) === 1 || po.is_posted === true;
-
-                        if (invPosted && amtPosted) {
-                            effectiveStatus = 6; // ✅ Received
-                        } else {
-                            effectiveStatus = 13; // ✅ For Posting
-                        }
-                    } else {
-                        // It has some receiving activity but not fully received
-                        effectiveStatus = 9; // Partially Received
-                    }
-                } 
-                // If no receiving activity but is approved, switch to For Receiving (3)
-                else if (isApproved && (dbStatus === 1 || dbStatus === 0)) {
-                    effectiveStatus = 3; 
+                // 1. Received: All items received, and all receipts are posted
+                else if (hasReceipt && totalOrdered > 0 && totalReceived >= totalOrdered && !hasUnpostedReceipts) {
+                    effectiveStatus = 6;
+                }
+                // 2. Partially Received: PO has at least 1 item/receipt posted
+                else if (hasAnyPostedReceipts) {
+                    effectiveStatus = 9;
+                }
+                // 3. For Posting: PO has unposted receipts
+                else if (hasUnpostedReceipts) {
+                    effectiveStatus = 13;
+                }
+                // 4. For Receiving: PO approved, ready to receive but no receipt activity
+                else if (isApproved && (dbStatus === 1 || dbStatus === 0 || dbStatus === 3)) {
+                    effectiveStatus = 3;
                 }
             }
 

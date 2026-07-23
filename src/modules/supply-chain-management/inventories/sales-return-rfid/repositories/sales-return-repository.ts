@@ -120,7 +120,7 @@ export async function getRawReturnDetails(returnNo: string) {
  * Fetches a single sales return header by ID (for status card).
  */
 export async function getRawReturnById(returnId: number) {
-  const fields = "return_id,isApplied,updated_at,status,isPosted,isReceived,order_id,received_at";
+  const fields = "return_id,isApplied,updated_at,status,isPosted,isReceived,order_id,received_at,salesman_id";
   return directusGet<{ data: Record<string, unknown> }>(
     `/items/sales_return/${returnId}?fields=${fields}`,
   );

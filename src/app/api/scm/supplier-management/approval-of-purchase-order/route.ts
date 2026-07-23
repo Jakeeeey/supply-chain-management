@@ -106,11 +106,14 @@ function ok(data: unknown, status = 200) {
  * but without the 'Z' suffix to ensure correct local interpretation.
  */
 function nowPH() {
-    const date = new Date();
-    const phOffset = 8 * 60; // 8 hours in minutes
-    const localOffset = date.getTimezoneOffset(); // in minutes
-    const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
-    return phTime.toISOString().replace("Z", "");
+    const d = new Date();
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+    });
+    return formatter.format(d).replace(' ', 'T') + 'Z';
 }
 function bad(error: string, status = 400) {
     return NextResponse.json({ error }, { status });

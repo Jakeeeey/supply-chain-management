@@ -186,8 +186,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                     branchName: a?.branch?.name ?? "Unassigned",
                 }))
                 .filter((it) => verifiedPorIds.includes(it.porId))
-                .filter((it) => (safeCounts[it.porId] || 0) > 0)
-                .filter((it) => Number(it.expectedQty || 0) > 0 || it.isExtra) as Array<ReceivingPOItem & { branchName: string }>;
+                .filter((it) => (safeCounts[it.porId] || 0) > 0) as Array<ReceivingPOItem & { branchName: string }>;
         });
     }, [selectedPO, verifiedPorIds, safeCounts]);
 
@@ -520,7 +519,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                         return paginatedItems.map((it: ReceivingPOItem) => {
                                             const porId = String(it.porId || it.id);
                                             const scanned = safeCounts[porId] ?? 0;
-                                            const expected = Number(it.expectedQty || it.taggedQty || 0);
+                                            const expected = it.isExtra ? 0 : Number(it.expectedQty || 0);
                                             const unitP = Number(it.unitPrice || 0);
                                             const discA = Number(it.discountAmount || 0);
                                             const effectivePrice = Math.max(0, unitP - discA);

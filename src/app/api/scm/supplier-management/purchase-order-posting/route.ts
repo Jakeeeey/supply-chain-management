@@ -63,11 +63,14 @@ function toNum(v: unknown): number {
     return Number.isFinite(n) ? n : 0;
 }
 function nowISO() {
-    const date = new Date();
-    const phOffset = 8 * 60; // 8 hours in minutes
-    const localOffset = date.getTimezoneOffset(); // in minutes
-    const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
-    return phTime.toISOString().replace("Z", "");
+    const d = new Date();
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+    });
+    return formatter.format(d).replace(' ', 'T') + 'Z';
 }
 
 function deriveDiscountPercentFromCode(codeRaw: string): number {
@@ -179,11 +182,12 @@ interface PORRow {
     total_amount: number | string;
     discount_type?: number | string | null;
     is_reverted?: number | string | null;
+    receiving_method?: string | null;
 }
 
 
 const POR_SAFE_FIELDS =
-    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,is_reverted,discounted_amount,vat_amount,withholding_amount,total_amount,unit_price,discount_type";
+    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,is_reverted,discounted_amount,vat_amount,withholding_amount,total_amount,unit_price,discount_type,receiving_method";
 
 // =====================
 // FETCHERS
@@ -428,6 +432,7 @@ type PostingReceipt = {
     vatAmount: number;
     withholdingTaxAmount: number;
     totalAmount: number;
+    receivingMethod?: string | null;
 };
 
 function buildReceiptSummary(porRows: PORRow[]) {
@@ -474,6 +479,9 @@ function buildReceiptSummary(porRows: PORRow[]) {
             wht += whtTotal;
         }
 
+        const methodsForReceipt = Array.from(new Set(rows.map(r => toStr(r.receiving_method).toLowerCase()).filter(Boolean)));
+        const rMethod = methodsForReceipt.length === 1 ? methodsForReceipt[0] : (methodsForReceipt.length > 1 ? "mixed" : null);
+
         receipts.push({
             receiptNo,
             receiptDate: bestDate,
@@ -485,6 +493,7 @@ function buildReceiptSummary(porRows: PORRow[]) {
             vatAmount: vat,
             withholdingTaxAmount: wht,
             totalAmount: gross - disc, // Grand Total is Net (Gross - Discount)
+            receivingMethod: rMethod
         });
     }
 
@@ -565,6 +574,7 @@ type PostingListItem = {
     postingReady: boolean;
     latestReceiptNo?: string;
     latestReceiptDate?: string;
+    receivingMethod?: string | null;
 };
 
 type PostingPOItem = {
@@ -613,6 +623,7 @@ type PostingPODetail = {
     discountAmount: number;
     vatAmount: number;
     withholdingTaxAmount?: number;
+    receivingMethod?: string | null;
 };
 
 // =====================
@@ -759,6 +770,14 @@ export async function GET() {
                 if (pid) itemsInReceipts.add(pid);
             }
 
+            const methods = Array.from(new Set(
+                porRows
+                    .filter(r => toNum(r.is_reverted) !== 1 && toStr(r.receipt_no) && toNum(r.received_quantity) > 0)
+                    .map(r => toStr(r.receiving_method).toLowerCase())
+                    .filter(Boolean)
+            ));
+            const poReceivingMethod = methods.length === 1 ? methods[0] : (methods.length > 1 ? "mixed" : null);
+
             list.push({
                 id: String(poId),
                 poNumber,
@@ -777,6 +796,7 @@ export async function GET() {
                 postingReady: true,
                 latestReceiptNo: lr.receipt_no || undefined,
                 latestReceiptDate: lr.received_date || lr.receipt_date || undefined,
+                receivingMethod: poReceivingMethod,
             });
         }
 
@@ -1062,6 +1082,14 @@ export async function POST(req: NextRequest) {
             }
 
 
+            const methods = Array.from(new Set(
+                porRows
+                    .filter(r => toNum(r.is_reverted) !== 1 && toStr(r.receipt_no) && toNum(r.received_quantity) > 0)
+                    .map(r => toStr(r.receiving_method).toLowerCase())
+                    .filter(Boolean)
+            ));
+            const poReceivingMethod = methods.length === 1 ? methods[0] : (methods.length > 1 ? "mixed" : null);
+
             const detail: PostingPODetail = {
                 id: String(poId),
                 poNumber: toStr(po?.purchase_order_no, String(poId)),
@@ -1087,6 +1115,7 @@ export async function POST(req: NextRequest) {
                 discountAmount: detailDisc,
                 vatAmount: detailVat,
                 withholdingTaxAmount: detailWht,
+                receivingMethod: poReceivingMethod,
             };
 
             return ok(detail);
@@ -1215,11 +1244,10 @@ export async function POST(req: NextRequest) {
             try {
                 const poUpdate: Record<string, unknown> = { date_received: nowISO() };
                 const amountsPosted = toNum(poCheckJ?.data?.is_posted) === 1 || poCheckJ?.data?.is_posted === true;
-                
                 if (fully) {
                     const allInvPosted = updatedPorRows.every(r => toNum(r.isPosted) === 1);
                     const allAmtPosted = updatedPorRows.every(r => toNum(r.is_posted_amounts) === 1);
-                    // To avoid a race condition with the popSyncPromises just issued, we re-evaluate line received status
+                    const updatedPorIdsByKey = buildPorIdsByKey(updatedPorRows);
                     const allLinesReceived = lines.every(ln => {
                         const pid = toNum(ln.product_id);
                         const bid = toNum(ln.branch_id ?? 0);
@@ -1232,14 +1260,30 @@ export async function POST(req: NextRequest) {
                         const ordered = toNum(ln.ordered_quantity);
                         return (totalPosted >= ordered && totalPosted > 0) || (ordered === 0 && totalPosted > 0);
                     });
-                    
+
+                    const hasUnpostedReceipts = updatedPorRows.some(r => toNum(r.isPosted) === 0 && toStr(r.receipt_no));
+                    const hasAnyPostedReceipts = updatedPorRows.some(r => toNum(r.isPosted) === 1);
+
                     if (allInvPosted && allAmtPosted && amountsPosted && allLinesReceived) {
-                        poUpdate.inventory_status = 6; // ✅ Fully Received & Fully Posted = Received
+                        poUpdate.inventory_status = 6; // Received
+                    } else if (hasAnyPostedReceipts) {
+                        poUpdate.inventory_status = 9; // Partially Received
+                    } else if (hasUnpostedReceipts) {
+                        poUpdate.inventory_status = 13; // For Posting
                     } else {
-                        poUpdate.inventory_status = 13; // ✅ Fully Received but pending some posting = For Posting
+                        poUpdate.inventory_status = 3; // For Receiving
                     }
                 } else {
-                    poUpdate.inventory_status = 9;  // Partially Received
+                    const hasUnpostedReceipts = updatedPorRows.some(r => toNum(r.isPosted) === 0 && toStr(r.receipt_no));
+                    const hasAnyPostedReceipts = updatedPorRows.some(r => toNum(r.isPosted) === 1);
+
+                    if (hasAnyPostedReceipts) {
+                        poUpdate.inventory_status = 9; // Partially Received
+                    } else if (hasUnpostedReceipts) {
+                        poUpdate.inventory_status = 13; // For Posting
+                    } else {
+                        poUpdate.inventory_status = 3; // For Receiving
+                    }
                 }
                 await patchPO(base, poId, poUpdate);
             } catch {}
@@ -1320,7 +1364,6 @@ export async function POST(req: NextRequest) {
                     if (fully) {
                         const allInvPosted = updatedPorRowsAll.every(r => toNum(r.isPosted) === 1);
                         const allAmtPosted = updatedPorRowsAll.every(r => toNum(r.is_posted_amounts) === 1);
-                        
                         const updatedPorIdsByKeyAll = buildPorIdsByKey(updatedPorRowsAll);
                         const allLinesReceived = lines.every(ln => {
                             const pid = toNum(ln.product_id);
@@ -1335,13 +1378,29 @@ export async function POST(req: NextRequest) {
                             return (totalPosted >= ordered && totalPosted > 0) || (ordered === 0 && totalPosted > 0);
                         });
 
+                        const hasUnpostedReceipts = updatedPorRowsAll.some(r => toNum(r.isPosted) === 0 && toStr(r.receipt_no));
+                        const hasAnyPostedReceipts = updatedPorRowsAll.some(r => toNum(r.isPosted) === 1);
+
                         if (allInvPosted && allAmtPosted && amountsPosted && allLinesReceived) {
                             poUpdate.inventory_status = 6; // Fully Received & Fully Posted
+                        } else if (hasAnyPostedReceipts) {
+                            poUpdate.inventory_status = 9; // Partially Received
+                        } else if (hasUnpostedReceipts) {
+                            poUpdate.inventory_status = 13; // For Posting
                         } else {
-                            poUpdate.inventory_status = 13; // Fully Received but pending amounts
+                            poUpdate.inventory_status = 3; // For Receiving
                         }
                     } else {
-                        poUpdate.inventory_status = 9;  // Partially Received
+                        const hasUnpostedReceipts = updatedPorRowsAll.some(r => toNum(r.isPosted) === 0 && toStr(r.receipt_no));
+                        const hasAnyPostedReceipts = updatedPorRowsAll.some(r => toNum(r.isPosted) === 1);
+
+                        if (hasAnyPostedReceipts) {
+                            poUpdate.inventory_status = 9; // Partially Received
+                        } else if (hasUnpostedReceipts) {
+                            poUpdate.inventory_status = 13; // For Posting
+                        } else {
+                            poUpdate.inventory_status = 3; // For Receiving
+                        }
                     }
                     await patchPO(base, poId, poUpdate);
 
