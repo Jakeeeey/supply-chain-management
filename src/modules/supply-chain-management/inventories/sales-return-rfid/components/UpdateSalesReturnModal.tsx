@@ -17,6 +17,7 @@ import {
   ScanLine,
   Check,
   ChevronsUpDown,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -682,6 +683,73 @@ export function UpdateSalesReturnModal({
 
   const handleDeleteRow = (index: number) => {
     setDetails((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSplitRow = async (index: number) => {
+    const source = details[index];
+    if (!source) return;
+
+    const qty = source.unitOrder === 3 ? 0 : 1;
+    const unitPrice = Number(source.unitPrice) || 0;
+    const grossAmount = Math.round(qty * unitPrice * 100) / 100;
+    let discountAmount = 0;
+    if (source.discountType && qty > 0) {
+      const selectedOption = discountOptions.find(
+        (d) => d.id.toString() === source.discountType?.toString(),
+      );
+      if (selectedOption) {
+        const percentage = parseFloat(selectedOption.total_percent) || 0;
+        discountAmount = Math.round(grossAmount * (percentage / 100) * 100) / 100;
+      }
+    }
+    const totalAmount = Math.round((grossAmount - discountAmount) * 100) / 100;
+
+    const fallbackId = `added-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const duplicate: SalesReturnItem = {
+      ...source,
+      id: fallbackId,
+      quantity: qty,
+      grossAmount,
+      discountAmount,
+      totalAmount,
+      returnType: "",
+      reason: "",
+      rfidTags: [],
+      rfidTagIds: [],
+    };
+
+    setDetails((prev) => {
+      const updated = [...prev];
+      updated.splice(index + 1, 0, duplicate);
+      return updated;
+    });
+
+    try {
+      const res = await SalesReturnProvider.presaveDetail({
+        id: undefined,
+        returnNo: headerData.returnNo,
+        productId: duplicate.product_id || duplicate.productId,
+        quantity: duplicate.quantity,
+        unitPrice: duplicate.unitPrice,
+        discountType: duplicate.discountType,
+        returnType: "Good Order",
+        reason: duplicate.reason,
+      });
+
+      if (res?.detailId) {
+        setDetails((curr) => {
+          const next = [...curr];
+          const splitIdx = next.findIndex((d) => d.id === fallbackId);
+          if (splitIdx !== -1) {
+            next[splitIdx] = { ...next[splitIdx], id: res.detailId };
+          }
+          return next;
+        });
+      }
+    } catch (err) {
+      console.error("Failed to presave split row", err);
+      toast.error("Failed to fully save the split row. You may need to refresh.");
+    }
   };
 
   const handleConfirmProductLookup = async (newItems: SalesReturnItem[]) => {
@@ -1407,17 +1475,29 @@ export function UpdateSalesReturnModal({
                               </TableCell>
                               {canEditAll && (
                                 <TableCell className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeleteRow(idx);
-                                      if (selectedRowIndex === idx) setSelectedRowIndex(null);
-                                    }}
-                                    className="text-destructive/70 hover:text-destructive h-7 w-7 rounded-md flex items-center justify-center transition-colors"
-                                    title="Remove Item"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSplitRow(idx);
+                                      }}
+                                      className="text-primary/70 hover:text-primary hover:bg-primary/10 h-7 w-7 rounded-md flex items-center justify-center transition-colors"
+                                      title="Split Row"
+                                    >
+                                      <Copy className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteRow(idx);
+                                        if (selectedRowIndex === idx) setSelectedRowIndex(null);
+                                      }}
+                                      className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 h-7 w-7 rounded-md flex items-center justify-center transition-colors"
+                                      title="Remove Item"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  </div>
                                 </TableCell>
                               )}
                             </TableRow>
