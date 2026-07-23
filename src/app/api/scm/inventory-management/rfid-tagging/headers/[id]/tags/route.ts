@@ -24,62 +24,72 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         });
 
         if (!headerRes.ok) {
+            const errBody = await headerRes.text();
+            console.error(`Header fetch failed: ${headerRes.status}`, errBody);
             return NextResponse.json({ ok: false, message: "Header not found" }, { status: 404 });
         }
 
         const headerData = (await headerRes.json()).data;
-
-        // Fetch Branch Details from Spring Boot
         const springBaseUrl = (process.env.SPRING_API_BASE_URL || "http://goatedcodoer:8083").replace(/\/$/, "");
-        try {
-            const bRes = await fetch(`${springBaseUrl}/api/branches`, {
-                headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-                cache: "no-store"
-            });
-            if (bRes.ok) {
-                const bData = await bRes.json();
-                const b = Array.isArray(bData) ? bData.find((x: Record<string, unknown>) => x.id == headerData.branch_id || x.branch_id == headerData.branch_id || x.branchId == headerData.branch_id) : null;
-                if (b) headerData.branch = b;
-            }
-        } catch (e) { console.error(e); }
 
-        // Fetch Product Details from Directus
-        try {
-            const pRes = await fetch(`${directusUrl}/items/products?filter[product_id][_eq]=${headerData.product_id}&fields=product_id,product_name,description,product_code,unit_of_measurement_count`, {
+        const fetchBranch = async () => {
+            try {
+                const bRes = await fetch(`${springBaseUrl}/api/branches`, {
+                    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+                    cache: "no-store"
+                });
+                if (bRes.ok) {
+                    const bData = await bRes.json();
+                    const b = Array.isArray(bData) ? bData.find((x: Record<string, unknown>) => x.id == headerData.branch_id || x.branch_id == headerData.branch_id || x.branchId == headerData.branch_id) : null;
+                    if (b) headerData.branch = b;
+                }
+            } catch (e) { console.error(e); }
+        };
+
+        const fetchProductAndInventory = async () => {
+            try {
+                const pRes = await fetch(`${directusUrl}/items/products?filter[product_id][_eq]=${headerData.product_id}&fields=product_id,product_name,description,product_code,unit_of_measurement_count`, {
+                    headers: { "Authorization": `Bearer ${directusToken}`, "Content-Type": "application/json" },
+                    cache: "no-store",
+                });
+                if (pRes.ok) {
+                    const pJson = await pRes.json();
+                    const p = (pJson.data || [])[0];
+                    if (p) headerData.product = p;
+                    
+                    let runningInventory = 0;
+                    if (headerData.product_id && headerData.branch_id) {
+                        const invRes = await fetch(`${springBaseUrl}/api/view-running-inventory-by-unit/all?branch_id=${headerData.branch_id}`, {
+                            headers: { "Authorization": `Bearer ${token}` }
+                        });
+                        if (invRes.ok) {
+                            const invData = await invRes.json();
+                            const invItem = Array.isArray(invData) ? invData.find((item: Record<string, unknown>) => String(item.product_id) === String(headerData.product_id) || String(item.productId) === String(headerData.product_id)) : null;
+                            runningInventory = invItem ? Number(invItem.running_inventory || invItem.runningInventory || 0) : 0;
+                        }
+                    }
+                    headerData.running_inventory = runningInventory;
+                }
+            } catch (e) { 
+                console.error("Error fetching running inventory:", e); 
+                headerData.running_inventory = 0;
+            }
+        };
+
+        const fetchListItems = async () => {
+            const listUrl = `${directusUrl}/items/registered_rfid_list?filter[header_id][_eq]=${id}&limit=-1`;
+            const listRes = await fetch(listUrl, {
                 headers: { "Authorization": `Bearer ${directusToken}`, "Content-Type": "application/json" },
                 cache: "no-store",
             });
-            if (pRes.ok) {
-                const pJson = await pRes.json();
-                const p = (pJson.data || [])[0];
-                if (p) headerData.product = p;
-                
-                let runningInventory = 0;
-                if (headerData.product_id && headerData.branch_id) {
-                    const invRes = await fetch(`${springBaseUrl}/api/view-running-inventory-by-unit/all?branch_id=${headerData.branch_id}`, {
-                        headers: { "Authorization": `Bearer ${token}` }
-                    });
-                    if (invRes.ok) {
-                        const invData = await invRes.json();
-                        const invItem = Array.isArray(invData) ? invData.find((item: Record<string, unknown>) => String(item.product_id) === String(headerData.product_id) || String(item.productId) === String(headerData.product_id)) : null;
-                        runningInventory = invItem ? Number(invItem.running_inventory || invItem.runningInventory || 0) : 0;
-                    }
-                }
-                headerData.running_inventory = runningInventory;
-            }
-        } catch (e) { 
-            console.error("Error fetching running inventory:", e); 
-            headerData.running_inventory = 0;
-        }
+            return listRes.ok ? ((await listRes.json()).data || []) : [];
+        };
 
-        // Fetch list items
-        const listUrl = `${directusUrl}/items/registered_rfid_list?filter[header_id][_eq]=${id}&limit=-1`;
-        const listRes = await fetch(listUrl, {
-            headers: { "Authorization": `Bearer ${directusToken}`, "Content-Type": "application/json" },
-            cache: "no-store",
-        });
-
-        const listData = listRes.ok ? (await listRes.json()).data : [];
+        const [, , listData] = await Promise.all([
+            fetchBranch(),
+            fetchProductAndInventory(),
+            fetchListItems()
+        ]);
 
         return NextResponse.json({ header: headerData, tags: listData });
     } catch (err) {

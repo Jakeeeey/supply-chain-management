@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PackageOpen, Printer, Loader2, ChevronLeft, ChevronRight, Hand } from 'lucide-react';
+import { PackageOpen, Printer, Loader2, ChevronLeft, ChevronRight, Hand, Paperclip, X } from 'lucide-react';
 import { useStockTransferReceiveManual } from './hooks/use-stock-transfer-receive-manual';
 import { OrderGroupItem, UnitOfMeasurement, CurrentUser } from '../types/stock-transfer.types';
 import { cn } from '@/lib/utils';
@@ -29,6 +29,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 export default function StockTransferReceiveManualView({ currentUser }: { currentUser: CurrentUser }) {
   const {
@@ -43,7 +48,12 @@ export default function StockTransferReceiveManualView({ currentUser }: { curren
     getBranchName,
     receivedQtys,
     updateReceivedQty,
+    selectedFiles,
+    isUploading,
+    addSelectedFiles,
+    removeSelectedFile,
   } = useStockTransferReceiveManual();
+
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -112,6 +122,117 @@ export default function StockTransferReceiveManualView({ currentUser }: { curren
                   getBranchName={getBranchName}
                 />
               </div>
+
+              {/* Attachment Popover section */}
+              {selectedGroup && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+                    Attachments <span className="text-destructive font-black">*</span>
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="file"
+                      id="attachment-upload"
+                      multiple
+                      accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx"
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        addSelectedFiles(files);
+                        e.target.value = '';
+                      }}
+                      disabled={isUploading}
+                    />
+
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          type="button"
+                          className={cn(
+                            "gap-2 border-border shadow-none h-10 hover:bg-muted/50 rounded-lg shrink-0 active:scale-95 transition-all text-sm font-semibold",
+                            selectedFiles.length > 0 ? "border-primary/45 bg-primary/5 text-primary hover:bg-primary/10" : ""
+                          )}
+                          disabled={isUploading}
+                        >
+                          <Paperclip className={cn("w-4 h-4", selectedFiles.length > 0 ? "text-primary" : "text-muted-foreground/50")} />
+                          {selectedFiles.length > 0 ? `Manage Attachments` : `Attach Files`}
+                          <span className={cn(
+                            "ml-1 px-1.5 py-0.5 rounded text-[10px] font-black font-mono border",
+                            selectedFiles.length > 0 
+                              ? "bg-primary text-primary-foreground border-primary" 
+                              : "bg-muted text-muted-foreground border-border/50"
+                          )}>
+                            {selectedFiles.length}
+                          </span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-[320px] p-4 border border-border shadow-xl bg-card rounded-xl">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between border-b border-border/50 pb-2">
+                            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Manage Attachments</span>
+                            <span className="text-[10px] text-muted-foreground italic">Max 20MB per file</span>
+                          </div>
+                          
+                          <Button
+                            variant="outline"
+                            type="button"
+                            size="sm"
+                            className="w-full gap-2 border-border shadow-none text-xs font-bold rounded-lg active:scale-95 transition-all"
+                            onClick={() => document.getElementById('attachment-upload')?.click()}
+                          >
+                            <Paperclip className="w-3.5 h-3.5 text-muted-foreground/60" />
+                            Add Attachment
+                          </Button>
+
+                          {selectedFiles.length > 0 ? (
+                            <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                              {selectedFiles.map((file, idx) => (
+                                <div key={`${file.name}-${idx}`} className="flex items-center justify-between gap-3 text-xs py-1 border-b border-border/10 last:border-0">
+                                  <span className="font-semibold truncate text-foreground flex-1 pr-2" title={file.name}>
+                                    {file.name}
+                                  </span>
+                                  <span className="text-[9px] text-muted-foreground font-mono shrink-0">
+                                    {(file.size / 1024 / 1024).toFixed(2)} MB
+                                  </span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    type="button"
+                                    className="h-5 w-5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full shrink-0"
+                                    onClick={() => removeSelectedFile(idx)}
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-6 text-muted-foreground/45 flex flex-col items-center justify-center gap-1.5">
+                              <Paperclip className="w-7 h-7 stroke-[1.5]" />
+                              <span className="text-[10px] font-bold uppercase tracking-widest">No files attached yet</span>
+                            </div>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+
+                    <span className="text-[10px] text-muted-foreground font-medium italic">
+                      Images, PDF, Word allowed.
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Full-Page Overlay Loader */}
+          {isUploading && (
+            <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[999] flex flex-col items-center justify-center gap-3">
+              <Loader2 className="w-10 h-10 animate-spin text-primary" />
+              <span className="text-xs font-black uppercase tracking-widest text-foreground animate-pulse">
+                Uploading attachments and finalizing manual deposit...
+              </span>
             </div>
           )}
 

@@ -74,7 +74,7 @@ export const dispatchPlanDataService = {
     const result = await fetchItems<{ dispatch_no: string }>(
       "/items/dispatch_plan",
       {
-        sort: "-dispatch_no",
+        sort: "-dispatch_id",
         fields: "dispatch_no",
         limit: 1,
       },

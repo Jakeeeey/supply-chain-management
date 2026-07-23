@@ -138,6 +138,8 @@ export function DispatchCreationModal({
         po_id: d.po_id,
         po_no: d.po_no,
         status: d.status,
+        latitude: d.latitude,
+        longitude: d.longitude,
       })),
     };
 

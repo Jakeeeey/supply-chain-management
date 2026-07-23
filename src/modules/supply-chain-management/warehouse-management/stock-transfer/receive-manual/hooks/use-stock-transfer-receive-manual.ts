@@ -15,12 +15,31 @@ export function useStockTransferReceiveManual() {
   });
 
   const [receivedQtys, setReceivedQtys] = useState<Record<number, number>>({});
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   const updateReceivedQty = useCallback((id: number, qty: number, maxQty: number) => {
     setReceivedQtys(prev => {
       const validQty = Math.max(0, Math.min(qty, maxQty));
       return { ...prev, [id]: validQty };
     });
+  }, []);
+
+  const addSelectedFiles = useCallback((files: File[]) => {
+    setSelectedFiles(prev => {
+      const combined = [...prev, ...files];
+      if (combined.length > 20) {
+        toast.error('Limit exceeded', {
+          description: 'You can upload a maximum of 20 attachments.'
+        });
+        return combined.slice(0, 20);
+      }
+      return combined;
+    });
+  }, []);
+
+  const removeSelectedFile = useCallback((index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   }, []);
 
   const orderGroups = useMemo(() => {
@@ -48,18 +67,57 @@ export function useStockTransferReceiveManual() {
     const group = orderGroups.find((g: OrderGroup) => g.orderNo === orderNo);
     if (!group) return;
 
+    if (selectedFiles.length === 0) {
+      toast.error('Attachment is required.', {
+        description: 'Please upload at least one file to finalize this manual deposit.'
+      });
+      return;
+    }
+
     base.setProcessing(true);
+    setIsUploading(true);
+
     try {
+      // 1. Upload files concurrently
+      const uploadPromises = selectedFiles.map(async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch('/api/scm/warehouse-management/stock-transfer/receive-manual/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || `Failed to upload "${file.name}".`);
+        }
+
+        const result = await res.json();
+        const directusFileId = result.data?.id;
+
+        if (!directusFileId) {
+          throw new Error(`Upload succeeded for "${file.name}" but no file ID was returned.`);
+        }
+
+        return directusFileId as string;
+      });
+
+      const directusFileIds = await Promise.all(uploadPromises);
+
+      // 2. Submit status update using directusFileIds
       await stockTransferLifecycleService.submitStatusUpdate({
         items: group.items.map((i: OrderGroupItem) => ({
           id: i.id,
           status: 'Received',
           received_quantity: receivedQtys[i.id] ?? Math.max(0, i.scanned_quantity ?? i.picked_quantity ?? i.allocated_quantity ?? 0)
         })),
-        status: 'Received'
+        status: 'Received',
+        attachments: directusFileIds
       });
 
       toast.success(`Order ${orderNo} successfully received manually.`);
+      setSelectedFiles([]);
       base.setSelectedOrderNo(null);
       await base.refresh();
     } catch (err: unknown) {
@@ -67,6 +125,7 @@ export function useStockTransferReceiveManual() {
       toast.error(msg);
     } finally {
       base.setProcessing(false);
+      setIsUploading(false);
     }
   };
 
@@ -77,5 +136,9 @@ export function useStockTransferReceiveManual() {
     receiveOrder,
     receivedQtys,
     updateReceivedQty,
+    selectedFiles,
+    isUploading,
+    addSelectedFiles,
+    removeSelectedFile,
   };
 }

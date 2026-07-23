@@ -703,7 +703,7 @@ export const dispatchPlanQueryService = {
       const { data: assignedDetails } = await fetchItemsInChunks<{
         sales_order_id: number;
       }>("/items/dispatch_plan_details", "sales_order_id", allOrderIds, {
-        "filter[dispatch_id][status][_nin]": "Dispatched,Cancelled,Delivered,Rejected,Approved",
+        "filter[dispatch_id][status][_nin]": "Dispatched,Cancelled,Rejected",
         fields: "sales_order_id",
         limit: -1,
       });
