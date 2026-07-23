@@ -957,7 +957,7 @@ export async function presaveDetail(
     returnType?: string;
     reason?: string;
   },
-  userId: number
+  _userId: number
 ): Promise<{ detailId: number }> {
   const refsResult = await repo.getRawReferences();
   const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
