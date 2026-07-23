@@ -83,6 +83,11 @@ export function useForArrivalSummary() {
     return groups;
   }, [filteredInvoices]);
 
+  // Flat list of all sales orders
+  const salesOrders = React.useMemo(() => {
+    return dispatchPlanGroups.flatMap((group) => group.salesOrders);
+  }, [dispatchPlanGroups]);
+
   // Unique values for filter dropdowns
   const uniqueDrivers = React.useMemo(() => {
     const set = new Set<string>();
@@ -111,6 +116,14 @@ export function useForArrivalSummary() {
     return Array.from(set).sort();
   }, [invoices]);
 
+  const totalOrdersCount = React.useMemo(() => {
+    const uniqueOrders = new Set<string>();
+    filteredInvoices.forEach((inv) => {
+      if (inv.orderId) uniqueOrders.add(inv.orderId);
+    });
+    return uniqueOrders.size;
+  }, [filteredInvoices]);
+
   return {
     invoices,
     filteredInvoices,
@@ -130,8 +143,9 @@ export function useForArrivalSummary() {
     uniqueDrivers,
     uniqueVehicles,
     uniqueCustomers,
+    salesOrders,
 
-    totalCount: filteredInvoices.length,
+    totalOrdersCount,
     reload,
   };
 }

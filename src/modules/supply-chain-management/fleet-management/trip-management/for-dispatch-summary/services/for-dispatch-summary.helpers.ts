@@ -23,6 +23,8 @@ export function buildDispatchPlanGroup(
       ? `${firstInv.driverFirstName} ${firstInv.driverLastName}`.trim()
       : "Unknown Driver";
   const vehiclePlate = firstInv?.vehiclePlate || "Unknown Vehicle";
+  const helperNames = firstInv?.helperNames || [];
+  const status = firstInv?.dispatchStatus || "For Dispatch";
 
   let dateLabel = "Unknown Date";
   if (dateStr) {
@@ -40,13 +42,38 @@ export function buildDispatchPlanGroup(
     }
   }
 
+  // Group invoices by orderId
+  const salesOrdersMap = new Map<string, ForDispatchInvoice[]>();
+  for (const inv of invoices) {
+    if (!salesOrdersMap.has(inv.orderId)) {
+      salesOrdersMap.set(inv.orderId, []);
+    }
+    salesOrdersMap.get(inv.orderId)!.push(inv);
+  }
+
+  const salesOrders = Array.from(salesOrdersMap.entries()).map(([orderId, invs]) => {
+    const firstOrderInv = invs[0];
+    return {
+      orderId,
+      customerCode: firstOrderInv.customerCode,
+      customerName: firstOrderInv.customerName,
+      brgy: firstOrderInv.brgy,
+      city: firstOrderInv.city,
+      province: firstOrderInv.province,
+      invoices: invs,
+      totalAmount: invs.reduce((sum, i) => sum + (Number(i.totalAmount) || 0), 0),
+    };
+  });
+
   return {
     dispatchDocNo,
     estimatedTimeOfDispatch: dateStr,
     dateLabel,
     driverName,
+    helperNames,
     vehiclePlate,
-    invoices,
+    status,
+    salesOrders,
   };
 }
 
@@ -54,6 +81,7 @@ export function matchesSearch(invoice: ForDispatchInvoice, term: string): boolea
   if (!term) return true;
   const lower = term.toLowerCase();
   return (
+    (invoice.orderId && invoice.orderId.toLowerCase().includes(lower)) ||
     invoice.invoiceNo.toLowerCase().includes(lower) ||
     invoice.customerName.toLowerCase().includes(lower) ||
     invoice.customerCode.toLowerCase().includes(lower) ||

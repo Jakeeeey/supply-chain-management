@@ -69,7 +69,19 @@ export interface ForArrivalSummaryResponse {
   data: ForArrivalInvoice[];
 }
 
-/** Grouped structure for Kanban columns */
+/** Mapped Sales Order containing one or more invoices */
+export interface ForArrivalSalesOrder {
+  orderId: string;
+  customerCode: string;
+  customerName: string;
+  brgy: string;
+  city: string;
+  province: string;
+  invoices: ForArrivalInvoice[];
+  totalAmount: number;
+}
+
+/** Grouped structure for cards */
 export interface DispatchPlanGroup {
   /** post_dispatch_plan.doc_no */
   dispatchDocNo: string;
@@ -79,10 +91,14 @@ export interface DispatchPlanGroup {
   dateLabel: string;
   /** Driver name */
   driverName: string;
+  /** Helper names */
+  helperNames: string[];
   /** Vehicle plate */
   vehiclePlate: string;
-  /** Invoices in this dispatch plan */
-  invoices: ForArrivalInvoice[];
+  /** Dispatch Status */
+  status: string;
+  /** Sales Orders in this dispatch plan */
+  salesOrders: ForArrivalSalesOrder[];
 }
 
 /** Grouped invoices by customer within a dispatch plan column */
