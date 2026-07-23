@@ -29,6 +29,20 @@ function statusLabel(status: string) {
     return s;
 }
 
+function methodBadge(method?: string | null) {
+    const m = String(method || "").toLowerCase();
+    if (m === "rfid") {
+        return "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20";
+    }
+    if (m === "manual") {
+        return "bg-slate-500/15 text-slate-700 dark:text-slate-300 border border-slate-500/20";
+    }
+    if (m === "mixed") {
+        return "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/20";
+    }
+    return null;
+}
+
 export function PostingPOList() {
     const {
         list,
@@ -213,6 +227,14 @@ export function PostingPOList() {
                                             >
                                                 {statusLabel(po.status)}
                                             </Badge>
+                                            {po.receivingMethod && methodBadge(po.receivingMethod) && (
+                                                <Badge
+                                                    variant="secondary"
+                                                    className={cn("text-[9px] font-black uppercase tracking-tight", methodBadge(po.receivingMethod))}
+                                                >
+                                                    {po.receivingMethod}
+                                                </Badge>
+                                            )}
                                             <span className="bg-muted/50 px-1.5 py-0.5 rounded border border-border/50">
                                                 {po.itemsCount} ITEMS
                                             </span>

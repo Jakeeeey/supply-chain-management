@@ -17,6 +17,7 @@ import {
   ScanLine,
   Check,
   ChevronsUpDown,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -223,25 +224,25 @@ const ReadOnlyField = ({
 const RFID_HEX_LENGTH = 24;
 
 function extractHexCharacters(value: string): string {
-    return value.toUpperCase().replace(/[^0-9A-F]/g, "");
+  return value.toUpperCase().replace(/[^0-9A-F]/g, "");
 }
 
 function finalizeHexTag(rawValue: string): string {
-    const hex = extractHexCharacters(rawValue);
+  const hex = extractHexCharacters(rawValue);
 
-    if (hex.length < RFID_HEX_LENGTH) {
-        return "";
-    }
+  if (hex.length < RFID_HEX_LENGTH) {
+    return "";
+  }
 
-    if (hex.length === RFID_HEX_LENGTH) {
-        return hex;
-    }
+  if (hex.length === RFID_HEX_LENGTH) {
+    return hex;
+  }
 
-    return hex.slice(-RFID_HEX_LENGTH);
+  return hex.slice(-RFID_HEX_LENGTH);
 }
 
 function sameTag(a: string, b: string): boolean {
-    return finalizeHexTag(a) === finalizeHexTag(b);
+  return finalizeHexTag(a) === finalizeHexTag(b);
 }
 
 
@@ -325,6 +326,7 @@ export function UpdateSalesReturnModal({
   const [rfidScanning, setRfidScanning] = useState(false);
   const [lastScannedRfid, setLastScannedRfid] = useState("");
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
+  const [sessionAddedTags, setSessionAddedTags] = useState<string[]>([]);
 
 
 
@@ -336,6 +338,8 @@ export function UpdateSalesReturnModal({
   // Rule 2: Only Remarks and Applied To are editable if Received
   const canEditAll = isPending;
   const canEditLimited = isPending || isReceived;
+
+  const hasZeroQtyItems = details.some((item) => Number(item.quantity) < 1);
 
   // --- INITIAL LOAD ---
   useEffect(() => {
@@ -543,40 +547,68 @@ export function UpdateSalesReturnModal({
       }
 
       // 4. Accept Scan: Tag to selected row
-      setDetails((prev) => {
-        const next = [...prev];
-        const row = next[selectedRowIndex];
-        if (!row) return prev;
+      try {
+        const res = await SalesReturnProvider.presaveRfidTag({
+          detailId: selectedRow.id,
+          rfidTag: cleanedTag,
+        });
+        const tagId = res?.tagId;
 
-        const newTags = [...(row.rfidTags || []), cleanedTag];
-        const newQty = newTags.length;
+        setSessionAddedTags((prev) => [...prev, cleanedTag]);
 
-        // Recalculate amounts for this row
-        const unitPrice = Number(row.unitPrice) || 0;
-        const grossAmount = Math.round(unitPrice * newQty * 100) / 100;
+        setDetails((prev) => {
+          const next = [...prev];
+          const row = next[selectedRowIndex];
+          if (!row) return prev;
 
-        // Calculate discount
-        let discountAmt = 0;
-        if (row.discountType) {
-          const opt = discountOptions.find(d => d.id.toString() === row.discountType?.toString());
-          if (opt) {
-            const percentage = parseFloat(opt.total_percent) || 0;
-            discountAmt = Math.round(grossAmount * (percentage / 100) * 100) / 100;
+          const newTags = [...(row.rfidTags || []), cleanedTag];
+          const newTagIds = [...(row.rfidTagIds || []), tagId];
+          const newQty = newTags.length;
+
+          // Recalculate amounts for this row
+          const unitPrice = Number(row.unitPrice) || 0;
+          const grossAmount = Math.round(unitPrice * newQty * 100) / 100;
+
+          // Calculate discount
+          let discountAmt = 0;
+          if (row.discountType) {
+            const opt = discountOptions.find(d => d.id.toString() === row.discountType?.toString());
+            if (opt) {
+              const percentage = parseFloat(opt.total_percent) || 0;
+              discountAmt = Math.round(grossAmount * (percentage / 100) * 100) / 100;
+            }
           }
-        }
 
-        next[selectedRowIndex] = {
-          ...row,
-          rfidTags: newTags,
-          quantity: newQty,
-          grossAmount,
-          discountAmount: discountAmt,
-          totalAmount: Math.round((grossAmount - discountAmt) * 100) / 100,
-        };
-        return next;
-      });
+          next[selectedRowIndex] = {
+            ...row,
+            rfidTags: newTags,
+            rfidTagIds: newTagIds,
+            quantity: newQty,
+            grossAmount,
+            discountAmount: discountAmt,
+            totalAmount: Math.round((grossAmount - discountAmt) * 100) / 100,
+          };
 
-      toast.success(`Tag accepted for ${details[selectedRowIndex].description}`);
+          // Re-presave the updated row
+          SalesReturnProvider.presaveDetail({
+            id: row.id,
+            returnNo: headerData.returnNo,
+            productId: row.productId,
+            quantity: newQty,
+            unitPrice: row.unitPrice,
+            discountType: row.discountType,
+            returnType: row.returnType,
+            reason: row.reason,
+          }).catch(console.error);
+
+          return next;
+        });
+
+        toast.success(`Tag accepted for ${details[selectedRowIndex].description}`);
+      } catch (err) {
+        console.error("Failed to presave RFID tag", err);
+        toast.error("RFID scanned but failed to save. Please try again.");
+      }
       setTimeout(() => setLastScannedRfid(""), 2000);
     } catch (err: unknown) {
       console.error("RFID lookup failed:", err);
@@ -653,57 +685,242 @@ export function UpdateSalesReturnModal({
     setDetails((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleConfirmProductLookup = (newItems: SalesReturnItem[]) => {
+  const handleSplitRow = async (index: number) => {
+    const source = details[index];
+    if (!source) return;
+
+    const qty = source.unitOrder === 3 ? 0 : 1;
+    const unitPrice = Number(source.unitPrice) || 0;
+    const grossAmount = Math.round(qty * unitPrice * 100) / 100;
+    let discountAmount = 0;
+    if (source.discountType && qty > 0) {
+      const selectedOption = discountOptions.find(
+        (d) => d.id.toString() === source.discountType?.toString(),
+      );
+      if (selectedOption) {
+        const percentage = parseFloat(selectedOption.total_percent) || 0;
+        discountAmount = Math.round(grossAmount * (percentage / 100) * 100) / 100;
+      }
+    }
+    const totalAmount = Math.round((grossAmount - discountAmount) * 100) / 100;
+
+    const fallbackId = `added-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const duplicate: SalesReturnItem = {
+      ...source,
+      id: fallbackId,
+      quantity: qty,
+      grossAmount,
+      discountAmount,
+      totalAmount,
+      returnType: "",
+      reason: "",
+      rfidTags: [],
+      rfidTagIds: [],
+    };
+
     setDetails((prev) => {
       const updated = [...prev];
+      updated.splice(index + 1, 0, duplicate);
+      return updated;
+    });
+
+    try {
+      const res = await SalesReturnProvider.presaveDetail({
+        id: undefined,
+        returnNo: headerData.returnNo,
+        productId: duplicate.product_id || duplicate.productId,
+        quantity: duplicate.quantity,
+        unitPrice: duplicate.unitPrice,
+        discountType: duplicate.discountType,
+        returnType: "Good Order",
+        reason: duplicate.reason,
+      });
+
+      if (res?.detailId) {
+        setDetails((curr) => {
+          const next = [...curr];
+          const splitIdx = next.findIndex((d) => d.id === fallbackId);
+          if (splitIdx !== -1) {
+            next[splitIdx] = { ...next[splitIdx], id: res.detailId };
+          }
+          return next;
+        });
+      }
+    } catch (err) {
+      console.error("Failed to presave split row", err);
+      toast.error("Failed to fully save the split row. You may need to refresh.");
+    }
+  };
+
+  const handleConfirmProductLookup = async (newItems: SalesReturnItem[]) => {
+    setIsProductLookupOpen(false);
+
+    setDetails((prev) => {
+      const updated = [...prev];
+      // We will track the final resolved items to update the DB
+      const resolvedItems: { id: number | string | undefined; quantity: number }[] = [];
+
       newItems.forEach((item) => {
-        // Find if already exists in details (by productId and unit)
+        const incomingDiscountType = item.discountType || "";
+        let initialDiscountAmt = 0;
+        const unitPrice = Math.round(Number(item.unitPrice || 0) * 100) / 100;
+        const grossAmount = Math.round(Number(item.grossAmount || 0) * 100) / 100;
+
+        if (incomingDiscountType && incomingDiscountType !== "No Discount") {
+          const selectedDisc = discountOptions.find(
+            (d) => d.id.toString() === incomingDiscountType.toString(),
+          );
+          if (selectedDisc) {
+            const percentage = parseFloat(selectedDisc.total_percent) || 0;
+            initialDiscountAmt = Math.round(grossAmount * (percentage / 100) * 100) / 100;
+          }
+        }
+
+        const totalAmount = Math.round((grossAmount - initialDiscountAmt) * 100) / 100;
+
+        // Check if it already exists in the table
         const existingIdx = updated.findIndex(
           (d) => d.product_id === item.productId && d.unit === item.unit
         );
+
         if (existingIdx !== -1) {
-          // Increment quantity
+          // It exists! Increment the quantity of the existing row.
           const existing = updated[existingIdx];
-          const newQty = (Number(existing.quantity) || 0) + (Number(item.quantity) || 0);
+          const incomingQty = item.unitOrder === 3 ? 0 : (Number(item.quantity) || 1);
+          const newQty = (Number(existing.quantity) || 0) + incomingQty;
           const newGross = Math.round(newQty * Number(existing.unitPrice || 0) * 100) / 100;
+
+          // Re-calculate discount for new gross
+          let newDisc = 0;
+          if (existing.discountType && existing.discountType !== "No Discount") {
+            const discOpt = discountOptions.find(d => d.id.toString() === existing.discountType?.toString());
+            if (discOpt) newDisc = Math.round(newGross * (parseFloat(discOpt.total_percent) / 100) * 100) / 100;
+          }
+
           updated[existingIdx] = {
             ...existing,
             quantity: newQty,
             grossAmount: newGross,
-            totalAmount: Math.round((newGross - (Number(existing.discountAmount) || 0)) * 100) / 100,
+            discountAmount: newDisc,
+            totalAmount: Math.round((newGross - newDisc) * 100) / 100,
           };
+
+          resolvedItems.push({ id: existing.id, quantity: newQty });
         } else {
-          // Add as new row
-          const unitPrice = Math.round(Number(item.unitPrice || 0) * 100) / 100;
-          const grossAmount = Math.round(Number(item.grossAmount || 0) * 100) / 100;
-          const incomingDiscountType = item.discountType || "";
-          let initialDiscountAmt = 0;
-
-          if (incomingDiscountType && incomingDiscountType !== "No Discount") {
-            const selectedDisc = discountOptions.find(
-              (d) => d.id.toString() === incomingDiscountType.toString(),
-            );
-            if (selectedDisc) {
-              const percentage = parseFloat(selectedDisc.total_percent) || 0;
-              initialDiscountAmt = Math.round(grossAmount * (percentage / 100) * 100) / 100;
-            }
-          }
-
-          updated.push({
+          // New product! Create a placeholder and push to array
+          const fallbackId = `added-${Date.now()}-${Math.random()}`;
+          const newItemObj: SalesReturnItem = {
             ...item,
-            id: `added-${Date.now()}-${Math.random()}`, // Temp ID for new rows
+            id: fallbackId,
             product_id: item.productId,
             unitPrice,
             grossAmount,
             discountType: incomingDiscountType || null,
             discountAmount: initialDiscountAmt,
-            totalAmount: Math.round((grossAmount - initialDiscountAmt) * 100) / 100,
-          });
+            totalAmount,
+            quantity: item.unitOrder === 3 ? 0 : (Number(item.quantity) || 1),
+            returnType: item.returnType || "Good Order",
+          };
+          updated.push(newItemObj);
+          resolvedItems.push({ id: fallbackId, quantity: Number(item.quantity) || 1 });
         }
       });
+
+      // Now sync the resolved items to the DB
+      resolvedItems.forEach(async (resItem) => {
+        try {
+          const detail = updated.find(d => d.id === resItem.id);
+          if (!detail) return;
+
+          const res = await SalesReturnProvider.presaveDetail({
+            id: typeof resItem.id === "string" && resItem.id.startsWith("added-") ? undefined : resItem.id, // undefined means create
+            returnNo: headerData.returnNo,
+            productId: detail.product_id,
+            quantity: detail.quantity,
+            unitPrice: detail.unitPrice,
+            discountType: detail.discountType,
+            returnType: detail.returnType,
+            reason: detail.reason,
+          });
+
+          // If we created a new one, update the ID in state asynchronously
+          if (res?.detailId && typeof resItem.id === "string" && resItem.id.startsWith("added-")) {
+            setDetails(curr => {
+              const next = [...curr];
+              const idx = next.findIndex(d => d.id === resItem.id);
+              if (idx !== -1) {
+                next[idx] = { ...next[idx], id: res.detailId };
+              }
+              return next;
+            });
+          }
+        } catch (err) {
+          console.error("Failed to presave product", err);
+          toast.error("Failed to pre-save product. Changes may not persist.");
+        }
+      });
+
       return updated;
     });
-    setIsProductLookupOpen(false);
+
+  };
+
+  const handleDeleteRfid = async (tIdx: number, rowIndex?: number) => {
+    const targetIdx = rowIndex !== undefined ? rowIndex : selectedRowIndex;
+    if (targetIdx === null) return;
+    const row = details[targetIdx];
+    if (!row || !row.rfidTagIds || !row.rfidTagIds[tIdx]) return;
+
+    const tagId = row.rfidTagIds[tIdx];
+
+    try {
+      await SalesReturnProvider.deleteRfidTagById(tagId);
+
+      setDetails(prev => {
+        const next = [...prev];
+        const currentRow = next[targetIdx];
+        const newTags = [...(currentRow.rfidTags || [])];
+        newTags.splice(tIdx, 1);
+        const newTagIds = [...(currentRow.rfidTagIds || [])];
+        newTagIds.splice(tIdx, 1);
+
+        const newQty = newTags.length;
+        const unitPrice = Number(currentRow.unitPrice) || 0;
+        const gross = Math.round(unitPrice * newQty * 100) / 100;
+        let discAmt = 0;
+        if (currentRow.discountType) {
+          const opt = discountOptions.find(d => d.id.toString() === currentRow.discountType?.toString());
+          if (opt) discAmt = Math.round(gross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
+        }
+
+        next[targetIdx] = {
+          ...currentRow,
+          rfidTags: newTags,
+          rfidTagIds: newTagIds,
+          quantity: newQty,
+          grossAmount: gross,
+          discountAmount: discAmt,
+          totalAmount: Math.round((gross - discAmt) * 100) / 100
+        };
+
+        // Re-presave the updated row
+        SalesReturnProvider.presaveDetail({
+          id: currentRow.id,
+          returnNo: headerData.returnNo,
+          productId: currentRow.productId,
+          quantity: newQty,
+          unitPrice: currentRow.unitPrice,
+          discountType: currentRow.discountType,
+          returnType: currentRow.returnType,
+          reason: currentRow.reason,
+        }).catch(console.error);
+
+        return next;
+      });
+    } catch (err) {
+      console.error("Failed to delete RFID tag", err);
+      toast.error("Failed to delete RFID tag");
+    }
   };
 
   // --- HANDLERS: UPDATE ---
@@ -725,14 +942,19 @@ export function UpdateSalesReturnModal({
     }
 
     const hasIncompleteItems = details.some(
-      (item) => !item.returnType || item.returnType === "",
+      (item) => item.quantity > 0 && (!item.returnType || item.returnType === ""),
     );
     if (hasIncompleteItems) {
       toast.error("Please select a 'Return Type' for all items.");
       setReturnTypeError(true);
       return;
     }
-    setIsUpdateConfirmOpen(true);
+
+    if (sessionAddedTags.length > 0) {
+      setIsUpdateConfirmOpen(true);
+    } else {
+      handleConfirmUpdate();
+    }
   };
 
   const handleReceiveClick = () => {
@@ -753,7 +975,7 @@ export function UpdateSalesReturnModal({
     }
 
     const hasIncompleteItems = details.some(
-      (item) => !item.returnType || item.returnType === "",
+      (item) => item.quantity > 0 && (!item.returnType || item.returnType === ""),
     );
     if (hasIncompleteItems) {
       toast.error("Please select a 'Return Type' for all items.");
@@ -1105,155 +1327,236 @@ export function UpdateSalesReturnModal({
                       details.map((item, idx) => {
                         const isSelected = selectedRowIndex === idx;
                         return (
-                          <TableRow
-                            key={item.id || idx}
-                            onClick={() => {
-                              if (!canEditAll) return;
-                              if (item.unitOrder === 3) {
-                                setSelectedRowIndex(idx);
-                              } else {
-                                toast.info("RFID tagging is limited to Box units (Order 3).", {
-                                  description: `"${item.description}" uses "${item.unit}", which must be handled manually.`
-                                });
-                              }
-                            }}
-                            className={cn(
-                              "border-b border-border hover:bg-muted/10 transition-colors duration-200 cursor-pointer group",
-                              isSelected && "bg-primary/5 ring-1 ring-inset ring-primary/20",
-                              item.unitOrder !== 3 && "cursor-default hover:bg-transparent opacity-90"
-                            )}
-                          >
-                            <TableCell className="px-4 py-2 font-mono text-sm text-foreground">
-                              <div className="flex items-center gap-2">
-                                {isSelected ? (
-                                  <div className="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)] animate-pulse" />
-                                ) : (
-                                  <div className="w-2 h-2 rounded-full bg-muted-foreground/20" />
-                                )}
-                                <span>{item.code}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="px-4 py-2 text-foreground">
-                              <div className="text-sm text-foreground font-medium" title={item.description}>
-                                {item.description}
-                              </div>
-                            </TableCell>
-                            <TableCell className="px-4 py-2">
-                              <Badge variant="outline" className="text-foreground bg-background border-border font-normal">
-                                {item.unit}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="px-4 py-2 text-center">
-                              <div className="flex flex-col items-center gap-1">
-                                <Badge variant="outline" className={cn(
-                                  "font-bold transition-all min-w-[40px] flex justify-center",
-                                  item.unitOrder === 3 ? "border-primary/40 bg-primary/10 text-primary shadow-sm" : "border-muted-foreground/30 bg-muted/10 text-muted-foreground opacity-70"
-                                )}>
-                                  {item.quantity}
-                                </Badge>
-                                <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-tighter">
-                                  {item.unitOrder === 3 ? "Box Units" : "Manual Qty"}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="px-3 py-2 text-right text-sm whitespace-nowrap">
-                              ₱{Number(item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </TableCell>
-                            <TableCell className="px-3 py-2 text-right text-muted-foreground font-mono text-sm whitespace-nowrap">
-                              ₱{(Number(item.grossAmount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </TableCell>
-                            <TableCell className="px-4 py-2">
-                              {canEditAll ? (
-                                (() => {
-                                  const noDiscountOpt = discountOptions.find(o => o.discount_type === "No Discount");
-                                  const defaultVal = noDiscountOpt ? noDiscountOpt.id.toString() : "";
-                                  const currentDiscVal = item.discountType?.toString() ? (
-                                    discountOptions.some(o => o.id.toString() === item.discountType?.toString())
-                                      ? item.discountType.toString()
-                                      : defaultVal
-                                  ) : defaultVal;
-                                  return (
-                                    <LocalSearchableSelect
-                                      value={currentDiscVal}
-                                      onValueChange={(val) => handleDetailChange(idx, "discountType", val)}
-                                      options={discountOptions.map((opt) => ({
-                                        value: opt.id.toString(),
-                                        label: opt.discount_type,
-                                      }))}
-                                      placeholder="Select Discount..."
-                                      className="h-8 w-full text-xs"
-                                    />
-                                  );
-                                })()
-                              ) : (
-                                <span className="text-sm text-muted-foreground">
-                                  {discountOptions.find(d => d.id.toString() == item.discountType)?.discount_type || "No Discount"}
-                                </span>
+                          <React.Fragment key={item.id || idx}>
+                            <TableRow
+                              key={item.id || idx}
+                              onClick={() => {
+                                if (!canEditAll) return;
+                                if (item.unitOrder === 3) {
+                                  setSelectedRowIndex(prev => prev === idx ? null : idx);
+                                } else {
+                                  toast.info("RFID tagging is limited to Box units (Order 3).", {
+                                    description: `"${item.description}" uses "${item.unit}", which must be handled manually.`
+                                  });
+                                }
+                              }}
+                              className={cn(
+                                "border-b border-border hover:bg-muted/10 transition-colors duration-200 cursor-pointer group",
+                                isSelected && "bg-primary/5 ring-1 ring-inset ring-primary/20",
+                                item.unitOrder !== 3 && "cursor-default hover:bg-transparent opacity-90"
                               )}
-                            </TableCell>
-                            <TableCell className="px-4 py-2">
-                              <input
-                                type="number"
-                                readOnly
-                                disabled
-                                className="w-full text-right border border-border bg-muted/30 text-muted-foreground rounded h-8 text-sm outline-none cursor-not-allowed"
-                                value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : "0.00"}
-                              />
-                            </TableCell>
-                            <TableCell className="px-3 py-2 text-right font-bold text-sm text-foreground whitespace-nowrap">
-                              ₱{Number(item.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </TableCell>
-                            <TableCell className="px-4 py-2">
-                              {canEditAll ? (
-                                <ReasonInputSection
-                                  value={item.reason || ""}
-                                  onChange={(val) => handleDetailChange(idx, "reason", val)}
-                                />
-                              ) : (
-                                <span className="text-sm text-muted-foreground italic truncate block max-w-[120px]" title={item.reason || ""}>
-                                  {item.reason || "-"}
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="px-3 py-2">
-                              {canEditAll ? (
-                                <LocalSearchableSelect
-                                  value={item.returnType || ""}
-                                  onValueChange={(val) => { handleDetailChange(idx, "returnType", val); setReturnTypeError(false); }}
-                                  options={returnTypeOptions.length > 0
-                                    ? returnTypeOptions.map((type) => ({ value: type.type_name, label: type.type_name }))
-                                    : [
-                                      { value: "Good Order", label: "Good Order" },
-                                      { value: "Bad Order", label: "Bad Order" }
-                                    ]
-                                  }
-                                  placeholder="Select type"
-                                  className={cn(
-                                    "h-8 text-sm",
-                                    returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
+                            >
+                              <TableCell className="px-4 py-2 font-mono text-sm text-foreground">
+                                <div className="flex items-center gap-2">
+                                  {isSelected ? (
+                                    <div className="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)] animate-pulse" />
+                                  ) : (
+                                    <div className="w-2 h-2 rounded-full bg-muted-foreground/20" />
                                   )}
-                                />
-                              ) : (
-                                <Badge variant="outline" className="font-normal">{item.returnType || "Unassigned"}</Badge>
-                              )}
-                            </TableCell>
-                            {canEditAll && (
-                              <TableCell className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteRow(idx);
-                                    if (selectedRowIndex === idx) setSelectedRowIndex(null);
-                                  }}
-                                  className="text-destructive/70 hover:text-destructive h-7 w-7 rounded-md flex items-center justify-center transition-colors"
-                                  title="Remove Item"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
+                                  <span>{item.code}</span>
+                                </div>
                               </TableCell>
+                              <TableCell className="px-4 py-2 text-foreground">
+                                <div className="text-sm text-foreground font-medium" title={item.description}>
+                                  {item.description}
+                                </div>
+                              </TableCell>
+                              <TableCell className="px-4 py-2">
+                                <Badge variant="outline" className="text-foreground bg-background border-border font-normal">
+                                  {item.unit}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex flex-col items-center gap-1">
+                                  {item.unitOrder === 3 ? (
+                                    <Badge variant="outline" className={cn(
+                                      "font-bold transition-all min-w-[40px] flex justify-center",
+                                      "border-primary/40 bg-primary/10 text-primary shadow-sm"
+                                    )}>
+                                      {item.quantity}
+                                    </Badge>
+                                  ) : (
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      value={item.quantity}
+                                      onChange={(e) => {
+                                        const val = parseInt(e.target.value, 10);
+                                        if (!isNaN(val) && val > 0) {
+                                          handleDetailChange(idx, "quantity", val);
+                                        }
+                                      }}
+                                      disabled={!canEditAll}
+                                      className="w-16 h-7 text-center text-xs font-bold text-foreground border border-border rounded-md shadow-sm outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all bg-background disabled:opacity-50"
+                                    />
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="px-3 py-2 text-right text-sm whitespace-nowrap">
+                                ₱{Number(item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </TableCell>
+                              <TableCell className="px-3 py-2 text-right text-muted-foreground font-mono text-sm whitespace-nowrap">
+                                ₱{(Number(item.grossAmount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </TableCell>
+                              <TableCell className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                                {canEditAll ? (
+                                  (() => {
+                                    const noDiscountOpt = discountOptions.find(o => o.discount_type === "No Discount");
+                                    const defaultVal = noDiscountOpt ? noDiscountOpt.id.toString() : "";
+                                    const currentDiscVal = item.discountType?.toString() ? (
+                                      discountOptions.some(o => o.id.toString() === item.discountType?.toString())
+                                        ? item.discountType.toString()
+                                        : defaultVal
+                                    ) : defaultVal;
+                                    return (
+                                      <LocalSearchableSelect
+                                        value={currentDiscVal}
+                                        onValueChange={(val) => handleDetailChange(idx, "discountType", val)}
+                                        options={discountOptions.map((opt) => ({
+                                          value: opt.id.toString(),
+                                          label: opt.discount_type,
+                                        }))}
+                                        placeholder="Select Discount..."
+                                        className="h-8 w-full text-xs"
+                                      />
+                                    );
+                                  })()
+                                ) : (
+                                  <span className="text-sm text-muted-foreground">
+                                    {discountOptions.find(d => d.id.toString() == item.discountType)?.discount_type || "No Discount"}
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="px-4 py-2">
+                                <input
+                                  type="number"
+                                  readOnly
+                                  disabled
+                                  className="w-full text-right border border-border bg-muted/30 text-muted-foreground rounded h-8 text-sm outline-none cursor-not-allowed"
+                                  value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : "0.00"}
+                                />
+                              </TableCell>
+                              <TableCell className="px-3 py-2 text-right font-bold text-sm text-foreground whitespace-nowrap">
+                                ₱{Number(item.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </TableCell>
+                              <TableCell className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                                {canEditAll ? (
+                                  <ReasonInputSection
+                                    value={item.reason || ""}
+                                    onChange={(val) => handleDetailChange(idx, "reason", val)}
+                                  />
+                                ) : (
+                                  <span className="text-sm text-muted-foreground italic truncate block max-w-[120px]" title={item.reason || ""}>
+                                    {item.reason || "-"}
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                                {canEditAll ? (
+                                  <LocalSearchableSelect
+                                    value={item.returnType || ""}
+                                    onValueChange={(val) => { handleDetailChange(idx, "returnType", val); setReturnTypeError(false); }}
+                                    options={returnTypeOptions.length > 0
+                                      ? returnTypeOptions.map((type) => ({ value: type.type_name, label: type.type_name }))
+                                      : [
+                                        { value: "Good Order", label: "Good Order" },
+                                        { value: "Bad Order", label: "Bad Order" }
+                                      ]
+                                    }
+                                    placeholder="Select type"
+                                    className={cn(
+                                      "h-8 text-sm",
+                                      returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
+                                    )}
+                                  />
+                                ) : (
+                                  <Badge variant="outline" className="font-normal">{item.returnType || "Unassigned"}</Badge>
+                                )}
+                              </TableCell>
+                              {canEditAll && (
+                                <TableCell className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSplitRow(idx);
+                                      }}
+                                      className="text-primary/70 hover:text-primary hover:bg-primary/10 h-7 w-7 rounded-md flex items-center justify-center transition-colors"
+                                      title="Split Row"
+                                    >
+                                      <Copy className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteRow(idx);
+                                        if (selectedRowIndex === idx) setSelectedRowIndex(null);
+                                      }}
+                                      className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 h-7 w-7 rounded-md flex items-center justify-center transition-colors"
+                                      title="Remove Item"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                </TableCell>
+                              )}
+                            </TableRow>
+
+                            {/* 🟢 EXPANDABLE TAG MANAGEMENT SUB-ROW */}
+                            {canEditAll && isSelected && item.unitOrder === 3 && (
+                              <TableRow>
+                                <TableCell colSpan={12} className="p-0 border-b border-border bg-muted/5 border-l-2 border-l-primary/30">
+                                  <div className="p-4 animate-in fade-in duration-200">
+                                    <div className="flex justify-between items-center mb-4">
+                                      <h4 className="font-bold text-foreground flex items-center gap-2 text-base">
+                                        <div className="bg-emerald-500/10 p-1.5 rounded text-emerald-600">
+                                          <ScanLine className="h-5 w-5" />
+                                        </div>
+                                        Tagged RFIDs for: <span className="text-primary underline decoration-primary/30 underline-offset-4">{item.description}</span>
+                                      </h4>
+                                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-3 py-1 font-bold">
+                                        {item.rfidTags?.length || 0} ITEMS SCANNED
+                                      </Badge>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                                      {(!item.rfidTags || item.rfidTags.length === 0) ? (
+                                        <div className="col-span-full py-12 text-center border border-dashed rounded-lg text-muted-foreground bg-muted/5">
+                                          <div className="flex flex-col items-center gap-2">
+                                            <ScanLine className="h-8 w-8 opacity-20" />
+                                            <p className="font-medium">No RFIDs tagged yet</p>
+                                            <span className="text-xs">Start scanning to add items to this row.</span>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        item.rfidTags.map((tag, tIdx) => (
+                                          <div key={tag} className="flex items-center justify-between bg-muted/20 border border-border p-2.5 rounded-md hover:border-primary/30 transition-all group hover:shadow-sm">
+                                            <div className="flex flex-col">
+                                              <span className="text-xs font-mono font-bold text-foreground">{tag}</span>
+                                              <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-black">Tag #{tIdx + 1}</span>
+                                            </div>
+                                            {sessionAddedTags.includes(tag) && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleDeleteRfid(tIdx, idx);
+                                                }}
+                                                className="p-1.5 text-destructive/50 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                                                title="Remove Tag"
+                                              >
+                                                <Trash2 className="h-4 w-4" />
+                                              </button>
+                                            )}
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
                             )}
-                          </TableRow>
-                        )
+                          </React.Fragment>
+                        );
                       })
                     )}
                   </TableBody>
@@ -1261,77 +1564,6 @@ export function UpdateSalesReturnModal({
               </div>
             </div>
           </div>
-
-          {/* 🟢 NEW: TAG MANAGEMENT SECTION */}
-          {canEditAll && selectedRowIndex !== null && details[selectedRowIndex] && (
-            <div className="bg-background rounded-lg border-2 border-primary/20 shadow-md p-5 mb-6 animate-in slide-in-from-bottom-4 duration-300">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="font-bold text-foreground flex items-center gap-2 text-base">
-                  <div className="bg-emerald-500/10 p-1.5 rounded text-emerald-600">
-                    <ScanLine className="h-5 w-5" />
-                  </div>
-                  Tagged RFIDs for: <span className="text-primary underline decoration-primary/30 underline-offset-4">{details[selectedRowIndex].description}</span>
-                </h4>
-                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-3 py-1 font-bold">
-                  {details[selectedRowIndex].rfidTags?.length || 0} ITEMS SCANNED
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {(!details[selectedRowIndex].rfidTags || details[selectedRowIndex].rfidTags!.length === 0) ? (
-                  <div className="col-span-full py-12 text-center border border-dashed rounded-lg text-muted-foreground bg-muted/5">
-                    <div className="flex flex-col items-center gap-2">
-                      <ScanLine className="h-8 w-8 opacity-20" />
-                      <p className="font-medium">No RFIDs tagged yet</p>
-                      <span className="text-xs">Start scanning to add items to this row.</span>
-                    </div>
-                  </div>
-                ) : (
-                  details[selectedRowIndex].rfidTags!.map((tag, tIdx) => (
-                    <div key={tag} className="flex items-center justify-between bg-muted/20 border border-border p-2.5 rounded-md hover:border-primary/30 transition-all group hover:shadow-sm">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-mono font-bold text-foreground">{tag}</span>
-                        <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-black">Tag #{tIdx + 1}</span>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setDetails(prev => {
-                            const next = [...prev];
-                            const row = next[selectedRowIndex];
-                            const newTags = row.rfidTags!.filter(t => t !== tag);
-                            const newQty = newTags.length;
-
-                            const unitPrice = Number(row.unitPrice) || 0;
-                            const gross = Math.round(unitPrice * newQty * 100) / 100;
-                            let discAmt = 0;
-                            if (row.discountType) {
-                              const opt = discountOptions.find(d => d.id.toString() === row.discountType?.toString());
-                              if (opt) discAmt = Math.round(gross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
-                            }
-
-                            next[selectedRowIndex] = {
-                              ...row,
-                              rfidTags: newTags,
-                              quantity: newQty,
-                              grossAmount: gross,
-                              discountAmount: discAmt,
-                              totalAmount: Math.round((gross - discAmt) * 100) / 100
-                            };
-                            return next;
-                          });
-                        }}
-                        className="p-1.5 text-destructive/50 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
-                        title="Remove Tag"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
           {/* BOTTOM FORM GRID */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-4">
             <div className="md:col-span-2 space-y-4">
@@ -1346,8 +1578,8 @@ export function UpdateSalesReturnModal({
                       <input
                         type="text"
                         className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${orderError
-                            ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
-                            : "border-border focus:ring-2 focus:border-primary"
+                          ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
+                          : "border-border focus:ring-2 focus:border-primary"
                           }`}
                         placeholder="Search Order No..."
                         value={orderSearch || headerData.orderNo || ""}
@@ -1408,8 +1640,8 @@ export function UpdateSalesReturnModal({
                       <input
                         type="text"
                         className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${invoiceError
-                            ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
-                            : "border-border focus:ring-2 focus:border-primary"
+                          ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
+                          : "border-border focus:ring-2 focus:border-primary"
                           }`}
                         placeholder="Search Invoice No..."
                         value={invoiceDropdownSearch || headerData.invoiceNo || ""}
@@ -1558,7 +1790,8 @@ export function UpdateSalesReturnModal({
           <Button
             className="min-w-[100px]"
             onClick={handleReceiveClick}
-            disabled={!isPending}
+            disabled={!isPending || hasZeroQtyItems || details.length === 0}
+            title={details.length === 0 ? "Cannot receive an empty return." : hasZeroQtyItems ? "All products must have at least 1 quantity before receiving." : undefined}
           >
             Receive
           </Button>
@@ -1687,11 +1920,10 @@ export function UpdateSalesReturnModal({
             </div>
             <div className="space-y-2">
               <DialogTitle className="text-lg font-bold">
-                Confirm Update
+                Update Sales Return?
               </DialogTitle>
               <div className="text-sm text-muted-foreground">
-                Are you sure you want to save changes to Sales Return{" "}
-                <span className="font-bold">{headerData.returnNo}</span>?
+                Once updated, any tagged RFID items cannot be removed. Please confirm all product and RFID entries are correct before proceeding.
               </div>
             </div>
           </div>

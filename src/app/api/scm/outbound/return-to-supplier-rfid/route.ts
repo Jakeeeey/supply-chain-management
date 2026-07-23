@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
       encoder_id: Number(userId),
     };
 
-    const data = await createTransaction(payloadWithAudit as Parameters<typeof createTransaction>[0]);
+    const data = await createTransaction(payloadWithAudit as Parameters<typeof createTransaction>[0], token || "");
     return json({ data }, 201);
   } catch (error: unknown) {
     const err = error as Error;
@@ -205,12 +205,14 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
+    const token = req.cookies.get("vos_access_token")?.value || "";
+
     const payloadWithAudit = {
       ...parsed.data,
       ...(parsed.data.is_posted === 1 ? { date_posted: new Date().toISOString() } : {}),
     };
 
-    await updateTransaction(id, payloadWithAudit as Parameters<typeof updateTransaction>[1]);
+    await updateTransaction(id, payloadWithAudit as Parameters<typeof updateTransaction>[1], token);
     return json({ data: { success: true } });
   } catch (error: unknown) {
     const err = error as Error;

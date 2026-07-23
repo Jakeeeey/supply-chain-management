@@ -445,27 +445,22 @@ export function UpdateSalesReturnModal({
       const newDetails = [...prev];
       const item = { ...newDetails[index], [field]: value };
 
-      if (field === "discountType") {
-        if (value === "No Discount" || !value) {
-          item.discountAmount = 0;
-        } else {
-          const selectedDisc = discountOptions.find(
-            (d) => d.id.toString() === value,
-          );
-          if (selectedDisc) {
-            const percentage = parseFloat(selectedDisc.total_percent);
-            const gross =
-              Math.round(Number(item.quantity || 0) * Number(item.unitPrice || 0) * 100) / 100;
-            item.discountAmount = Math.round(gross * (percentage / 100) * 100) / 100;
-          }
-        }
-      }
-
       const qty = Number(item.quantity || 0);
       const price = Number(item.unitPrice || 0);
       const gross = Math.round(qty * price * 100) / 100;
-      const disc = Number(item.discountAmount || 0);
 
+      let disc = 0;
+      if (item.discountType && item.discountType !== "No Discount") {
+        const selectedDisc = discountOptions.find(
+          (d) => d.id.toString() === item.discountType?.toString(),
+        );
+        if (selectedDisc) {
+          const percentage = parseFloat(selectedDisc.total_percent);
+          disc = Math.round(gross * (percentage / 100) * 100) / 100;
+        }
+      }
+
+      item.discountAmount = disc;
       item.grossAmount = gross;
       item.totalAmount = Math.round((gross - disc) * 100) / 100;
 

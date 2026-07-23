@@ -23,6 +23,7 @@ export type POListItem = {
     // posting-specific
     receiptsCount: number;
     unpostedReceiptsCount: number;
+    receivingMethod?: string | null;
 };
 
 export type Supplier = { id: string; name: string };
@@ -60,6 +61,7 @@ export type PostingReceipt = {
     linesCount: number;
     totalReceivedQty: number;
     statusLabel?: string;
+    receivingMethod?: string | null;
 };
 
 export type PurchaseOrder = {
