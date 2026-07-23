@@ -612,6 +612,7 @@ export async function submitReturn(payload: any, userId: number, token: string =
       sales_return_type_id: typeId,
       discount_type: discId,
       reason: item.reason || null,
+      created_by: userId,
       created_at: nowPH(),
     };
 
@@ -957,7 +958,7 @@ export async function presaveDetail(
     returnType?: string;
     reason?: string;
   },
-  _userId: number
+  userId: number
 ): Promise<{ detailId: number }> {
   const refsResult = await repo.getRawReferences();
   const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
@@ -975,7 +976,7 @@ export async function presaveDetail(
   const percentage = discId ? lineDiscountMap.get(discId) || 0 : 0;
   const discountAmt = Math.round(gross * (percentage / 100) * 100) / 100;
 
-  const detailPayload = {
+  const detailPayload: any = {
     quantity: Number(payload.quantity),
     unit_price: Number(payload.unitPrice),
     gross_amount: gross,
@@ -992,10 +993,12 @@ export async function presaveDetail(
       ...detailPayload,
       return_no: payload.returnNo,
       product_id: Number(payload.productId),
+      created_by: userId,
       created_at: nowPH(),
     });
     return { detailId: Number((detailResult.data as any)?.detail_id || (detailResult.data as any)?.id) };
   } else {
+    detailPayload.updated_by = userId;
     await repo.updateReturnDetail(Number(payload.id), detailPayload);
     return { detailId: Number(payload.id) };
   }
