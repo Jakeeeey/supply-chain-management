@@ -20,50 +20,55 @@ export default function PreDispatchSummaryModule() {
         availableDispatchNos
     } = usePreDispatch();
 
-    if (loading) {
-        return (
-            <div className="w-full h-64 flex flex-col items-center justify-center text-muted-foreground/50">
-                <FileText className="h-12 w-12 mb-4 animate-pulse" />
-                <p className="font-black uppercase tracking-widest text-sm">Loading Manifests...</p>
-            </div>
-        );
-    }
-
     return (
         <div className="w-full max-w-7xl mx-auto space-y-4 sm:space-y-6">
 
             {/* 🚀 Header now takes groupedData so the button can generate the PDF */}
-
             <PreDispatchHeader
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
                 activeStatus={activeStatus}
                 groupedData={groupedData}
-                availableDispatchNos={availableDispatchNos} // 🚀 ADD THIS LINE
+                availableDispatchNos={availableDispatchNos}
             />
+
             {/* --- Status Toggles --- */}
-            <div className="flex items-center gap-3 bg-card p-2 rounded-2xl border border-border/40 shadow-sm w-fit mx-auto sm:mx-0">
-                <Button
-                    variant={activeStatus === "PENDING" ? "default" : "ghost"}
-                    onClick={() => setActiveStatus("PENDING")}
-                    className="rounded-xl px-6 font-black uppercase tracking-widest text-xs"
-                >
-                    <Clock className="w-4 h-4 mr-2" /> Pending Dispatches
-                </Button>
-                <Button
-                    variant={activeStatus === "DELIVERED" ? "default" : "ghost"}
-                    onClick={() => setActiveStatus("DELIVERED")}
-                    className={`rounded-xl px-6 font-black uppercase tracking-widest text-xs ${activeStatus === 'DELIVERED' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
-                >
-                    <CheckCircle2 className="w-4 h-4 mr-2" /> Delivered
-                </Button>
+            <div className="space-y-2">
+                <div className="flex items-center gap-3 bg-card p-2 rounded-2xl border border-border/40 shadow-sm w-fit mx-auto sm:mx-0">
+                    <Button
+                        variant={activeStatus === "PENDING" ? "default" : "ghost"}
+                        onClick={() => setActiveStatus("PENDING")}
+                        className="rounded-xl px-6 font-black uppercase tracking-widest text-xs"
+                    >
+                        <Clock className="w-4 h-4 mr-2" /> Pending Dispatches
+                    </Button>
+                    <Button
+                        variant={activeStatus === "DISPATCHED" ? "default" : "ghost"}
+                        onClick={() => setActiveStatus("DISPATCHED")}
+                        className={`rounded-xl px-6 font-black uppercase tracking-widest text-xs ${activeStatus === 'DISPATCHED' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+                    >
+                        <CheckCircle2 className="w-4 h-4 mr-2" /> Dispatched
+                    </Button>
+                </div>
+                {activeStatus === "DISPATCHED" && (
+                    <p className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1 ml-1 text-center sm:text-left animate-in fade-in slide-in-from-top-1 duration-200">
+                        * Showing dispatched plans for the current week only
+                    </p>
+                )}
             </div>
 
-            {/* --- Content --- */}
-            {availableDispatchNos.length === 0 ? (
+            {/* --- Content Area with Inline Loader --- */}
+            {loading ? (
+                <div className="w-full h-64 flex flex-col items-center justify-center text-muted-foreground/50 bg-card rounded-3xl border border-dashed border-border/60">
+                    <FileText className="h-12 w-12 mb-4 animate-pulse text-blue-500" />
+                    <p className="font-black uppercase tracking-widest text-sm">Loading Manifests...</p>
+                </div>
+            ) : availableDispatchNos.length === 0 ? (
                 <div className="w-full h-64 flex flex-col items-center justify-center text-muted-foreground/50 bg-card rounded-3xl border border-dashed border-border/60">
                     <PackageX className="h-12 w-12 mb-4 opacity-50" />
-                    <p className="font-black uppercase tracking-widest text-sm">No {activeStatus} Data Found</p>
+                    <p className="font-black uppercase tracking-widest text-sm">
+                        {activeStatus === "DISPATCHED" ? "No Dispatched Data Found For This Week" : "No Pending Data Found"}
+                    </p>
                 </div>
             ) : (
                 <Tabs defaultValue={availableDispatchNos[0]} className="w-full">
