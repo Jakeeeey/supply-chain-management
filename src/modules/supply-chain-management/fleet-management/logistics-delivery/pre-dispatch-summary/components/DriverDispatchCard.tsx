@@ -33,11 +33,14 @@ export function DriverDispatchCard({ driver, customers }: Props) {
                         <h3 className="text-lg sm:text-xl font-black uppercase tracking-tighter truncate">{driver}</h3>
                         <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-1">
                             <Badge variant="outline" className={`text-[8px] sm:text-[9px] uppercase font-black whitespace-nowrap ${
-                                firstItem.dispatchStatus === 'DELIVERED'
+                                firstItem.dispatchStatus === 'DISPATCHED'
                                     ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
                                     : 'bg-orange-500/10 text-orange-600 border-orange-500/20'
                             }`}>
                                 Status: {firstItem.dispatchStatus || "PENDING"}
+                            </Badge>
+                            <Badge variant="outline" className="text-[8px] sm:text-[9px] uppercase font-black bg-blue-500/10 text-blue-600 border-blue-500/20 whitespace-nowrap">
+                                Truck: {firstItem.plateNumber || "N/A"}
                             </Badge>
                             <Badge variant="outline" className="text-[8px] sm:text-[9px] uppercase font-black bg-background text-muted-foreground whitespace-nowrap">
                                 {firstItem.clusterName || "General Area"}

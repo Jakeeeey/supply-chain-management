@@ -8,7 +8,7 @@ export function usePreDispatch() {
     const [dispatches, setDispatches] = useState<VPreDispatchPlanDetailedDto[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
-    const [activeStatus, setActiveStatus] = useState<"PENDING" | "DELIVERED">("PENDING");
+    const [activeStatus, setActiveStatus] = useState<"PENDING" | "DISPATCHED">("PENDING");
 
     useEffect(() => {
         const loadData = async () => {

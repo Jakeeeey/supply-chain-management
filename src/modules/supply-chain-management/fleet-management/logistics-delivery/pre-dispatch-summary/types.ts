@@ -12,6 +12,7 @@ export interface VPreDispatchPlanDetailedDto {
     branchName: string;
     clusterName: string;
     dispatchRemarks: string;
+    plateNumber?: string;
 }
 
 // 🚀 Updated: DispatchNo -> Driver -> Customer -> Items
