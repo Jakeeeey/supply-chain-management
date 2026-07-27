@@ -8,6 +8,7 @@ import { Play, Pause } from "lucide-react";
 import type { DispatchPlanGroup } from "../types/for-dispatch-summary.types";
 import { DispatchPlanColumnHeader } from "./DispatchPlanColumnHeader";
 import { InvoiceCard } from "./InvoiceCard";
+import { groupDispatchInvoices } from "../services/for-dispatch-summary.helpers";
 
 interface KanbanBoardProps {
   dispatchPlanGroups: DispatchPlanGroup[];
@@ -116,12 +117,12 @@ export function KanbanBoard({ dispatchPlanGroups, loading }: KanbanBoardProps) {
             {/* Dispatch Plan Header */}
             <DispatchPlanColumnHeader group={group} />
 
-            {/* Invoice Cards */}
+            {/* Invoice Cards (grouped by customer) */}
             <div className="flex flex-col gap-3">
-              {group.invoices.map((invoice) => (
+              {groupDispatchInvoices(group.invoices).map((grouped) => (
                 <InvoiceCard
-                  key={`${invoice.dispatchPlanId}-${invoice.invoiceId}-${invoice.sequence}`}
-                  invoice={invoice}
+                  key={`${group.dispatchDocNo}-${grouped.groupKey}`}
+                  group={grouped}
                 />
               ))}
             </div>
