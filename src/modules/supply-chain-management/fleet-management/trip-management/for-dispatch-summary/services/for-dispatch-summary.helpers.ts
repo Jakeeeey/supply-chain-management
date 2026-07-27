@@ -1,4 +1,4 @@
-import type { ForDispatchInvoice, DispatchPlanGroup } from "../types/for-dispatch-summary.types";
+import type { ForDispatchInvoice, DispatchPlanGroup, GroupedDispatchInvoice } from "../types/for-dispatch-summary.types";
 
 export function normalizeCode(code: string): string {
   return code ? code.replace(/\s+/g, "") : "";
@@ -90,4 +90,41 @@ export function formatDateTime(dateStr: string): string {
     minute: "2-digit",
     hour12: true,
   });
+}
+
+/**
+ * Groups dispatch invoices by customerName within a dispatch plan.
+ */
+export function groupDispatchInvoices(
+  invoices: ForDispatchInvoice[],
+): GroupedDispatchInvoice[] {
+  const grouped: GroupedDispatchInvoice[] = [];
+  const keyToGroup = new Map<string, GroupedDispatchInvoice>();
+
+  for (const inv of invoices) {
+    const key = inv.customerName || "Unknown Customer";
+    const existing = keyToGroup.get(key);
+
+    if (existing) {
+      existing.invoices.push(inv);
+      existing.totalNetAmount += inv.netAmount;
+      existing.totalAmount += inv.totalAmount;
+    } else {
+      const newGroup: GroupedDispatchInvoice = {
+        groupKey: key,
+        customerName: inv.customerName,
+        sequence: inv.sequence,
+        invoices: [inv],
+        totalNetAmount: inv.netAmount,
+        totalAmount: inv.totalAmount,
+        brgy: inv.brgy,
+        city: inv.city,
+        province: inv.province,
+      };
+      grouped.push(newGroup);
+      keyToGroup.set(key, newGroup);
+    }
+  }
+
+  return grouped;
 }
