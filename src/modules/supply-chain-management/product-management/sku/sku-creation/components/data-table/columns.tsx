@@ -14,7 +14,7 @@ import {
   XCircle,
   MoreHorizontal,
   Eye,
-  // ImageIcon,
+  ChevronRight,
 } from "lucide-react";
 // import Image from "next/image";
 import {
@@ -56,12 +56,14 @@ export const getColumns = (
     ),
     cell: ({ row }) => (
       <div className="px-1">
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
-          className="translate-y-1"
-        />
+        {row.depth === 0 && (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Select row"
+            className="translate-y-1"
+          />
+        )}
       </div>
     ),
     enableSorting: false,
@@ -125,11 +127,47 @@ export const getColumns = (
       <DataTableColumnHeader column={column} label="Product Name" />
     ),
     meta: { label: "Product Name" },
-    cell: ({ row }) => (
-      <span className="font-medium block truncate max-w-[400px]">
-        {row.original.product_name || "Unnamed Product"}
-      </span>
-    ),
+    cell: ({ row }) => {
+      const canExpand = row.getCanExpand();
+      const isExpanded = row.getIsExpanded();
+      
+      return (
+        <div className="flex items-center gap-1">
+          {/* Indent child rows */}
+          {row.depth > 0 && (
+            <div style={{ paddingLeft: `${row.depth * 1.2}rem` }} />
+          )}
+          
+          {canExpand && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                row.toggleExpanded();
+              }}
+              className="p-1 hover:bg-muted rounded text-muted-foreground transition-transform"
+              style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          )}
+
+          {!canExpand && row.depth > 0 && (
+            <span className="text-muted-foreground/30 font-mono text-xs select-none mr-1">└─</span>
+          )}
+          
+          <span className="font-medium block truncate max-w-[400px]">
+            {row.original.product_name || "Unnamed Product"}
+          </span>
+
+          {row.depth === 0 && row.original.parent_id && (
+            <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/50 ml-1">
+              Variant Update
+            </Badge>
+          )}
+        </div>
+      );
+    },
   },
   {
     accessorKey: "product_supplier",
@@ -313,29 +351,34 @@ export const getColumns = (
             <DropdownMenuContent align="end" className="w-[160px]">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {(status === "draft" || status === "rejected") && (
+              {(status === "draft" || status === "rejected") && onEdit && (
+                <DropdownMenuItem onClick={() => onEdit(sku)}>
+                  <Eye className="h-4 w-4 mr-2" /> Edit Draft
+                </DropdownMenuItem>
+              )}
+              {row.depth === 0 && (
                 <>
-                  {onSubmitForApproval && (
+                  {(status === "draft" || status === "rejected") && onSubmitForApproval && (
                     <DropdownMenuItem onClick={() => onSubmitForApproval(sku)}>
                       <Send className="h-4 w-4 mr-2" /> Submit
                     </DropdownMenuItem>
                   )}
-                </>
-              )}
-              {(status === "for approval" || status === "pending") && (
-                <>
-                  {onApprove && (
-                    <DropdownMenuItem
-                      onClick={() => onApprove(id as number)}
-                      className="text-primary"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-2" /> Approve
-                    </DropdownMenuItem>
-                  )}
-                  {onReject && (
-                    <DropdownMenuItem onClick={() => onReject(id as number)}>
-                      <XCircle className="h-4 w-4 mr-2" /> Reject
-                    </DropdownMenuItem>
+                  {(status === "for approval" || status === "pending") && (
+                    <>
+                      {onApprove && (
+                        <DropdownMenuItem
+                          onClick={() => onApprove(id as number)}
+                          className="text-primary"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" /> Approve
+                        </DropdownMenuItem>
+                      )}
+                      {onReject && (
+                        <DropdownMenuItem onClick={() => onReject(id as number)}>
+                          <XCircle className="h-4 w-4 mr-2" /> Reject
+                        </DropdownMenuItem>
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -344,7 +387,7 @@ export const getColumns = (
                   <Eye className="h-4 w-4 mr-2" /> View Details
                 </DropdownMenuItem>
               )}
-              {onDelete && (
+              {row.depth === 0 && onDelete && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem

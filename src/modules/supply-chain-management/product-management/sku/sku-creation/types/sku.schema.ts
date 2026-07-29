@@ -92,8 +92,11 @@ export const skuSchema = z
     created_by: z.union([z.string(), z.number()]).nullable().optional(),
     updated_by: z.union([z.string(), z.number()]).nullable().optional(),
     user_created: z.union([z.string(), z.number()]).nullable().optional(),
-    user_updated: z.union([z.string(), z.number()]).nullable().optional(),
     remarks: z.string().nullable().optional(),
+    approved_at: z.string().nullable().optional(),
+    rejected_at: z.string().nullable().optional(),
+    approved_by: z.union([z.string(), z.number()]).nullable().optional(),
+    rejected_by: z.union([z.string(), z.number()]).nullable().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.inventory_type === "Variant") {

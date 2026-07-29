@@ -23,7 +23,7 @@ interface ApprovalTableProps {
   manualSorting?: boolean;
   masterData: MasterData | null;
   isLoading: boolean;
-  onApprove?: (id: number | string) => void;
+  onApprove?: (sku: SKU) => void;
   onReject?: (sku: SKU) => void;
   onSearch?: (v: string) => void;
   title: string;

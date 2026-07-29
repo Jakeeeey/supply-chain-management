@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { skuService } from "@/modules/supply-chain-management/product-management/sku/sku-creation/services/sku";
+import { getLiteralPHTTime } from "@/modules/supply-chain-management/product-management/utils/timezone";
 
 export const runtime = "nodejs";
 
@@ -71,6 +72,21 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     const body = await req.json();
     const action = body.action;
 
+    const token = req.cookies.get("vos_access_token")?.value;
+    let userId: string | number | undefined = undefined;
+    if (token) {
+      try {
+        const parts = token.split(".");
+        if (parts.length >= 2) {
+          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
+          userId = payload.user_id ?? payload.userId ?? payload.id ?? payload.sub;
+        }
+      } catch (e) {
+        console.warn("Failed to decode token", e);
+      }
+    }
+    const nowPHT = getLiteralPHTTime();
+
     if (action === "submit") {
       await skuService.submitForApproval(id);
       return NextResponse.json({ success: true });
@@ -78,17 +94,15 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
 
     if (action === "approve") {
       const masterData = await skuService.fetchMasterData();
-      await skuService.approveDraft(id, masterData);
+      await skuService.approveDraft(id, masterData, userId, nowPHT);
       return NextResponse.json({ success: true });
     }
 
     if (action === "reject") {
       const remarks = body.remarks;
-      await skuService.rejectDraft(id, remarks);
+      await skuService.rejectDraft(id, remarks, userId, nowPHT);
       return NextResponse.json({ success: true });
     }
-
-
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error: unknown) {
