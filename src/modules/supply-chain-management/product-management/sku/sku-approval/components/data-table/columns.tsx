@@ -16,7 +16,7 @@ import {
   SKU,
 } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { ColumnDef } from "@tanstack/react-table";
-import { CheckCircle, Eye, MoreHorizontal, XCircle } from "lucide-react";
+import { CheckCircle, Eye, MoreHorizontal, XCircle, ChevronRight } from "lucide-react";
 import {
   CellHelpers,
   statusVariants,
@@ -26,7 +26,7 @@ import { DataTableColumnHeader } from "./table-column-header";
 export const getApprovalColumns = (
   masterData: MasterData | null,
   onView?: (sku: SKU) => void,
-  onApprove?: (id: number) => void,
+  onApprove?: (sku: SKU) => void,
   onReject?: (sku: SKU) => void,
 ): ColumnDef<SKU>[] => [
   {
@@ -46,12 +46,14 @@ export const getApprovalColumns = (
     ),
     cell: ({ row }) => (
       <div className="px-1">
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
-          className="translate-y-1"
-        />
+        {row.depth === 0 && (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Select row"
+            className="translate-y-1"
+          />
+        )}
       </div>
     ),
     enableSorting: false,
@@ -85,11 +87,47 @@ export const getApprovalColumns = (
       <DataTableColumnHeader column={column} label="Product Name" />
     ),
     meta: { label: "Product Name" },
-    cell: ({ row }) => ( 
-      <span className="font-medium block truncate max-w-[400px]">
-        {row.original.product_name || "Unnamed Product"}
-      </span>
-    ),
+    cell: ({ row }) => {
+      const canExpand = row.getCanExpand();
+      const isExpanded = row.getIsExpanded();
+      
+      return (
+        <div className="flex items-center gap-1">
+          {/* Indent child rows */}
+          {row.depth > 0 && (
+            <div style={{ paddingLeft: `${row.depth * 1.2}rem` }} />
+          )}
+          
+          {canExpand && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                row.toggleExpanded();
+              }}
+              className="p-1 hover:bg-muted rounded text-muted-foreground transition-transform"
+              style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          )}
+
+          {!canExpand && row.depth > 0 && (
+            <span className="text-muted-foreground/30 font-mono text-xs select-none mr-1">└─</span>
+          )}
+          
+          <span className="font-medium block truncate max-w-[400px]">
+            {row.original.product_name || "Unnamed Product"}
+          </span>
+
+          {row.depth === 0 && row.original.parent_id && (
+            <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/50 ml-1">
+              Variant Update
+            </Badge>
+          )}
+        </div>
+      );
+    },
   },
   {
     accessorKey: "product_category",
@@ -170,7 +208,8 @@ export const getApprovalColumns = (
     meta: { label: "Actions" },
     cell: ({ row }) => {
       const sku = row.original;
-      const id = sku.id || sku.product_id;
+      if (row.depth > 0) return null;
+      
       return (
         <div className="flex justify-end w-[60px]">
           <DropdownMenu>
@@ -189,7 +228,7 @@ export const getApprovalColumns = (
               )}
               {onApprove && (
                 <DropdownMenuItem
-                  onClick={() => onApprove(id as number)}
+                  onClick={() => onApprove(sku)}
                   className="text-primary"
                 >
                   <CheckCircle className="h-4 w-4 mr-2" /> Approve

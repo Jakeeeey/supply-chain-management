@@ -42,9 +42,7 @@ export default function SKUCreationModule() {
     refresh,
     createDraft,
     updateDraft,
-    submitForApproval,
     bulkSubmitForApproval,
-    deleteDraft,
     bulkDeleteDrafts,
     checkDuplicate,
     setSearch,
@@ -53,6 +51,7 @@ export default function SKUCreationModule() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSKU, setSelectedSKU] = useState<SKU | undefined>();
   const [selectedRows, setSelectedRows] = useState<SKU[]>([]);
+  const [combinedActionSKUs, setCombinedActionSKUs] = useState<SKU[]>([]);
   const [bulkActionType, setBulkActionType] = useState<
     "submit" | "delete" | null
   >(null);
@@ -113,7 +112,10 @@ export default function SKUCreationModule() {
     if (!id) return;
 
     try {
-      await deleteDraft(id);
+      const children = (skuToDelete as SKU & { subRows?: SKU[] }).subRows || [];
+      const idsToDelete = [id, ...children.map(c => resolveId(c)).filter(Boolean) as number[]];
+      
+      await bulkDeleteDrafts(idsToDelete);
       toast.success("SKU Draft Deleted", {
         description:
           "The product record has been permanently removed from the system.",
@@ -172,12 +174,15 @@ export default function SKUCreationModule() {
     if (!id) return;
 
     try {
-      await submitForApproval(id);
+      const children = (item as SKU & { subRows?: SKU[] }).subRows || [];
+      const idsToSubmit = [id, ...children.map(c => resolveId(c)).filter(Boolean) as number[]];
+      
+      await bulkSubmitForApproval(idsToSubmit);
       toast.success("SKU Submitted for Review", {
         description:
-          "The record has been moved to the manager's approval queue.",
+          `${idsToSubmit.length} record(s) moved to the manager's approval queue.`,
       });
-      setSelectedRows((prev) => prev.filter((p) => resolveId(p) !== id));
+      setSelectedRows((prev) => prev.filter((p) => !idsToSubmit.includes(resolveId(p) as number)));
     } catch (err: unknown) {
       toast.error("Submission Failed", {
         description:
@@ -186,17 +191,37 @@ export default function SKUCreationModule() {
     }
   };
 
+  const handleBulkActionOpen = (type: "submit" | "delete") => {
+    const combined: SKU[] = [];
+    selectedRows.forEach((sku) => {
+      const id = sku.id || sku.product_id;
+      if (!combined.some((c) => String(c.id || c.product_id) === String(id))) {
+        combined.push(sku);
+      }
+      const subRows = (sku as SKU & { subRows?: SKU[] }).subRows || [];
+      subRows.forEach((child) => {
+        const childId = child.id || child.product_id;
+        if (!combined.some((c) => String(c.id || c.product_id) === String(childId))) {
+          combined.push(child);
+        }
+      });
+    });
+    setCombinedActionSKUs(combined);
+    setBulkActionType(type);
+  };
+
   const handleBulkSubmit = async () => {
     setSaving(true);
     try {
-      const ids = selectedRows
+      const ids = combinedActionSKUs
         .map((sku) => resolveId(sku))
         .filter(Boolean) as number[];
       await bulkSubmitForApproval(ids);
       toast.success("Bulk Submission Successful", {
-        description: `${selectedRows.length} items have been submitted for manager approval.`,
+        description: `${combinedActionSKUs.length} items have been submitted for manager approval.`,
       });
       setSelectedRows([]);
+      setCombinedActionSKUs([]);
       setBulkActionType(null);
     } catch (err: unknown) {
       toast.error("Bulk Submission Failed", {
@@ -211,14 +236,15 @@ export default function SKUCreationModule() {
   const handleBulkDelete = async () => {
     setSaving(true);
     try {
-      const ids = selectedRows
+      const ids = combinedActionSKUs
         .map((sku) => resolveId(sku))
         .filter(Boolean) as number[];
       await bulkDeleteDrafts(ids);
       toast.success("Bulk Deletion Successful", {
-        description: `${selectedRows.length} draft records have been permanently removed.`,
+        description: `${combinedActionSKUs.length} draft records have been permanently removed.`,
       });
       setSelectedRows([]);
+      setCombinedActionSKUs([]);
       setBulkActionType(null);
     } catch (err: unknown) {
       toast.error("Bulk Deletion Failed", {
@@ -279,14 +305,14 @@ export default function SKUCreationModule() {
             <div className="flex items-center gap-2">
               <Button
                 variant="destructive"
-                onClick={() => setBulkActionType("delete")}
+                onClick={() => handleBulkActionOpen("delete")}
                 size="sm"
                 className="flex items-center gap-2"
               >
                 Delete ({selectedRows.length})
               </Button>
               <Button
-                onClick={() => setBulkActionType("submit")}
+                onClick={() => handleBulkActionOpen("submit")}
                 size="sm"
                 className="flex items-center gap-2"
               >
@@ -370,8 +396,11 @@ export default function SKUCreationModule() {
 
       <BulkDraftActionsModal
         isOpen={bulkActionType !== null}
-        onClose={() => setBulkActionType(null)}
-        selectedSKUs={selectedRows}
+        onClose={() => {
+          setBulkActionType(null);
+          setCombinedActionSKUs([]);
+        }}
+        selectedSKUs={combinedActionSKUs}
         onConfirm={
           bulkActionType === "submit" ? handleBulkSubmit : handleBulkDelete
         }

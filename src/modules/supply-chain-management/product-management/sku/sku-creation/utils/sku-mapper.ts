@@ -1,4 +1,4 @@
-import { formatInTimeZone } from "@/modules/supply-chain-management/product-management/utils/timezone";
+import { getLiteralPHTTime } from "@/modules/supply-chain-management/product-management/utils/timezone";
 
 /**
  * Normalizes raw master data from various Directus collections into a standard format
@@ -51,7 +51,7 @@ export const prepareSKUPayload = (
   /* eslint-enable @typescript-eslint/no-unused-vars */
 
   const payload = restPayload as Record<string, unknown>;
-  const nowPHT = dbTime || formatInTimeZone(new Date(), "Asia/Manila");
+  const nowPHT = dbTime || getLiteralPHTTime();
 
   return {
     ...payload,

@@ -244,7 +244,29 @@ export function SKUForm({
       product_segment: resolveInitialId(initialData?.product_segment),
       product_section: resolveInitialId(initialData?.product_section),
       product_supplier: resolveInitialId(initialData?.product_supplier),
-      units: initialData?.units?.length ? initialData.units : [],
+      units: (() => {
+        if (initialData?.units?.length) return initialData.units;
+        if (initialData) {
+          const parentUnit = {
+            unit_id: resolveInitialId(initialData.unit_of_measurement),
+            conversion_factor: initialData.unit_of_measurement_count || 1,
+            price: initialData.price_per_unit || 0,
+            cost: initialData.cost_per_unit || 0,
+            barcode: initialData.barcode || "",
+            id: initialData.id || initialData.product_id,
+          };
+          const childUnits = ((initialData as { subRows?: SKU[] }).subRows || []).map((child) => ({
+            unit_id: resolveInitialId(child.unit_of_measurement),
+            conversion_factor: child.unit_of_measurement_count || 1,
+            price: child.price_per_unit || 0,
+            cost: child.cost_per_unit || 0,
+            barcode: child.barcode || "",
+            id: child.id || child.product_id,
+          }));
+          return [parentUnit, ...childUnits];
+        }
+        return [];
+      })(),
       ...initialData,
       // Priority overrides for specific IDs
       product_id: initialData?.product_id,
@@ -486,7 +508,13 @@ export function SKUForm({
                         >
                           <TabsList className="grid w-full grid-cols-2">
                             <TabsTrigger value="Regular">Regular</TabsTrigger>
-                            <TabsTrigger value="Variant">Variant</TabsTrigger>
+                            <TabsTrigger
+                              value="Variant"
+                              disabled
+                              className="disabled:pointer-events-auto disabled:cursor-not-allowed"
+                            >
+                              Variant
+                            </TabsTrigger>
                           </TabsList>
                         </Tabs>
                       </FormItem>

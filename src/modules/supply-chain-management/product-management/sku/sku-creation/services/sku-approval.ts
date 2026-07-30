@@ -228,12 +228,20 @@ async function handleOrphanAdoption(
  * Private helper: marks the draft as ACTIVE (or deletes it) after approval.
  * Tries PATCH first; falls back to DELETE if PATCH is rejected.
  */
-async function cleanupDraft(draft: SKU): Promise<void> {
+async function cleanupDraft(
+  draft: SKU,
+  approvedBy?: string | number,
+  approvedAt?: string,
+): Promise<void> {
   const dId = draft.id || draft.product_id;
   try {
     await request(`${API_BASE_URL}/items/product_draft/${dId}`, {
       method: "PATCH",
-      body: JSON.stringify({ status: "ACTIVE" }),
+      body: JSON.stringify({
+        status: "ACTIVE",
+        approved_by: approvedBy,
+        approved_at: approvedAt,
+      }),
     });
   } catch {
     try {
@@ -265,6 +273,8 @@ export const skuApprovalService = {
   async approveDraft(
     id: number | string,
     masterData: MasterData,
+    approvedBy?: string | number,
+    approvedAt?: string,
   ): Promise<boolean> {
     // 1. Fetch only the specific draft
     const { data: draft } = await request<{ data: SKU }>(
@@ -290,7 +300,7 @@ export const skuApprovalService = {
     await handleOrphanAdoption(finalMasterId, masterCode, draft);
 
     // 7. Cleanup only THIS draft
-    await cleanupDraft(draft);
+    await cleanupDraft(draft, approvedBy, approvedAt);
 
     return true;
   },

@@ -146,11 +146,11 @@ export function EditProductModal({
               />
             </div>
 
-            <div className="space-y-3">
-              <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                Taxonomy *
-              </Label>
-              <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Class *
+                </Label>
                 <Combobox
                   options={(masterData?.classes || []).map((c) => ({ value: c.id.toString(), label: c.name }))}
                   value={formData.product_class?.toString() || ""}
@@ -158,6 +158,11 @@ export function EditProductModal({
                   placeholder="Select Class"
                   disabled={isLoading}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Segment *
+                </Label>
                 <Combobox
                   options={(masterData?.segments || []).map((s) => ({ value: s.id.toString(), label: s.name }))}
                   value={formData.product_segment?.toString() || ""}
@@ -165,6 +170,11 @@ export function EditProductModal({
                   placeholder="Select Segment"
                   disabled={isLoading}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Section *
+                </Label>
                 <Combobox
                   options={(masterData?.sections || []).map((s) => ({ value: s.id.toString(), label: s.name }))}
                   value={formData.product_section?.toString() || ""}

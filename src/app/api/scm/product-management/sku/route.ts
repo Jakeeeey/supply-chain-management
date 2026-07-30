@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { skuService } from "@/modules/supply-chain-management/product-management/sku/sku-creation/services/sku";
-import { skuSchema } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
+import { skuSchema, SKU } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 
 export const runtime = "nodejs";
 
@@ -21,11 +21,86 @@ export async function GET(req: NextRequest) {
     if (type === "master") {
       const data = await skuService.fetchMasterData();
       return NextResponse.json({ data });
-    }
-
-    if (type === "drafts") {
+    }    if (type === "drafts") {
       const status = searchParams.get("status") || undefined;
       const search = searchParams.get("search") || undefined;
+
+      if (status === "FOR_APPROVAL" || status === "DRAFT") {
+        // Fetch ALL drafts to properly group them hierarchically
+        const paginated = await skuService.fetchDrafts(
+          1000,
+          0,
+          status,
+          search,
+          sort,
+        );
+        const allDrafts = paginated.data || [];
+        const draftIds = new Set(allDrafts.map((d) => String(d.id || d.product_id)));
+
+        interface SKUWithSubRows extends SKU {
+          subRows?: SKU[];
+        }
+
+        const roots: SKUWithSubRows[] = [];
+        const childrenMap = new Map<string, SKU[]>();
+
+        // Pre-group children by parent_id
+        for (const draft of allDrafts) {
+          const parentVal = draft.parent_id;
+          if (parentVal) {
+            const parentIdStr = typeof parentVal === "object"
+              ? String((parentVal as { id?: number | string; product_id?: number | string }).id || (parentVal as { id?: number | string; product_id?: number | string }).product_id)
+              : String(parentVal);
+            if (!childrenMap.has(parentIdStr)) {
+              childrenMap.set(parentIdStr, []);
+            }
+            childrenMap.get(parentIdStr)!.push(draft);
+          }
+        }
+
+        // Identify roots
+        for (const draft of allDrafts) {
+          const parentVal = draft.parent_id;
+          let isRoot = true;
+
+          if (parentVal) {
+            const parentIdStr = typeof parentVal === "object"
+              ? String((parentVal as { id?: number | string; product_id?: number | string }).id || (parentVal as { id?: number | string; product_id?: number | string }).product_id)
+              : String(parentVal);
+            
+            // If parent draft exists in the FOR_APPROVAL queue, this draft is NOT a root.
+            if (draftIds.has(parentIdStr)) {
+              isRoot = false;
+            }
+          }
+
+          if (isRoot) {
+            roots.push(draft as SKUWithSubRows);
+          }
+        }
+
+        // Attach children (subRows) to roots
+        for (const root of roots) {
+          const rootIdStr = String(root.id || root.product_id);
+          const children = childrenMap.get(rootIdStr) || [];
+          if (children.length > 0) {
+            root.subRows = children;
+          }
+        }
+
+        // Apply pagination on roots
+        const totalCount = roots.length;
+        const slicedRoots = roots.slice(offset, offset + limit);
+
+        return NextResponse.json({
+          data: slicedRoots,
+          meta: {
+            total_count: totalCount,
+            filter_count: totalCount,
+          },
+        });
+      }
+
       const paginated = await skuService.fetchDrafts(
         limit,
         offset,
@@ -35,9 +110,6 @@ export async function GET(req: NextRequest) {
       );
       return NextResponse.json(paginated);
     }
-
-
-
     if (type === "pending-edits") {
       const idsParam = searchParams.get("ids") || "";
       const ids = idsParam.split(",").map(Number).filter(Boolean);

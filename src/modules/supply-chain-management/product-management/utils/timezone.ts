@@ -61,3 +61,14 @@ export async function getDatabaseTimeISO(): Promise<string> {
   const tz = await fetchTimezone();
   return formatInTimeZone(new Date(), tz);
 }
+
+/**
+ * Helper to get the current timestamp in Asia/Manila (PHT) as a literal ISO string without offset suffix.
+ * Example: "2026-07-29T10:48:59.000"
+ */
+export function getLiteralPHTTime(): string {
+  const date = new Date();
+  const offsetMinutes = 8 * 60; // Asia/Manila is UTC+8
+  const shifted = new Date(date.getTime() + offsetMinutes * 60 * 1000);
+  return shifted.toISOString().replace("Z", "");
+}

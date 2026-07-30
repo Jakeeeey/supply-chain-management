@@ -28,7 +28,6 @@ export default function SKUApprovalPage() {
     isLoading,
     error,
     refresh,
-    approveSKU,
     bulkApproveSKUs,
     bulkRejectSKUs,
     rejectSKU,
@@ -37,6 +36,7 @@ export default function SKUApprovalPage() {
   const [mounted, setMounted] = useState(false);
   const [rejectingSKU, setRejectingSKU] = useState<SKU | null>(null);
   const [selectedSKUs, setSelectedSKUs] = useState<SKU[]>([]);
+  const [skusToApprove, setSkusToApprove] = useState<SKU[]>([]);
   const [isBulkApproveOpen, setIsBulkApproveOpen] = useState(false);
   const [isBulkRejectOpen, setIsBulkRejectOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -64,40 +64,51 @@ export default function SKUApprovalPage() {
     [setSearch, setPendingPage],
   );
 
-  const handleApproveAndActivate = async (id: number | string) => {
-    try {
-      await approveSKU(id);
-      toast.success("SKU Approved & Activated", {
-        description:
-          "The product has been activated and is now visible in the masterlist.",
-      });
-      setSelectedSKUs((prev) =>
-        prev.filter(
-          (item) => String(item.id || item.product_id) !== String(id),
-        ),
-      );
-    } catch (err: unknown) {
-      toast.error("Activation Failed", {
-        description: err instanceof Error ? err.message : "An error occurred during SKU activation.",
-      });
-    }
+  const handleApproveClick = (sku: SKU) => {
+    const typedSku = sku as SKU & { subRows?: SKU[] };
+    const combined = [sku, ...(typedSku.subRows || [])];
+    setSkusToApprove(combined);
+    setIsBulkApproveOpen(true);
   };
 
-  const handleBulkApprove = async () => {
+  const handleBulkApproveClick = () => {
+    const combined: SKU[] = [];
+    selectedSKUs.forEach((sku) => {
+      const id = sku.id || sku.product_id;
+      if (!combined.some((c) => String(c.id || c.product_id) === String(id))) {
+        combined.push(sku);
+      }
+      const subRows = (sku as SKU & { subRows?: SKU[] }).subRows || [];
+      subRows.forEach((child) => {
+        const childId = child.id || child.product_id;
+        if (!combined.some((c) => String(c.id || c.product_id) === String(childId))) {
+          combined.push(child);
+        }
+      });
+    });
+    setSkusToApprove(combined);
+    setIsBulkApproveOpen(true);
+  };
+
+  const handleConfirmApprove = async () => {
     setIsUpdating(true);
     try {
-      const ids = selectedSKUs.map((sku) =>
+      const ids = skusToApprove.map((sku) =>
         String(sku.id || sku.product_id),
       );
       await bulkApproveSKUs(ids);
-      toast.success("Bulk Approval Successful", {
-        description: `${selectedSKUs.length} items have been approved and activated.`,
+      toast.success("Approval Successful", {
+        description: `${skusToApprove.length} items have been approved and activated.`,
       });
-      setSelectedSKUs([]);
+      const approvedIdsSet = new Set(ids);
+      setSelectedSKUs((prev) =>
+        prev.filter((sku) => !approvedIdsSet.has(String(sku.id || sku.product_id))),
+      );
+      setSkusToApprove([]);
       setIsBulkApproveOpen(false);
     } catch (err: unknown) {
-      toast.error("Bulk Approval Failed", {
-        description: err instanceof Error ? err.message : "Could not process bulk activation.",
+      toast.error("Approval Failed", {
+        description: err instanceof Error ? err.message : "Could not process activation.",
       });
     } finally {
       setIsUpdating(false);
@@ -177,7 +188,7 @@ export default function SKUApprovalPage() {
         onSearch={handleSearch}
         masterData={masterData}
         isLoading={isLoading}
-        onApprove={(id: number | string) => handleApproveAndActivate(id)}
+        onApprove={handleApproveClick}
         onReject={(sku: SKU) => handleReject(sku)}
         onSelectionChange={setSelectedSKUs}
         actionComponent={
@@ -192,7 +203,7 @@ export default function SKUApprovalPage() {
                 Reject ({selectedSKUs.length})
               </Button>
               <Button
-                onClick={() => setIsBulkApproveOpen(true)}
+                onClick={handleBulkApproveClick}
                 className="bg-primary hover:bg-primary/90 flex items-center gap-2"
                 size="sm"
               >
@@ -213,10 +224,13 @@ export default function SKUApprovalPage() {
       />
 
       <BulkApproveModal
-        selectedSKUs={selectedSKUs}
+        selectedSKUs={skusToApprove}
         isOpen={isBulkApproveOpen}
-        onClose={() => setIsBulkApproveOpen(false)}
-        onConfirm={handleBulkApprove}
+        onClose={() => {
+          setIsBulkApproveOpen(false);
+          setSkusToApprove([]);
+        }}
+        onConfirm={handleConfirmApprove}
         isLoading={isUpdating}
       />
 
