@@ -713,7 +713,7 @@ type PostingPODetail = {
 // =====================
 // ROUTES
 // =====================
-export async function GET(_req: NextRequest) {
+export async function GET() {
     try {
         const base = getDirectusBase();
 
