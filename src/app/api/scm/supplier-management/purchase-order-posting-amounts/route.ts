@@ -713,21 +713,39 @@ type PostingPODetail = {
 // =====================
 // ROUTES
 // =====================
-export async function GET() {
+export async function GET(_req: NextRequest) {
     try {
         const base = getDirectusBase();
 
-        // ✅ STRATEGY: Post Amounts accepts POs with inventory-posted receipts that are NOT yet financially posted.
-        // Include status 9 (Partially Received) because individual receipts can be amount-posted before full PO receiving.
-        const poHeaderUrl =
-            `${base}/items/${PO_COLLECTION}?limit=-1` +
-            `&filter[inventory_status][_in]=6,9,13` +
-            `&filter[_or][0][is_posted][_eq]=0` +
-            `&filter[_or][1][is_posted][_null]=true` +
-            `&fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status,gross_amount,discounted_amount,vat_amount,withholding_tax_amount,discount_type.*,discount_type.line_per_discount_type.line_id.*,is_posted`;
+        // Step 1: Query POR first to find all purchase orders that have receipts posted in inventory (isPosted=1)
+        // but have not yet been fully posted financially (is_posted_amounts!=1).
+        const porCandidateUrl =
+            `${base}/items/${POR_COLLECTION}?limit=-1` +
+            `&filter[isPosted][_eq]=1` +
+            `&filter[is_posted_amounts][_neq]=1` +
+            `&fields=purchase_order_id`;
 
-        const poHeaderJ = await fetchJson(poHeaderUrl) as { data: POHeader[] };
-        const poHeaders = Array.isArray(poHeaderJ?.data) ? poHeaderJ.data : [];
+        const porCandidateJ = await fetchJson(porCandidateUrl) as { data: { purchase_order_id: number }[] };
+        const porCandidates = Array.isArray(porCandidateJ?.data) ? porCandidateJ.data : [];
+        if (!porCandidates.length) return ok([] as PostingListItem[]);
+
+        const initialCandidatePoIds = Array.from(
+            new Set(porCandidates.map(r => toNum(r?.purchase_order_id)).filter(Boolean))
+        ) as number[];
+
+        // Step 2: Fetch only the specific PO headers that qualify, in chunks of 100 to avoid large URL query string
+        const poHeaders: POHeader[] = [];
+        for (const ids of chunk(initialCandidatePoIds, 100)) {
+            const url =
+                `${base}/items/${PO_COLLECTION}?limit=-1` +
+                `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
+                `&filter[_or][0][is_posted][_eq]=0` +
+                `&filter[_or][1][is_posted][_null]=true` +
+                `&fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status,gross_amount,discounted_amount,vat_amount,withholding_tax_amount,discount_type.*,discount_type.line_per_discount_type.line_id.*,is_posted`;
+            const j = await fetchJson(url) as { data: POHeader[] };
+            poHeaders.push(...(Array.isArray(j?.data) ? j.data : []));
+        }
+
         if (!poHeaders.length) return ok([] as PostingListItem[]);
 
         const rawPoIds = poHeaders.map(p => toNum(p?.purchase_order_id)).filter(Boolean) as number[];
