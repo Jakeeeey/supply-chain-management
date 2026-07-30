@@ -23,6 +23,7 @@ import {
   MoreHorizontal,
   XCircle,
   Edit,
+  ChevronRight,
 } from "lucide-react";
 import Image from "next/image";
 import { CellHelpers } from "../../../sku-creation/utils/sku-helpers";
@@ -144,8 +145,34 @@ export const getMasterlistColumns = (
       const sku = row.original;
       const pid = (sku.product_id || sku.id) as number;
       const hasPendingEdit = pendingEditIds?.has(pid) ?? false;
+      const canExpand = row.getCanExpand();
+      const isExpanded = row.getIsExpanded();
+
       return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          {/* Indent child rows */}
+          {row.depth > 0 && (
+            <div style={{ paddingLeft: `${row.depth * 1.2}rem` }} />
+          )}
+
+          {canExpand && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                row.toggleExpanded();
+              }}
+              className="p-1 hover:bg-muted rounded text-muted-foreground transition-transform"
+              style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          )}
+
+          {!canExpand && row.depth > 0 && (
+            <span className="text-muted-foreground/30 font-mono text-xs select-none mr-1">└─</span>
+          )}
+
           <span className="text-sm font-medium block truncate max-w-[400px]">
             {sku.product_name || "Unnamed Product"}
           </span>
@@ -342,7 +369,7 @@ export const getMasterlistColumns = (
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {onEdit && (
+            {onEdit && !sku.parent_id && (
               (() => {
                 const pid = (sku.product_id || sku.id) as number;
                 const hasPendingEdit = pendingEditIds?.has(pid) ?? false;

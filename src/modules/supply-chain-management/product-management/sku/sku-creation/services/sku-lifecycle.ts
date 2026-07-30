@@ -42,7 +42,7 @@ export const skuLifecycleService = {
       last_updated: nowPHT,
     };
 
-    // 4. Create the draft record
+    // 4. Create the parent draft record
     const { data: draft } = await request<{ data: SKU }>(
       `${API_BASE_URL}/items/product_draft`,
       { method: "POST", body: JSON.stringify(draftPayload) },
@@ -63,6 +63,81 @@ export const skuLifecycleService = {
           err instanceof Error ? err.message : err,
         );
       }
+    }
+
+    // 6. Cascade shared fields to child SKUs in products table
+    const { data: children } = await fetchItems<SKU>("/items/products", {
+      filter: JSON.stringify({ parent_id: { _eq: id } }),
+      fields: "*",
+      limit: -1,
+    });
+
+    if (children?.length && draftId) {
+      // Shared fields that cascade from parent to children
+      const sharedFields: Partial<SKU> = {
+        product_name: draft.product_name,
+        product_brand: draft.product_brand,
+        product_category: draft.product_category,
+        product_class: draft.product_class,
+        product_segment: draft.product_segment,
+        product_section: draft.product_section,
+        product_supplier: draft.product_supplier,
+        description: draft.description,
+        short_description: draft.short_description,
+        isActive: draft.isActive,
+        inventory_type: draft.inventory_type,
+        flavor: draft.flavor,
+        size: draft.size,
+        color: draft.color,
+      };
+
+      await Promise.all(
+        children.map(async (child) => {
+          const childMasterId = child.id || child.product_id;
+
+          // Strip metadata from child
+          const {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            id: _cId,
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            product_id: _cPid,
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            created_at: _cCa, updated_at: _cUa, user_created: _cUc, user_updated: _cUu,
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            date_created: _cDc, date_updated: _cDu,
+            ...childBaseFields
+          } = child as SKU & Record<string, unknown>;
+
+          const childDraftPayload = {
+            ...childBaseFields,
+            ...sharedFields,
+            parent_id: draftId,
+            status: "FOR_APPROVAL" as const,
+            remarks: `MASTER_EDIT:${childMasterId}`,
+            date_added: nowPHT,
+            created_at: nowPHT,
+            last_updated: nowPHT,
+          };
+
+          const { data: childDraft } = await request<{ data: SKU }>(
+            `${API_BASE_URL}/items/product_draft`,
+            { method: "POST", body: JSON.stringify(childDraftPayload) },
+          );
+
+          // Sync supplier for child draft
+          const childDraftId = childDraft.id || childDraft.product_id;
+          if (childDraftId && supplierId) {
+            try {
+              await request(`${API_BASE_URL}/items/product_draft_per_supplier`, {
+                method: "POST",
+                body: JSON.stringify({ product_draft_id: childDraftId, supplier_id: supplierId }),
+              });
+            } catch (e) {
+              console.error(`[SKU Lifecycle] Failed to save child supplier for draft ${childDraftId}:`, e);
+            }
+          }
+        }),
+      );
     }
 
     return draft;
