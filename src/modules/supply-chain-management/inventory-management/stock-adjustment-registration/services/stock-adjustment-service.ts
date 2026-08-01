@@ -68,7 +68,7 @@ export const stockAdjustmentService = {
    * Fetch all stock adjustment headers with optional filtering
    */
   async fetchAllHeaders(params?: { search?: string; branchId?: number; type?: string; status?: string }) {
-    let query = `fields=*,branch_id.branch_name,branch_id.id,supplier_id.id,supplier_id.supplier_name,created_by.user_fname,created_by.user_lname,created_by.user_id,posted_by.user_fname,posted_by.user_lname,items.id,stock_adjustment.id&sort=-created_at`;
+    let query = `fields=*,branch_id.branch_name,branch_id.id,supplier_id.id,supplier_id.supplier_name,created_by.user_fname,created_by.user_lname,created_by.user_id,posted_by.user_fname,posted_by.user_lname,items.id,stock_adjustment.id&sort=-created_at&limit=-1`;
 
     const filters: Record<string, unknown> = {
       is_delete: { _neq: true },
