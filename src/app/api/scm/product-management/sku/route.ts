@@ -159,17 +159,82 @@ export async function GET(req: NextRequest) {
     const statusParam = searchParams.get("status") || undefined;
     
     const paginated = await skuService.fetchApproved(
-      limit,
-      offset,
+      1000,
+      0,
       search,
       sort,
       supplierId,
       { categoryId, classId, segmentId, itemType, brandId, status: statusParam },
     );
+    
+    const allApproved = paginated.data || [];
+    const approvedIds = new Set(allApproved.map((d) => String(d.id || d.product_id)));
+
+    interface SKUWithSubRows extends SKU {
+      subRows?: SKU[];
+    }
+
+    const roots: SKUWithSubRows[] = [];
+    const childrenMap = new Map<string, SKU[]>();
+
+    // Pre-group children by parent_id
+    for (const prod of allApproved) {
+      const parentVal = prod.parent_id;
+      if (parentVal) {
+        const parentIdStr = typeof parentVal === "object"
+          ? String((parentVal as { id?: number | string; product_id?: number | string }).id || (parentVal as { id?: number | string; product_id?: number | string }).product_id)
+          : String(parentVal);
+        if (!childrenMap.has(parentIdStr)) {
+          childrenMap.set(parentIdStr, []);
+        }
+        childrenMap.get(parentIdStr)!.push(prod);
+      }
+    }
+
+    // Identify roots
+    for (const prod of allApproved) {
+      const parentVal = prod.parent_id;
+      let isRoot = true;
+
+      if (parentVal) {
+        const parentIdStr = typeof parentVal === "object"
+          ? String((parentVal as { id?: number | string; product_id?: number | string }).id || (parentVal as { id?: number | string; product_id?: number | string }).product_id)
+          : String(parentVal);
+        
+        if (approvedIds.has(parentIdStr)) {
+          isRoot = false;
+        }
+      }
+
+      if (isRoot) {
+        roots.push(prod as SKUWithSubRows);
+      }
+    }
+
+    // Attach children (subRows) to roots
+    for (const root of roots) {
+      const rootIdStr = String(root.id || root.product_id);
+      const children = childrenMap.get(rootIdStr) || [];
+      if (children.length > 0) {
+        root.subRows = children;
+      }
+    }
+
+    // Apply pagination on roots
+    const totalCount = roots.length;
+    const slicedRoots = roots.slice(offset, offset + limit);
+
     console.log(
-      `API Route [approved]: Returning ${paginated.data.length} items, total: ${paginated.meta.total_count}`,
+      `API Route [approved]: Returning ${slicedRoots.length} root items (out of ${allApproved.length} total fetched), total roots: ${totalCount}`,
     );
-    return NextResponse.json(paginated);
+
+    return NextResponse.json({
+      data: slicedRoots,
+      meta: {
+        total_count: totalCount,
+        filter_count: totalCount,
+      },
+    });
   } catch (error: unknown) {
     const err = error as Error;
     console.error("SKU GET Error:", err);
