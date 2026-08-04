@@ -113,13 +113,19 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as CreateTransferPayload;
     
-    // Extract userId from token
+    // Extract userId from token — encoder_id must never be null
     const token = request.cookies.get("vos_access_token")?.value;
     const decoded = token ? decodeJwtPayload(token) : null;
-    const userId = decoded?.sub ? Number(decoded.sub) 
-      : (process.env.NEXT_PUBLIC_AUTH_DISABLED === "true" ? 1 : undefined);
+    const userId = decoded?.sub ? Number(decoded.sub) : null;
 
-    const result = await createTransfer(body, userId); 
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Unauthorized: valid session is required to create a stock transfer." },
+        { status: 401 }
+      );
+    }
+
+    const result = await createTransfer(body, userId);
     return NextResponse.json(result, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -133,16 +139,18 @@ export async function PATCH(request: NextRequest) {
   try {
     const body = (await request.json()) as UpdateTransferPayload;
     
-    // Extract userId from token
+    // Extract userId from token — approved_by / dispatched_by / receiver_id / rejected_by must never be null
     const token = request.cookies.get("vos_access_token")?.value;
     const decoded = token ? decodeJwtPayload(token) : null;
-    // Dev-mode fallback: when auth is disabled, no cookie exists so userId would be undefined
-    const userId = decoded?.sub ? Number(decoded.sub) 
-      : (process.env.NEXT_PUBLIC_AUTH_DISABLED === "true" ? 1 : undefined);
-    
-    console.log("[Stock Transfer PATCH Route] Incoming payload:", JSON.stringify(body));
-    console.log("[Stock Transfer PATCH Route] Extracted userId:", userId, "(token present:", !!token, ")");
-    
+    const userId = decoded?.sub ? Number(decoded.sub) : null;
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Unauthorized: valid session is required to update a stock transfer." },
+        { status: 401 }
+      );
+    }
+
     const result = await updateTransferStatus({ ...body, userId });
     return NextResponse.json(result, { status: 200 });
   } catch (error: unknown) {

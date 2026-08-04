@@ -134,7 +134,11 @@ export function useStockTransferDispatchManual() {
       await base.refresh();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong while dispatching.';
-      toast.error(msg);
+      if (msg.includes('Unauthorized') || msg.includes('401')) {
+        toast.error('Session Expired', { description: 'Please log in again to continue.' });
+      } else {
+        toast.error(msg);
+      }
     } finally {
       base.setProcessing(false);
     }
