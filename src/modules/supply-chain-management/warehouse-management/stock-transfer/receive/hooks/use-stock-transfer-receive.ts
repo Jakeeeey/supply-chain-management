@@ -199,7 +199,11 @@ export function useStockTransferReceive({ currentUser }: { currentUser?: Current
       const message = err instanceof Error ? err.message : 'Something went wrong while receiving.';
       console.error('Receive failed:', err);
       playErrorSound();
-      toast.error(message);
+      if (message.includes('Unauthorized') || message.includes('401')) {
+        toast.error('Session Expired', { description: 'Please log in again to continue.' });
+      } else {
+        toast.error(message);
+      }
     } finally {
       base.setProcessing(false);
     }

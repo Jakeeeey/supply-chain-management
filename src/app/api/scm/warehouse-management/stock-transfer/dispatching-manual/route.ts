@@ -12,10 +12,17 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Missing required field: ids array" }, { status: 400 });
     }
 
-    // Extract userId from token
+    // Extract userId from token — dispatched_by must never be null
     const token = request.cookies.get("vos_access_token")?.value;
     const decoded = token ? decodeJwtPayload(token) : null;
-    const userId = decoded?.sub ? Number(decoded.sub) : undefined;
+    const userId = decoded?.sub ? Number(decoded.sub) : null;
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Unauthorized: valid session is required to dispatch a stock transfer." },
+        { status: 401 }
+      );
+    }
 
     const { success } = await updateTransferStatus({ ids, status, userId });
 
