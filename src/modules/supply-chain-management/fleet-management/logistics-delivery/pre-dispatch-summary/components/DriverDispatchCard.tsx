@@ -98,7 +98,7 @@ export function DriverDispatchCard({ driver, customers }: Props) {
                                     {orders.length} SO(s)
                                 </td>
                                 <td className={`px-4 sm:px-6 py-3 sm:py-4 text-right font-black italic whitespace-nowrap ${isExpanded ? 'text-primary' : 'text-foreground'}`}>
-                                    ₱{customerTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    ₱{customerTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </td>
                             </tr>
 
@@ -123,7 +123,7 @@ export function DriverDispatchCard({ driver, customers }: Props) {
                                         {/* Blank space to indent properly under location/orders */}
                                     </td>
                                     <td className="px-4 sm:px-6 py-2 sm:py-3 text-right font-bold italic whitespace-nowrap text-muted-foreground text-xs">
-                                        ₱{order.dispatchAmount ? order.dispatchAmount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
+                                        ₱{order.dispatchAmount ? order.dispatchAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                                     </td>
                                 </tr>
                             ))}
