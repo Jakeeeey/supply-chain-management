@@ -44,6 +44,7 @@ export function DispatchEditModal({
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const isInitialLoadRef = useRef(false);
+  const [isReadOnly, setIsReadOnly] = useState(false);
 
   useEffect(() => {
     if (open && !masterData) {
@@ -122,6 +123,7 @@ export function DispatchEditModal({
           if (!res.ok) throw new Error("Failed to load details");
           const result = await res.json();
           const p = result.data;
+          setIsReadOnly(p.status !== "DRAFT");
           const loadedIds = p.dispatch_ids?.length
             ? p.dispatch_ids.map(Number)
             : p.dispatch_id
@@ -175,11 +177,12 @@ export function DispatchEditModal({
       form.reset();
       setPlanDetails([]);
       setApprovedPlans([]);
+      setIsReadOnly(false);
     }
   }, [open, planId, form, loadApprovedPlans, setPlanDetails, setApprovedPlans]);
 
   const onSubmit = async (values: DispatchCreationFormValues) => {
-    if (!planId) return;
+    if (!planId || isReadOnly) return;
 
     const payload = {
       ...values,
@@ -225,10 +228,10 @@ export function DispatchEditModal({
             </div>
             <div>
               <DialogTitle className="text-base font-semibold text-foreground tracking-tight">
-                Edit Dispatch Trip
+                {isReadOnly ? "View Dispatch Trip" : "Edit Dispatch Trip"}
               </DialogTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Update vehicle, crew, or reorder linked sales invoices.
+                {isReadOnly ? "Details of the dispatch trip (View-Only)." : "Update vehicle, crew, or reorder linked sales invoices."}
               </p>
             </div>
           </div>
@@ -261,12 +264,13 @@ export function DispatchEditModal({
                   onLoadDeliveries={triggerLoadApprovedPlans}
                   isBranchSelected={!!selectedBranch}
                   hasLoadedOnce={hasLoadedOnce}
+                  disabled={isReadOnly}
                 />
 
                 <TripConfigurationForm 
                   masterData={masterData} 
                   vehicleCapacity={vehicleCapacity}
-                  disabled={isLoadingPlans}
+                  disabled={isReadOnly || isLoadingPlans}
                 />
 
                 <InvoiceItemsSidebar
@@ -278,41 +282,57 @@ export function DispatchEditModal({
                   totalWeight={totalWeight}
                   vehicleCapacity={vehicleCapacity}
                   selectedBranch={selectedBranch}
+                  disabled={isReadOnly}
                 />
               </div>
 
               <div className="flex items-center justify-between px-6 py-4 border-t border-border/50 bg-muted/10">
                 <p className="text-xs text-muted-foreground">
-                  {selectedPlanIds.length > 0
-                    ? "Adjust details and reorder invoices if needed before saving."
-                    : "Review and update dispatch trip details."}
+                  {isReadOnly
+                    ? "This dispatch trip is not in DRAFT status and cannot be modified."
+                    : selectedPlanIds.length > 0
+                      ? "Adjust details and reorder invoices if needed before saving."
+                      : "Review and update dispatch trip details."}
                 </p>
                 <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onOpenChange(false)}
-                    className="h-8 px-4 text-sm font-medium"
-                    disabled={isSaving}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={isSaving}
-                    className="h-8 px-4 text-sm font-medium"
-                  >
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-                        Updating...
-                      </>
-                    ) : (
-                      "Save Changes"
-                    )}
-                  </Button>
+                  {isReadOnly ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => onOpenChange(false)}
+                      className="h-8 px-4 text-sm font-medium"
+                    >
+                      Close
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onOpenChange(false)}
+                        className="h-8 px-4 text-sm font-medium"
+                        disabled={isSaving}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        size="sm"
+                        disabled={isSaving}
+                        className="h-8 px-4 text-sm font-medium"
+                      >
+                        {isSaving ? (
+                          <>
+                            <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                            Updating...
+                          </>
+                        ) : (
+                          "Save Changes"
+                        )}
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </form>
