@@ -37,6 +37,7 @@ interface PdpListSidebarProps {
   onLoadDeliveries?: () => void;
   isBranchSelected?: boolean;
   hasLoadedOnce?: boolean;
+  disabled?: boolean;
 }
 
 export function PdpListSidebar({
@@ -57,6 +58,7 @@ export function PdpListSidebar({
   onLoadDeliveries,
   isBranchSelected,
   hasLoadedOnce,
+  disabled,
 }: PdpListSidebarProps) {
   const counts = useMemo(() => ({
     all: approvedPlans.length,
@@ -202,7 +204,7 @@ export function PdpListSidebar({
                     vehicleCapacity > 0 &&
                     currentTotalWeight + planWeight > vehicleCapacity;
 
-                  const isDisabled = wouldExceed || isNotSelectable;
+                  const isDisabled = wouldExceed || isNotSelectable || disabled;
 
                   return (
                     <button

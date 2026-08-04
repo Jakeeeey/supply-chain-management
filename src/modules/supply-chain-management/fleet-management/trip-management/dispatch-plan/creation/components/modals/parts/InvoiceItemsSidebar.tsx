@@ -45,16 +45,19 @@ interface InvoiceItemsSidebarProps {
   totalWeight?: number;
   vehicleCapacity?: number;
   selectedBranch?: number;
+  disabled?: boolean;
 }
 
 function DraggableGroupedStop({
   stop,
   index,
   onDelete,
+  disabled,
 }: {
   stop: GroupedPlanDetailItem;
   index: number;
   onDelete: (id: string | number) => void;
+  disabled?: boolean;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const {
@@ -94,14 +97,16 @@ function DraggableGroupedStop({
         </span>
 
         {/* Drag handle */}
-        <button
-          type="button"
-          className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground transition-colors mt-0.5 shrink-0"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="w-3.5 h-3.5" />
-        </button>
+        {!disabled && (
+          <button
+            type="button"
+            className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground transition-colors mt-0.5 shrink-0"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="w-3.5 h-3.5" />
+          </button>
+        )}
 
         {/* Content */}
         <div className="flex-1 min-w-0 space-y-1">
@@ -191,7 +196,7 @@ function DraggableGroupedStop({
                     {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                   </button>
                 )}
-                {(stop.isManualStop || stop.isPoStop) && (
+                {!disabled && (stop.isManualStop || stop.isPoStop) && (
                   <button
                     type="button"
                     onClick={() => onDelete(stop.id)}
@@ -257,6 +262,7 @@ export function InvoiceItemsSidebar({
   totalWeight,
   vehicleCapacity,
   selectedBranch,
+  disabled,
 }: InvoiceItemsSidebarProps) {
   const [isAddingStop, setIsAddingStop] = useState(false);
   const [isAddingPo, setIsAddingPo] = useState(false);
@@ -322,42 +328,44 @@ export function InvoiceItemsSidebar({
             <ShoppingCart className="w-3.5 h-3.5" />
             Route Sequence
           </p>
-          <div className="flex items-center gap-1">
-            <div className="flex items-center gap-0.5">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 rounded-md hover:bg-primary/10 text-primary transition-colors"
-                    onClick={() => setIsAddingStop(true)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Add Manual Stop</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 rounded-md hover:bg-amber-600/10 text-amber-600 transition-colors"
-                    onClick={() => setIsAddingPo(true)}
-                  >
-                    <Package className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Add PO Stop</p>
-                </TooltipContent>
-              </Tooltip>
+          {!disabled && (
+            <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-md hover:bg-primary/10 text-primary transition-colors"
+                      onClick={() => setIsAddingStop(true)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Add Manual Stop</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-md hover:bg-amber-600/10 text-amber-600 transition-colors"
+                      onClick={() => setIsAddingPo(true)}
+                    >
+                      <Package className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Add PO Stop</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </div>
-          </div>
+          )}
         </div>
         <p className="text-xs text-muted-foreground">
           {groupedPlanDetails.length > 0
@@ -401,6 +409,7 @@ export function InvoiceItemsSidebar({
                         stop={stop}
                         index={index}
                         onDelete={handleDeleteStop}
+                        disabled={disabled}
                       />
                     ))}
                   </div>
