@@ -1670,6 +1670,35 @@ export async function POST(req: NextRequest) {
                 return bad("Cannot Force Post. All existing receipts must first be posted.", 400);
             }
 
+            // 1. Find unposted receiving receipts (isPosted = 0)
+            const unpostedInventoryReceipts = porRows.filter(
+                (r) => toNum(r.isPosted) === 0 && toNum(r.is_reverted) !== 1
+            );
+
+            if (unpostedInventoryReceipts.length > 0) {
+                // 2. Check if any RFID tags exist on these open/unposted receiving lines
+                const unpostedPorIds = unpostedInventoryReceipts.map(r => toNum(r.purchase_order_product_id)).filter(Boolean);
+                if (unpostedPorIds.length > 0) {
+                    const pendingRfidItems = await fetchReceivingItems(base, unpostedPorIds);
+                    const pendingRfidCodes = pendingRfidItems.filter(i => toStr(i.rfid_code));
+                    
+                    if (pendingRfidCodes.length > 0) {
+                        return bad(
+                            `Cannot Force Post. There are ${pendingRfidCodes.length} unposted RFID tag(s) attached to pending receiving lines. ` +
+                            `Please post or void all pending receiving receipts and RFID records before using Force Post.`,
+                            400
+                        );
+                    }
+                }
+
+                // If no RFIDs, block with a general unposted receipts message
+                return bad(
+                    `Cannot Force Post. There are ${unpostedInventoryReceipts.length} unposted receiving receipt(s) still in progress. ` +
+                    `Please post or void all pending receiving receipts before using Force Post.`,
+                    400
+                );
+            }
+
             // Perform PO Header force post update: setting is_posted = 1, inventory_status = 6.
             const poUpdate: Record<string, unknown> = {
                 is_posted: 1,
