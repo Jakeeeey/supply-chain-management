@@ -754,7 +754,7 @@ export function UpdateSalesReturnModal({
         quantity: duplicate.quantity,
         unitPrice: duplicate.unitPrice,
         discountType: duplicate.discountType,
-        returnType: "Good Order",
+        returnType: "",
         reason: duplicate.reason,
       });
 
@@ -841,7 +841,7 @@ export function UpdateSalesReturnModal({
             discountAmount: initialDiscountAmt,
             totalAmount,
             quantity: item.unitOrder === 3 ? 0 : (Number(item.quantity) || 1),
-            returnType: item.returnType || "Good Order",
+            returnType: item.returnType || "",
           };
           updated.push(newItemObj);
           resolvedItems.push({ id: fallbackId, quantity: Number(item.quantity) || 1 });
