@@ -16,6 +16,7 @@ import {
   Check,
   ChevronsUpDown,
   Copy,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -244,6 +245,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const [isSuccessOpen, setSuccessOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirmCreateOpen, setIsConfirmCreateOpen] = useState(false);
+  const [isUnsavedConfirmOpen, setIsUnsavedConfirmOpen] = useState(false);
 
   // UI State for Validation
   const [returnTypeError, setReturnTypeError] = useState(false);
@@ -285,6 +287,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   // --- RFID State ---
   const [rfidScanning, setRfidScanning] = useState(false);
   const [lastScannedRfid, setLastScannedRfid] = useState("");
+  const scannedTagsRef = useRef<Set<string>>(new Set());
 
   // --- 3. CART STATE ---
   const [items, setItems] = useState<SalesReturnItem[]>([]);
@@ -443,12 +446,22 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       return;
     }
 
-    // Check for duplicate RFID already in items
+    // Check for duplicate RFID already in items (synchronous ref check)
+    if (scannedTagsRef.current.has(cleanedTag)) {
+      toast.error(`RFID tag "${cleanedTag}" is already in the list.`);
+      return;
+    }
+
+    // Mark as scanned immediately to prevent race condition from fast consecutive scans
+    scannedTagsRef.current.add(cleanedTag);
+
+    // Also double check items state
     const isDuplicate = items.some(
       (item) => item.rfidTags && item.rfidTags.some(existingTag => sameTag(existingTag, cleanedTag)),
     );
     if (isDuplicate) {
       toast.error(`RFID tag "${cleanedTag}" is already in the list.`);
+      scannedTagsRef.current.delete(cleanedTag);
       return;
     }
 
@@ -472,6 +485,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       if (dupCheck.isDuplicate) {
         setLastScannedRfid("");
         toast.error(`Tag "${cleanedTag}" already returned in SR #${dupCheck.returnNo}`);
+        scannedTagsRef.current.delete(cleanedTag);
         return;
       }
 
@@ -485,6 +499,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             description: "This item is already in the branch's inventory. Sales Return is not allowed for on-hand items.",
             duration: 5000,
           });
+          scannedTagsRef.current.delete(cleanedTag);
           return;
         } else {
           setLastScannedRfid("");
@@ -492,6 +507,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             description: `This product belongs to ${result.currentBranchName || 'another branch'}. It cannot be returned to the selected salesman's branch.`,
             duration: 5000,
           });
+          scannedTagsRef.current.delete(cleanedTag);
           return;
         }
       }
@@ -500,6 +516,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       if (items.some((i) => i.rfidTags?.some(existingTag => sameTag(existingTag, cleanedTag)))) {
         setLastScannedRfid("");
         toast.warning("Tag already scanned in this session.");
+        scannedTagsRef.current.delete(cleanedTag);
         return;
       }
 
@@ -543,6 +560,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       setTimeout(() => setLastScannedRfid(""), 2000);
     } catch (err: unknown) {
       console.error("RFID lookup failed:", err);
+      scannedTagsRef.current.delete(cleanedTag);
       setLastScannedRfid(""); // Clear checkmark
       toast.error("RFID Lookup Failed", {
         description: (err as Error).message || "An unexpected error occurred during scanning. Please try again.",
@@ -788,6 +806,26 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     onClose();
   };
 
+  const checkIfDirty = () => {
+    if (selectedSalesmanId !== "") return true;
+    if (selectedCustomerId !== "") return true;
+    if (priceType !== "A") return true;
+    if (isThirdParty !== false) return true;
+    if (orderNo !== "") return true;
+    if (invoiceNo !== "") return true;
+    if (remarks !== "") return true;
+    if (items.length > 0) return true;
+    return false;
+  };
+
+  const handleCloseAttempt = () => {
+    if (checkIfDirty()) {
+      setIsUnsavedConfirmOpen(true);
+    } else {
+      handleClose();
+    }
+  };
+
   // --- 7. FILTERING & SELECTION ---
   const filteredSalesmen = salesmen.filter((s) =>
     s.name.toLowerCase().includes(salesmanSearch.toLowerCase()),
@@ -840,21 +878,16 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
     if (items.length > 0) {
       const invalidItems = items.some(
-        (item) => item.quantity > 0 && (!item.returnType || item.returnType === ""),
+        (item) => item.unitOrder !== 3 && (!item.returnType || item.returnType === ""),
       );
       if (invalidItems) {
-        toast.error("Please select a Return Type for all items.");
+        toast.error("Return Type is required for all non-RFID items.");
         setReturnTypeError(true);
         return;
       }
     }
 
-    const hasNewTags = items.some(item => item.rfidTags && item.rfidTags.length > 0);
-    if (hasNewTags) {
-      setIsConfirmCreateOpen(true);
-    } else {
-      handleConfirmCreate();
-    }
+    setIsConfirmCreateOpen(true);
   };
 
   const handleConfirmCreate = async () => {
@@ -889,7 +922,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       setSuccessOpen(true);
     } catch (err: unknown) {
       console.error(err);
-      toast.error("Failed to create Sales Return.");
+      const errMsg = err instanceof Error ? err.message : "An unexpected error occurred.";
+      toast.error("Failed to create Sales Return", { description: errMsg });
     } finally {
       setIsSubmitting(false);
     }
@@ -1089,7 +1123,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
           </div>
 
           <button
-            onClick={handleClose}
+            onClick={handleCloseAttempt}
             className="bg-destructive hover:bg-destructive text-white p-2 rounded-md shadow-sm transition-all duration-200 active:scale-95 flex items-center justify-center"
             title="Close"
           >
@@ -1418,10 +1452,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                             onClick={() => {
                               if (item.unitOrder === 3) {
                                 setSelectedRowIndex(idx);
-                              } else {
-                                toast.info("RFID tagging is limited to Box units (Order 3).", {
-                                  description: `"${item.description}" uses "${item.unit}", which must be handled manually.`
-                                });
                               }
                             }}
                             className={cn(
@@ -1539,7 +1569,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 placeholder="Select type"
                                 className={cn(
                                   "h-8 text-sm px-2",
-                                  returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
+                                  returnTypeError && item.unitOrder !== 3 && (!item.returnType || item.returnType === "") && "ring-1 ring-destructive border-destructive"
                                 )}
                               />
                             </td>
@@ -1611,6 +1641,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                       </div>
                       <button
                         onClick={() => {
+                          scannedTagsRef.current.delete(finalizeHexTag(tag));
                           setItems(prev => {
                             const next = [...prev];
                             const row = next[selectedRowIndex];
@@ -1837,7 +1868,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
         {/* FOOTER ACTIONS */}
         <div className="p-4 bg-background border-t border-border flex justify-end gap-3 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-          <Button variant="outline" onClick={handleClose}>
+          <Button variant="outline" onClick={handleCloseAttempt}>
             Cancel
           </Button>
           <Button
@@ -1932,6 +1963,44 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
               className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base rounded-xl shadow-primary/20 shadow-lg transition-all active:scale-95"
             >
               Done
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* UNSAVED CHANGES MODAL */}
+      <Dialog
+        open={isUnsavedConfirmOpen}
+        onOpenChange={setIsUnsavedConfirmOpen}
+      >
+        <DialogContent className="max-w-[400px] p-6 bg-background rounded-xl shadow-2xl border border-border">
+          <div className="flex flex-col items-center text-center gap-4">
+            <div className="h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center">
+              <AlertTriangle className="h-6 w-6 text-destructive" />
+            </div>
+            <div className="space-y-2">
+              <DialogTitle className="text-lg font-bold text-foreground">
+                Unsaved Changes
+              </DialogTitle>
+              <div className="text-sm text-muted-foreground">
+                You have unsaved changes. Are you sure you want to discard them?
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => setIsUnsavedConfirmOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setIsUnsavedConfirmOpen(false);
+                handleClose();
+              }}
+            >
+              Discard & Exit
             </Button>
           </div>
         </DialogContent>

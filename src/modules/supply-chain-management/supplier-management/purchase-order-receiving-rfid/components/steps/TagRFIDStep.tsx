@@ -423,8 +423,8 @@ export function TagRFIDStep() {
     }
 
     // ========== ACTIVE PRODUCT: Tagging View ==========
-    const activeExpected = Number((activeItem as ReceivingPOItem)?.expectedQty || 0);
-    const activeTarget = activeExpected > 0 ? activeExpected : 1;
+    const activeExpected = activeItem?.isExtra ? 0 : Number((activeItem as ReceivingPOItem)?.originalOrderedQty ?? (activeItem as ReceivingPOItem)?.expectedQty ?? 0);
+    const activeTarget = activeExpected;
     const activeScanned = filteredActivity.length;
     const activeDone = activeScanned >= activeTarget;
     const activeIsOver = activeExpected > 0 && activeScanned > activeExpected;

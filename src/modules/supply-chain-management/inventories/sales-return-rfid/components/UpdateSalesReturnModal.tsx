@@ -282,6 +282,7 @@ export function UpdateSalesReturnModal({
     }
   }, [prefillRemarks]);
   const [details, setDetails] = useState<SalesReturnItem[]>([]);
+  const scannedTagsRef = useRef<Set<string>>(new Set());
   const [statusCardData, setStatusCardData] =
     useState<SalesReturnStatusCard | null>(null);
   const [loading, setLoading] = useState(true);
@@ -310,6 +311,8 @@ export function UpdateSalesReturnModal({
   const [returnTypeError, setReturnTypeError] = useState(false);
   const [orderError, setOrderError] = useState(false);
   const [invoiceError, setInvoiceError] = useState(false);
+  const [initialDetails, setInitialDetails] = useState<SalesReturnItem[]>([]);
+  const [isUnsavedConfirmOpen, setIsUnsavedConfirmOpen] = useState(false);
 
   const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
   const [invoiceSearch, setInvoiceSearch] = useState("");
@@ -363,6 +366,9 @@ export function UpdateSalesReturnModal({
         ]);
 
         setDetails(items);
+        const allTags = items.flatMap(item => item.rfidTags || []);
+        scannedTagsRef.current = new Set(allTags.map(t => finalizeHexTag(t)));
+        setInitialDetails(JSON.parse(JSON.stringify(items)));
         setStatusCardData(statusData);
         if (statusData?.appliedInvoiceId) {
           setAppliedInvoiceId(statusData.appliedInvoiceId);
@@ -486,12 +492,22 @@ export function UpdateSalesReturnModal({
       return;
     }
 
-    // Check for duplicate RFID already in items
+    // Check for duplicate RFID already in items (synchronous ref check)
+    if (scannedTagsRef.current.has(cleanedTag)) {
+      toast.error(`RFID tag "${cleanedTag}" is already in the list.`);
+      return;
+    }
+
+    // Mark as scanned immediately to prevent race condition from fast consecutive scans
+    scannedTagsRef.current.add(cleanedTag);
+
+    // Also check details state
     const isDuplicate = details.some(
       (item) => item.rfidTags && item.rfidTags.some(existingTag => sameTag(existingTag, cleanedTag)),
     );
     if (isDuplicate) {
       toast.error(`RFID tag "${cleanedTag}" is already in the list.`);
+      scannedTagsRef.current.delete(cleanedTag);
       return;
     }
 
@@ -515,6 +531,7 @@ export function UpdateSalesReturnModal({
       if (dupCheck.isDuplicate && dupCheck.returnNo !== headerData.returnNo) {
         setLastScannedRfid("");
         toast.error(`Tag "${cleanedTag}" already returned in SR #${dupCheck.returnNo}`);
+        scannedTagsRef.current.delete(cleanedTag);
         return;
       }
 
@@ -528,6 +545,7 @@ export function UpdateSalesReturnModal({
             description: "This item is already in the branch's inventory. Sales Return is not allowed for on-hand items.",
             duration: 5000,
           });
+          scannedTagsRef.current.delete(cleanedTag);
           return;
         } else {
           setLastScannedRfid("");
@@ -535,6 +553,7 @@ export function UpdateSalesReturnModal({
             description: `This product belongs to ${result.currentBranchName || 'another branch'}. It cannot be returned to the selected salesman's branch.`,
             duration: 5000,
           });
+          scannedTagsRef.current.delete(cleanedTag);
           return;
         }
       }
@@ -543,6 +562,7 @@ export function UpdateSalesReturnModal({
       if (details.some((i) => i.rfidTags?.some(existingTag => sameTag(existingTag, cleanedTag)))) {
         setLastScannedRfid("");
         toast.warning("Tag already scanned in this session.");
+        scannedTagsRef.current.delete(cleanedTag);
         return;
       }
 
@@ -607,11 +627,13 @@ export function UpdateSalesReturnModal({
         toast.success(`Tag accepted for ${details[selectedRowIndex].description}`);
       } catch (err) {
         console.error("Failed to presave RFID tag", err);
+        scannedTagsRef.current.delete(cleanedTag);
         toast.error("RFID scanned but failed to save. Please try again.");
       }
       setTimeout(() => setLastScannedRfid(""), 2000);
     } catch (err: unknown) {
       console.error("RFID lookup failed:", err);
+      scannedTagsRef.current.delete(cleanedTag);
       setLastScannedRfid("");
       toast.error("RFID Lookup Failed", {
         description: (err as Error).message || "An unexpected error occurred during scanning. Please try again.",
@@ -732,7 +754,7 @@ export function UpdateSalesReturnModal({
         quantity: duplicate.quantity,
         unitPrice: duplicate.unitPrice,
         discountType: duplicate.discountType,
-        returnType: "Good Order",
+        returnType: "",
         reason: duplicate.reason,
       });
 
@@ -780,7 +802,7 @@ export function UpdateSalesReturnModal({
 
         // Check if it already exists in the table
         const existingIdx = updated.findIndex(
-          (d) => d.product_id === item.productId && d.unit === item.unit
+          (d) => (d.productId === item.productId || d.product_id === item.productId) && d.unit === item.unit
         );
 
         if (existingIdx !== -1) {
@@ -819,7 +841,7 @@ export function UpdateSalesReturnModal({
             discountAmount: initialDiscountAmt,
             totalAmount,
             quantity: item.unitOrder === 3 ? 0 : (Number(item.quantity) || 1),
-            returnType: item.returnType || "Good Order",
+            returnType: item.returnType || "",
           };
           updated.push(newItemObj);
           resolvedItems.push({ id: fallbackId, quantity: Number(item.quantity) || 1 });
@@ -835,7 +857,7 @@ export function UpdateSalesReturnModal({
           const res = await SalesReturnProvider.presaveDetail({
             id: typeof resItem.id === "string" && resItem.id.startsWith("added-") ? undefined : resItem.id, // undefined means create
             returnNo: headerData.returnNo,
-            productId: detail.product_id,
+            productId: detail.productId || detail.product_id,
             quantity: detail.quantity,
             unitPrice: detail.unitPrice,
             discountType: detail.discountType,
@@ -872,6 +894,10 @@ export function UpdateSalesReturnModal({
     if (!row || !row.rfidTagIds || !row.rfidTagIds[tIdx]) return;
 
     const tagId = row.rfidTagIds[tIdx];
+    const tagToDelete = row.rfidTags ? row.rfidTags[tIdx] : undefined;
+    if (tagToDelete) {
+      scannedTagsRef.current.delete(finalizeHexTag(tagToDelete));
+    }
 
     try {
       await SalesReturnProvider.deleteRfidTagById(tagId);
@@ -942,7 +968,7 @@ export function UpdateSalesReturnModal({
     }
 
     const hasIncompleteItems = details.some(
-      (item) => item.quantity > 0 && (!item.returnType || item.returnType === ""),
+      (item) => !item.returnType || item.returnType === "",
     );
     if (hasIncompleteItems) {
       toast.error("Please select a 'Return Type' for all items.");
@@ -950,11 +976,7 @@ export function UpdateSalesReturnModal({
       return;
     }
 
-    if (sessionAddedTags.length > 0) {
-      setIsUpdateConfirmOpen(true);
-    } else {
-      handleConfirmUpdate();
-    }
+    setIsUpdateConfirmOpen(true);
   };
 
   const handleReceiveClick = () => {
@@ -975,7 +997,7 @@ export function UpdateSalesReturnModal({
     }
 
     const hasIncompleteItems = details.some(
-      (item) => item.quantity > 0 && (!item.returnType || item.returnType === ""),
+      (item) => !item.returnType || item.returnType === "",
     );
     if (hasIncompleteItems) {
       toast.error("Please select a 'Return Type' for all items.");
@@ -1009,7 +1031,72 @@ export function UpdateSalesReturnModal({
     } catch (error) {
       console.error("Update failed", error);
       const errMsg = error instanceof Error ? error.message : "An unexpected error occurred.";
-      toast.error(errMsg);
+      toast.error("Failed to update sales return", { description: errMsg });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const checkIfDirty = () => {
+    if (details.length !== initialDetails.length) return true;
+    for (let i = 0; i < details.length; i++) {
+      const cur = details[i];
+      const orig = initialDetails[i];
+      if (!orig) return true;
+      if (
+        cur.quantity !== orig.quantity ||
+        cur.unitPrice !== orig.unitPrice ||
+        cur.discountType !== orig.discountType ||
+        cur.returnType !== orig.returnType ||
+        cur.reason !== orig.reason
+      ) {
+        return true;
+      }
+      const curTags = cur.rfidTags || [];
+      const origTags = orig.rfidTags || [];
+      if (curTags.join(",") !== origTags.join(",")) {
+        return true;
+      }
+    }
+
+    if ((headerData.remarks || "") !== (initialData.remarks || "")) return true;
+    if ((headerData.orderNo || "") !== (initialData.orderNo || "")) return true;
+    if ((headerData.invoiceNo || "") !== (initialData.invoiceNo || "")) return true;
+    if (!!headerData.isThirdParty !== !!initialData.isThirdParty) return true;
+    if (appliedInvoiceId !== (statusCardData?.appliedInvoiceId || null)) return true;
+
+    return false;
+  };
+
+  const handleCloseAttempt = () => {
+    if (checkIfDirty()) {
+      setIsUnsavedConfirmOpen(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleDiscardAndExit = async () => {
+    try {
+      setIsUpdating(true);
+      const payload = {
+        returnId: initialData.id,
+        returnNo: initialData.returnNo,
+        items: initialDetails,
+        remarks: initialData.remarks || "",
+        invoiceNo: initialData.invoiceNo,
+        orderNo: initialData.orderNo,
+        appliedInvoiceId: statusCardData?.appliedInvoiceId || null,
+        isThirdParty: initialData.isThirdParty,
+      };
+
+      await SalesReturnProvider.updateReturn(payload);
+      setIsUnsavedConfirmOpen(false);
+      onClose();
+    } catch (err) {
+      console.error("Failed to discard changes", err);
+      const errMsg = err instanceof Error ? err.message : "An unexpected error occurred.";
+      toast.error("Failed to discard changes", { description: errMsg });
     } finally {
       setIsUpdating(false);
     }
@@ -1131,8 +1218,12 @@ export function UpdateSalesReturnModal({
   );
 
   return (
-    <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="w-full max-w-[95vw] lg:max-w-7xl h-[90vh] flex flex-col p-0 overflow-hidden bg-background border-0 shadow-2xl rounded-xl [&>button]:hidden">
+    <Dialog open={true}>
+      <DialogContent
+        className="w-full max-w-[95vw] lg:max-w-7xl h-[90vh] flex flex-col p-0 overflow-hidden bg-background border-0 shadow-2xl rounded-xl [&>button]:hidden"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         {/* HEADER */}
         <div className="px-8 py-5 border-b border-border flex justify-between items-center bg-background shrink-0">
           <div>
@@ -1150,7 +1241,7 @@ export function UpdateSalesReturnModal({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleCloseAttempt}
             className="bg-destructive hover:bg-destructive text-white p-2 rounded-md shadow-sm transition-all active:scale-95"
           >
             <X className="h-5 w-5" />
@@ -1334,10 +1425,6 @@ export function UpdateSalesReturnModal({
                                 if (!canEditAll) return;
                                 if (item.unitOrder === 3) {
                                   setSelectedRowIndex(prev => prev === idx ? null : idx);
-                                } else {
-                                  toast.info("RFID tagging is limited to Box units (Order 3).", {
-                                    description: `"${item.description}" uses "${item.unit}", which must be handled manually.`
-                                  });
                                 }
                               }}
                               className={cn(
@@ -1466,7 +1553,7 @@ export function UpdateSalesReturnModal({
                                     placeholder="Select type"
                                     className={cn(
                                       "h-8 text-sm",
-                                      returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
+                                      returnTypeError && (!item.returnType || item.returnType === "") && "ring-1 ring-destructive border-destructive"
                                     )}
                                   />
                                 ) : (
@@ -1784,7 +1871,7 @@ export function UpdateSalesReturnModal({
           <Button variant="outline" onClick={handlePrintInNewTab}>
             <Printer className="h-4 w-4 mr-2" /> Print Slip
           </Button>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={handleCloseAttempt}>
             Close
           </Button>
           <Button
@@ -2027,6 +2114,58 @@ export function UpdateSalesReturnModal({
           </div>
         </DialogContent>
       </Dialog>
+      <Dialog
+        open={isUnsavedConfirmOpen}
+        onOpenChange={setIsUnsavedConfirmOpen}
+      >
+        <DialogContent className="max-w-[420px] p-6 bg-background rounded-xl shadow-2xl border border-border">
+          <div className="flex flex-col items-center text-center gap-4">
+            <div className="h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center">
+              <AlertTriangle className="h-6 w-6 text-destructive" />
+            </div>
+            <div className="space-y-2">
+              <DialogTitle className="text-lg font-bold text-foreground">
+                Unsaved Changes
+              </DialogTitle>
+              <div className="text-sm text-muted-foreground">
+                You have unsaved changes. How would you like to proceed?
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 mt-6">
+            <Button
+              onClick={async () => {
+                setIsUnsavedConfirmOpen(false);
+                handleUpdateClick();
+              }}
+              disabled={isUpdating}
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+            >
+              Save & Exit
+            </Button>
+            <Button
+              onClick={handleDiscardAndExit}
+              disabled={isUpdating}
+              variant="destructive"
+              className="w-full font-semibold"
+            >
+              {isUpdating ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
+              Discard & Exit
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsUnsavedConfirmOpen(false)}
+              disabled={isUpdating}
+              className="w-full font-semibold"
+            >
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </Dialog>
   );
 }

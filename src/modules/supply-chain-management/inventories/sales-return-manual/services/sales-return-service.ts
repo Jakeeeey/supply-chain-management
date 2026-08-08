@@ -208,7 +208,7 @@ export async function fetchReturnDetails(
       sales_return_type_id: detail.sales_return_type_id
         ? Number(detail.sales_return_type_id)
         : "",
-      returnType: returnTypeObj ? returnTypeObj.type_name : "Good Order",
+      returnType: returnTypeObj ? returnTypeObj.type_name : "",
       priceA: product.priceA,
       priceB: product.priceB,
       priceC: product.priceC,
@@ -458,6 +458,18 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
   // Build aggregate discount percentage map from junction + line_discount tables
   const lineDiscountMap = await buildDiscountPercentMap();
 
+  const validatedItems = payload.items.map((item: any) => {
+    const matchedType = returnTypes.find(
+      (t: API_SalesReturnType) => t.type_name === item.returnType,
+    );
+    const typeId = matchedType ? matchedType.type_id : null;
+
+    if (item.unitOrder !== 3 && !typeId) {
+      throw new Error("Return Type is required for all non-RFID items.");
+    }
+    return { ...item, resolvedTypeId: typeId };
+  });
+
   const totalGross = payload.items.reduce(
     (sum: number, item: any) =>
       Math.round((sum + Number(item.quantity) * Number(item.unitPrice)) * 100) / 100,
@@ -521,13 +533,8 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
     }
   }
 
-  const detailPromises = payload.items.map(async (item: any) => {
-    const matchedType = returnTypes.find(
-      (t: API_SalesReturnType) => t.type_name === item.returnType,
-    );
-    const typeId = matchedType
-      ? matchedType.type_id
-      : returnTypes[0]?.type_id || 1;
+  const detailPromises = validatedItems.map(async (item: any) => {
+    const typeId = item.resolvedTypeId;
 
     const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
     const discId =
@@ -577,6 +584,18 @@ export async function updateReturn(
   // Fetch line discounts
   const refsResult = await repo.getRawReferences();
   const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
+
+  const validatedItems = payload.items.map((item: any) => {
+    const matchedType = returnTypes.find(
+      (t: API_SalesReturnType) => t.type_name === item.returnType,
+    );
+    const typeId = matchedType ? matchedType.type_id : null;
+
+    if (!typeId) {
+      throw new Error("Return Type is required for all items.");
+    }
+    return { ...item, resolvedTypeId: typeId };
+  });
 
   // Build aggregate discount percentage map from junction + line_discount tables
   const lineDiscountMap = await buildDiscountPercentMap();
@@ -678,24 +697,19 @@ export async function updateReturn(
   );
 
   const payloadIds = payload.items
-    .filter((item: any) => typeof item.id === "number")
-    .map((item: any) => item.id);
+    .map((item: any) => Number(item.id))
+    .filter((id: number) => !isNaN(id));
 
   const itemsToDelete = currentItems.filter(
-    (dbItem) => !payloadIds.includes(dbItem.id),
+    (dbItem) => dbItem.id !== undefined && !payloadIds.includes(Number(dbItem.id)),
   );
 
   for (const item of itemsToDelete) {
     if (item.id) await repo.deleteReturnDetail(item.id as number);
   }
 
-  for (const item of payload.items) {
-    const matchedType = returnTypes.find(
-      (t: API_SalesReturnType) => t.type_name === item.returnType,
-    );
-    const typeId = matchedType
-      ? matchedType.type_id
-      : returnTypes[0]?.type_id || 1;
+  for (const item of validatedItems) {
+    const typeId = item.resolvedTypeId;
 
     const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
     const discId =
