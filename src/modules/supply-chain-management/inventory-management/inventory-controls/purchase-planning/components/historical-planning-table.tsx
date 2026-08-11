@@ -410,10 +410,10 @@ export default function HistoricalPlanningTable({
                                         </TableCell>
 
                                         <TableCell className={cn("px-2 py-1 font-bold text-slate-900 dark:text-slate-200 uppercase text-[11px] leading-tight", stickyCellClass())} style={{ left: leftOffsets.productName }}>
-                                            <div className="flex items-center justify-between min-w-0 gap-1.5">
-                                                <div className="flex flex-col min-w-0">
-                                                    <div className="text-[11px] break-words whitespace-normal" title={row.productName}>{row.productName}</div>
-                                                    {row.sku && <div className="mt-0.5 text-[9px] font-black tracking-wider uppercase text-slate-500 dark:text-slate-500 break-words whitespace-normal">SKU: {row.sku}</div>}
+                                            <div className="flex items-center justify-between min-w-0 gap-1.5 w-full">
+                                                <div className="flex flex-col min-w-0 flex-1">
+                                                    <div className="truncate text-[11px]" title={row.productName}>{row.productName}</div>
+                                                    {row.sku && <div className="mt-0.5 text-[9px] font-black tracking-wider uppercase text-slate-500 dark:text-slate-500 truncate">SKU: {row.sku}</div>}
                                                 </div>
                                                 {onShowTrend && (
                                                     <button
