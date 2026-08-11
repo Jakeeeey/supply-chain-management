@@ -228,12 +228,58 @@ async function handleOrphanAdoption(
  * Private helper: marks the draft as ACTIVE (or deletes it) after approval.
  * Tries PATCH first; falls back to DELETE if PATCH is rejected.
  */
-async function cleanupDraft(draft: SKU): Promise<void> {
+async function cleanupDraft(
+  draft: SKU,
+  masterCode: string,
+  approvedBy?: string | number,
+  approvedAt?: string,
+): Promise<void> {
   const dId = draft.id || draft.product_id;
+  
+  // 1. Archive old ACTIVE drafts with the same product_code
+  if (masterCode) {
+    try {
+      const { data: oldDrafts } = await fetchItems<SKU>("/items/product_draft", {
+        filter: JSON.stringify({
+          _and: [
+            { product_code: { _eq: masterCode } },
+            { status: { _eq: "ACTIVE" } },
+            { product_id: { _neq: dId } },
+          ],
+        }),
+        limit: -1,
+      });
+
+      if (oldDrafts && oldDrafts.length > 0) {
+        const keys = oldDrafts.map((d) => d.id || d.product_id).filter(Boolean);
+        if (keys.length > 0) {
+          await request(`${API_BASE_URL}/items/product_draft`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              keys,
+              data: { status: "ARCHIVED" },
+            }),
+          });
+          console.log(`[SKU Approval] Archived ${keys.length} old draft(s) for code ${masterCode}`);
+        }
+      }
+    } catch (err: unknown) {
+      console.error(
+        `[SKU Approval] Failed to archive old drafts for ${masterCode}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
+  // 2. Mark the newly approved draft as ACTIVE
   try {
     await request(`${API_BASE_URL}/items/product_draft/${dId}`, {
       method: "PATCH",
-      body: JSON.stringify({ status: "ACTIVE" }),
+      body: JSON.stringify({
+        status: "ACTIVE",
+        approved_by: approvedBy,
+        approved_at: approvedAt,
+      }),
     });
   } catch {
     try {
@@ -265,6 +311,8 @@ export const skuApprovalService = {
   async approveDraft(
     id: number | string,
     masterData: MasterData,
+    approvedBy?: string | number,
+    approvedAt?: string,
   ): Promise<boolean> {
     // 1. Fetch only the specific draft
     const { data: draft } = await request<{ data: SKU }>(
@@ -289,8 +337,8 @@ export const skuApprovalService = {
     // 6. Handle orphan child adoptions
     await handleOrphanAdoption(finalMasterId, masterCode, draft);
 
-    // 7. Cleanup only THIS draft
-    await cleanupDraft(draft);
+    // 7. Mark draft as ACTIVE and archive old ones
+    await cleanupDraft(draft, masterCode, approvedBy, approvedAt);
 
     return true;
   },

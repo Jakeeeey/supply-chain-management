@@ -251,14 +251,13 @@ export const getDispatchPlanColumns = (
     header: "",
     cell: ({ row }) => {
       const status = row.original.status;
-      const isEditable = status === "For Approval" || status === "DRAFT";
-      if (!isEditable) return null;
+      const isEditable = status === "DRAFT";
       return (
         <Button
           className="text-sm rounded-lg"
           onClick={() => onEdit(row.original)}
         >
-          Edit
+          {isEditable ? "Edit" : "View"}
         </Button>
       );
     },

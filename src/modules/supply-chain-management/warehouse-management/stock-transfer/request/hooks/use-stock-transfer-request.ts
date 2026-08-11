@@ -157,7 +157,14 @@ export function useStockTransferRequest(): UseStockTransferRequestReturn {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Something went wrong';
       console.error('confirmTransfer error:', err);
-      toast.error('Submission failed', { description: message });
+
+      if (message.includes('Unauthorized') || message.includes('401')) {
+        toast.error('Session Expired', {
+          description: 'Please log in again to continue.',
+        });
+      } else {
+        toast.error('Submission failed', { description: message });
+      }
     } finally {
       setConfirming(false);
     }

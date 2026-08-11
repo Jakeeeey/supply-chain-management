@@ -18,6 +18,7 @@ import {
   Cell,
   PaginationState,
   Updater,
+  getExpandedRowModel,
 } from "@tanstack/react-table";
 
 import {
@@ -187,6 +188,8 @@ export function DataTable<TData, TValue>({
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    getSubRows: (row) => (row as { subRows?: TData[] }).subRows,
+    getExpandedRowModel: getExpandedRowModel(),
     onSortingChange: (updater: Updater<SortingState>) => {
       const nextSorting =
         typeof updater === "function" ? updater(actualSorting) : updater;
@@ -335,7 +338,7 @@ export function DataTable<TData, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className="group hover:bg-muted/10 transition-colors"
+                  className={`group hover:bg-muted/10 transition-colors ${row.depth > 0 ? "bg-muted/10 dark:bg-muted/5 text-muted-foreground" : ""}`}
                 >
                   {row.getVisibleCells().map((cell: Cell<TData, unknown>) => (
                     <TableCell key={cell.id} className="py-3">

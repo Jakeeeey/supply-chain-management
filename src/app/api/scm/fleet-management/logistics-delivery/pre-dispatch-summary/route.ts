@@ -48,6 +48,7 @@ interface DirectusSalesOrder {
     customer_code: string;
     total_amount: number | null;
     net_amount: number | null;
+    allocated_amount: number | null;
 }
 
 interface DirectusCustomer {
@@ -179,7 +180,7 @@ export async function GET(req: NextRequest) {
 
     const orders = await fetchFromDirectusInChunks<DirectusSalesOrder>("/sales_order", "order_id", salesOrderIds, {
         limit: "-1",
-        fields: "order_id,order_no,customer_code,total_amount,net_amount"
+        fields: "order_id,order_no,customer_code,total_amount,net_amount,allocated_amount"
     });
 
     if (!orders.length) return NextResponse.json([]);
@@ -201,7 +202,12 @@ export async function GET(req: NextRequest) {
     const customerMap = new Map(customers.map(c => [c.customer_code, c]));
 
     // 6. Map and enrich details into target DTO format
-    const records = details.map(detail => {
+    // Deduplicate details to prevent multiple identical sales orders per dispatch plan
+    const uniqueDetailsMap = new Map<string, DirectusPlanDetail>();
+    details.forEach(d => uniqueDetailsMap.set(`${d.dispatch_id}-${d.sales_order_id}`, d));
+    const uniqueDetails = Array.from(uniqueDetailsMap.values());
+
+    const records = uniqueDetails.map(detail => {
         const plan = planMap.get(detail.dispatch_id);
         const order = orderMap.get(detail.sales_order_id);
         if (!plan || !order) return null;
@@ -221,7 +227,7 @@ export async function GET(req: NextRequest) {
             customerCity: customer?.city || "UNKNOWN CITY",
             customerBarangay: customer?.brgy || "",
             orderNo: order.order_no,
-            dispatchAmount: order.net_amount ?? order.total_amount ?? 0,
+            dispatchAmount: order.allocated_amount ?? 0,
             driverName: driverName,
             branchName: branchName,
             clusterName: clusterName,

@@ -71,8 +71,8 @@ export const generateManifestPDF = (
             const driver = item.driverName || "NO DRIVER";
             const plate = (item as VPreDispatchPlanDetailedDto & { plateNumber?: string }).plateNumber || "N/A";
             const cluster = item.clusterName || "___________";
-            const prov = item.customerProvince || "UNKNOWN PROV";
-            const city = item.customerCity || "UNKNOWN CITY";
+            const prov = (item.customerProvince || "UNKNOWN PROV").toUpperCase();
+            const city = (item.customerCity || "UNKNOWN CITY").toUpperCase();
             const outlet = item.customerName || "UNKNOWN OUTLET";
             const amt = item.dispatchAmount || 0;
 
@@ -135,21 +135,21 @@ export const generateManifestPDF = (
 
                         tableBody.push([
                             { content: outletText, styles: { cellPadding: { top: 3, bottom: 3, right: 2 } } },
-                            { content: oData.totalAmt ? `P ${oData.totalAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "-", styles: { halign: "right", valign: "middle", fontStyle: "bold" } }
+                            { content: oData.totalAmt ? `P ${oData.totalAmt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-", styles: { halign: "right", valign: "middle", fontStyle: "bold" } }
                         ]);
                     });
 
                     // 💰 CITY SUBTOTAL ROW (Shortened to prevent wrapping)
                     tableBody.push([
                         { content: `City Subtotal:`, styles: { halign: "right", fontStyle: "italic", textColor: [60, 60, 60], cellPadding: 3, fontSize: 6.5 } },
-                        { content: `P ${cData.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { halign: "right", fontStyle: "bold", textColor: [60, 60, 60], cellPadding: 3, fontSize: 6.5 } }
+                        { content: `P ${cData.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: "right", fontStyle: "bold", textColor: [60, 60, 60], cellPadding: 3, fontSize: 6.5 } }
                     ]);
                 });
 
                 // 💰 PROVINCE SUBTOTAL ROW (Shortened to prevent wrapping)
                 tableBody.push([
                     { content: `Provincial Subtotal:`, styles: { halign: "right", fontStyle: "italic", fillColor: [245, 245, 245], cellPadding: 4, fontSize: 7 } },
-                    { content: `P ${pData.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, styles: { halign: "right", fontStyle: "bold", fillColor: [245, 245, 245], cellPadding: 4, fontSize: 7 } }
+                    { content: `P ${pData.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: "right", fontStyle: "bold", fillColor: [245, 245, 245], cellPadding: 4, fontSize: 7 } }
                 ]);
             });
         });
@@ -159,7 +159,7 @@ export const generateManifestPDF = (
             content: `GRAND TOTAL FOR ${dispatchNo}`,
             styles: { halign: "right", fontStyle: "bold", fillColor: [180, 180, 180], cellPadding: 5, fontSize: 8 }
         }, {
-            content: `P ${pdpTotalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            content: `P ${pdpTotalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
             styles: { halign: "right", fontStyle: "bold", fillColor: [180, 180, 180], cellPadding: 5, fontSize: 8 }
         }]);
 
