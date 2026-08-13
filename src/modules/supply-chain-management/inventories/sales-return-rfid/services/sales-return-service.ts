@@ -559,6 +559,7 @@ export async function submitReturn(payload: any, userId: number, token: string =
     remarks: payload.remarks || "Created via Web App",
     order_id: payload.orderNo || "",
     isThirdParty: payload.isThirdParty ? 1 : 0,
+    isApplied: payload.appliedInvoiceId ? 1 : 0,
     created_at: nowPH(),
     updated_at: nowPH(),
   };
@@ -684,7 +685,7 @@ export async function updateReturn(
 
   const totalNet = Math.round((totalGross - totalDiscount) * 100) / 100;
 
-  const headerPayload = {
+  const headerPayload: Record<string, any> = {
     remarks: payload.remarks ?? "",
     gross_amount: totalGross,
     discount_amount: totalDiscount,
@@ -694,6 +695,10 @@ export async function updateReturn(
     isThirdParty: payload.isThirdParty ? 1 : 0,
     updated_at: nowPH(),
   };
+
+  if (payload.hasOwnProperty("appliedInvoiceId")) {
+    headerPayload.isApplied = payload.appliedInvoiceId ? 1 : 0;
+  }
 
   await repo.updateReturnHeader(payload.returnId, headerPayload);
 
