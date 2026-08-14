@@ -31,6 +31,8 @@ interface ComboboxProps {
   placeholder?: string
   emptyMessage?: string
   className?: string
+  popoverClassName?: string
+  align?: "start" | "center" | "end"
   disabled?: boolean
   renderItem?: (option: ComboboxOption) => React.ReactNode
 }
@@ -42,6 +44,8 @@ export function Combobox({
   placeholder = "Select option...",
   emptyMessage = "No option found.",
   className,
+  popoverClassName,
+  align = "start",
   disabled,
   renderItem
 }: ComboboxProps) {
@@ -67,12 +71,18 @@ export function Combobox({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-        <Command>
+      <PopoverContent
+        className={cn(
+          "w-full min-w-[var(--radix-popover-trigger-width)] max-w-[280px] sm:max-w-[320px] p-0 z-50",
+          popoverClassName
+        )}
+        align={align}
+      >
+        <Command className="w-full">
           <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
           <CommandList>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
-            <CommandGroup className="max-h-[300px] overflow-auto">
+            <CommandGroup className="max-h-[240px] overflow-y-auto">
               {options.map((option) => (
                 <CommandItem
                   key={option.value}
@@ -81,14 +91,17 @@ export function Combobox({
                     onValueChange(option.value === value ? "" : option.value)
                     setOpen(false)
                   }}
+                  className="flex items-start py-2"
                 >
                   <Check
                     className={cn(
-                      "mr-2 h-4 w-4 shrink-0",
+                      "mr-2 h-4 w-4 shrink-0 mt-0.5",
                       value === option.value ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  {renderItem ? renderItem(option) : option.label}
+                  <span className="whitespace-normal break-words leading-tight flex-1 text-xs sm:text-sm">
+                    {renderItem ? renderItem(option) : option.label}
+                  </span>
                 </CommandItem>
               ))}
             </CommandGroup>
