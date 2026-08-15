@@ -335,7 +335,7 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
                                 ) : (
                                     activeProducts.map((p) => {
                                         const expected = Number(p.expectedQty || 0);
-                                        const target = expected > 0 ? expected : 1;
+                                        const target = expected;
                                         const scanned = safeCounts[p.porId] || 0;
                                         const isDone = scanned >= target;
                                         const isOver = expected > 0 && scanned > expected;
@@ -461,7 +461,7 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
 
     // ========== ACTIVE PRODUCT: Tagging View ==========
     const activeExpected = Number((activeItem as ReceivingPOItem)?.expectedQty || 0);
-    const activeTarget = activeExpected > 0 ? activeExpected : 1;
+    const activeTarget = activeExpected;
     const activeScanned = safeCounts[String((activeItem as ReceivingPOItem)?.porId || "")] || 0;
     const activeDone = activeScanned >= activeTarget;
     const activeIsOver = activeExpected > 0 && activeScanned > activeExpected;
