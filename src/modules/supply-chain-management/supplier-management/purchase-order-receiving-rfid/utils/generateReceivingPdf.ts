@@ -339,7 +339,7 @@ export async function generateReceivingPdf(
         }
 
         // 5. Signatures
-        let signatureY = currentY + noteOffset + 15;
+        const signatureY = currentY + noteOffset + 15;
         renderSignatures(doc, signatureY, "");
     });
 

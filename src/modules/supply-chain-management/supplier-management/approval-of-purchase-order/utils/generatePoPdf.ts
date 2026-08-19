@@ -280,7 +280,7 @@ export async function generatePurchaseOrderPdf(
         }
 
         // 4. Compact Signatures with dynamic vertical spacing
-        let signatureY = currentY + lineHeight + noteOffset + 15;
+        const signatureY = currentY + lineHeight + noteOffset + 15;
         renderSignatures(doc, signatureY, preparerName, approverName);
     });
 
