@@ -19,7 +19,7 @@ export default function ForDispatchSummaryModule() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-4 p-4 sm:p-6">
+    <div className="w-full space-y-4 p-4 sm:p-6">
       {/* Header */}
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div>
