@@ -104,7 +104,7 @@ export async function generatePurchaseOrderPdf(
     const templateName = template?.name || "MEN2";
 
     // --- USE Unified PdfEngine ---
-    const doc = await PdfEngine.generateWithFrame(templateName, companyData, (doc, startY, config) => {
+    const doc = await PdfEngine.generateWithFrame(templateName, companyData, async (doc, startY, config) => {
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
 
@@ -166,7 +166,7 @@ export async function generatePurchaseOrderPdf(
         // 3. Render Main Table
         autoTable(doc, {
             startY: detailsY + 12,
-            margin: { left: 10, right: 10 },
+            margin: { top: (config?.bodyStart ?? 35) + 5, left: 10, right: 10 },
             head: [["Brand", "Item", "UOM", "Qty", "Price", "Gross", "Disc", "Net"]],
             body: tableBody,
             foot: [[
@@ -204,9 +204,15 @@ export async function generatePurchaseOrderPdf(
 
         // 3. Compact Financial Summary
         let finalY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
-        if (finalY + 60 > pageHeight) {
+        
+        const isInvoice = Boolean(po.isInvoice || po.is_invoice || Number(po.vat_amount) > 0);
+        const lineHeight = 6;
+        
+        const requiredHeight = isInvoice ? 65 : 45;
+        
+        if (finalY + requiredHeight > pageHeight) {
             doc.addPage();
-            PdfEngine.applyTemplate(doc, templateName, companyData); // Re-apply header to new page using resolved name
+            await PdfEngine.applyTemplate(doc, templateName, companyData); // Re-apply header to new page using resolved name
             finalY = (config?.bodyStart ?? 35) + 5;
         }
 
@@ -219,7 +225,6 @@ export async function generatePurchaseOrderPdf(
 
         const rightColX = pageWidth - 10;
         const labelX = pageWidth - 80;
-        const lineHeight = 6;
 
         doc.setFontSize(8);
         doc.setTextColor(50, 50, 50);
@@ -237,8 +242,6 @@ export async function generatePurchaseOrderPdf(
 
         doc.setTextColor(50, 50, 50);
         let currentY = finalY + lineHeight + 3;
-
-        const isInvoice = Boolean(po.isInvoice || po.is_invoice || Number(po.vat_amount) > 0);
 
         if (isInvoice) {
             const vatAmount = totalAmount - (totalAmount / 1.12);
@@ -266,16 +269,19 @@ export async function generatePurchaseOrderPdf(
         doc.text("Grand Total:", labelX, currentY + lineHeight + 1);
         doc.text(`PHP ${formatMoney(totalAmount)}`, rightColX, currentY + lineHeight + 1, { align: "right" });
 
+        let noteOffset = 0;
         if (isInvoice) {
             // Standardized Footnote
             doc.setFont("helvetica", "italic");
             doc.setFontSize(7);
             doc.setTextColor(100, 100, 100);
             doc.text("Note: VAT and EWT figures are for reference and have not been deducted from the total.", labelX - 25, currentY + lineHeight + 6);
+            noteOffset = 6;
         }
 
-        // 4. Compact Signatures with increased vertical spacing
-        renderSignatures(doc, finalY + 60, preparerName, approverName);
+        // 4. Compact Signatures with dynamic vertical spacing
+        let signatureY = currentY + lineHeight + noteOffset + 15;
+        renderSignatures(doc, signatureY, preparerName, approverName);
     });
 
     const poNumberStr = String(poNumber);
