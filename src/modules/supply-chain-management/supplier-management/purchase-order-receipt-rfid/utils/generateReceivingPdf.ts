@@ -117,7 +117,7 @@ export async function generateReceivingPdf(
     const templateName = template?.name || "MEN2";
 
     // --- USE Unified PdfEngine ---
-    const doc = await PdfEngine.generateWithFrame(templateName, companyData, (doc, startY, config) => {
+    const doc = await PdfEngine.generateWithFrame(templateName, companyData, async (doc, startY, config) => {
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
 
@@ -252,9 +252,13 @@ export async function generateReceivingPdf(
 
         // 4. Financial Summary
         let finalY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
-        if (finalY + 60 > pageHeight) {
+        
+        const isInvoice = Boolean(data.isInvoice);
+        const requiredHeight = isInvoice ? 65 : 45;
+
+        if (finalY + requiredHeight > pageHeight) {
             doc.addPage();
-            PdfEngine.applyTemplate(doc, templateName, companyData);
+            await PdfEngine.applyTemplate(doc, templateName, companyData);
             finalY = (config?.bodyStart ?? 35) + 5;
         }
 
@@ -300,7 +304,6 @@ export async function generateReceivingPdf(
         doc.text("Net Total:", labelX, finalY + lineHeight * 2 + 3);
         doc.text(`${formatMoney(sumNet)}`, rightColX, finalY + lineHeight * 2 + 3, { align: "right" });
 
-        const isInvoice = Boolean(data.isInvoice);
         let currentY = finalY + lineHeight * 2 + 9;
 
         if (isInvoice) {
@@ -326,16 +329,19 @@ export async function generateReceivingPdf(
         doc.text("Grand Total:", labelX, currentY);
         doc.text(`PHP ${formatMoney(grandTotal)}`, rightColX, currentY, { align: "right" });
 
+        let noteOffset = 0;
         // Standardized Footnote
         if (isInvoice) {
             doc.setFont("helvetica", "italic");
             doc.setFontSize(7);
             doc.setTextColor(100, 100, 100);
             doc.text("Note: VAT and EWT figures are for reference and have not been deducted from the total.", labelX - 20, currentY + 6);
+            noteOffset = 6;
         }
 
         // 5. Signatures
-        renderSignatures(doc, finalY + lineHeight * 5 + 25, safeStr(data.receiverName));
+        const signatureY = currentY + noteOffset + 15;
+        renderSignatures(doc, signatureY, safeStr(data.receiverName));
     });
 
     doc.save(`Receiving_${receiptNo}.pdf`);

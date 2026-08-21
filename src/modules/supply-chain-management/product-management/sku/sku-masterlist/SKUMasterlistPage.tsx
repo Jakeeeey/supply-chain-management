@@ -11,7 +11,10 @@ import { toast } from "sonner";
 import { EditProductModal } from "./components/modals/edit-product-modal";
 import { SKUImageModal } from "./components/modals/sku-image-modal";
 import { SKUGalleryModal } from "./components/modals/sku-gallery-modal";
+import { PrintColumnsModal } from "./components/modals/print-columns-modal";
 import { FacetFilters } from "./components/filters/FacetFilters";
+import { Printer } from "lucide-react";
+import { generateSKUMasterlistPDF } from "./utils/generate-sku-masterlist-pdf";
 
 export default function SKUMasterlistModule() {
   const {
@@ -55,6 +58,7 @@ export default function SKUMasterlistModule() {
   const [editingSKU, setEditingSKU] = useState<SKU | null>(null);
   const [updatingImageSKU, setUpdatingImageSKU] = useState<SKU | null>(null);
   const [viewingGallerySKU, setViewingGallerySKU] = useState<SKU | null>(null);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -218,20 +222,38 @@ export default function SKUMasterlistModule() {
     setPage(0);
   };
 
-  const bulkActionComponent = selectedRows.length > 0 ? (
+  const bulkActionComponent = (
     <div className="flex items-center gap-2">
-      {hasSelectedInactive && (
-        <Button size="sm" variant="default" onClick={handleBulkActivate} disabled={isUpdating}>
-          Activate ({selectedRows.filter((r) => Number(r.isActive) !== 1).length})
-        </Button>
+      {selectedRows.length > 0 && (
+        <>
+          {hasSelectedInactive && (
+            <Button size="sm" variant="default" onClick={handleBulkActivate} disabled={isUpdating}>
+              Activate ({selectedRows.filter((r) => Number(r.isActive) !== 1).length})
+            </Button>
+          )}
+          {hasSelectedActive && (
+            <Button size="sm" variant="destructive" onClick={handleBulkDeactivate} disabled={isUpdating}>
+              Deactivate ({selectedRows.filter((r) => Number(r.isActive) === 1).length})
+            </Button>
+          )}
+        </>
       )}
-      {hasSelectedActive && (
-        <Button size="sm" variant="destructive" onClick={handleBulkDeactivate} disabled={isUpdating}>
-          Deactivate ({selectedRows.filter((r) => Number(r.isActive) === 1).length})
-        </Button>
-      )}
+      <Button 
+        size="sm" 
+        variant="outline" 
+        onClick={() => {
+          if (!masterData) {
+            toast.error("Master data is still loading. Please try again.");
+            return;
+          }
+          setIsPrintModalOpen(true);
+        }}
+      >
+        <Printer className="w-4 h-4 mr-2" />
+        Print PDF
+      </Button>
     </div>
-  ) : null;
+  );
 
   if (!mounted) {
     return <ModuleSkeleton hasActions={false} rowCount={8} />;
@@ -300,6 +322,21 @@ export default function SKUMasterlistModule() {
         sku={viewingGallerySKU}
         isOpen={!!viewingGallerySKU}
         onClose={() => setViewingGallerySKU(null)}
+      />
+
+      <PrintColumnsModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        onConfirm={(selectedColumns) => {
+          if (masterData) {
+            const doc = generateSKUMasterlistPDF({
+              items: selectedRows.length > 0 ? selectedRows : data,
+              masterData,
+              selectedColumns,
+            });
+            doc.save(`SKU_Masterlist_${new Date().toISOString().split('T')[0]}.pdf`);
+          }
+        }}
       />
     </div>
   );
