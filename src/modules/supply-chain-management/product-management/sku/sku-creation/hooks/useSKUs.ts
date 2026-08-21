@@ -56,7 +56,7 @@ export function useSKUs() {
             `/api/scm/product-management/sku?type=drafts&status=DRAFT&limit=${drafts.draftsLimit}&offset=${drafts.draftsPage * drafts.draftsLimit}&search=${encodeURIComponent(search)}&sort=${dSort}`,
           ).then((res) => res.json()),
           fetch(
-            `/api/scm/product-management/sku?type=drafts&status=FOR_APPROVAL&limit=${pending.pendingLimit}&offset=${pending.pendingPage * pending.pendingLimit}&search=${encodeURIComponent(search)}&sort=${pSort}`,
+            `/api/scm/product-management/sku?type=drafts&status=FOR_APPROVAL&limit=${pending.pendingLimit}&offset=${pending.pendingPage * pending.pendingLimit}&search=${encodeURIComponent(search)}&sort=${pSort}&supplier=${pending.pendingSupplier}&itemType=${encodeURIComponent(pending.pendingType)}&isActive=${encodeURIComponent(pending.pendingStatus)}`,
           ).then((res) => res.json()),
           fetch(
             `/api/scm/product-management/sku?type=segment-approval&limit=${segment.segmentLimit}&offset=${segment.segmentPage * segment.segmentLimit}&search=${encodeURIComponent(search)}&sort=${sSort}`,
@@ -164,6 +164,9 @@ export function useSKUs() {
     pending.pendingLimit,
     pending.pendingPage,
     pending.pendingSorting,
+    pending.pendingSupplier,
+    pending.pendingStatus,
+    pending.pendingType,
     segment.segmentLimit,
     segment.segmentPage,
     segment.segmentSorting,
@@ -421,6 +424,12 @@ export function useSKUs() {
     setPendingLimit: pending.setPendingLimit,
     pendingSorting: pending.pendingSorting,
     setPendingSorting: pending.setPendingSorting,
+    pendingSupplier: pending.pendingSupplier,
+    setPendingSupplier: pending.setPendingSupplier,
+    pendingStatus: pending.pendingStatus,
+    setPendingStatus: pending.setPendingStatus,
+    pendingType: pending.pendingType,
+    setPendingType: pending.setPendingType,
 
     // Segment Approval
     segmentApprovalData: segment.segmentApprovalData,

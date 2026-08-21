@@ -11,6 +11,7 @@ import { RejectRemarksModal } from "@/modules/supply-chain-management/product-ma
 import { SKU } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { BulkApproveModal } from "@/modules/supply-chain-management/product-management/sku/sku-approval/components/modals/bulk-approve-modal";
 import { BulkRejectModal } from "@/modules/supply-chain-management/product-management/sku/sku-approval/components/modals/bulk-reject-modal";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 export default function SKUApprovalPage() {
   const {
@@ -22,6 +23,12 @@ export default function SKUApprovalPage() {
     setPendingLimit,
     pendingSorting,
     setPendingSorting,
+    pendingSupplier,
+    setPendingSupplier,
+    pendingStatus,
+    setPendingStatus,
+    pendingType,
+    setPendingType,
     setSearch,
 
     masterData,
@@ -40,6 +47,7 @@ export default function SKUApprovalPage() {
   const [isBulkApproveOpen, setIsBulkApproveOpen] = useState(false);
   const [isBulkRejectOpen, setIsBulkRejectOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [resetKey, setResetKey] = useState(0);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -106,6 +114,7 @@ export default function SKUApprovalPage() {
       );
       setSkusToApprove([]);
       setIsBulkApproveOpen(false);
+      setResetKey((prev) => prev + 1);
     } catch (err: unknown) {
       toast.error("Approval Failed", {
         description: err instanceof Error ? err.message : "Could not process activation.",
@@ -126,6 +135,7 @@ export default function SKUApprovalPage() {
       });
       setSelectedSKUs([]);
       setIsBulkRejectOpen(false);
+      setResetKey((prev) => prev + 1);
     } catch (err: unknown) {
       toast.error("Bulk Rejection Failed", {
         description: err instanceof Error ? err.message : "Could not process bulk rejection.",
@@ -135,8 +145,20 @@ export default function SKUApprovalPage() {
     }
   };
 
-  const handleReject = async (sku: SKU) => {
-    setRejectingSKU(sku);
+  const handleReject = (sku: SKU) => {
+    const typedSku = sku as SKU & { subRows?: SKU[] };
+    const combined = [sku, ...(typedSku.subRows || [])];
+    
+    // Check if they are already in the combined array to avoid duplicates
+    const uniqueCombined: SKU[] = [];
+    combined.forEach((c) => {
+      if (!uniqueCombined.some((u) => String(u.id || u.product_id) === String(c.id || c.product_id))) {
+        uniqueCombined.push(c);
+      }
+    });
+
+    setSelectedSKUs(uniqueCombined);
+    setIsBulkRejectOpen(true);
   };
 
   const handleConfirmReject = async (id: number | string, remarks: string) => {
@@ -149,6 +171,7 @@ export default function SKUApprovalPage() {
       });
       refresh();
       setRejectingSKU(null);
+      setResetKey((prev) => prev + 1);
     } catch (err: unknown) {
       toast.error("Process Failed", {
         description: err instanceof Error ? err.message : "Could not complete the rejection process.",
@@ -174,9 +197,32 @@ export default function SKUApprovalPage() {
     );
   }
 
+  const supplierOptions = [
+    { value: "all", label: "Supplier: All" },
+    ...(masterData?.suppliers?.map((s) => ({
+      value: String(s.id),
+      label: String(s.name || s.supplier_name || "Unknown"),
+    })) || []),
+  ];
+
+  const statusOptions = [
+    { value: "all", label: "Status: All" },
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
+  ];
+
+  const typeOptions = [
+    { value: "all", label: "Type: All" },
+    { value: "Regular", label: "Regular" },
+    { value: "Variant", label: "Variant" },
+    { value: "Bundle", label: "Bundle" },
+    { value: "Promo", label: "Promo" },
+  ];
+
   return (
-    <div>
+    <div className="space-y-4">
       <ApprovalTable
+        key={resetKey}
         title="Items Pending Approval"
         data={pendingApprovalData}
         totalCount={pendingTotal}
@@ -192,36 +238,56 @@ export default function SKUApprovalPage() {
         onReject={(sku: SKU) => handleReject(sku)}
         onSelectionChange={setSelectedSKUs}
         actionComponent={
-          selectedSKUs.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="destructive"
-                onClick={() => setIsBulkRejectOpen(true)}
-                size="sm"
-                className="flex items-center gap-2"
-              >
-                Reject ({selectedSKUs.length})
-              </Button>
-              <Button
-                onClick={handleBulkApproveClick}
-                className="bg-primary hover:bg-primary/90 flex items-center gap-2"
-                size="sm"
-              >
-                Approve ({selectedSKUs.length})
-              </Button>
-            </div>
-          )
+          <div className="flex items-center gap-3">
+            <SearchableSelect
+              options={supplierOptions}
+              value={pendingSupplier || "all"}
+              onValueChange={(v) => { setPendingSupplier(v === "all" ? "" : v); setPendingPage(0); }}
+              placeholder="Supplier: All"
+              className="w-[160px] bg-background"
+            />
+
+            <SearchableSelect
+              options={statusOptions}
+              value={pendingStatus || "all"}
+              onValueChange={(v) => { setPendingStatus(v === "all" ? "" : v); setPendingPage(0); }}
+              placeholder="Status: All"
+              className="w-[130px] bg-background"
+            />
+
+            <SearchableSelect
+              options={typeOptions}
+              value={pendingType || "all"}
+              onValueChange={(v) => { setPendingType(v === "all" ? "" : v); setPendingPage(0); }}
+              placeholder="Type: All"
+              className="w-[130px] bg-background"
+            />
+
+            {selectedSKUs.length > 0 && (
+              <div className="flex items-center gap-2 pl-2 ml-1 border-l">
+                <Button
+                  variant="destructive"
+                  onClick={() => setIsBulkRejectOpen(true)}
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  Reject ({selectedSKUs.length})
+                </Button>
+                <Button
+                  onClick={handleBulkApproveClick}
+                  className="bg-primary hover:bg-primary/90 flex items-center gap-2"
+                  size="sm"
+                >
+                  Approve ({selectedSKUs.length})
+                </Button>
+              </div>
+            )}
+          </div>
         }
       />
 
 
-      <RejectRemarksModal
-        sku={rejectingSKU}
-        isOpen={!!rejectingSKU}
-        onClose={() => setRejectingSKU(null)}
-        onConfirm={handleConfirmReject}
-        isLoading={isUpdating}
-      />
+
 
       <BulkApproveModal
         selectedSKUs={skusToApprove}

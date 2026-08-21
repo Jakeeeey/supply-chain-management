@@ -24,6 +24,15 @@ export async function GET(req: NextRequest) {
     }    if (type === "drafts") {
       const status = searchParams.get("status") || undefined;
       const search = searchParams.get("search") || undefined;
+      const supplierIdParam = searchParams.get("supplier");
+      const supplierId = supplierIdParam ? parseInt(supplierIdParam) : undefined;
+      const itemType = searchParams.get("itemType") || undefined;
+      const isActive = searchParams.get("isActive") || undefined;
+
+      const facets = {
+        itemType,
+        isActive,
+      };
 
       if (status === "FOR_APPROVAL" || status === "DRAFT") {
         // Fetch ALL drafts to properly group them hierarchically
@@ -33,6 +42,8 @@ export async function GET(req: NextRequest) {
           status,
           search,
           sort,
+          supplierId,
+          facets
         );
         const allDrafts = paginated.data || [];
         const draftIds = new Set(allDrafts.map((d) => String(d.id || d.product_id)));
@@ -107,6 +118,8 @@ export async function GET(req: NextRequest) {
         status,
         search,
         sort,
+        supplierId,
+        facets
       );
       return NextResponse.json(paginated);
     }

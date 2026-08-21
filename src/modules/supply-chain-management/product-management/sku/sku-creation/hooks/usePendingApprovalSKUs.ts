@@ -16,6 +16,9 @@ export function usePendingApprovalSKUs() {
   const [pendingPage, setPendingPage] = useState(0);
   const [pendingLimit, setPendingLimit] = useState(10);
   const [pendingSorting, setPendingSorting] = useState<SortingState>([]);
+  const [pendingSupplier, setPendingSupplier] = useState<string>("");
+  const [pendingStatus, setPendingStatus] = useState<string>("");
+  const [pendingType, setPendingType] = useState<string>("");
 
   // Track locally approved IDs to filter them out even if backend status update fails.
   // Initialized from localStorage to persist across page refreshes.
@@ -54,6 +57,12 @@ export function usePendingApprovalSKUs() {
     setPendingLimit,
     pendingSorting,
     setPendingSorting,
+    pendingSupplier,
+    setPendingSupplier,
+    pendingStatus,
+    setPendingStatus,
+    pendingType,
+    setPendingType,
     approvedIds,
     setApprovedIds,
   };

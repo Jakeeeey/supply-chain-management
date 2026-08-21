@@ -164,13 +164,26 @@ export function DataTable<TData, TValue>({
   React.useEffect(() => {
     if (onSelectionChange) {
       // rowSelection is a map of index/id to boolean
-      // We need to map it back to the data
+      // Keys can be nested indices like "0.1" for subRows
       const selectedIndices = Object.keys(rowSelection).filter(
         (key) => rowSelection[key as keyof typeof rowSelection],
       );
+      
       const selectedData = selectedIndices
-        .map((index) => data[parseInt(index)])
+        .map((indexStr) => {
+          const parts = indexStr.split(".");
+          let current = data[parseInt(parts[0])];
+          for (let i = 1; i < parts.length; i++) {
+            if (current && (current as any).subRows) {
+              current = (current as any).subRows[parseInt(parts[i])];
+            } else {
+              return null;
+            }
+          }
+          return current;
+        })
         .filter(Boolean);
+        
       onSelectionChange(selectedData);
     }
   }, [rowSelection, data, onSelectionChange]);

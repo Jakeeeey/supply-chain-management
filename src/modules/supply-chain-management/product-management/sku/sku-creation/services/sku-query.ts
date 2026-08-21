@@ -156,6 +156,11 @@ export const skuQueryService = {
     status?: string,
     search?: string,
     sort?: string,
+    supplierId?: number,
+    facets?: {
+      itemType?: string;
+      isActive?: string;
+    }
   ): Promise<PaginatedSKU> {
     const filter: Record<string, unknown[]> = { _and: [] };
 
@@ -169,6 +174,34 @@ export const skuQueryService = {
           ? { status: { _in: ["DRAFT", "REJECTED"] } }
           : { status: { _eq: target } },
       );
+    }
+
+    if (facets?.itemType) {
+      filter._and.push({ inventory_type: { _eq: facets.itemType } });
+    }
+    if (facets?.isActive === "active") {
+      filter._and.push({ isActive: { _eq: 1 } });
+    } else if (facets?.isActive === "inactive") {
+      filter._and.push({ isActive: { _eq: 0 } });
+    }
+
+    // Since product_draft_per_supplier is a separate collection, we fetch matching drafts first.
+    // However, if supplierId is provided, we must pre-fetch draft IDs for that supplier.
+    let allowedDraftIds: number[] | null = null;
+    if (supplierId) {
+      try {
+        const { data: supplierLinks } = await fetchItems<{ product_draft_id: number }>("/items/product_draft_per_supplier", {
+          filter: JSON.stringify({ supplier_id: { _eq: supplierId } }),
+          limit: -1,
+        });
+        allowedDraftIds = supplierLinks ? supplierLinks.map((l) => l.product_draft_id) : [];
+      } catch (err) {
+        console.warn("[SKU Query] Failed to fetch supplier links for drafts:", err);
+        allowedDraftIds = [];
+      }
+      filter._and.push({
+        id: { _in: allowedDraftIds.length > 0 ? allowedDraftIds : [-1] }
+      });
     }
 
     const searchFilter = CellHelpers.buildSearchFilter(search);
