@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
-import { RejectRemarksModal } from "@/modules/supply-chain-management/product-management/sku/sku-approval/components/modals/reject-remarks-modal";
 import { SKU } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { BulkApproveModal } from "@/modules/supply-chain-management/product-management/sku/sku-approval/components/modals/bulk-approve-modal";
 import { BulkRejectModal } from "@/modules/supply-chain-management/product-management/sku/sku-approval/components/modals/bulk-reject-modal";
@@ -41,9 +40,9 @@ export default function SKUApprovalPage() {
   } = useSKUs();
 
   const [mounted, setMounted] = useState(false);
-  const [rejectingSKU, setRejectingSKU] = useState<SKU | null>(null);
   const [selectedSKUs, setSelectedSKUs] = useState<SKU[]>([]);
   const [skusToApprove, setSkusToApprove] = useState<SKU[]>([]);
+  const [skusToReject, setSkusToReject] = useState<SKU[]>([]);
   const [isBulkApproveOpen, setIsBulkApproveOpen] = useState(false);
   const [isBulkRejectOpen, setIsBulkRejectOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -96,6 +95,25 @@ export default function SKUApprovalPage() {
     });
     setSkusToApprove(combined);
     setIsBulkApproveOpen(true);
+  };
+
+  const handleBulkRejectClick = () => {
+    const combined: SKU[] = [];
+    selectedSKUs.forEach((sku) => {
+      const id = sku.id || sku.product_id;
+      if (!combined.some((c) => String(c.id || c.product_id) === String(id))) {
+        combined.push(sku);
+      }
+      const subRows = (sku as SKU & { subRows?: SKU[] }).subRows || [];
+      subRows.forEach((child) => {
+        const childId = child.id || child.product_id;
+        if (!combined.some((c) => String(c.id || c.product_id) === String(childId))) {
+          combined.push(child);
+        }
+      });
+    });
+    setSkusToReject(combined);
+    setIsBulkRejectOpen(true);
   };
 
   const handleConfirmApprove = async () => {
@@ -157,29 +175,11 @@ export default function SKUApprovalPage() {
       }
     });
 
-    setSelectedSKUs(uniqueCombined);
+    setSkusToReject(uniqueCombined);
     setIsBulkRejectOpen(true);
   };
 
-  const handleConfirmReject = async (id: number | string, remarks: string) => {
-    setIsUpdating(true);
-    try {
-      await rejectSKU(id, remarks);
-      toast.success("SKU Registration Rejected", {
-        description:
-          "The record has been returned to draft status with your remarks.",
-      });
-      refresh();
-      setRejectingSKU(null);
-      setResetKey((prev) => prev + 1);
-    } catch (err: unknown) {
-      toast.error("Process Failed", {
-        description: err instanceof Error ? err.message : "Could not complete the rejection process.",
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
+
 
 
   if (!mounted) {
@@ -201,7 +201,7 @@ export default function SKUApprovalPage() {
     { value: "all", label: "Supplier: All" },
     ...(masterData?.suppliers?.map((s) => ({
       value: String(s.id),
-      label: String(s.name || s.supplier_name || "Unknown"),
+      label: String(s.name || (s as { supplier_name?: string }).supplier_name || "Unknown"),
     })) || []),
   ];
 
@@ -267,7 +267,7 @@ export default function SKUApprovalPage() {
               <div className="flex items-center gap-2 pl-2 ml-1 border-l">
                 <Button
                   variant="destructive"
-                  onClick={() => setIsBulkRejectOpen(true)}
+                  onClick={handleBulkRejectClick}
                   size="sm"
                   className="flex items-center gap-2"
                 >
@@ -301,9 +301,12 @@ export default function SKUApprovalPage() {
       />
 
       <BulkRejectModal
-        selectedSKUs={selectedSKUs}
+        selectedSKUs={skusToReject}
         isOpen={isBulkRejectOpen}
-        onClose={() => setIsBulkRejectOpen(false)}
+        onClose={() => {
+          setIsBulkRejectOpen(false);
+          setSkusToReject([]);
+        }}
         onConfirm={handleBulkReject}
         isLoading={isUpdating}
       />
