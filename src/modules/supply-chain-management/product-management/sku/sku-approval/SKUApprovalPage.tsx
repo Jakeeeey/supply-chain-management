@@ -36,7 +36,6 @@ export default function SKUApprovalPage() {
     refresh,
     bulkApproveSKUs,
     bulkRejectSKUs,
-    rejectSKU,
   } = useSKUs();
 
   const [mounted, setMounted] = useState(false);
