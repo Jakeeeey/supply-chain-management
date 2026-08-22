@@ -488,15 +488,18 @@ export const skuLifecycleService = {
     rejectedBy?: string | number,
     rejectedAt?: string,
   ): Promise<boolean> {
+    const payload = {
+      status: "REJECTED",
+      remarks,
+      rejected_by: rejectedBy,
+      rejected_at: rejectedAt,
+    };
+    
     await request(`${API_BASE_URL}/items/product_draft/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({
-        status: "REJECTED",
-        remarks,
-        rejected_by: rejectedBy,
-        rejected_at: rejectedAt,
-      }),
+      body: JSON.stringify(payload),
     });
+
     return true;
   },
 
