@@ -94,52 +94,79 @@ export async function getEnrichedForDispatchSummary(): Promise<ForDispatchInvoic
       (a, b) => (a.sequence ?? 0) - (b.sequence ?? 0),
     );
 
-    for (const inv of sortedInvoices) {
-      const si = salesInvoiceMap.get(String(inv.invoice_id));
-
-      let customerCode = "";
-      let customerName = "Unknown Customer";
-      let brgy = "";
-      let city = "";
-      let province = "";
-
-      if (si?.customer_code) {
-        const cust = customerMap.get(normalizeCode(String(si.customer_code)));
-        if (cust) {
-          customerCode = String(cust.customer_code ?? "");
-          customerName = String(cust.customer_name ?? "Unknown Customer");
-          brgy = String(cust.brgy ?? "");
-          city = String(cust.city ?? "");
-          province = String(cust.province ?? "");
-        } else {
-          customerCode = String(si.customer_code);
-        }
-      }
-
+    if (sortedInvoices.length === 0) {
       enrichedInvoices.push({
         dispatchPlanId: planIdStr,
         dispatchDocNo: String(plan.doc_no ?? ""),
-        sequence: inv.sequence ?? 0,
-        orderId: si ? String(si.order_id ?? "") : "",
-        invoiceId: String(inv.invoice_id),
-        invoiceNo: si ? String(si.invoice_no ?? "") : "",
-        customerCode,
-        customerName,
-        brgy,
-        city,
-        province,
-        netAmount: Number(si?.net_amount ?? 0) || 0,
-        totalAmount: Number(si?.total_amount ?? 0) || 0,
-        createdDate: si ? String(si.created_date ?? "") : "",
+        sequence: 0,
+        orderId: "",
+        invoiceId: "",
+        invoiceNo: "",
+        customerCode: "",
+        customerName: "No Invoices Assigned",
+        brgy: "",
+        city: "",
+        province: "",
+        netAmount: 0,
+        totalAmount: 0,
+        createdDate: "",
         driverFirstName,
         driverLastName,
         helperNames: helpers,
         vehiclePlate,
-        invoiceStatus: String(inv.status ?? "Not Fulfilled"),
+        invoiceStatus: "N/A",
         dispatchStatus: String(plan.status ?? ""),
         estimatedTimeOfDispatch: String(plan.estimated_time_of_dispatch ?? ""),
         estimatedTimeOfArrival: String(plan.estimated_time_of_arrival ?? ""),
       });
+    } else {
+      for (const inv of sortedInvoices) {
+        const si = salesInvoiceMap.get(String(inv.invoice_id));
+
+        let customerCode = "";
+        let customerName = "Unknown Customer";
+        let brgy = "";
+        let city = "";
+        let province = "";
+
+        if (si?.customer_code) {
+          const cust = customerMap.get(normalizeCode(String(si.customer_code)));
+          if (cust) {
+            customerCode = String(cust.customer_code ?? "");
+            customerName = String(cust.customer_name ?? "Unknown Customer");
+            brgy = String(cust.brgy ?? "");
+            city = String(cust.city ?? "");
+            province = String(cust.province ?? "");
+          } else {
+            customerCode = String(si.customer_code);
+          }
+        }
+
+        enrichedInvoices.push({
+          dispatchPlanId: planIdStr,
+          dispatchDocNo: String(plan.doc_no ?? ""),
+          sequence: inv.sequence ?? 0,
+          orderId: si ? String(si.order_id ?? "") : "",
+          invoiceId: String(inv.invoice_id),
+          invoiceNo: si ? String(si.invoice_no ?? "") : "",
+          customerCode,
+          customerName,
+          brgy,
+          city,
+          province,
+          netAmount: Number(si?.net_amount ?? 0) || 0,
+          totalAmount: Number(si?.total_amount ?? 0) || 0,
+          createdDate: si ? String(si.created_date ?? "") : "",
+          driverFirstName,
+          driverLastName,
+          helperNames: helpers,
+          vehiclePlate,
+          invoiceStatus: String(inv.status ?? "Not Fulfilled"),
+          dispatchStatus: String(plan.status ?? ""),
+          estimatedTimeOfDispatch: String(plan.estimated_time_of_dispatch ?? ""),
+          estimatedTimeOfArrival: String(plan.estimated_time_of_arrival ?? ""),
+        });
+      }
     }
   }
 

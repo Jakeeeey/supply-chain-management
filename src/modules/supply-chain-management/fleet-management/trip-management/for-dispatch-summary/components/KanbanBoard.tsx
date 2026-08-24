@@ -119,12 +119,20 @@ export function KanbanBoard({ dispatchPlanGroups, loading }: KanbanBoardProps) {
 
             {/* Invoice Cards (grouped by customer) */}
             <div className="flex flex-col gap-3">
-              {groupDispatchInvoices(group.invoices).map((grouped) => (
-                <InvoiceCard
-                  key={`${group.dispatchDocNo}-${grouped.groupKey}`}
-                  group={grouped}
-                />
-              ))}
+              {group.invoices.length === 1 && group.invoices[0].invoiceId === "" ? (
+                <div className="flex items-center justify-center p-4 border border-dashed rounded-md bg-muted/20">
+                  <span className="text-xs text-muted-foreground text-center">
+                    No invoices assigned to this dispatch plan.
+                  </span>
+                </div>
+              ) : (
+                groupDispatchInvoices(group.invoices).map((grouped) => (
+                  <InvoiceCard
+                    key={`${group.dispatchDocNo}-${grouped.groupKey}`}
+                    group={grouped}
+                  />
+                ))
+              )}
             </div>
           </div>
         ))}

@@ -41,9 +41,9 @@ export function FilterBar({
   loading,
 }: FilterBarProps) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap lg:flex-nowrap sm:items-center sm:gap-3 lg:gap-4">
       {/* Search */}
-      <div className="relative flex-1">
+      <div className="relative flex-1 min-w-[200px]">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           id="for-dispatch-search"
@@ -64,7 +64,7 @@ export function FilterBar({
           { value: "All Drivers", label: "All Drivers" },
           ...uniqueDrivers.map((name) => ({ value: name, label: name }))
         ]}
-        className="h-9 w-full sm:w-[180px]"
+        className="h-9 w-full sm:w-[170px] lg:w-[180px] shrink-0"
       />
 
       {/* Vehicle Filter */}
@@ -77,7 +77,7 @@ export function FilterBar({
           { value: "All Vehicles", label: "All Vehicles" },
           ...uniqueVehicles.map((plate) => ({ value: plate, label: plate }))
         ]}
-        className="h-9 w-full sm:w-[160px]"
+        className="h-9 w-full sm:w-[150px] lg:w-[160px] shrink-0"
       />
 
       {/* Customer Filter */}
@@ -90,7 +90,8 @@ export function FilterBar({
           { value: "All Customers", label: "All Customers" },
           ...uniqueCustomers.map((name) => ({ value: name, label: name }))
         ]}
-        className="h-9 w-full sm:w-[200px]"
+        className="h-9 w-full sm:w-[180px] lg:w-[200px] shrink-0"
+        align="end"
       />
 
       {/* Refresh */}
