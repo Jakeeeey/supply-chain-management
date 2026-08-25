@@ -22,11 +22,13 @@ export async function fetchMasterData(): Promise<DispatchCreationMasterData> {
     // Fetch Drivers
     fetchItems<DriverOption>("/items/user", {
       fields: "user_id,user_fname,user_lname",
+      "filter[position_id][_eq]": 1000,
       limit: -1,
     }),
     // Fetch Helpers
     fetchItems<HelperOption>("/items/user", {
       fields: "user_id,user_fname,user_lname",
+      "filter[position_id][_eq]": 1001,
       limit: -1,
     }),
     // Fetch Vehicles
