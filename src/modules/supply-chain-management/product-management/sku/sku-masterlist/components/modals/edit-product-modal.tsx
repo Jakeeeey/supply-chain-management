@@ -38,6 +38,15 @@ export function EditProductModal({
 }: EditProductModalProps) {
   const [formData, setFormData] = useState<Partial<SKU>>({});
 
+  const getRawId = (val: unknown): number | undefined => {
+    if (!val) return undefined;
+    if (typeof val === "object") {
+      return (val as { id: number }).id;
+    }
+    const num = parseInt(String(val));
+    return isNaN(num) ? undefined : num;
+  };
+
   useEffect(() => {
     if (!isOpen) {
       const timer = setTimeout(() => {
@@ -52,10 +61,10 @@ export function EditProductModal({
       const timer = setTimeout(() => {
         setFormData({
           product_name: sku.product_name,
-          product_supplier: sku.product_supplier,
-          product_class: sku.product_class,
-          product_segment: sku.product_segment,
-          product_section: sku.product_section,
+          product_supplier: getRawId(sku.product_supplier),
+          product_class: getRawId(sku.product_class),
+          product_segment: getRawId(sku.product_segment),
+          product_section: getRawId(sku.product_section),
           description: sku.description,
         });
       }, 0);
@@ -101,7 +110,7 @@ export function EditProductModal({
           </div>
         </DialogHeader>
 
-        <div className="p-6 space-y-5">
+        <div className="p-6 space-y-5 flex-1 overflow-y-auto">
             <div className="flex items-start gap-2 p-3 rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
               <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
               <p className="text-xs text-blue-700 dark:text-blue-300">

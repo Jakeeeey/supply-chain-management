@@ -102,7 +102,7 @@ export function MasterlistTable({
         sorting={sorting}
         onSortingChange={onSortingChange}
         manualSorting={manualSorting}
-        searchKey={hideSearch ? undefined : "product_name"}
+        searchKey={hideSearch ? undefined : "product_name_or_SKU_code"}
         onSearch={onSearch}
         isLoading={isLoading}
         onSelectionChange={onSelectionChange}

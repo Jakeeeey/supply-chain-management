@@ -11,6 +11,10 @@ import { API_BASE_URL, fetchItems, request } from "./sku-api";
  * Read-only query operations for SKUs.
  * No side effects — safe to call from any context.
  */
+let cachedMasterData: MasterData | null = null;
+let lastFetchedTime = 0;
+const CACHE_TTL = 30000; // 30 seconds cache TTL
+
 export const skuQueryService = {
   async fetchApproved(
     limit: number = 10,
@@ -160,6 +164,7 @@ export const skuQueryService = {
     facets?: {
       itemType?: string;
       isActive?: string;
+      statusFilter?: string;
     }
   ): Promise<PaginatedSKU> {
     const filter: Record<string, unknown[]> = { _and: [] };
@@ -169,11 +174,16 @@ export const skuQueryService = {
 
     if (status) {
       const target = status.toUpperCase();
-      filter._and.push(
-        target === "DRAFT"
-          ? { status: { _in: ["DRAFT", "REJECTED"] } }
-          : { status: { _eq: target } },
-      );
+      // If a specific statusFilter override is provided, use it directly
+      if (facets?.statusFilter) {
+        filter._and.push({ status: { _eq: facets.statusFilter.toUpperCase() } });
+      } else {
+        filter._and.push(
+          target === "DRAFT"
+            ? { status: { _in: ["DRAFT", "REJECTED"] } }
+            : { status: { _eq: target } },
+        );
+      }
     }
 
     if (facets?.itemType) {
@@ -200,7 +210,7 @@ export const skuQueryService = {
         allowedDraftIds = [];
       }
       filter._and.push({
-        id: { _in: allowedDraftIds.length > 0 ? allowedDraftIds : [-1] }
+        product_id: { _in: allowedDraftIds.length > 0 ? allowedDraftIds : [-1] }
       });
     }
 
@@ -266,6 +276,12 @@ export const skuQueryService = {
   },
 
   async fetchMasterData(): Promise<MasterData> {
+    const now = Date.now();
+    if (cachedMasterData && (now - lastFetchedTime < CACHE_TTL)) {
+      console.log(`[SKU Query] Returning cached masterData (age: ${now - lastFetchedTime}ms)`);
+      return cachedMasterData;
+    }
+
     const fetchResilient = async (
       names: string[],
     ): Promise<{ data: Record<string, unknown>[] }> => {
@@ -290,7 +306,7 @@ export const skuQueryService = {
       fetchResilient(["product_section", "section", "sections"]),
     ]);
 
-    return {
+    const result = {
       units: normalizeMasterData(units.data || []),
       categories: normalizeMasterData(categories.data || []),
       brands: normalizeMasterData(brands.data || []),
@@ -299,6 +315,10 @@ export const skuQueryService = {
       segments: normalizeMasterData(segments.data || []),
       sections: normalizeMasterData(sections.data || []),
     };
+
+    cachedMasterData = result;
+    lastFetchedTime = Date.now();
+    return result;
   },
 
   async checkDuplicateName(name: string): Promise<boolean> {
