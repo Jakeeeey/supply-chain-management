@@ -121,12 +121,14 @@ export const getColumns = (
     ),
   },
   {
+    id: "product_name_or_SKU_code",
     accessorKey: "product_name",
     enableSorting: true,
     header: ({ column }) => (
       <DataTableColumnHeader column={column} label="Product Name" />
     ),
     meta: { label: "Product Name" },
+    filterFn: () => true,
     cell: ({ row }) => {
       const canExpand = row.getCanExpand();
       const isExpanded = row.getIsExpanded();
@@ -336,6 +338,8 @@ export const getColumns = (
     enableHiding: false,
     meta: { label: "Actions" },
     cell: ({ row }) => {
+      if (row.depth > 0) return null;
+
       const sku = row.original;
       const id = sku.id || sku.product_id;
       const status = (sku.status || "Draft").toLowerCase().replace(/_/g, " ");

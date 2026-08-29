@@ -1,6 +1,6 @@
 import { SKU } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { API_BASE_URL, fetchItems, request } from "./sku-api";
-import { generateSKUCode } from "./sku-generator";
+import { generateSKUCode, generateBarcode } from "./sku-generator";
 import { skuQueryService } from "./sku-query";
 import { getLiteralPHTTime } from "@/modules/supply-chain-management/product-management/utils/timezone";
 
@@ -11,6 +11,9 @@ import { getLiteralPHTTime } from "@/modules/supply-chain-management/product-man
  */
 export const skuLifecycleService = {
   async submitMasterEdit(id: number | string, editedFields: Partial<SKU>): Promise<SKU> {
+    const { units = [], ...baseData } = editedFields;
+    const nowPHT = getLiteralPHTTime();
+
     // 1. Fetch the current master product to get all existing fields
     const { data: master } = await request<{ data: SKU }>(
       `${API_BASE_URL}/items/products/${id}?fields=*`,
@@ -30,33 +33,148 @@ export const skuLifecycleService = {
       ...baseFields
     } = master as SKU & Record<string, unknown>;
 
-    // 3. Merge with edited fields and tag as a masterlist edit
-    const nowPHT = getLiteralPHTTime();
-    const draftPayload = {
+    // Helper to extract raw ID from relational fields
+    const getRawId = (val: unknown): number | null => {
+      if (!val) return null;
+      if (typeof val === "object" && val !== null) {
+        return (val as { id?: number }).id ?? null;
+      }
+      const num = parseInt(String(val));
+      return isNaN(num) ? null : num;
+    };
+
+    // Sanitize any relational fields to prevent validation errors on insert
+    const relationalKeys = [
+      "product_brand",
+      "product_category",
+      "product_class",
+      "product_segment",
+      "product_section",
+      "product_supplier",
+      "unit_of_measurement",
+    ];
+    relationalKeys.forEach((key) => {
+      if (baseFields[key] !== undefined) {
+        baseFields[key] = getRawId(baseFields[key]) as unknown;
+      }
+    });
+
+    // 3. Resolve codes for the units
+    const masterData = await skuQueryService.fetchMasterData();
+    let parentSequence: string | undefined = undefined;
+    const codes: string[] = [];
+
+    for (const u of units) {
+      if (u.sku_code?.trim()) {
+        codes.push(u.sku_code.trim());
+      } else {
+        const result = await generateSKUCode(
+          {
+            ...baseFields,
+            ...baseData,
+            id: Number(id),
+            product_id: Number(id),
+            unit_of_measurement: u.unit_id,
+            unit_of_measurement_count: u.conversion_factor,
+          } as SKU,
+          masterData,
+          parentSequence
+        );
+        codes.push(result.code);
+        if (!parentSequence) {
+          parentSequence = result.sequence;
+        }
+      }
+    }
+
+    const parentUnitName = units.length > 0
+      ? (masterData.units.find((u) => Number(u.id) === Number(units[0].unit_id))?.name || null)
+      : null;
+
+    // 4. Merge parent unit fields
+    const parentPayload = {
       ...baseFields,
-      ...editedFields,
+      ...baseData,
       status: "FOR_APPROVAL" as const,
       remarks: `MASTER_EDIT:${id}`,
       date_added: nowPHT,
       created_at: nowPHT,
       last_updated: nowPHT,
-    };
+    } as Record<string, unknown>;
 
-    // 4. Create the parent draft record
-    const { data: draft } = await request<{ data: SKU }>(
-      `${API_BASE_URL}/items/product_draft`,
-      { method: "POST", body: JSON.stringify(draftPayload) },
-    );
+    if (units.length > 0) {
+      const u = units[0];
+      parentPayload.unit_of_measurement = u.unit_id;
+      parentPayload.unit_of_measurement_count = u.conversion_factor;
+      parentPayload.price_per_unit = u.price;
+      parentPayload.cost_per_unit = u.cost;
+      parentPayload.barcode = u.barcode?.trim() ? u.barcode.trim() : generateBarcode();
+      parentPayload.product_code = codes[0];
+      if (parentUnitName) {
+        parentPayload.base_unit = parentUnitName;
+      }
+    }
 
-    // 5. Sync supplier into product_draft_per_supplier junction
-    const supplierId = editedFields.product_supplier ?? master.product_supplier;
+    // 5. Create or update the parent draft record
+    const { data: existingDrafts } = await fetchItems<SKU>("/items/product_draft", {
+      filter: JSON.stringify({
+        _and: [
+          { product_code: { _eq: codes[0] } },
+          { parent_id: { _null: true } }
+        ]
+      }),
+      limit: 1,
+    });
+
+    let draft: SKU;
+    if (existingDrafts && existingDrafts.length > 0) {
+      const existingId = existingDrafts[0].id || existingDrafts[0].product_id;
+      const { data: updated } = await request<{ data: SKU }>(
+        `${API_BASE_URL}/items/product_draft/${existingId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(parentPayload),
+        }
+      );
+      draft = updated;
+      console.log(`[SKU Lifecycle] Overwrote existing parent draft ID: ${existingId}`);
+    } else {
+      const { data: created } = await request<{ data: SKU }>(
+        `${API_BASE_URL}/items/product_draft`,
+        {
+          method: "POST",
+          body: JSON.stringify(parentPayload),
+        }
+      );
+      draft = created;
+      console.log(`[SKU Lifecycle] Created new parent draft ID: ${draft.id || draft.product_id}`);
+    }
+
     const draftId = draft.id || draft.product_id;
+
+    // 6. Sync supplier in product_draft_per_supplier
+    const supplierId = getRawId(editedFields.product_supplier ?? master.product_supplier);
     if (draftId && supplierId) {
       try {
-        await request(`${API_BASE_URL}/items/product_draft_per_supplier`, {
-          method: "POST",
-          body: JSON.stringify({ product_draft_id: draftId, supplier_id: supplierId }),
-        });
+        const { data: existingLink } = await fetchItems<Record<string, unknown>>(
+          "/items/product_draft_per_supplier",
+          {
+            filter: JSON.stringify({
+              _and: [
+                { product_draft_id: { _eq: draftId } },
+                { supplier_id: { _eq: supplierId } },
+              ],
+            }),
+            limit: 1,
+          },
+        );
+
+        if (!existingLink || existingLink.length === 0) {
+          await request(`${API_BASE_URL}/items/product_draft_per_supplier`, {
+            method: "POST",
+            body: JSON.stringify({ product_draft_id: draftId, supplier_id: supplierId }),
+          });
+        }
       } catch (err: unknown) {
         console.error(
           `[SKU Lifecycle] Failed to save supplier for master edit draft ${draftId}:`,
@@ -65,75 +183,136 @@ export const skuLifecycleService = {
       }
     }
 
-    // 6. Cascade shared fields to child SKUs in products table
-    const { data: children } = await fetchItems<SKU>("/items/products", {
-      filter: JSON.stringify({ parent_id: { _eq: id } }),
-      fields: "*",
-      limit: -1,
-    });
+    // Delete any existing child drafts that are not present in the new edit submission
+    if (existingDrafts && existingDrafts.length > 0) {
+      try {
+        const { data: existingDraftChildren } = await fetchItems<SKU>("/items/product_draft", {
+          filter: JSON.stringify({ parent_id: { _eq: draftId } }),
+          limit: -1,
+        });
 
-    if (children?.length && draftId) {
-      // Shared fields that cascade from parent to children
-      const sharedFields: Partial<SKU> = {
-        product_name: draft.product_name,
-        product_brand: draft.product_brand,
-        product_category: draft.product_category,
-        product_class: draft.product_class,
-        product_segment: draft.product_segment,
-        product_section: draft.product_section,
-        product_supplier: draft.product_supplier,
-        description: draft.description,
-        short_description: draft.short_description,
-        isActive: draft.isActive,
-        inventory_type: draft.inventory_type,
-        flavor: draft.flavor,
-        size: draft.size,
-        color: draft.color,
-      };
+        if (existingDraftChildren && existingDraftChildren.length > 0) {
+          const newUnitCodes = codes.slice(1);
 
+          for (const childDraft of existingDraftChildren) {
+            const childDraftId = childDraft.id || childDraft.product_id;
+            if (childDraftId && childDraft.product_code && !newUnitCodes.includes(childDraft.product_code)) {
+              await skuLifecycleService.deleteDraft(childDraftId);
+              console.log(`[SKU Lifecycle] Cleaned up removed variant draft ID: ${childDraftId}`);
+            }
+          }
+        }
+      } catch (cleanupErr) {
+        console.error("[SKU Lifecycle] Failed to clean up removed child variant drafts:", cleanupErr);
+      }
+    }
+
+    // 7. Create child draft records for remaining units
+    const childUnits = units.slice(1);
+    const sharedFields = {
+      product_name: draft.product_name,
+      product_brand: draft.product_brand,
+      product_category: draft.product_category,
+      product_class: draft.product_class,
+      product_segment: draft.product_segment,
+      product_section: draft.product_section,
+      product_supplier: draft.product_supplier,
+      description: draft.description,
+      short_description: draft.short_description,
+      isActive: draft.isActive,
+      inventory_type: draft.inventory_type,
+      flavor: draft.flavor,
+      size: draft.size,
+      color: draft.color,
+      status: draft.status,
+      base_unit: draft.base_unit || parentUnitName,
+    };
+
+    if (draftId) {
       await Promise.all(
-        children.map(async (child) => {
-          const childMasterId = child.id || child.product_id;
-
-          // Strip metadata from child
-          const {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            id: _cId,
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            product_id: _cPid,
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            created_at: _cCa, updated_at: _cUa, user_created: _cUc, user_updated: _cUu,
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            date_created: _cDc, date_updated: _cDu,
-            ...childBaseFields
-          } = child as SKU & Record<string, unknown>;
+        childUnits.map(async (u, idx) => {
+          const childCode = codes[idx + 1];
+          const childMasterId = u.id;
+          const remarks = childMasterId ? `MASTER_EDIT:${childMasterId}` : "MASTER_EDIT:NEW";
 
           const childDraftPayload = {
-            ...childBaseFields,
             ...sharedFields,
             parent_id: draftId,
-            status: "FOR_APPROVAL" as const,
-            remarks: `MASTER_EDIT:${childMasterId}`,
+            unit_of_measurement: u.unit_id,
+            unit_of_measurement_count: u.conversion_factor,
+            price_per_unit: u.price,
+            cost_per_unit: u.cost,
+            barcode: u.barcode?.trim() ? u.barcode.trim() : generateBarcode(),
+            product_code: childCode,
+            remarks,
             date_added: nowPHT,
             created_at: nowPHT,
             last_updated: nowPHT,
           };
 
-          const { data: childDraft } = await request<{ data: SKU }>(
-            `${API_BASE_URL}/items/product_draft`,
-            { method: "POST", body: JSON.stringify(childDraftPayload) },
-          );
+          // Check if child draft already exists
+          let childDraftId: number | string | undefined = undefined;
+          const { data: existingChildren } = await fetchItems<SKU>("/items/product_draft", {
+            filter: JSON.stringify({
+              _and: [
+                { product_code: { _eq: childCode } },
+                { parent_id: { _eq: draftId } }
+              ]
+            }),
+            limit: 1,
+          });
+          if (existingChildren && existingChildren.length > 0) {
+            childDraftId = existingChildren[0].id || existingChildren[0].product_id;
+          }
+
+          let childDraft: SKU;
+          if (childDraftId) {
+            const { data: updatedChild } = await request<{ data: SKU }>(
+              `${API_BASE_URL}/items/product_draft/${childDraftId}`,
+              {
+                method: "PATCH",
+                body: JSON.stringify(childDraftPayload),
+              }
+            );
+            childDraft = updatedChild;
+            console.log(`[SKU Lifecycle] Overwrote existing child draft ID: ${childDraftId}`);
+          } else {
+            const { data: createdChild } = await request<{ data: SKU }>(
+              `${API_BASE_URL}/items/product_draft`,
+              {
+                method: "POST",
+                body: JSON.stringify(childDraftPayload),
+              }
+            );
+            childDraft = createdChild;
+            console.log(`[SKU Lifecycle] Created new child draft ID: ${childDraft.id || childDraft.product_id}`);
+          }
 
           // Sync supplier for child draft
-          const childDraftId = childDraft.id || childDraft.product_id;
-          if (childDraftId && supplierId) {
+          const resolvedChildDraftId = childDraft.id || childDraft.product_id;
+          if (resolvedChildDraftId && supplierId) {
             try {
-              await request(`${API_BASE_URL}/items/product_draft_per_supplier`, {
-                method: "POST",
-                body: JSON.stringify({ product_draft_id: childDraftId, supplier_id: supplierId }),
-              });
+              const { data: existingLink } = await fetchItems<Record<string, unknown>>(
+                "/items/product_draft_per_supplier",
+                {
+                  filter: JSON.stringify({
+                    _and: [
+                      { product_draft_id: { _eq: resolvedChildDraftId } },
+                      { supplier_id: { _eq: supplierId } },
+                    ],
+                  }),
+                  limit: 1,
+                },
+              );
+
+              if (!existingLink || existingLink.length === 0) {
+                await request(`${API_BASE_URL}/items/product_draft_per_supplier`, {
+                  method: "POST",
+                  body: JSON.stringify({ product_draft_id: resolvedChildDraftId, supplier_id: supplierId }),
+                });
+              }
             } catch (e) {
-              console.error(`[SKU Lifecycle] Failed to save child supplier for draft ${childDraftId}:`, e);
+              console.error(`[SKU Lifecycle] Failed to save child supplier for draft ${resolvedChildDraftId}:`, e);
             }
           }
         }),
@@ -172,21 +351,28 @@ export const skuLifecycleService = {
     )?.name || null;
     const codes: string[] = [];
     let parentSequence: string | undefined = undefined;
+    const isManual = units.some((u) => u.sku_code?.trim());
 
-    for (const u of units) {
-      const result = await generateSKUCode(
-        {
-          ...baseData,
-          unit_of_measurement: u.unit_id,
-          unit_of_measurement_count: u.conversion_factor,
-        } as SKU,
-        masterData,
-        parentSequence
-      );
-      
-      codes.push(result.code);
-      if (!parentSequence) {
-        parentSequence = result.sequence;
+    if (isManual) {
+      for (const u of units) {
+        codes.push(u.sku_code?.trim() || "");
+      }
+    } else {
+      for (const u of units) {
+        const result = await generateSKUCode(
+          {
+            ...baseData,
+            unit_of_measurement: u.unit_id,
+            unit_of_measurement_count: u.conversion_factor,
+          } as SKU,
+          masterData,
+          parentSequence
+        );
+        
+        codes.push(result.code);
+        if (!parentSequence) {
+          parentSequence = result.sequence;
+        }
       }
     }
 
@@ -203,7 +389,7 @@ export const skuLifecycleService = {
       unit_of_measurement_count: u.conversion_factor,
       price_per_unit: u.price,
       cost_per_unit: u.cost,
-      barcode: u.barcode,
+      barcode: u.barcode?.trim() ? u.barcode.trim() : generateBarcode(),
       product_code: code,
       date_added: nowPHT,
       created_at: nowPHT,
@@ -274,21 +460,28 @@ export const skuLifecycleService = {
     
     let parentSequence: string | undefined = undefined;
     const codes: string[] = [];
+    const isManual = units.some((u) => u.sku_code?.trim());
     
-    // Generate codes for all units
-    for (const u of units) {
-      const result = await generateSKUCode(
-        {
-          ...baseData,
-          unit_of_measurement: u.unit_id,
-          unit_of_measurement_count: u.conversion_factor,
-        } as SKU,
-        masterData,
-        parentSequence
-      );
-      codes.push(result.code);
-      if (!parentSequence) {
-        parentSequence = result.sequence;
+    if (isManual) {
+      for (const u of units) {
+        codes.push(u.sku_code?.trim() || "");
+      }
+    } else {
+      // Generate codes for all units
+      for (const u of units) {
+        const result = await generateSKUCode(
+          {
+            ...baseData,
+            unit_of_measurement: u.unit_id,
+            unit_of_measurement_count: u.conversion_factor,
+          } as SKU,
+          masterData,
+          parentSequence
+        );
+        codes.push(result.code);
+        if (!parentSequence) {
+          parentSequence = result.sequence;
+        }
       }
     }
     
@@ -302,7 +495,7 @@ export const skuLifecycleService = {
       parentPayload.unit_of_measurement_count = u.conversion_factor;
       parentPayload.price_per_unit = u.price;
       parentPayload.cost_per_unit = u.cost;
-      parentPayload.barcode = u.barcode;
+      parentPayload.barcode = u.barcode?.trim() ? u.barcode.trim() : generateBarcode();
       parentPayload.product_code = codes[0];
       if (parentUnitName) {
         parentPayload.base_unit = parentUnitName;
@@ -366,9 +559,7 @@ export const skuLifecycleService = {
       toDelete.map(async (child) => {
         const childId = child.id || child.product_id;
         if (childId) {
-          await request(`${API_BASE_URL}/items/product_draft/${childId}`, {
-            method: "DELETE",
-          });
+          await skuLifecycleService.deleteDraft(childId);
         }
       }),
     );
@@ -405,7 +596,7 @@ export const skuLifecycleService = {
           unit_of_measurement_count: u.conversion_factor,
           price_per_unit: u.price,
           cost_per_unit: u.cost,
-          barcode: u.barcode,
+          barcode: u.barcode?.trim() ? u.barcode.trim() : generateBarcode(),
           product_code: childCode,
           last_updated: nowPHT,
         };
@@ -504,7 +695,30 @@ export const skuLifecycleService = {
   },
 
   async deleteDraft(id: number | string): Promise<boolean> {
-    // 1. Clean up supplier junction records for this draft first
+    // 1. Fetch child drafts that point to this parent
+    try {
+      const { data: children } = await fetchItems<{ id: number; product_id: number }>("/items/product_draft", {
+        filter: JSON.stringify({ parent_id: { _eq: id } }),
+        limit: -1,
+      });
+      if (children?.length) {
+        await Promise.all(
+          children.map(async (child) => {
+            const childId = child.id || child.product_id;
+            if (childId) {
+              await skuLifecycleService.deleteDraft(childId);
+            }
+          }),
+        );
+      }
+    } catch (err: unknown) {
+      console.error(
+        `[SKU Lifecycle] Child drafts cleanup failed for parent ${id}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+
+    // 2. Clean up supplier junction records for this draft first
     try {
       const { data: existing } = await fetchItems<{ id: number }>(
         "/items/product_draft_per_supplier",
@@ -529,7 +743,7 @@ export const skuLifecycleService = {
       );
     }
 
-    // 2. Delete the draft itself
+    // 3. Delete the draft itself
     await request(`${API_BASE_URL}/items/product_draft/${id}`, {
       method: "DELETE",
     });

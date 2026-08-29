@@ -46,7 +46,7 @@ export const skuSchema = z
     short_description: z.string().nullable().optional(),
 
     // UOM and Conversion
-    base_unit: z.number().int().nullable().optional(), 
+    base_unit: z.union([z.string(), z.number()]).nullable().optional(), 
     unit_of_measurement: z.union([z.number(), z.record(z.string(), z.unknown())]).nullable().optional(),
     unit_of_measurement_count: z.number().int().nullable().optional(), 
 

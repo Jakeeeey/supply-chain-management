@@ -75,7 +75,7 @@ export function ApprovalTable({
         sorting={sorting}
         onSortingChange={onSortingChange}
         manualSorting={manualSorting}
-        searchKey="product_name"
+        searchKey="product_name_or_SKU_code"
         onSearch={onSearch}
         isLoading={isLoading}
         onSelectionChange={onSelectionChange}
