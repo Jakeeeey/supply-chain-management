@@ -18,11 +18,19 @@ export const fetchPlanDetails = async (id: number): Promise<PostDispatchApproval
 };
 
 export const approveDispatchPlan = async (id: number): Promise<boolean> => {
-    const res = await fetch(`${NEXT_API_BASE}/${id}/approve`, { method: "PUT" });
+    const res = await fetch(`${NEXT_API_BASE}/${id}`, { 
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "approve" })
+    });
     return res.ok;
 };
 
 export const rejectDispatchPlan = async (id: number): Promise<boolean> => {
-    const res = await fetch(`${NEXT_API_BASE}/${id}/reject`, { method: "PUT" });
+    const res = await fetch(`${NEXT_API_BASE}/${id}`, { 
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reject" })
+    });
     return res.ok;
 };
