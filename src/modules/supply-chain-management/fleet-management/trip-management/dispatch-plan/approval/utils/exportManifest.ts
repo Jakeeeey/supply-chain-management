@@ -180,10 +180,20 @@ export const exportDispatchManifestPDF = (plan: PostDispatchApprovalDto) => {
         currentY = 20;
     }
 
+    const finalInvoiceSummary: AutoTableRow[] = invoiceSummary.length > 0 
+        ? [...invoiceSummary] 
+        : [[{ content: "No deliveries logged.", colSpan: 3, styles: { fontStyle: "italic", cellPadding: 1.5 } }]];
+
+    const totalInvoiceAmount = plan.stops?.reduce((sum, stop) => stop.type === "DELIVERY" ? sum + (stop.documentAmount || 0) : sum, 0) || 0;
+    finalInvoiceSummary.push([
+        { content: "TOTAL", colSpan: 2, styles: { fontStyle: "bold", halign: "right", cellPadding: 1.5 } },
+        { content: formatPDFCurrency(totalInvoiceAmount), styles: { fontStyle: "bold", halign: "right", cellPadding: 1.5 } }
+    ]);
+
     autoTable(doc, {
         startY: currentY,
         head: [["Customer Name", "Invoice No.", "Amount"]],
-        body: invoiceSummary.length > 0 ? invoiceSummary : [["No deliveries logged.", "", ""]],
+        body: finalInvoiceSummary,
         theme: "plain",
         headStyles: { fillColor: false, textColor: 0, fontStyle: "bold", fontSize: 8, lineWidth: { bottom: 0.5 }, cellPadding: 2 },
         columnStyles: {
