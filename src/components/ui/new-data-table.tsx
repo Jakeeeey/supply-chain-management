@@ -248,18 +248,27 @@ export function DataTable<TData, TValue>({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
-        {searchKey && (
-          <div className="max-w-sm w-full">
-            <SearchInput
-              placeholder={`Search ${searchKey.replace(/_/g, " ")}...`}
-              initialValue={
-                (table.getColumn(searchKey)?.getFilterValue() as string) ?? ""
-              }
-              isLoading={isLoading}
-              onSearch={handleSearchWrapper}
-            />
-          </div>
-        )}
+        {searchKey && (() => {
+          const formattedKey = searchKey
+            .replace(/_/g, " ")
+            .replace(/([A-Z])/g, " $1")
+            .trim()
+            .toLowerCase();
+          const titleCaseKey = formattedKey.replace(/\b\w/g, c => c.toUpperCase());
+
+          return (
+            <div className="max-w-sm w-full">
+              <SearchInput
+                placeholder={`Search ${titleCaseKey}...`}
+                initialValue={
+                  (table.getColumn(searchKey)?.getFilterValue() as string) ?? ""
+                }
+                isLoading={isLoading}
+                onSearch={handleSearchWrapper}
+              />
+            </div>
+          );
+        })()}
 
         <div className="flex items-center gap-2 ml-auto">
           {actionComponent}
