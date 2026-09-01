@@ -63,10 +63,18 @@ export const prepareSKUPayload = (
     last_updated: nowPHT,
     created_at: draft.created_at || nowPHT,
     updated_at: nowPHT,
-    created_by: draft.created_by || null,
-    updated_by: draft.updated_by || null,
-    user_created: draft.user_created || draft.created_by || null,
-    user_updated: draft.user_updated || draft.updated_by || null,
+    created_by: typeof draft.created_by === "object" && draft.created_by !== null
+      ? (draft.created_by as { id?: number | string }).id || null
+      : draft.created_by || null,
+    updated_by: typeof draft.updated_by === "object" && draft.updated_by !== null
+      ? (draft.updated_by as { id?: number | string }).id || null
+      : draft.updated_by || null,
+    user_created: typeof draft.user_created === "object" && draft.user_created !== null
+      ? (draft.user_created as { id?: number | string }).id || null
+      : draft.user_created || null,
+    user_updated: typeof draft.user_updated === "object" && draft.user_updated !== null
+      ? (draft.user_updated as { id?: number | string }).id || null
+      : draft.user_updated || null,
     product_brand: (draft.product_brand as Record<string, unknown>)?.id ?? draft.product_brand,
     product_category: (draft.product_category as Record<string, unknown>)?.id ?? draft.product_category,
     product_class: (draft.product_class as Record<string, unknown>)?.id ?? draft.product_class,

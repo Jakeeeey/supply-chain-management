@@ -6,6 +6,10 @@ import { prepareSKUPayload } from "../utils/sku-mapper";
 import { API_BASE_URL, fetchItems, request } from "./sku-api";
 import { generateSKUCode } from "./sku-generator";
 import { getDatabaseTimeISO } from "@/modules/supply-chain-management/product-management/utils/timezone";
+import { skuLifecycleService } from "./sku-lifecycle";
+
+// In-memory cache to store parentDraftId -> parentMasterId mappings during sequential approval queue execution
+const approvedDraftsMap = new Map<string | number, string | number>();
 
 /**
  * Private helper: resolves the master product ID of a draft's parent.
@@ -16,14 +20,43 @@ async function resolveParentMasterId(
 ): Promise<number | string | null> {
   if (!draft.parent_id) return null;
 
+  const parentId =
+    typeof draft.parent_id === "object"
+      ? (draft.parent_id as unknown as { id: number }).id
+      : draft.parent_id;
+
+  // Fallback 1: Resolve using the in-memory cache if the parent draft has already been approved and deleted in this session
+  if (parentId && approvedDraftsMap.has(parentId)) {
+    return approvedDraftsMap.get(parentId)!;
+  }
+
+  // Fallback 2: If this is an edit of an existing child variant, lookup the variant's original parent ID in the master list
+  if (draft.remarks?.startsWith("MASTER_EDIT:")) {
+    const rawChildId = draft.remarks.split(":")[1];
+    if (rawChildId && rawChildId !== "NEW") {
+      try {
+        const { data: existingChild } = await fetchItems<SKU>("/items/products", {
+          filter: JSON.stringify({ product_id: { _eq: rawChildId } }),
+          fields: "parent_id",
+          limit: 1,
+        });
+        if (existingChild?.length && existingChild[0].parent_id) {
+          const parentIdVal = typeof existingChild[0].parent_id === "object" && existingChild[0].parent_id !== null
+            ? (existingChild[0].parent_id as { id?: number }).id
+            : existingChild[0].parent_id;
+          if (parentIdVal) {
+            return parentIdVal;
+          }
+        }
+      } catch (err) {
+        console.warn(`[SKU Approval] Failed to resolve parent ID from existing child variant ${rawChildId}:`, err);
+      }
+    }
+  }
+
   let parentCode = (draft.parent_id as unknown as { product_code?: string } | undefined)?.product_code;
 
   if (!parentCode) {
-    const parentId =
-      typeof draft.parent_id === "object"
-        ? (draft.parent_id as unknown as { id: number }).id
-        : draft.parent_id;
-
     try {
       const { data: pDraft } = await request<{ data: SKU }>(
         `${API_BASE_URL}/items/product_draft/${parentId}`,
@@ -55,17 +88,45 @@ async function upsertMasterProduct(
   draft: SKU,
   pMasterId: number | string | null,
   code: string,
+  approvedBy?: string | number,
+  approvedAt?: string,
 ): Promise<number | string> {
-  const { data: existing } = await fetchItems<SKU>("/items/products", {
-    filter: JSON.stringify({ product_code: { _eq: code } }),
-    limit: 1,
-  });
+  let targetId: number | string | undefined = undefined;
 
-  const targetId = existing?.[0]?.id || existing?.[0]?.product_id;
+  // 1. If this is a master edit draft, resolve by original master ID from remarks
+  if (draft.remarks?.startsWith("MASTER_EDIT:")) {
+    const rawId = draft.remarks.split(":")[1];
+    if (rawId && rawId !== "NEW") {
+      const parsedId = parseInt(rawId);
+      if (!isNaN(parsedId)) {
+        targetId = parsedId;
+      } else {
+        targetId = rawId;
+      }
+    }
+  }
+
+  // 2. Fallback to product_code lookup if not resolved via remarks
+  if (!targetId) {
+    const { data: existing } = await fetchItems<SKU>("/items/products", {
+      filter: JSON.stringify({ product_code: { _eq: code } }),
+      limit: 1,
+    });
+    targetId = existing?.[0]?.id || existing?.[0]?.product_id;
+  }
   const resolvedPMasterId =
     typeof pMasterId === "string" ? parseInt(pMasterId) : pMasterId;
-  const dbTime = await getDatabaseTimeISO();
-  const payload = prepareSKUPayload(draft, resolvedPMasterId, code, dbTime);
+  const dbTime = approvedAt || (await getDatabaseTimeISO());
+  const basePayload = prepareSKUPayload(draft, resolvedPMasterId, code, dbTime);
+
+  const resolvedApprovedBy = approvedBy ? parseInt(String(approvedBy)) : null;
+  const finalApprovedBy = isNaN(resolvedApprovedBy as number) ? null : resolvedApprovedBy;
+
+  const payload = {
+    ...basePayload,
+    approved_by: finalApprovedBy,
+    approved_at: approvedAt || dbTime || null,
+  };
 
   if (targetId) {
     await request(`${API_BASE_URL}/items/products/${targetId}`, {
@@ -283,9 +344,9 @@ async function cleanupDraft(
     });
   } catch {
     try {
-      await request(`${API_BASE_URL}/items/product_draft/${dId}`, {
-        method: "DELETE",
-      });
+      if (dId) {
+        await skuLifecycleService.deleteDraft(dId);
+      }
     } catch (delErr: unknown) {
       console.error(
         `[SKU Approval] Failed to cleanup draft ${dId} after approval:`,
@@ -329,7 +390,18 @@ export const skuApprovalService = {
       draft.product_code || (await generateSKUCode(draft, masterData)).code;
 
     // 4. Upsert Master records
-    const finalMasterId = await upsertMasterProduct(draft, pMasterId, masterCode);
+    const finalMasterId = await upsertMasterProduct(draft, pMasterId, masterCode, approvedBy, approvedAt);
+
+    // If this is the parent product and it's a master edit, deactivate any removed variants
+    if (!pMasterId && finalMasterId) {
+      await deactivateRemovedVariants(draft, finalMasterId, id);
+    }
+
+    // Cache the approved draft to master mapping for any subsequent children variant approvals
+    if (id && finalMasterId) {
+      approvedDraftsMap.set(String(id), finalMasterId);
+      approvedDraftsMap.set(Number(id), finalMasterId);
+    }
 
     // 5. Link to supplier
     await syncSupplierLink(draft, finalMasterId);
@@ -350,3 +422,50 @@ export const skuApprovalService = {
   handleOrphanAdoption,
   cleanupDraft,
 };
+
+/**
+ * Deactivates child variant products in the products table that were removed in the edit session.
+ */
+async function deactivateRemovedVariants(
+  draft: SKU,
+  parentMasterId: string | number,
+  draftId: string | number,
+): Promise<void> {
+  if (draft.remarks?.startsWith("MASTER_EDIT:")) {
+    try {
+      // 1. Fetch all child variants currently in products under this parent
+      const { data: existingVariants } = await fetchItems<SKU>("/items/products", {
+        filter: JSON.stringify({ parent_id: { _eq: parentMasterId } }),
+        fields: "product_id,product_code",
+        limit: -1,
+      });
+
+      if (existingVariants && existingVariants.length > 0) {
+        // 2. Fetch all currently active child drafts for this parent draft
+        const { data: childDrafts } = await fetchItems<SKU>("/items/product_draft", {
+          filter: JSON.stringify({ parent_id: { _eq: draftId } }),
+          fields: "product_code",
+          limit: -1,
+        });
+
+        const activeDraftCodes = (childDrafts || []).map((d) => d.product_code).filter(Boolean);
+
+        // 3. For any existing variant not in the active child drafts, set status to Inactive
+        for (const variant of existingVariants) {
+          if (variant.product_code && !activeDraftCodes.includes(variant.product_code)) {
+            await request(`${API_BASE_URL}/items/products/${variant.product_id || variant.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({ status: "Inactive", isActive: 0 }),
+            });
+            console.log(`[SKU Approval] Deactivated removed variant product ID: ${variant.product_id || variant.id}`);
+          }
+        }
+      }
+    } catch (err: unknown) {
+      console.error(
+        `[SKU Approval] Failed to deactivate removed variants for parent product ${parentMasterId}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+}

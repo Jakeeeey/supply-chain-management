@@ -135,8 +135,10 @@ export const getMasterlistColumns = (
       ),
   },
   {
+    id: "product_name_or_SKU_code",
     accessorKey: "product_name",
     enableSorting: true,
+    filterFn: () => true,
     header: ({ column }) => (
       <DataTableColumnHeader column={column} label="Product Name" />
     ),
