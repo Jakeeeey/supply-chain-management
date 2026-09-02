@@ -960,7 +960,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
         <div className="w-full min-w-0 space-y-6">
             <div className="flex items-center justify-between gap-4">
                 <div className="space-y-1 text-left">
-                    <div className="text-xl font-black text-foreground">Create Purchase Order</div>
+                    <div className="text-xl font-black text-foreground">Create Purchase Order (Production)</div>
                     <div className="text-sm text-muted-foreground">
                         Configure your supplier and branch allocations below.
                     </div>
