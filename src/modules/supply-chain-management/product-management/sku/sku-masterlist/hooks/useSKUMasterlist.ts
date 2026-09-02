@@ -22,6 +22,7 @@ export function useSKUMasterlist() {
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [brandFilter, setBrandFilter] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [uomFilter, setUomFilter] = useState<string>("");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [parentImages, setParentImages] = useState<Record<number, string | null>>(
@@ -50,22 +51,30 @@ export function useSKUMasterlist() {
       if (typeFilter) filterParams.set('itemType', typeFilter);
       if (brandFilter) filterParams.set('brand', brandFilter);
       if (statusFilter) filterParams.set('status', statusFilter);
+      if (uomFilter) filterParams.set('uom', uomFilter);
 
-      const [approvedRes, masterRes] = await Promise.all([
+      const promises: [Promise<unknown>, Promise<unknown> | null] = [
         fetch(
           `/api/scm/product-management/sku?${filterParams.toString()}`,
         ).then((res) => res.json()),
-        fetch("/api/scm/product-management/sku?type=master").then((res) =>
-          res.json(),
-        ),
-      ]);
+        !masterData
+          ? fetch("/api/scm/product-management/sku?type=master").then((res) => res.json())
+          : Promise.resolve(null),
+      ];
+
+      const [approvedRes, masterRes] = (await Promise.all(promises)) as [
+        { data?: SKU[]; error?: string; meta?: { total_count?: number } },
+        { data?: MasterData; error?: string } | null,
+      ];
 
       if (approvedRes.error) throw new Error(approvedRes.error);
-      if (masterRes.error) throw new Error(masterRes.error);
+      if (masterRes && masterRes.error) throw new Error(masterRes.error);
 
       setData(approvedRes.data || []);
       setTotalCount(approvedRes.meta?.total_count || 0);
-      setMasterData(masterRes.data || null);
+      if (masterRes) {
+        setMasterData(masterRes.data || null);
+      }
 
       // Fetch parent images for inheritance if they are not in the current page
       const parentIds = Array.from(
@@ -137,7 +146,7 @@ export function useSKUMasterlist() {
     } finally {
       setIsLoading(false);
     }
-  }, [limit, page, search, sorting, supplierFilter, categoryFilter, classFilter, segmentFilter, typeFilter, brandFilter, statusFilter]);
+  }, [limit, page, search, sorting, supplierFilter, categoryFilter, classFilter, segmentFilter, typeFilter, brandFilter, statusFilter, uomFilter, masterData]);
 
   const toggleStatus = async (id: number | string, isActive: boolean) => {
     setIsUpdating(true);
@@ -216,6 +225,8 @@ export function useSKUMasterlist() {
     setBrandFilter,
     statusFilter,
     setStatusFilter,
+    uomFilter,
+    setUomFilter,
     sorting,
     setSorting,
     masterData,

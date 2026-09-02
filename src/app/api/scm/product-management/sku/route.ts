@@ -28,10 +28,12 @@ export async function GET(req: NextRequest) {
       const supplierId = supplierIdParam ? parseInt(supplierIdParam) : undefined;
       const itemType = searchParams.get("itemType") || undefined;
       const isActive = searchParams.get("isActive") || undefined;
+      const statusFilter = searchParams.get("statusFilter") || undefined;
 
       const facets = {
         itemType,
         isActive,
+        statusFilter,
       };
 
       if (status === "FOR_APPROVAL" || status === "DRAFT") {
@@ -170,6 +172,7 @@ export async function GET(req: NextRequest) {
     const itemType = searchParams.get("itemType") || undefined;
     const brandId = searchParams.get("brand") ? parseInt(searchParams.get("brand")!) : undefined;
     const statusParam = searchParams.get("status") || undefined;
+    const uomId = searchParams.get("uom") ? parseInt(searchParams.get("uom")!) : undefined;
     
     const paginated = await skuService.fetchApproved(
       1000,
@@ -177,7 +180,7 @@ export async function GET(req: NextRequest) {
       search,
       sort,
       supplierId,
-      { categoryId, classId, segmentId, itemType, brandId, status: statusParam },
+      { categoryId, classId, segmentId, itemType, brandId, status: statusParam, uomId },
     );
     
     const allApproved = paginated.data || [];
