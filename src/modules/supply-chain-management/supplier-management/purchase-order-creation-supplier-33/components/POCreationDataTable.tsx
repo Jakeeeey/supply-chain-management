@@ -18,7 +18,6 @@ import {
   Cell,
   PaginationState,
   Updater,
-  getExpandedRowModel,
 } from "@tanstack/react-table";
 
 import {
@@ -129,9 +128,11 @@ interface DataTableProps<TData, TValue> {
   emptyDescription?: string;
   onSelectionChange?: (selectedRows: TData[]) => void;
   actionComponent?: React.ReactNode;
+  autoResetPageIndex?: boolean;
+  showSelectionCount?: boolean;
 }
 
-export function DataTable<TData, TValue>({
+export function POCreationDataTable<TData, TValue>({
   columns,
   data,
   pageCount,
@@ -148,6 +149,8 @@ export function DataTable<TData, TValue>({
   emptyDescription,
   onSelectionChange,
   actionComponent,
+  autoResetPageIndex = true,
+  showSelectionCount = true,
 }: DataTableProps<TData, TValue>) {
   "use no memo"
   const [internalSorting, setInternalSorting] = React.useState<SortingState>(
@@ -188,8 +191,6 @@ export function DataTable<TData, TValue>({
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    getSubRows: (row) => (row as { subRows?: TData[] }).subRows,
-    getExpandedRowModel: getExpandedRowModel(),
     onSortingChange: (updater: Updater<SortingState>) => {
       const nextSorting =
         typeof updater === "function" ? updater(actualSorting) : updater;
@@ -207,6 +208,7 @@ export function DataTable<TData, TValue>({
     pageCount: pageCount,
     manualPagination: manualPagination,
     manualSorting: manualSorting,
+    autoResetPageIndex: autoResetPageIndex,
     state: {
       sorting: actualSorting,
       columnFilters,
@@ -248,27 +250,18 @@ export function DataTable<TData, TValue>({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
-        {searchKey && (() => {
-          const formattedKey = searchKey
-            .replace(/_/g, " ")
-            .replace(/([A-Z])/g, " $1")
-            .trim()
-            .toLowerCase();
-          const titleCaseKey = formattedKey.replace(/\b\w/g, c => c.toUpperCase());
-
-          return (
-            <div className="max-w-sm w-full">
-              <SearchInput
-                placeholder={`Search ${titleCaseKey}...`}
-                initialValue={
-                  (table.getColumn(searchKey)?.getFilterValue() as string) ?? ""
-                }
-                isLoading={isLoading}
-                onSearch={handleSearchWrapper}
-              />
-            </div>
-          );
-        })()}
+        {searchKey && (
+          <div className="max-w-sm w-full">
+            <SearchInput
+              placeholder={`Search ${searchKey.replace(/_/g, " ")}...`}
+              initialValue={
+                (table.getColumn(searchKey)?.getFilterValue() as string) ?? ""
+              }
+              isLoading={isLoading}
+              onSearch={handleSearchWrapper}
+            />
+          </div>
+        )}
 
         <div className="flex items-center gap-2 ml-auto">
           {actionComponent}
@@ -347,7 +340,7 @@ export function DataTable<TData, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className={`group hover:bg-muted/10 transition-colors ${row.depth > 0 ? "bg-muted/10 dark:bg-muted/5 text-muted-foreground" : ""}`}
+                  className="group hover:bg-muted/10 transition-colors"
                 >
                   {row.getVisibleCells().map((cell: Cell<TData, unknown>) => (
                     <TableCell key={cell.id} className="py-3">
@@ -378,10 +371,17 @@ export function DataTable<TData, TValue>({
 
       {/* Pagination Controls */}
       <div className="flex items-center justify-between px-2">
-        <div className="flex-1 text-sm text-muted-foreground font-medium">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
-        </div>
+        {showSelectionCount ? (
+          <div className="flex-1 text-sm text-muted-foreground font-medium">
+            {table.getFilteredSelectedRowModel().rows.length > 0 ? (
+              `${table.getFilteredSelectedRowModel().rows.length} of ${table.getFilteredRowModel().rows.length} row(s) selected.`
+            ) : (
+              `${table.getFilteredRowModel().rows.length} of ${table.getFilteredRowModel().rows.length} row(s) selected.`
+            )}
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
         <div className="flex items-center space-x-6 lg:space-x-8">
           <div className="flex items-center space-x-2">
             <p className="text-sm font-bold">Rows per page</p>
