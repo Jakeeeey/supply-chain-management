@@ -132,7 +132,46 @@ export async function generateSKUCode(
       }
     }
 
-    const code = buildFinalSKU(catCode, brandCode, seq, uomCode, sku);
+    let code = buildFinalSKU(catCode, brandCode, seq, uomCode, sku);
+
+    // Ensure strict uniqueness if sequence wasn't precomputed (i.e. we are actively generating a new one)
+    if (!precomputedSequence) {
+      let isUnique = false;
+      let loopCount = 0;
+      const myId = sku.id || sku.product_id;
+
+      while (!isUnique && loopCount < 100) {
+        loopCount++;
+        try {
+          const [prodCheck, draftCheck] = await Promise.all([
+            fetchItems<SKU>("/items/products", {
+              filter: JSON.stringify({ product_code: { _eq: code } }),
+              limit: 2,
+            }),
+            fetchItems<SKU>("/items/product_draft", {
+              filter: JSON.stringify({ product_code: { _eq: code } }),
+              limit: 2,
+            }),
+          ]);
+
+          const pMatch = prodCheck.data?.find((p) => (p.id || p.product_id) !== myId);
+          const dMatch = draftCheck.data?.find((d) => (d.id || d.product_id) !== myId);
+
+          if (!pMatch && !dMatch) {
+            isUnique = true;
+          } else {
+            // Collision detected, increment sequence and rebuild
+            const currentSeq = parseInt(seq, 10);
+            seq = String(currentSeq + 1).padStart(3, "0");
+            code = buildFinalSKU(catCode, brandCode, seq, uomCode, sku);
+          }
+        } catch (e) {
+          console.warn("[SKU Generator] Collision check failed, proceeding with current code", e);
+          isUnique = true; // Break loop on fetch error to avoid infinite hang
+        }
+      }
+    }
+
     return { code, sequence: seq };
   } catch (error) {
     console.error("SKU Generation Error:", error);
