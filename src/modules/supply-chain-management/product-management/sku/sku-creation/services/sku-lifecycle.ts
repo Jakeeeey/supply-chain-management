@@ -233,7 +233,7 @@ export const skuLifecycleService = {
         childUnits.map(async (u, idx) => {
           const childCode = codes[idx + 1];
           const childMasterId = u.id;
-          const remarks = childMasterId ? `MASTER_EDIT:${childMasterId}` : "MASTER_EDIT:NEW";
+          const remarks = childMasterId ? `MASTER_EDIT:${childMasterId}` : `NEW_CHILD_OF_LIVE:${id}`;
 
           const childDraftPayload = {
             ...sharedFields,

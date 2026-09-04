@@ -103,7 +103,11 @@ async function upsertMasterProduct(
       } else {
         targetId = rawId;
       }
+    } else if (rawId === "NEW") {
+      targetId = "EXPLICIT_NEW";
     }
+  } else if (draft.remarks?.startsWith("NEW_CHILD_OF_LIVE:")) {
+    targetId = "EXPLICIT_NEW";
   }
 
   // 2. Fallback to product_code lookup if not resolved via remarks
@@ -113,6 +117,10 @@ async function upsertMasterProduct(
       limit: 1,
     });
     targetId = existing?.[0]?.id || existing?.[0]?.product_id;
+  }
+  
+  if (targetId === "EXPLICIT_NEW") {
+    targetId = undefined; // Clear the flag to force a POST request
   }
   const resolvedPMasterId =
     typeof pMasterId === "string" ? parseInt(pMasterId) : pMasterId;
@@ -240,52 +248,6 @@ async function syncSupplierLink(
 }
 
 /**
- * Private helper: adopts orphan master products when a parent SKU is approved.
- * An "orphan" is a master product with the same name but no parent_id yet.
- */
-async function handleOrphanAdoption(
-  finalMasterId: number | string,
-  code: string,
-  draft: SKU,
-): Promise<void> {
-  if (!draft.parent_id) {
-    const orphanConditions: Record<string, Record<string, unknown>>[] = [
-      { product_name: { _eq: draft.product_name } },
-      { parent_id: { _null: true } },
-      { product_id: { _neq: finalMasterId } },
-    ];
-
-    const codeBase = code.substring(0, 10);
-    if (codeBase && codeBase.length >= 5) {
-      orphanConditions.push({ product_code: { _starts_with: codeBase } });
-    }
-
-    const { data: orphans } = await fetchItems<SKU>("/items/products", {
-      filter: JSON.stringify({ _and: orphanConditions }),
-      limit: 500, // Using 500 instead of -1 for safer bounds
-    });
-
-    if (orphans?.length) {
-      console.log(
-        `[SKU Approval] Parent ${finalMasterId} adopting ${orphans.length} orphans...`,
-      );
-      
-      const keys = orphans.map((orphan) => orphan.id || orphan.product_id).filter(Boolean);
-      
-      if (keys.length > 0) {
-        await request(`${API_BASE_URL}/items/products`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            keys,
-            data: { parent_id: finalMasterId },
-          }),
-        });
-      }
-    }
-  }
-}
-
-/**
  * Private helper: marks the draft as ACTIVE (or deletes it) after approval.
  * Tries PATCH first; falls back to DELETE if PATCH is rejected.
  */
@@ -300,14 +262,21 @@ async function cleanupDraft(
   // 1. Archive old ACTIVE drafts with the same product_code
   if (masterCode) {
     try {
+      const filterConditions: Record<string, unknown>[] = [
+        { product_code: { _eq: masterCode } },
+        { status: { _eq: "ACTIVE" } },
+        { product_id: { _neq: dId } },
+      ];
+
+      // Add context restriction to avoid collateral archiving of duplicate codes
+      if (draft.parent_id) {
+        filterConditions.push({ parent_id: { _eq: draft.parent_id } });
+      } else {
+        filterConditions.push({ parent_id: { _null: true } });
+      }
+
       const { data: oldDrafts } = await fetchItems<SKU>("/items/product_draft", {
-        filter: JSON.stringify({
-          _and: [
-            { product_code: { _eq: masterCode } },
-            { status: { _eq: "ACTIVE" } },
-            { product_id: { _neq: dId } },
-          ],
-        }),
+        filter: JSON.stringify({ _and: filterConditions }),
         limit: -1,
       });
 
@@ -382,8 +351,29 @@ export const skuApprovalService = {
 
     if (!draft) throw new Error("Draft record not found");
 
+    // 1.5. Gatekeeper: Prevent child approval before parent draft
+    if (draft.parent_id) {
+      const parentId =
+        typeof draft.parent_id === "object"
+          ? (draft.parent_id as unknown as { id: number }).id
+          : draft.parent_id;
+
+      if (parentId && !approvedDraftsMap.has(parentId)) {
+        const pDraftStatus = (draft.parent_id as unknown as { status?: string })?.status;
+        if (pDraftStatus && pDraftStatus !== "ACTIVE" && pDraftStatus !== "ARCHIVED") {
+            throw new Error("Cannot approve child unit before its parent draft is approved.");
+        }
+      }
+    }
+
     // 2. Resolve Parent Master ID (if any)
-    const pMasterId = await resolveParentMasterId(draft);
+    let pMasterId = await resolveParentMasterId(draft);
+    if (draft.remarks?.startsWith("NEW_CHILD_OF_LIVE:")) {
+      const liveId = parseInt(draft.remarks.split(":")[1]);
+      if (!isNaN(liveId)) {
+        pMasterId = liveId;
+      }
+    }
 
     // 3. Generate or use existing code
     const masterCode =
@@ -406,9 +396,6 @@ export const skuApprovalService = {
     // 5. Link to supplier
     await syncSupplierLink(draft, finalMasterId);
 
-    // 6. Handle orphan child adoptions
-    await handleOrphanAdoption(finalMasterId, masterCode, draft);
-
     // 7. Mark draft as ACTIVE and archive old ones
     await cleanupDraft(draft, masterCode, approvedBy, approvedAt);
 
@@ -419,7 +406,6 @@ export const skuApprovalService = {
   resolveParentMasterId,
   upsertMasterProduct,
   syncSupplierLink,
-  handleOrphanAdoption,
   cleanupDraft,
 };
 
