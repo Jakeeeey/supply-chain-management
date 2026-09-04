@@ -12,6 +12,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface AttachmentViewerModalProps {
   open: boolean;
@@ -49,29 +50,6 @@ export function AttachmentViewerModal({
   if (!open && prevOpenFile !== "") {
     setPrevOpenFile("");
   }
-
-  // Esc to close
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    },
-    [onClose]
-  );
-
-  useEffect(() => {
-    if (open) {
-      document.addEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "hidden";
-    }
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
-    };
-  }, [open, handleKeyDown]);
-
-  const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === overlayRef.current) onClose();
-  };
 
   const zoomIn = () => setZoom((z) => Math.min(z + ZOOM_STEP, MAX_ZOOM));
   const zoomOut = () => setZoom((z) => Math.max(z - ZOOM_STEP, MIN_ZOOM));
@@ -124,21 +102,15 @@ export function AttachmentViewerModal({
   const isRotated90 = Math.abs(rotation % 180) === 90;
 
   return (
-    /* Backdrop */
-    <div
-      ref={overlayRef}
-      onClick={handleOverlayClick}
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Attachment Viewer"
-    >
-      {/* ── Card ── */}
-      <div
-        className="bg-background rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
-        style={{ width: "min(600px, 95vw)", maxHeight: "90vh" }}
-        onClick={(e) => e.stopPropagation()}
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
+      <DialogContent
+        showCloseButton={false}
+        className="p-0 bg-background rounded-2xl shadow-2xl flex flex-col overflow-hidden border-none gap-0"
+        style={{ width: "min(1000px, 95vw)", maxWidth: "100%", maxHeight: "90vh" }}
       >
+        <DialogHeader className="sr-only">
+          <DialogTitle>Attachment Viewer</DialogTitle>
+        </DialogHeader>
         {/* Header */}
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2 min-w-0">
@@ -172,8 +144,8 @@ export function AttachmentViewerModal({
               className="transition-transform duration-200 ease-out origin-center"
               style={{
                 transform: `rotate(${rotation}deg) scale(${zoom / 100})`,
-                maxWidth: isRotated90 ? "70vh" : "100%",
-                maxHeight: isRotated90 ? "100%" : "60vh",
+                maxWidth: isRotated90 ? "80vh" : "100%",
+                maxHeight: isRotated90 ? "100%" : "80vh",
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -182,8 +154,8 @@ export function AttachmentViewerModal({
                 alt={filename || "Attachment"}
                 className="rounded-xl shadow-lg object-contain select-none block"
                 style={{
-                  maxWidth: isRotated90 ? "70vh" : "100%",
-                  maxHeight: isRotated90 ? "100%" : "60vh",
+                  maxWidth: isRotated90 ? "80vh" : "100%",
+                  maxHeight: isRotated90 ? "100%" : "80vh",
                 }}
                 draggable={false}
               />
@@ -197,7 +169,7 @@ export function AttachmentViewerModal({
                 src={fileUrl}
                 title={filename || "Attachment"}
                 className="w-full rounded-xl shadow-lg bg-white"
-                style={{ height: "55vh", minHeight: "300px", border: "none" }}
+                style={{ height: "75vh", minHeight: "300px", border: "none" }}
               />
             </div>
           )}
@@ -263,7 +235,7 @@ export function AttachmentViewerModal({
             </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

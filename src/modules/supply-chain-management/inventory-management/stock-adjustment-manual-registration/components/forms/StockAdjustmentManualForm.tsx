@@ -277,7 +277,6 @@ export function StockAdjustmentManualForm({
     fetchInventory,
     fetchBranchInventory,
     inventoryMap,
-    fetchNextDocNo,
     postAdjustment,
     deleteAdjustment,
   } = useStockAdjustmentManualForm();
@@ -320,7 +319,7 @@ export function StockAdjustmentManualForm({
     mode: "all",
     resolver: zodResolver(StockAdjustmentManualFormSchema),
     defaultValues: {
-      doc_no: "", // Will be fetched via effect
+      doc_no: "(Auto-generated)",
       branch_id: 0,
       supplier_id: 0,
       type: "IN",
@@ -338,7 +337,7 @@ export function StockAdjustmentManualForm({
 
   const handleClearForm = useCallback(async () => {
     form.reset({
-      doc_no: "",
+      doc_no: "(Auto-generated)",
       branch_id: 0,
       supplier_id: 0,
       type: "IN",
@@ -350,13 +349,9 @@ export function StockAdjustmentManualForm({
     setBranchInputValue("");
     setSupplierInputValue("");
 
-    // Fetch and set the new doc_no for type "IN"
-    const nextDocNo = await fetchNextDocNo("IN");
-    form.setValue("doc_no", nextDocNo);
-
     // Update initial values ref to match the reset state
     initialValuesRef.current = JSON.stringify({
-      doc_no: nextDocNo,
+      doc_no: "(Auto-generated)",
       branch_id: 0,
       supplier_id: 0,
       type: "IN",
@@ -365,7 +360,7 @@ export function StockAdjustmentManualForm({
       isPosted: false,
       stock_adjustment_attachment: [],
     });
-  }, [form, fetchNextDocNo]);
+  }, [form]);
 
   const generatePDF = useCallback(async () => {
     const values = form.getValues();
@@ -728,39 +723,6 @@ export function StockAdjustmentManualForm({
   }, [id, form]);
 
   // ——————————————————————————————————————————————————————————————————————————————
-  useEffect(() => {
-    if (!id) {
-      const updateDocNo = async () => {
-        const type = form.getValues("type");
-        const nextDocNo = await fetchNextDocNo(type);
-        form.setValue("doc_no", nextDocNo, { shouldValidate: true });
-        try {
-          const current = JSON.parse(initialValuesRef.current || "{}");
-          current.doc_no = nextDocNo;
-          initialValuesRef.current = JSON.stringify(current);
-        } catch {}
-      };
-      updateDocNo();
-    }
-  }, [id, fetchNextDocNo, form]);
-
-  // ——————————————————————————————————————————————————————————————————————————————
-  const watchedTypeToUpdateDocNo = useWatch({ control: form.control, name: "type" });
-  useEffect(() => {
-    if (!id && watchedTypeToUpdateDocNo) {
-      const updateDocNo = async () => {
-        const nextDocNo = await fetchNextDocNo(watchedTypeToUpdateDocNo);
-        form.setValue("doc_no", nextDocNo);
-        try {
-          const current = JSON.parse(initialValuesRef.current || "{}");
-          current.doc_no = nextDocNo;
-          initialValuesRef.current = JSON.stringify(current);
-        } catch {}
-      };
-      updateDocNo();
-    }
-  }, [id, watchedTypeToUpdateDocNo, fetchNextDocNo, form]);
-
   // ——————————————————————————————————————————————————————————————————————————————
   useEffect(() => {
     if (watchedSupplierId) {
@@ -1069,9 +1031,6 @@ export function StockAdjustmentManualForm({
 
       <div className="flex flex-col gap-1 mb-2">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {id ? "Edit Stock Adjustment" : "New Stock Adjustment Registration"}
-          </h1>
           {id && (
             <Badge
               variant="outline"
@@ -1084,9 +1043,6 @@ export function StockAdjustmentManualForm({
             </Badge>
           )}
         </div>
-        <p className="text-sm text-muted-foreground">
-          Record stock movement and adjust inventory levels
-        </p>
 
         {isPosted && (
           <div className="flex items-center gap-6 mt-2 animate-in fade-in slide-in-from-left-2 duration-300">
@@ -1372,7 +1328,7 @@ export function StockAdjustmentManualForm({
                   className="pl-9 h-9 text-sm border-input"
                 />
               </div>
-              <Button
+              {/* <Button
                 type="button"
                 onClick={generatePDF}
                 className="font-bold h-9 px-4 rounded-full shadow-sm flex items-center gap-2 text-sm transition-all border-primary/20 text-primary/90 bg-primary/10 hover:bg-primary/20"
@@ -1380,7 +1336,7 @@ export function StockAdjustmentManualForm({
               >
                 <Printer className="h-4 w-4" />
                 Print
-              </Button>
+              </Button> */}
               {!isReadOnly && (
                 <Button
                   type="button"

@@ -152,10 +152,10 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
           <td className="p-3 text-center w-28">
             <div className="flex flex-col items-center gap-1 justify-center">
               <span className={`text-xs font-bold px-3 py-1.5 rounded-md border min-w-10 text-center select-none inline-block ${quantity === 0
-                  ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400"
-                  : remaining > 0
-                    ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50 text-amber-600 dark:text-amber-400"
-                    : "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800/50 text-green-600 dark:text-green-400"
+                ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400"
+                : remaining > 0
+                  ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50 text-amber-600 dark:text-amber-400"
+                  : "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800/50 text-green-600 dark:text-green-400"
                 }`}>{quantity}</span>
               {quantity === 0 && (
                 <span className="text-[9px] text-red-500 font-black animate-pulse leading-none mt-1 uppercase tracking-wider block">
@@ -168,8 +168,8 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
           {/* Remaining Column */}
           <td className="p-3 text-center w-28">
             <span className={`text-xs font-bold px-3 py-1.5 rounded-md border min-w-10 text-center select-none inline-block ${remaining > 0
-                ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50 text-amber-600 dark:text-amber-400"
-                : "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800/50 text-green-600 dark:text-green-400"
+              ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50 text-amber-600 dark:text-amber-400"
+              : "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800/50 text-green-600 dark:text-green-400"
               }`}>{remaining}</span>
           </td>
         </>
@@ -181,8 +181,8 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
                 <span className={`text-xs font-bold px-3 py-1 rounded-md border min-w-10 text-center select-none ${isRfidMissing
-                    ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400"
-                    : "bg-muted/50 border-border/50"
+                  ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400"
+                  : "bg-muted/50 border-border/50"
                   }`}>{isRfidMissing ? 0 : quantity}</span>
                 <Button
                   type="button"
@@ -190,8 +190,8 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
                   size="sm"
                   onClick={() => onOpenScanner(index)}
                   className={`h-8 font-bold gap-1 px-2 transition-all duration-200 shadow-sm rounded-lg text-[10px] ${isRfidMissing
-                      ? "border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 hover:bg-red-100 hover:border-red-300 dark:hover:bg-red-900/40"
-                      : "border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700"
+                    ? "border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 hover:bg-red-100 hover:border-red-300 dark:hover:bg-red-900/40"
+                    : "border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700"
                     }`}
                 >
                   <Tag className={`h-3 w-3 ${isRfidMissing ? "text-red-500 animate-pulse" : "text-blue-500"}`} />
@@ -253,8 +253,8 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
               size="sm"
               onClick={() => onOpenScanner(index)}
               className={`h-8 font-bold gap-1 px-3 transition-all duration-200 shadow-sm rounded-lg text-[10px] mx-auto flex items-center ${isRfidMissing
-                  ? "border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 hover:bg-red-100 hover:border-red-300 dark:hover:bg-red-900/40"
-                  : "border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700"
+                ? "border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 hover:bg-red-100 hover:border-red-300 dark:hover:bg-red-900/40"
+                : "border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700"
                 }`}
             >
               <Tag className={`h-3 w-3 ${isRfidMissing ? "text-red-500 animate-pulse" : "text-blue-500"}`} />
@@ -414,7 +414,6 @@ export function StockAdjustmentForm({
     fetchBranchInventory,
     rfidProductIds,
     inventoryMap,
-    fetchNextDocNo,
     postAdjustment,
     validateRFIDAvailability,
     resolveRFID,
@@ -660,9 +659,8 @@ export function StockAdjustmentForm({
     setSupplierSearch("");
 
     // Stay on the page — reset the form for the next entry with default "IN" type
-    const nextDocNo = await fetchNextDocNo("IN");
     form.reset({
-      doc_no: nextDocNo,
+      doc_no: "(Auto-generated)",
       branch_id: 0,
       supplier_id: 0,
       type: "IN",
@@ -673,7 +671,6 @@ export function StockAdjustmentForm({
     });
   }, [
     form,
-    fetchNextDocNo,
     setBranchInputValue,
     setSupplierInputValue,
     setBranchSearch,
@@ -798,25 +795,16 @@ export function StockAdjustmentForm({
 
   useEffect(() => {
     if (!id) {
-      const updateDocNo = async () => {
-        const type = form.getValues("type");
-        const nextDocNo = await fetchNextDocNo(type);
-        form.setValue("doc_no", nextDocNo);
-      };
-      updateDocNo();
+      form.setValue("doc_no", "(Auto-generated)");
     }
-  }, [id, fetchNextDocNo, form]);
+  }, [id, form]);
 
   const watchedTypeToUpdateDocNo = useWatch({ control: form.control, name: "type" });
   useEffect(() => {
     if (!id && watchedTypeToUpdateDocNo) {
-      const updateDocNo = async () => {
-        const nextDocNo = await fetchNextDocNo(watchedTypeToUpdateDocNo);
-        form.setValue("doc_no", nextDocNo);
-      };
-      updateDocNo();
+      form.setValue("doc_no", "(Auto-generated)");
     }
-  }, [id, watchedTypeToUpdateDocNo, fetchNextDocNo, form]);
+  }, [id, watchedTypeToUpdateDocNo, form]);
 
   useEffect(() => {
     if (watchedSupplierId) {
@@ -948,9 +936,9 @@ export function StockAdjustmentForm({
           toast.success("Adjustment Updated Successfully");
           onSuccess();
         } else {
-          await createAdjustment(values);
+          const res = await createAdjustment(values);
           toast.success("Stock Adjustment Registered Successfully", {
-            description: `Document ${values.doc_no} has been saved as a draft.`,
+            description: `Document ${res?.doc_no || values.doc_no} has been saved as a draft.`,
             duration: 4000,
           });
 
@@ -1079,7 +1067,7 @@ export function StockAdjustmentForm({
           </div>
           <div>
             <h2 className="text-xl font-bold text-foreground leading-tight">
-              Stock Adjustment Module
+              Stock Adjustment Registration
             </h2>
             <p className="text-xs text-muted-foreground font-medium">
               Inventory Management System
@@ -1102,9 +1090,6 @@ export function StockAdjustmentForm({
 
       <div className="flex flex-col gap-1 mb-2">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {id ? "Edit Stock Adjustment" : "New Stock Adjustment"}
-          </h1>
           {id && (
             <Badge
               variant="outline"
@@ -1117,9 +1102,6 @@ export function StockAdjustmentForm({
             </Badge>
           )}
         </div>
-        <p className="text-sm text-muted-foreground">
-          Record stock movement and adjust inventory levels
-        </p>
 
         {isPosted && (
           <div className="flex items-center gap-6 mt-2 animate-in fade-in slide-in-from-left-2 duration-300">
