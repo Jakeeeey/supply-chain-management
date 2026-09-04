@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useState } from "react";
 import {
   X,
   ZoomIn,
@@ -39,9 +39,7 @@ export function AttachmentViewerModal({
   // Calling setState during render (not inside useEffect) is the React-recommended
   // pattern for resetting derived state based on a prop change.
   const [prevOpenFile, setPrevOpenFile] = useState("");
-  const overlayRef = useRef<HTMLDivElement>(null);
-
-  // Reset zoom/rotation each time a different file is opened
+  // Tracking the last "open + file" combo so we can reset when a new file opens.
   if (open && fileUrl !== prevOpenFile) {
     setPrevOpenFile(fileUrl);
     setZoom(100);
