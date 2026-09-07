@@ -110,17 +110,10 @@ async function upsertMasterProduct(
     targetId = "EXPLICIT_NEW";
   }
 
-  // 2. Fallback to product_code lookup if not resolved via remarks
-  if (!targetId) {
-    const { data: existing } = await fetchItems<SKU>("/items/products", {
-      filter: JSON.stringify({ product_code: { _eq: code } }),
-      limit: 1,
-    });
-    targetId = existing?.[0]?.id || existing?.[0]?.product_id;
-  }
-  
-  if (targetId === "EXPLICIT_NEW") {
-    targetId = undefined; // Clear the flag to force a POST request
+  // 2. Strict Master ID Enforcement: If not explicitly targeting an existing master product via MASTER_EDIT:<id>,
+  // force a POST request (targetId = undefined) to prevent accidental overwrites via product_code lookup fallback.
+  if (targetId === "EXPLICIT_NEW" || !targetId) {
+    targetId = undefined; // Force a POST request to create a new master record
   }
   const resolvedPMasterId =
     typeof pMasterId === "string" ? parseInt(pMasterId) : pMasterId;
@@ -258,7 +251,7 @@ async function cleanupDraft(
   approvedAt?: string,
 ): Promise<void> {
   const dId = draft.id || draft.product_id;
-  
+
   // 1. Archive old ACTIVE drafts with the same product_code
   if (masterCode) {
     try {
@@ -361,7 +354,7 @@ export const skuApprovalService = {
       if (parentId && !approvedDraftsMap.has(parentId)) {
         const pDraftStatus = (draft.parent_id as unknown as { status?: string })?.status;
         if (pDraftStatus && pDraftStatus !== "ACTIVE" && pDraftStatus !== "ARCHIVED") {
-            throw new Error("Cannot approve child unit before its parent draft is approved.");
+          throw new Error("Cannot approve child unit before its parent draft is approved.");
         }
       }
     }
