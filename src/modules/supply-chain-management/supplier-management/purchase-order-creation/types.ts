@@ -47,6 +47,10 @@ export type Product = {
     baseUnitPrice?: number; // original price_per_unit
     baseUomId?: number; // original unit_of_measurement (raw)
     unitsPerBox?: number; // how many base units in 1 BOX (derived)
+    
+    // ✅ Grouping and UOM hierarchy
+    parentId?: string | null;
+    uomCount?: number;
 
     // ✅ Fixed per supplier-product
     discountTypeId?: string;
