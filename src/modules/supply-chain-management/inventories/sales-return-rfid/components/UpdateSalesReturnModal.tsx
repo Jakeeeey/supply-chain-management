@@ -1268,7 +1268,7 @@ export function UpdateSalesReturnModal({
               <Checkbox
                 id="isThirdParty"
                 checked={headerData.isThirdParty || false}
-                disabled={!canEditAll}
+                disabled={loading || !canEditAll}
                 onCheckedChange={(checked) =>
                   setHeaderData({
                     ...headerData,
@@ -1336,6 +1336,7 @@ export function UpdateSalesReturnModal({
                     size="sm"
                     onClick={() => setIsProductLookupOpen(true)}
                     className="bg-primary hover:bg-primary text-white shadow-primary/20 shadow-md h-9 gap-2"
+                    disabled={loading}
                   >
                     <Plus className="h-4 w-4" /> Add Product
                   </Button>
@@ -1473,7 +1474,7 @@ export function UpdateSalesReturnModal({
                                           handleDetailChange(idx, "quantity", val);
                                         }
                                       }}
-                                      disabled={!canEditAll}
+                                      disabled={loading || !canEditAll}
                                       className="w-16 h-7 text-center text-xs font-bold text-foreground border border-border rounded-md shadow-sm outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all bg-background disabled:opacity-50"
                                     />
                                   )}
@@ -1486,7 +1487,7 @@ export function UpdateSalesReturnModal({
                                 ₱{(Number(item.grossAmount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </TableCell>
                               <TableCell className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
-                                {canEditAll ? (
+                                {canEditAll && !loading ? (
                                   (() => {
                                     const noDiscountOpt = discountOptions.find(o => o.discount_type === "No Discount");
                                     const defaultVal = noDiscountOpt ? noDiscountOpt.id.toString() : "";
@@ -1505,6 +1506,7 @@ export function UpdateSalesReturnModal({
                                         }))}
                                         placeholder="Select Discount..."
                                         className="h-8 w-full text-xs"
+                                        disabled={loading}
                                       />
                                     );
                                   })()
@@ -1527,10 +1529,11 @@ export function UpdateSalesReturnModal({
                                 ₱{Number(item.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </TableCell>
                               <TableCell className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
-                                {canEditAll ? (
+                                {canEditAll && !loading ? (
                                   <ReasonInputSection
                                     value={item.reason || ""}
                                     onChange={(val) => handleDetailChange(idx, "reason", val)}
+                                    disabled={loading}
                                   />
                                 ) : (
                                   <span className="text-sm text-muted-foreground italic truncate block max-w-[120px]" title={item.reason || ""}>
@@ -1539,8 +1542,9 @@ export function UpdateSalesReturnModal({
                                 )}
                               </TableCell>
                               <TableCell className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                                {canEditAll ? (
+                                {canEditAll && !loading ? (
                                   <LocalSearchableSelect
+                                    disabled={loading}
                                     value={item.returnType || ""}
                                     onValueChange={(val) => { handleDetailChange(idx, "returnType", val); setReturnTypeError(false); }}
                                     options={returnTypeOptions.length > 0
@@ -1560,26 +1564,30 @@ export function UpdateSalesReturnModal({
                                   <Badge variant="outline" className="font-normal">{item.returnType || "Unassigned"}</Badge>
                                 )}
                               </TableCell>
-                              {canEditAll && (
+                              {canEditAll && !loading && (
                                 <TableCell className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
                                   <div className="flex items-center justify-center gap-1">
                                     <button
+                                      disabled={loading}
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleSplitRow(idx);
+                                        if (!loading) handleSplitRow(idx);
                                       }}
-                                      className="text-primary/70 hover:text-primary hover:bg-primary/10 h-7 w-7 rounded-md flex items-center justify-center transition-colors"
+                                      className="text-primary/70 hover:text-primary hover:bg-primary/10 h-7 w-7 rounded-md flex items-center justify-center transition-colors disabled:opacity-50"
                                       title="Split Row"
                                     >
                                       <Copy className="h-4 w-4" />
                                     </button>
                                     <button
+                                      disabled={loading}
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleDeleteRow(idx);
-                                        if (selectedRowIndex === idx) setSelectedRowIndex(null);
+                                        if (!loading) {
+                                          handleDeleteRow(idx);
+                                          if (selectedRowIndex === idx) setSelectedRowIndex(null);
+                                        }
                                       }}
-                                      className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 h-7 w-7 rounded-md flex items-center justify-center transition-colors"
+                                      className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 h-7 w-7 rounded-md flex items-center justify-center transition-colors disabled:opacity-50"
                                       title="Remove Item"
                                     >
                                       <Trash2 className="h-4 w-4" />
@@ -1660,10 +1668,11 @@ export function UpdateSalesReturnModal({
                     Order No. <span className="text-destructive">*</span>
                   </Label>
                   {/* Order No Dropdown */}
-                  {canEditAll ? (
+                  {canEditAll && !loading ? (
                     <div className="relative group">
                       <input
                         type="text"
+                        disabled={loading}
                         className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${orderError
                           ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
                           : "border-border focus:ring-2 focus:border-primary"
@@ -1675,7 +1684,7 @@ export function UpdateSalesReturnModal({
                           setHeaderData({ ...headerData, orderNo: e.target.value });
                           setIsOrderDropdownOpen(true);
                         }}
-                        onFocus={() => setIsOrderDropdownOpen(true)}
+                        onFocus={() => !loading && setIsOrderDropdownOpen(true)}
                       />
                       <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       {isOrderDropdownOpen && (
@@ -1722,10 +1731,11 @@ export function UpdateSalesReturnModal({
                     Invoice No. <span className="text-destructive">*</span>
                   </Label>
                   {/* Invoice No Dropdown */}
-                  {canEditAll ? (
+                  {canEditAll && !loading ? (
                     <div className="relative group">
                       <input
                         type="text"
+                        disabled={loading}
                         className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${invoiceError
                           ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
                           : "border-border focus:ring-2 focus:border-primary"
@@ -1737,7 +1747,7 @@ export function UpdateSalesReturnModal({
                           setHeaderData({ ...headerData, invoiceNo: e.target.value });
                           setIsInvoiceDropdownOpen(true);
                         }}
-                        onFocus={() => setIsInvoiceDropdownOpen(true)}
+                        onFocus={() => !loading && setIsInvoiceDropdownOpen(true)}
                       />
                       <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       {isInvoiceDropdownOpen && (
@@ -1783,7 +1793,7 @@ export function UpdateSalesReturnModal({
               <RemarksInputSection
                 value={headerData.remarks || ""}
                 onChange={(val) => setHeaderData({ ...headerData, remarks: val })}
-                disabled={!canEditLimited}
+                disabled={loading || !canEditLimited}
               />
             </div>
 
@@ -1868,7 +1878,7 @@ export function UpdateSalesReturnModal({
 
         {/* FOOTER ACTIONS */}
         <div className="border-t border-border p-5 bg-background flex justify-end gap-3 shrink-0">
-          <Button variant="outline" onClick={handlePrintInNewTab}>
+          <Button variant="outline" onClick={handlePrintInNewTab} disabled={loading}>
             <Printer className="h-4 w-4 mr-2" /> Print Slip
           </Button>
           <Button variant="outline" onClick={handleCloseAttempt}>
@@ -1877,7 +1887,7 @@ export function UpdateSalesReturnModal({
           <Button
             className="min-w-[100px]"
             onClick={handleReceiveClick}
-            disabled={!isPending || hasZeroQtyItems || details.length === 0}
+            disabled={loading || !isPending || hasZeroQtyItems || details.length === 0}
             title={details.length === 0 ? "Cannot receive an empty return." : hasZeroQtyItems ? "All products must have at least 1 quantity before receiving." : undefined}
           >
             Receive
@@ -1885,7 +1895,7 @@ export function UpdateSalesReturnModal({
           <Button
             className="bg-primary hover:bg-primary text-white min-w-40"
             onClick={handleUpdateClick}
-            disabled={!canEditLimited}
+            disabled={loading || !canEditLimited}
           >
             Update Sales Return
           </Button>

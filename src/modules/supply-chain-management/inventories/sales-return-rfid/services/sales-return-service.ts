@@ -730,12 +730,6 @@ export async function updateReturn(
       }
 
       if (payload.appliedInvoiceId) {
-        // Rule B: Prevent linking to a posted invoice
-        const targetInvoiceData = await repo.getInvoiceStatus(payload.appliedInvoiceId);
-        if (parseBoolean(targetInvoiceData?.data?.isPosted)) {
-          throw new Error("This invoice has already been posted. You can only link to invoices that are not yet posted.");
-        }
-
         // Link or Update
         if (existingLink) {
           await repo.updateJunctionLink(existingLink.id, {

@@ -743,23 +743,44 @@ export const stockAdjustmentService = {
       finalRemarks = `${finalRemarks}\n[SUPPLIER_ID: ${header.supplier_id}]`.trim();
     }
 
-    const headerRes = await directusFetch<{ data: { id: number } }>(`${DIRECTUS_URL}/items/stock_adjustment_header`, {
-      method: "POST",
-      body: JSON.stringify({
-        doc_no: header.doc_no,
-        branch_id: header.branch_id,
-        supplier_id: header.supplier_id,
-        type: header.type,
-        remarks: finalRemarks,
-        amount: header.amount || items.reduce((acc: number, item: StockAdjustmentItem) => acc + (item.quantity * (item.cost_per_unit || 0)), 0),
-        isPosted: 0,
-        created_by: payload.userId,
-      }),
-    });
-    const headerId = headerRes.data.id;
+    let headerId: number | null = null;
+    let generatedDocNo = "";
+    let headerRes: { data: { id: number } } | null = null;
+
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      generatedDocNo = await this.fetchNextDocNo((header.type as "IN" | "OUT") || "IN");
+
+      try {
+        headerRes = await directusFetch<{ data: { id: number } }>(`${DIRECTUS_URL}/items/stock_adjustment_header`, {
+          method: "POST",
+          body: JSON.stringify({
+            doc_no: generatedDocNo,
+            branch_id: header.branch_id,
+            supplier_id: header.supplier_id,
+            type: header.type,
+            remarks: finalRemarks,
+            amount: header.amount || items.reduce((acc: number, item: StockAdjustmentItem) => acc + (item.quantity * (item.cost_per_unit || 0)), 0),
+            isPosted: 0,
+            created_by: payload.userId,
+          }),
+        });
+        
+        headerId = headerRes.data.id;
+        break; // Success
+      } catch (error: unknown) {
+        if (attempt === maxRetries) throw error;
+        // Wait a random short duration before retrying (200ms to 700ms)
+        await new Promise(res => setTimeout(res, Math.random() * 500 + 200));
+      }
+    }
+
+    if (!headerId || !headerRes) {
+      throw new Error("Failed to create stock adjustment header after multiple attempts.");
+    }
 
     const itemsPayload = items.map((item: StockAdjustmentItem) => ({
-      doc_no: header.doc_no,
+      doc_no: generatedDocNo,
       stock_adjustment_id: headerId,
       product_id: Number(item.product_id),
       branch_id: Number(header.branch_id),
@@ -814,7 +835,7 @@ export const stockAdjustmentService = {
       }
     }
 
-    return headerRes.data;
+    return { ...(headerRes?.data || {}), doc_no: generatedDocNo };
   },
 
   /**

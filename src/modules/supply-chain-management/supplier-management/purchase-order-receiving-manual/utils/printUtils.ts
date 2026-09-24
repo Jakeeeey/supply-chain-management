@@ -58,7 +58,7 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
         const template = templates.find(t => t.name === "MEN2") || templates.find(t => t.name.toLowerCase().includes("men2")) || templates[0];
         const templateName = template?.name || "MEN2";
 
-        const doc = await PdfEngine.generateWithFrame(templateName, companyData, (doc, startY, config) => {
+        const doc = await PdfEngine.generateWithFrame(templateName, companyData, async (doc, startY, config) => {
             const pageWidth = doc.internal.pageSize.getWidth();
             const pageHeight = doc.internal.pageSize.getHeight();
 
@@ -204,18 +204,21 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
 
             // Financial Summary Block
             let finalY = (doc as any).lastAutoTable.finalY + 8;
-            if (finalY + 70 > pageHeight) {
+            
+            const isExclusive = data.priceType?.toUpperCase() === "VAT EXCLUSIVE";
+            const isInvoice = Boolean(data.isInvoice);
+            
+            const requiredHeight = isInvoice ? 75 : 55;
+            
+            if (finalY + requiredHeight > pageHeight) {
                 doc.addPage();
-                PdfEngine.applyTemplate(doc, templateName, companyData);
+                await PdfEngine.applyTemplate(doc, templateName, companyData);
                 finalY = (config?.bodyStart ?? 35) + 5;
             }
 
             const rightColX = pageWidth - 10;
             const labelX = pageWidth - 80;
             const lineHeight = 6;
-
-            const isExclusive = data.priceType?.toUpperCase() === "VAT EXCLUSIVE";
-            const isInvoice = Boolean(data.isInvoice);
 
             let currentY = finalY + lineHeight + 3; // After Discount Line
 

@@ -17,6 +17,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -214,10 +220,10 @@ export function PDPCreateModal({
             return (
               Number(
                 val.id ||
-                  val.vehicle_id ||
-                  val.user_id ||
-                  val.cluster_id ||
-                  val.branch_id,
+                val.vehicle_id ||
+                val.user_id ||
+                val.cluster_id ||
+                val.branch_id,
               ) || null
             );
           return Number(val) || null;
@@ -559,6 +565,12 @@ export function PDPCreateModal({
                 placeholder="Select cluster"
                 disabled={isLoadingOrders || isSaving}
               />
+              {clusterId === -1 && (
+                <p className="text-[11px] font-medium text-amber-500 flex items-center gap-1.5 mt-1.5 bg-amber-500/10 px-2 py-1 rounded-md border border-amber-500/20">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  The &apos;All&apos; option is for viewing purposes only.
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5 flex flex-col">
@@ -580,10 +592,10 @@ export function PDPCreateModal({
                     disabled={isLoadingOrders || isSaving}
                   />
                 </div>
-                <Button 
-                  type="button" 
+                <Button
+                  type="button"
                   variant="default"
-                  className="h-10 px-3 shrink-0" 
+                  className="h-10 px-3 shrink-0"
                   disabled={isLoadingOrders || isSaving || !branchId || clusterId === null}
                   onClick={() => onFilterChange(clusterId === -1 ? null : clusterId ?? undefined, branchId ?? undefined)}
                 >
@@ -639,7 +651,7 @@ export function PDPCreateModal({
                         : null,
                     branchId
                       ? masterData?.branches?.find((b) => b.id === branchId)
-                          ?.branch_name
+                        ?.branch_name
                       : null,
                   ]
                     .filter(Boolean)
@@ -819,9 +831,9 @@ export function PDPCreateModal({
                         <TableCell className="text-right text-sm tabular-nums font-medium">
                           {formatPeso(
                             order.allocated_amount ??
-                              order.net_amount ??
-                              order.total_amount ??
-                              0,
+                            order.net_amount ??
+                            order.total_amount ??
+                            0,
                           )}
                         </TableCell>
                         <TableCell className="text-right">
@@ -948,18 +960,31 @@ export function PDPCreateModal({
               <X className="mr-1.5 h-3.5 w-3.5" />
               Cancel
             </Button>
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={isSaving || isOverCapacity}
-            >
-              <Save className="mr-1.5 h-3.5 w-3.5" />
-              {isSaving
-                ? "Saving..."
-                : isEditMode
-                  ? "Update Plan"
-                  : "Save Plan"}
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="inline-block">
+                    <Button
+                      size="sm"
+                      onClick={handleSave}
+                      disabled={isSaving || isOverCapacity || clusterId === -1}
+                    >
+                      <Save className="mr-1.5 h-3.5 w-3.5" />
+                      {isSaving
+                        ? "Saving..."
+                        : isEditMode
+                          ? "Update Plan"
+                          : "Save Plan"}
+                    </Button>
+                  </div>
+                </TooltipTrigger>
+                {clusterId === -1 && (
+                  <TooltipContent side="top">
+                    <p>Cannot save plan when &apos;All&apos; clusters are selected.</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </DialogContent>

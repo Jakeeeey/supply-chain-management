@@ -53,10 +53,10 @@ export function useSKUs() {
             `/api/scm/product-management/sku?type=approved&limit=${approved.approvedLimit}&offset=${approved.approvedPage * approved.approvedLimit}&search=${encodeURIComponent(search)}&sort=${aSort}`,
           ).then((res) => res.json()),
           fetch(
-            `/api/scm/product-management/sku?type=drafts&status=DRAFT&limit=${drafts.draftsLimit}&offset=${drafts.draftsPage * drafts.draftsLimit}&search=${encodeURIComponent(search)}&sort=${dSort}`,
+            `/api/scm/product-management/sku?type=drafts&status=DRAFT&limit=${drafts.draftsLimit}&offset=${drafts.draftsPage * drafts.draftsLimit}&search=${encodeURIComponent(search)}&sort=${dSort}&supplier=${drafts.draftsSupplier}&statusFilter=${encodeURIComponent(drafts.draftsStatusFilter)}&itemType=${encodeURIComponent(drafts.draftsType)}`,
           ).then((res) => res.json()),
           fetch(
-            `/api/scm/product-management/sku?type=drafts&status=FOR_APPROVAL&limit=${pending.pendingLimit}&offset=${pending.pendingPage * pending.pendingLimit}&search=${encodeURIComponent(search)}&sort=${pSort}`,
+            `/api/scm/product-management/sku?type=drafts&status=FOR_APPROVAL&limit=${pending.pendingLimit}&offset=${pending.pendingPage * pending.pendingLimit}&search=${encodeURIComponent(search)}&sort=${pSort}&supplier=${pending.pendingSupplier}&itemType=${encodeURIComponent(pending.pendingType)}&isActive=${encodeURIComponent(pending.pendingStatus)}`,
           ).then((res) => res.json()),
           fetch(
             `/api/scm/product-management/sku?type=segment-approval&limit=${segment.segmentLimit}&offset=${segment.segmentPage * segment.segmentLimit}&search=${encodeURIComponent(search)}&sort=${sSort}`,
@@ -161,9 +161,15 @@ export function useSKUs() {
     drafts.draftsLimit,
     drafts.draftsPage,
     drafts.draftsSorting,
+    drafts.draftsSupplier,
+    drafts.draftsStatusFilter,
+    drafts.draftsType,
     pending.pendingLimit,
     pending.pendingPage,
     pending.pendingSorting,
+    pending.pendingSupplier,
+    pending.pendingStatus,
+    pending.pendingType,
     segment.segmentLimit,
     segment.segmentPage,
     segment.segmentSorting,
@@ -275,14 +281,25 @@ export function useSKUs() {
   };
 
   const bulkApproveSKUs = async (ids: (number | string)[]) => {
+    // Helper to find a SKU either at root level or nested within subRows
+    const findSKUInPending = (targetId: number | string) => {
+      for (const item of pending.pendingApprovalData) {
+        if (String(item.id || item.product_id) === String(targetId)) {
+          return item;
+        }
+        const subRows = (item as SKU & { subRows?: SKU[] }).subRows || [];
+        const found = subRows.find(
+          (child) => String(child.id || child.product_id) === String(targetId)
+        );
+        if (found) return found;
+      }
+      return undefined;
+    };
+
     // Sort parents before children to avoid race conditions during parent-linking
     const sortedIds = [...ids].sort((a, b) => {
-      const skuA = pending.pendingApprovalData.find(
-        (s) => String(s.id || s.product_id) === String(a),
-      );
-      const skuB = pending.pendingApprovalData.find(
-        (s) => String(s.id || s.product_id) === String(b),
-      );
+      const skuA = findSKUInPending(a);
+      const skuB = findSKUInPending(b);
       const aIsChild = !!skuA?.parent_id;
       const bIsChild = !!skuB?.parent_id;
       if (!aIsChild && bIsChild) return -1;
@@ -411,6 +428,12 @@ export function useSKUs() {
     setDraftsLimit: drafts.setDraftsLimit,
     draftsSorting: drafts.draftsSorting,
     setDraftsSorting: drafts.setDraftsSorting,
+    draftsSupplier: drafts.draftsSupplier,
+    setDraftsSupplier: drafts.setDraftsSupplier,
+    draftsStatusFilter: drafts.draftsStatusFilter,
+    setDraftsStatusFilter: drafts.setDraftsStatusFilter,
+    draftsType: drafts.draftsType,
+    setDraftsType: drafts.setDraftsType,
 
     // Pending Approval
     pendingApprovalData: pending.pendingApprovalData,
@@ -421,6 +444,12 @@ export function useSKUs() {
     setPendingLimit: pending.setPendingLimit,
     pendingSorting: pending.pendingSorting,
     setPendingSorting: pending.setPendingSorting,
+    pendingSupplier: pending.pendingSupplier,
+    setPendingSupplier: pending.setPendingSupplier,
+    pendingStatus: pending.pendingStatus,
+    setPendingStatus: pending.setPendingStatus,
+    pendingType: pending.pendingType,
+    setPendingType: pending.setPendingType,
 
     // Segment Approval
     segmentApprovalData: segment.segmentApprovalData,

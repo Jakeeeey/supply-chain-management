@@ -89,6 +89,7 @@
     "react-markdown": "^10.1.0",
     "react-moveable": "^0.56.0",
     "react-qr-barcode-scanner": "^2.1.23",
+    "react-quill-new": "^3.8.3",
     "react-resizable-panels": "^4.6.2",
     "react-rnd": "^10.5.2",
     "react-to-print": "^3.3.0",

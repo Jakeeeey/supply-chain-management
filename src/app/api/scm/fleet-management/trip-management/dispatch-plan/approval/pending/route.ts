@@ -32,6 +32,37 @@ export async function GET() {
         }
 
         const data = await springRes.json();
+
+        // 🚀 OVERRIDE AMOUNT USING DIRECTUS (As requested by User)
+        const directusBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
+        const staticToken = process.env.DIRECTUS_STATIC_TOKEN;
+        
+        try {
+            const planIds = data.map((p: { id: string | number }) => p.id);
+            if (planIds.length > 0) {
+                const dUrl = `${directusBaseUrl}/items/post_dispatch_plan?filter[id][_in]=${planIds.join(",")}&fields=id,amount`;
+                const dRes = await fetch(dUrl, {
+                    headers: { "Authorization": `Bearer ${staticToken || token}` }
+                });
+                
+                if (dRes.ok) {
+                    const dData = await dRes.json();
+                    const directusAmounts = dData.data.reduce((acc: Record<string, number>, item: { id: string | number; amount: number }) => {
+                        acc[item.id] = item.amount;
+                        return acc;
+                    }, {});
+
+                    data.forEach((plan: { id: string | number; amount?: number }) => {
+                        if (directusAmounts[plan.id] !== undefined) {
+                            plan.amount = directusAmounts[plan.id];
+                        }
+                    });
+                }
+            }
+        } catch (e) {
+            console.error("Failed to fetch amounts from Directus", e);
+        }
+
         return NextResponse.json(data);
     } catch {
         return NextResponse.json({ ok: false, message: "BFF Network Error" }, { status: 502 });

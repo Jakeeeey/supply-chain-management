@@ -40,7 +40,6 @@ export const skuService = {
   resolveParentMasterId: skuApprovalService.resolveParentMasterId,
   upsertMasterProduct: skuApprovalService.upsertMasterProduct,
   syncSupplierLink: skuApprovalService.syncSupplierLink,
-  handleOrphanAdoption: skuApprovalService.handleOrphanAdoption,
   cleanupDraft: skuApprovalService.cleanupDraft,
 
   // ─── Status Toggle ─────────────────────────────────────────────────────────

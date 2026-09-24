@@ -21,6 +21,7 @@ import { AlertTriangle, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { BulkDraftActionsModal } from "./components/modals/bulk-draft-actions-modal";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 export default function SKUCreationModule() {
   const {
@@ -36,6 +37,12 @@ export default function SKUCreationModule() {
     setDraftsLimit,
     draftsSorting,
     setDraftsSorting,
+    draftsSupplier,
+    setDraftsSupplier,
+    draftsStatusFilter,
+    setDraftsStatusFilter,
+    draftsType,
+    setDraftsType,
     masterData,
     isLoading,
     error,
@@ -112,10 +119,7 @@ export default function SKUCreationModule() {
     if (!id) return;
 
     try {
-      const children = (skuToDelete as SKU & { subRows?: SKU[] }).subRows || [];
-      const idsToDelete = [id, ...children.map(c => resolveId(c)).filter(Boolean) as number[]];
-      
-      await bulkDeleteDrafts(idsToDelete);
+      await bulkDeleteDrafts([id]);
       toast.success("SKU Draft Deleted", {
         description:
           "The product record has been permanently removed from the system.",
@@ -236,7 +240,9 @@ export default function SKUCreationModule() {
   const handleBulkDelete = async () => {
     setSaving(true);
     try {
+      // Exclude child drafts whose parent is also being deleted to prevent race conditions during recursive backend deletion.
       const ids = combinedActionSKUs
+        .filter((sku) => !sku.parent_id || !combinedActionSKUs.some((p) => resolveId(p) === sku.parent_id))
         .map((sku) => resolveId(sku))
         .filter(Boolean) as number[];
       await bulkDeleteDrafts(ids);
@@ -301,25 +307,64 @@ export default function SKUCreationModule() {
         onSubmitForApproval={handleSubmitToManager}
         onSelectionChange={setSelectedRows}
         actionComponent={
-          selectedRows.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="destructive"
-                onClick={() => handleBulkActionOpen("delete")}
-                size="sm"
-                className="flex items-center gap-2"
-              >
-                Delete ({selectedRows.length})
-              </Button>
-              <Button
-                onClick={() => handleBulkActionOpen("submit")}
-                size="sm"
-                className="flex items-center gap-2"
-              >
-                Submit ({selectedRows.length})
-              </Button>
-            </div>
-          )
+          <div className="flex items-center gap-3">
+            <SearchableSelect
+              options={[
+                { value: "all", label: "Supplier: All" },
+                ...(masterData?.suppliers?.map((s) => ({
+                  value: String(s.id),
+                  label: String(s.name || (s as { supplier_name?: string }).supplier_name || "Unknown"),
+                })) || []),
+              ]}
+              value={draftsSupplier || "all"}
+              onValueChange={(v) => { setDraftsSupplier(v === "all" ? "" : v); setDraftsPage(0); }}
+              placeholder="Supplier: All"
+              className="w-[160px] bg-background"
+            />
+            <SearchableSelect
+              options={[
+                { value: "all", label: "Status: All" },
+                { value: "DRAFT", label: "Draft" },
+                { value: "REJECTED", label: "Rejected" },
+              ]}
+              value={draftsStatusFilter || "all"}
+              onValueChange={(v) => { setDraftsStatusFilter(v === "all" ? "" : v); setDraftsPage(0); }}
+              placeholder="Status: All"
+              className="w-[130px] bg-background"
+            />
+            <SearchableSelect
+              options={[
+                { value: "all", label: "Type: All" },
+                { value: "Regular", label: "Regular" },
+                { value: "Variant", label: "Variant" },
+                { value: "Bundle", label: "Bundle" },
+                { value: "Promo", label: "Promo" },
+              ]}
+              value={draftsType || "all"}
+              onValueChange={(v) => { setDraftsType(v === "all" ? "" : v); setDraftsPage(0); }}
+              placeholder="Type: All"
+              className="w-[130px] bg-background"
+            />
+            {selectedRows.length > 0 && (
+              <div className="flex items-center gap-2 pl-2 ml-1 border-l">
+                <Button
+                  variant="destructive"
+                  onClick={() => handleBulkActionOpen("delete")}
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  Delete ({selectedRows.length})
+                </Button>
+                <Button
+                  onClick={() => handleBulkActionOpen("submit")}
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  Submit ({selectedRows.length})
+                </Button>
+              </div>
+            )}
+          </div>
         }
         manualPagination={true}
         onSearch={handleSearch}

@@ -258,7 +258,6 @@ export function StockAdjustmentForm({
     fetchBranchInventory,
     rfidProductIds,
     inventoryMap,
-    fetchNextDocNo,
     postAdjustment,
     deleteAdjustment,
   } = useStockAdjustmentForm();
@@ -433,27 +432,7 @@ export function StockAdjustmentForm({
     }
   }, [watchedBranchId, fetchBranchRfidData, fetchBranchInventory]);
 
-  useEffect(() => {
-    if (!id) {
-      const updateDocNo = async () => {
-        const type = form.getValues("type");
-        const nextDocNo = await fetchNextDocNo(type);
-        form.setValue("doc_no", nextDocNo);
-      };
-      updateDocNo();
-    }
-  }, [id, fetchNextDocNo, form]);
 
-  const watchedTypeToUpdateDocNo = useWatch({ control: form.control, name: "type" });
-  useEffect(() => {
-    if (!id && watchedTypeToUpdateDocNo) {
-      const updateDocNo = async () => {
-        const nextDocNo = await fetchNextDocNo(watchedTypeToUpdateDocNo);
-        form.setValue("doc_no", nextDocNo);
-      };
-      updateDocNo();
-    }
-  }, [id, watchedTypeToUpdateDocNo, fetchNextDocNo, form]);
 
   useEffect(() => {
     if (watchedSupplierId) {
@@ -709,7 +688,7 @@ export function StockAdjustmentForm({
           </div>
           <div>
             <h2 className="text-xl font-bold text-foreground leading-tight">
-              Stock Adjustment Module
+              Stock Adjustment Posting
             </h2>
             <p className="text-xs text-muted-foreground font-medium">
               Inventory Management System
@@ -732,15 +711,6 @@ export function StockAdjustmentForm({
 
       <div className="flex flex-col gap-1 mb-2">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {mode === "posting"
-              ? id
-                ? "Review & Post Stock Adjustment"
-                : "Select Stock Adjustment"
-              : id
-                ? "Edit Stock Adjustment"
-                : "New Stock Adjustment"}
-          </h1>
           {id && (
             <Badge
               variant="outline"
@@ -756,19 +726,14 @@ export function StockAdjustmentForm({
             <Badge
               variant="outline"
               className={`px-3 py-1 font-bold shadow-sm ${sourceType === "RFID"
-                  ? "bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400 border-violet-200 dark:border-violet-800/50"
-                  : "bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800/50"
+                ? "bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400 border-violet-200 dark:border-violet-800/50"
+                : "bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800/50"
                 } uppercase tracking-wider`}
             >
               {sourceType === "RFID" ? "RFID Base" : "Non-RFID"}
             </Badge>
           )}
         </div>
-        <p className="text-sm text-muted-foreground">
-          {mode === "posting"
-            ? "Review unposted stock adjustment details before posting to inventory"
-            : "Record stock movement and adjust inventory levels"}
-        </p>
 
         {isPosted && (
           <div className="flex items-center gap-6 mt-2 animate-in fade-in slide-in-from-left-2 duration-300">
@@ -1065,7 +1030,7 @@ export function StockAdjustmentForm({
                           const fileId = typeof file === 'object' ? file.id : file;
                           const isImage = typeof file === 'object' && file.type?.startsWith('image');
                           const filename = typeof file === 'object' ? file.filename_download : `Attachment ${idx + 1}`;
-                          const sizeInMb = typeof file === 'object' && file.filesize 
+                          const sizeInMb = typeof file === 'object' && file.filesize
                             ? (Number(file.filesize) / (1024 * 1024)).toFixed(2)
                             : null;
 

@@ -41,7 +41,7 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
     const templateName = template?.name || "MEN2";
 
     // --- 2. GENERATE PDF WITH FRAME ---
-    return await PdfEngine.generateWithFrame(templateName, companyData, (doc, startY, config) => {
+    return await PdfEngine.generateWithFrame(templateName, companyData, async (doc, startY, config) => {
         const pageW = doc.internal.pageSize.getWidth();
         const pageH = doc.internal.pageSize.getHeight();
         const margin = config.margins?.left || 14;
@@ -102,7 +102,7 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
         doc.text("Allocations Breakdown", margin, y);
         y += 2;
 
-        (po.allocations || []).forEach(alloc => {
+        for (const alloc of (po.allocations || [])) {
             if (!alloc.items.length) return;
 
             y += 6;
@@ -128,7 +128,7 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
             const isInvoice = Number(po.vatAmount || 0) > 0 || Number(po.withholdingTaxAmount || 0) > 0;
             const cur = po.currency || "PHP";
 
-            Array.from(receiptsMap.entries()).forEach(([receiptNo, rawItems]) => {
+            for (const [receiptNo, rawItems] of Array.from(receiptsMap.entries())) {
                 const items = [...rawItems].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
                 const receiptDate = items[0]?.receiptDate || "";
                 const isPending = receiptNo === "PENDING";
@@ -138,6 +138,7 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
                 // Ensure page break before receipt header if we are near the bottom
                 if (y + 20 > pageH) {
                     doc.addPage();
+                    await PdfEngine.applyTemplate(doc, templateName, companyData);
                     y = (config.bodyStart || 35) + 5;
                 }
 
@@ -236,6 +237,7 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
                 // Check page break for subtotal
                 if (y + 30 > pageH) {
                     doc.addPage();
+                    await PdfEngine.applyTemplate(doc, templateName, companyData);
                     y = (config.bodyStart || 35) + 5;
                 }
 
@@ -265,12 +267,13 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
                 y += 1;
                 addSubtotalLine("Receipt Net Total:", rcptNet, true);
                 y += 4; // Extra padding after subtotal
-            });
-        });
+            }
+        }
 
         /* ── Financial Summary ─────────────────────────────────── */
         if (y + 40 > pageH) {
             doc.addPage();
+            await PdfEngine.applyTemplate(doc, templateName, companyData);
             y = (config.bodyStart || 35) + 5;
         }
 

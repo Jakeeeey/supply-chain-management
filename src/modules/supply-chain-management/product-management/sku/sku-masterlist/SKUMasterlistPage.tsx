@@ -8,10 +8,13 @@ import { SKU } from "../sku-creation/types/sku.schema";
 import { MasterlistTable } from "./components/data-table";
 import { useSKUMasterlist } from "./hooks/useSKUMasterlist";
 import { toast } from "sonner";
-import { EditProductModal } from "./components/modals/edit-product-modal";
+import { SKUModal } from "../sku-creation/components/modals/sku-create-modal";
 import { SKUImageModal } from "./components/modals/sku-image-modal";
 import { SKUGalleryModal } from "./components/modals/sku-gallery-modal";
-import { FacetFilters } from "./components/filters/FacetFilters";
+import { PrintColumnsModal } from "./components/modals/print-columns-modal";
+import { MasterlistFilters } from "./components/filters/MasterlistFilters";
+import { Printer } from "lucide-react";
+import { generateSKUMasterlistPDF } from "./utils/generate-sku-masterlist-pdf";
 
 export default function SKUMasterlistModule() {
   const {
@@ -36,6 +39,8 @@ export default function SKUMasterlistModule() {
     setBrandFilter,
     statusFilter,
     setStatusFilter,
+    uomFilter,
+    setUomFilter,
     sorting,
     setSorting,
     masterData,
@@ -55,6 +60,7 @@ export default function SKUMasterlistModule() {
   const [editingSKU, setEditingSKU] = useState<SKU | null>(null);
   const [updatingImageSKU, setUpdatingImageSKU] = useState<SKU | null>(null);
   const [viewingGallerySKU, setViewingGallerySKU] = useState<SKU | null>(null);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -178,35 +184,6 @@ export default function SKUMasterlistModule() {
     (row) => Number(row.isActive) !== 1,
   );
 
-  const currentFilters = {
-    category: categoryFilter,
-    class: classFilter,
-    segment: segmentFilter,
-    type: typeFilter,
-    brand: brandFilter,
-    supplier: supplierFilter,
-    status: statusFilter,
-  };
-
-  const handleApplyFilters = (values: {
-    category: string;
-    class: string;
-    segment: string;
-    type: string;
-    brand: string;
-    supplier: string;
-    status: string;
-  }) => {
-    setCategoryFilter(values.category);
-    setClassFilter(values.class);
-    setSegmentFilter(values.segment);
-    setTypeFilter(values.type);
-    setBrandFilter(values.brand);
-    setSupplierFilter(values.supplier);
-    setStatusFilter(values.status);
-    setPage(0);
-  };
-
   const handleClearFilters = () => {
     setCategoryFilter("");
     setClassFilter("");
@@ -215,23 +192,42 @@ export default function SKUMasterlistModule() {
     setBrandFilter("");
     setSupplierFilter("");
     setStatusFilter("");
+    setUomFilter("");
     setPage(0);
   };
 
-  const bulkActionComponent = selectedRows.length > 0 ? (
+  const bulkActionComponent = (
     <div className="flex items-center gap-2">
-      {hasSelectedInactive && (
-        <Button size="sm" variant="default" onClick={handleBulkActivate} disabled={isUpdating}>
-          Activate ({selectedRows.filter((r) => Number(r.isActive) !== 1).length})
-        </Button>
+      {selectedRows.length > 0 && (
+        <>
+          {hasSelectedInactive && (
+            <Button size="sm" variant="default" onClick={handleBulkActivate} disabled={isUpdating}>
+              Activate ({selectedRows.filter((r) => Number(r.isActive) !== 1).length})
+            </Button>
+          )}
+          {hasSelectedActive && (
+            <Button size="sm" variant="destructive" onClick={handleBulkDeactivate} disabled={isUpdating}>
+              Deactivate ({selectedRows.filter((r) => Number(r.isActive) === 1).length})
+            </Button>
+          )}
+        </>
       )}
-      {hasSelectedActive && (
-        <Button size="sm" variant="destructive" onClick={handleBulkDeactivate} disabled={isUpdating}>
-          Deactivate ({selectedRows.filter((r) => Number(r.isActive) === 1).length})
-        </Button>
-      )}
+      <Button 
+        size="sm" 
+        variant="outline" 
+        onClick={() => {
+          if (!masterData) {
+            toast.error("Master data is still loading. Please try again.");
+            return;
+          }
+          setIsPrintModalOpen(true);
+        }}
+      >
+        <Printer className="w-4 h-4 mr-2" />
+        Print PDF
+      </Button>
     </div>
-  ) : null;
+  );
 
   if (!mounted) {
     return <ModuleSkeleton hasActions={false} rowCount={8} />;
@@ -249,43 +245,67 @@ export default function SKUMasterlistModule() {
   }
 
   return (
-    <div className="space-y-4">
-      <FacetFilters
+    <div className="grid grid-cols-1 min-w-0 w-full gap-4">
+      <MasterlistFilters
         masterData={masterData}
-        filters={currentFilters}
-        onApply={handleApplyFilters}
+        isLoading={isLoading}
+        supplier={supplierFilter}
+        onSupplierChange={(v) => { setSupplierFilter(v); setPage(0); }}
+        brand={brandFilter}
+        onBrandChange={(v) => { setBrandFilter(v); setPage(0); }}
+        category={categoryFilter}
+        onCategoryChange={(v) => { setCategoryFilter(v); setPage(0); }}
+        classVal={classFilter}
+        onClassChange={(v) => { setClassFilter(v); setPage(0); }}
+        segment={segmentFilter}
+        onSegmentChange={(v) => { setSegmentFilter(v); setPage(0); }}
+        type={typeFilter}
+        onTypeChange={(v) => { setTypeFilter(v); setPage(0); }}
+        status={statusFilter}
+        onStatusChange={(v) => { setStatusFilter(v); setPage(0); }}
+        uom={uomFilter}
+        onUomChange={(v) => { setUomFilter(v); setPage(0); }}
         onClear={handleClearFilters}
-        isLoading={isLoading}
       />
-      <MasterlistTable
-        title="Active Product Master Records"
-        data={data}
-        totalCount={totalCount}
-        pageIndex={page}
-        pageSize={limit}
-        onPaginationChange={handlePagination}
-        sorting={sorting}
-        onSortingChange={setSorting}
-        masterData={masterData}
-        parentImages={parentImages}
-        pendingEditIds={pendingEditIds}
-        isLoading={isLoading}
-        onSearch={handleSearch}
-        onSelectionChange={setSelectedRows}
-        onToggleStatus={(id, current) => toggleStatus(id, !current)}
-        onEdit={setEditingSKU}
-        onUpdateImage={setUpdatingImageSKU}
-        onViewGallery={setViewingGallerySKU}
-        actionComponent={bulkActionComponent}
-      />
+      <div className="min-w-0 w-full overflow-x-auto">
+        <MasterlistTable
+          title="Active Product Master Records"
+          data={data}
+          totalCount={totalCount}
+          pageIndex={page}
+          pageSize={limit}
+          onPaginationChange={handlePagination}
+          sorting={sorting}
+          onSortingChange={setSorting}
+          masterData={masterData}
+          parentImages={parentImages}
+          pendingEditIds={pendingEditIds}
+          isLoading={isLoading}
+          onSearch={handleSearch}
+          onSelectionChange={setSelectedRows}
+          onToggleStatus={(id, current) => toggleStatus(id, !current)}
+          onEdit={setEditingSKU}
+          onUpdateImage={setUpdatingImageSKU}
+          onViewGallery={setViewingGallerySKU}
+          actionComponent={bulkActionComponent}
+        />
+      </div>
 
-      <EditProductModal
-        sku={editingSKU}
-        isOpen={!!editingSKU}
-        onClose={() => setEditingSKU(null)}
-        onSave={handleSaveProduct}
-        isLoading={isUpdating}
+      <SKUModal
+        open={!!editingSKU}
+        setOpen={(open) => {
+          if (!open) setEditingSKU(null);
+        }}
+        initialData={editingSKU ? { ...editingSKU, status: "DRAFT" } : undefined}
         masterData={masterData}
+        onSubmit={async (data) => {
+          if (editingSKU) {
+            const id = editingSKU.id || editingSKU.product_id;
+            await handleSaveProduct(id!, data);
+          }
+        }}
+        loading={isUpdating}
+        isMasterEdit={true}
       />
 
       <SKUImageModal
@@ -300,6 +320,38 @@ export default function SKUMasterlistModule() {
         sku={viewingGallerySKU}
         isOpen={!!viewingGallerySKU}
         onClose={() => setViewingGallerySKU(null)}
+      />
+
+      <PrintColumnsModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        onConfirm={(selectedColumns) => {
+          if (masterData) {
+            const itemsToPrint = selectedRows.length > 0
+              ? selectedRows.reduce<SKU[]>((acc, row) => {
+                  const rowId = row.id || row.product_id;
+                  if (!acc.some(item => (item.id || item.product_id) === rowId)) {
+                    acc.push(row);
+                  }
+                  const subRows = (row as { subRows?: SKU[] }).subRows || [];
+                  subRows.forEach((sub) => {
+                    const subId = sub.id || sub.product_id;
+                    if (!acc.some(item => (item.id || item.product_id) === subId)) {
+                      acc.push(sub);
+                    }
+                  });
+                  return acc;
+                }, [])
+              : data;
+
+            const doc = generateSKUMasterlistPDF({
+              items: itemsToPrint,
+              masterData,
+              selectedColumns,
+            });
+            doc.save(`SKU_Masterlist_${new Date().toISOString().split('T')[0]}.pdf`);
+          }
+        }}
       />
     </div>
   );

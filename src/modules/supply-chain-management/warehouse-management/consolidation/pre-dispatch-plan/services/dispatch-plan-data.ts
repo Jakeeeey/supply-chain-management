@@ -16,9 +16,10 @@ export const dispatchPlanDataService = {
   async fetchMasterData(): Promise<DispatchPlanMasterData> {
     const [driversRes, vehiclesRes, clustersRes, branchesRes, vehicleTypesRes] =
       await Promise.all([
-        // Drivers: only users from department 8
+        // Drivers: only users from department 8 and position Driver
         fetchItems<DriverOption>("/items/user", {
           "filter[user_department][_eq]": 8,
+          "filter[position_id][_eq]": 1000,
           fields: "user_id,user_fname,user_mname,user_lname,user_department",
           limit: -1,
         }),

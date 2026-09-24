@@ -24,6 +24,17 @@ export async function GET(req: NextRequest) {
     }    if (type === "drafts") {
       const status = searchParams.get("status") || undefined;
       const search = searchParams.get("search") || undefined;
+      const supplierIdParam = searchParams.get("supplier");
+      const supplierId = supplierIdParam ? parseInt(supplierIdParam) : undefined;
+      const itemType = searchParams.get("itemType") || undefined;
+      const isActive = searchParams.get("isActive") || undefined;
+      const statusFilter = searchParams.get("statusFilter") || undefined;
+
+      const facets = {
+        itemType,
+        isActive,
+        statusFilter,
+      };
 
       if (status === "FOR_APPROVAL" || status === "DRAFT") {
         // Fetch ALL drafts to properly group them hierarchically
@@ -33,6 +44,8 @@ export async function GET(req: NextRequest) {
           status,
           search,
           sort,
+          supplierId,
+          facets
         );
         const allDrafts = paginated.data || [];
         const draftIds = new Set(allDrafts.map((d) => String(d.id || d.product_id)));
@@ -107,6 +120,8 @@ export async function GET(req: NextRequest) {
         status,
         search,
         sort,
+        supplierId,
+        facets
       );
       return NextResponse.json(paginated);
     }
@@ -157,6 +172,7 @@ export async function GET(req: NextRequest) {
     const itemType = searchParams.get("itemType") || undefined;
     const brandId = searchParams.get("brand") ? parseInt(searchParams.get("brand")!) : undefined;
     const statusParam = searchParams.get("status") || undefined;
+    const uomId = searchParams.get("uom") ? parseInt(searchParams.get("uom")!) : undefined;
     
     const paginated = await skuService.fetchApproved(
       1000,
@@ -164,7 +180,7 @@ export async function GET(req: NextRequest) {
       search,
       sort,
       supplierId,
-      { categoryId, classId, segmentId, itemType, brandId, status: statusParam },
+      { categoryId, classId, segmentId, itemType, brandId, status: statusParam, uomId },
     );
     
     const allApproved = paginated.data || [];
