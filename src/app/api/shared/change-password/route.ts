@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ChangePasswordSchema } from "@/modules/supply-chain-management/change-password/types/change-password.schema";
-import { ChangePasswordService } from "@/modules/supply-chain-management/change-password/services/change-password-service";
+import { ChangePasswordSchema } from "@/modules/shared/change-password/types/change-password.schema";
+import { ChangePasswordService } from "@/modules/shared/change-password/services/change-password-service";
 
 export const dynamic = "force-dynamic";
 

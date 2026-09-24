@@ -30,6 +30,7 @@ import {
     SidebarMenuItem,
     useSidebar,
 } from "@/components/ui/sidebar"
+import { ChangePasswordModal } from "@/modules/shared/change-password/components/ChangePasswordModal"
 
 type NavUserProps = {
     user: {
@@ -38,7 +39,7 @@ type NavUserProps = {
         avatar?: string
     }
     /**
-     * Optional subsystem slug (e.g., "hrm", "scm"). 
+     * Optional subsystem slug (e.g., "hrm", "scm").
      * If not provided, it will be automatically detected from the URL.
      */
     subsystemSlug?: string
@@ -50,6 +51,7 @@ export function NavUser({ user, onLogout, subsystemSlug }: NavUserProps) {
     const router = useRouter()
     const pathname = usePathname()
     const [loggingOut, setLoggingOut] = React.useState(false)
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = React.useState(false)
 
     const currentSlug = subsystemSlug || pathname.split("/")[1] || "hrm"
 
@@ -111,8 +113,8 @@ export function NavUser({ user, onLogout, subsystemSlug }: NavUserProps) {
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-medium">{user.name}</span>
                                 <span className="truncate text-xs text-muted-foreground">
-                                    {user.email}
-                                </span>
+                  {user.email}
+                </span>
                             </div>
 
                             <ChevronsUpDown className="ml-auto size-4 opacity-70" />
@@ -151,11 +153,15 @@ export function NavUser({ user, onLogout, subsystemSlug }: NavUserProps) {
                                 </Link>
                             </DropdownMenuItem>
 
-                            <DropdownMenuItem asChild>
-                                <Link href={`/${currentSlug}/change-password`} className="cursor-pointer">
-                                    <KeyRound className="mr-2 size-4" />
-                                    Change Password
-                                </Link>
+                            <DropdownMenuItem
+                                className="cursor-pointer"
+                                onSelect={(e) => {
+                                    e.preventDefault()
+                                    setIsPasswordModalOpen(true)
+                                }}
+                            >
+                                <KeyRound className="mr-2 size-4" />
+                                Change Password
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild>
@@ -182,15 +188,19 @@ export function NavUser({ user, onLogout, subsystemSlug }: NavUserProps) {
                                 onClick={handleLogout}
                                 disabled={loggingOut}
                             >
-                                <span className="inline-flex items-center">
-                                    <LogOut className="mr-2 size-4" />
-                                    {loggingOut ? "Logging out..." : "Log out"}
-                                </span>
+                <span className="inline-flex items-center">
+                  <LogOut className="mr-2 size-4" />
+                    {loggingOut ? "Logging out..." : "Log out"}
+                </span>
                             </button>
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </SidebarMenuItem>
+            <ChangePasswordModal
+                open={isPasswordModalOpen}
+                onOpenChange={setIsPasswordModalOpen}
+            />
         </SidebarMenu>
     )
 }
