@@ -81,12 +81,14 @@ export const getApprovalColumns = (
     ),
   },
   {
+    id: "product_name_or_SKU_code",
     accessorKey: "product_name",
     enableSorting: true,
     header: ({ column }) => (
       <DataTableColumnHeader column={column} label="Product Name" />
     ),
     meta: { label: "Product Name" },
+    filterFn: () => true,
     cell: ({ row }) => {
       const canExpand = row.getCanExpand();
       const isExpanded = row.getIsExpanded();
@@ -123,6 +125,12 @@ export const getApprovalColumns = (
           {row.depth === 0 && row.original.parent_id && (
             <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/50 ml-1">
               Variant Update
+            </Badge>
+          )}
+
+          {row.original.remarks?.startsWith("MASTER_EDIT:") && (
+            <Badge variant="outline" className="text-[9px] px-1.5 py-0.5 bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/50 ml-1 shrink-0 font-bold uppercase tracking-wider">
+              Master Edit
             </Badge>
           )}
         </div>

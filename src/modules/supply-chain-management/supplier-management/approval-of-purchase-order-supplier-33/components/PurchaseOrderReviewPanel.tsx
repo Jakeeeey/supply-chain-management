@@ -1,0 +1,843 @@
+"use client";
+
+import * as React from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { generatePurchaseOrderPdf } from "../utils/generatePoPdf";
+import { Printer } from "lucide-react";
+
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
+} from "@/components/ui/pagination";
+import { cn } from "@/lib/utils";
+
+import type { PurchaseOrderDetail, PaymentTerm } from "../types";
+import type { CompanyData } from "@/components/pdf-layout-design/types";
+
+import { toast } from "sonner";
+
+function money() {
+    try {
+        return new Intl.NumberFormat("en-PH", {
+            style: "currency",
+            currency: "PHP",
+            minimumFractionDigits: 2,
+        });
+    } catch {
+        return new Intl.NumberFormat("en-PH", { minimumFractionDigits: 2 });
+    }
+}
+
+function toNum(v: unknown): number {
+    if (v === null || v === undefined) return 0;
+    const s = String(v).trim();
+    if (!s) return 0;
+    const n = Number(s.replace(/,/g, ""));
+    return Number.isFinite(n) ? n : 0;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function unwrap(po: any) {
+    return po?.data ?? po;
+}
+
+function safeStr(v: unknown, fallback = "—") {
+    const s = String(v ?? "").trim();
+    return s ? s : fallback;
+}
+
+function isNumericString(v: unknown) {
+    const s = String(v ?? "").trim();
+    if (!s) return false;
+    return /^[0-9]+$/.test(s);
+}
+
+function pickText(v: unknown): string {
+    if (v === null || v === undefined) return "";
+    if (typeof v === "string") return v.trim();
+    if (typeof v === "number") return String(v);
+    if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+    return "";
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatBranchOne(raw: any): string {
+    if (!raw) return "";
+
+    const allocName = pickText(raw?.branchName ?? raw?.branch_name_text ?? raw?.branchNameText ?? "");
+    const allocCode = pickText(raw?.branchCode ?? raw?.branch_code_text ?? raw?.branchCodeText ?? "");
+
+    const code = pickText(raw?.branch_code ?? raw?.code ?? allocCode);
+    const name = pickText(raw?.branch_name ?? raw?.name ?? raw?.branch_description ?? allocName);
+
+    if (code && name) return `${code} — ${name}`;
+    if (name) return name;
+    if (code) return code;
+
+    if (typeof raw === "string" || typeof raw === "number") {
+        const s = String(raw).trim();
+        if (!s || isNumericString(s)) return "";
+        return s;
+    }
+
+    return "";
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatBranches(raw: any): string {
+    if (Array.isArray(raw)) {
+        const labels = raw
+            .map((b) => formatBranchOne(b))
+            .map((x) => x.trim())
+            .filter(Boolean);
+
+        if (!labels.length) return "—";
+        if (labels.length <= 2) return labels.join(", ");
+        return `${labels.slice(0, 2).join(", ")} +${labels.length - 2} more`;
+    }
+
+    const one = formatBranchOne(raw);
+    return one ? one : "—";
+}
+
+type NormalizedLine = {
+    key: string;
+    name: string;
+    brand: string;
+    category: string;
+    uom: string;
+    qty: number;
+    price: number;
+    gross: number;
+    discountType: string;
+    discountAmount: number;
+    net: number;
+    total: number;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeLines(rawItems: any[]): NormalizedLine[] {
+    if (!Array.isArray(rawItems)) return [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return rawItems.map((it: any, idx: number) => {
+        const key = String(it?.po_item_id ?? it?.id ?? idx);
+        const name = safeStr(it?.item_name ?? it?.name ?? it?.product_name ?? `Item ${idx + 1}`);
+        const brand = safeStr(it?.brand ?? "—");
+        const category = safeStr(it?.category ?? "—");
+        const uom = safeStr(it?.uom ?? it?.unit ?? "—");
+        
+        // Use exact DB column names as primary source
+        const qty = Math.max(0, toNum(it?.ordered_quantity ?? it?.qty ?? it?.quantity ?? 0));
+        const price = Math.max(0, toNum(it?.unit_price ?? it?.price ?? 0));
+        
+        const gross = toNum(it?.gross) || Math.max(0, qty * price);
+        const discountType = safeStr(it?.discount_type ?? "—");
+        
+        // Calculate discount amount from unit_price vs discounted_price
+        const discPriceLine = toNum(it?.discounted_price);
+        const discountAmount = discPriceLine > 0 && discPriceLine < price 
+            ? Number(((price - discPriceLine) * qty).toFixed(2))
+            : Math.abs(toNum(it?.discount_amount ?? 0));
+
+        const net = toNum(it?.total_amount ?? it?.net ?? (gross - discountAmount));
+        const total = toNum(it?.total_amount ?? it?.line_total ?? net);
+        
+        return { key, name, brand, category, uom, qty, price, gross, discountType, discountAmount, net, total };
+    });
+}
+
+export default function PurchaseOrderReviewPanel(props: {
+    po: PurchaseOrderDetail | null;
+    loading?: boolean;
+    disabled?: boolean;
+    paymentTerms: PaymentTerm[];
+    onApprove?: (opts: {
+        markAsInvoice: boolean;
+        payment_type: number | null;
+        termsDays?: number;
+        gross_amount?: number;
+        discounted_amount?: number;
+        vat_amount?: number;
+        withholding_tax_amount?: number;
+        total_amount?: number;
+        branch_id?: number | null;
+        receiver_id?: number | null;
+    }) => void | Promise<void>;
+    onReject?: () => void | Promise<void>;
+    approverName?: string;
+}) {
+    const fmt = React.useMemo(() => money(), []);
+
+
+    const [markAsInvoice, setMarkAsInvoice] = React.useState(false);
+    const [selectedPaymentTermId, setSelectedPaymentTermId] = React.useState<number | null>(null);
+    const [termsDays, setTermsDays] = React.useState<number>(30);
+
+    const [confirmOpen, setConfirmOpen] = React.useState(false);
+    const [rejectConfirmOpen, setRejectConfirmOpen] = React.useState(false);
+    const [submitting, setSubmitting] = React.useState(false);
+
+    const [currentPage, setCurrentPage] = React.useState(1);
+    const [pageSize, setPageSize] = React.useState(10);
+    const [companyData, setCompanyData] = React.useState<CompanyData | null>(null);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const poAny: any = React.useMemo(() => unwrap(props.po), [props.po]);
+
+    React.useEffect(() => {
+        // Fetch company data for PDF
+        fetch("/api/pdf/company")
+            .then(res => res.json())
+            .then(data => {
+                const company = data?.data?.[0] || (Array.isArray(data.data) ? null : data.data);
+                setCompanyData(company);
+            })
+            .catch(err => console.error("Failed to fetch company data:", err));
+
+        setMarkAsInvoice(!!(poAny?.is_invoice ?? poAny?.isInvoice ?? false));
+        const existingType = Number(poAny?.payment_type) || null;
+        if (existingType) {
+            setSelectedPaymentTermId(existingType);
+        } else {
+            // Fallback: try to match supplier's terms string from the expanded supplier data
+            const supplierTerms = String(
+                poAny?.supplier_name?.payment_terms ?? 
+                poAny?.supplier?.payment_terms ?? 
+                poAny?.supplier_terms ?? 
+                ""
+            ).toLowerCase().trim();
+
+            if (supplierTerms) {
+                const matched = props.paymentTerms.find(pt => 
+                    pt.payment_name.toLowerCase().trim() === supplierTerms
+                );
+                setSelectedPaymentTermId(matched?.id || null);
+            } else {
+                setSelectedPaymentTermId(null);
+            }
+        }
+        setTermsDays(30);
+
+        setConfirmOpen(false);
+        setSubmitting(false);
+        setCurrentPage(1);
+    }, [
+        poAny?.purchase_order_id, 
+        poAny?.id, 
+        poAny?.is_invoice, 
+        poAny?.isInvoice, 
+        poAny?.payment_type, 
+        poAny?.supplier_name?.payment_terms, 
+        poAny?.supplier?.payment_terms, 
+        poAny?.supplier_terms, 
+        props.paymentTerms
+    ]);
+
+    const branchLabel = React.useMemo(() => {
+        const helperName = pickText(poAny?.branch_name_text ?? poAny?.branchNameText ?? poAny?.branchName ?? "");
+        const helperCode = pickText(poAny?.branch_code_text ?? poAny?.branchCodeText ?? poAny?.branchCode ?? "");
+
+        if (helperName) {
+            return helperCode ? `${helperCode} — ${helperName}` : helperName;
+        }
+
+        if (Array.isArray(poAny?.allocations) && poAny.allocations.length) {
+            return formatBranches(poAny.allocations);
+        }
+
+        if (poAny?.branch_id !== undefined) {
+            return formatBranches(poAny.branch_id);
+        }
+
+        if (poAny?.branches !== undefined) return formatBranches(poAny.branches);
+        if (poAny?.branch !== undefined) return formatBranches(poAny.branch);
+
+        const raw = poAny?.branch_id_value ?? poAny?.branchId ?? "";
+        if (raw && !isNumericString(raw)) return String(raw).trim();
+
+        return "—";
+    }, [poAny]);
+
+    const supplierName = React.useMemo(() => {
+        return safeStr(
+            poAny?.supplier_name?.supplier_name ??
+            poAny?.supplierName ??
+            poAny?.supplier ??
+            "—"
+        );
+    }, [poAny]);
+
+    const lines = React.useMemo(() => normalizeLines(poAny?.items ?? []), [poAny]);
+
+    const totalPages = Math.ceil(lines.length / pageSize);
+    const currentLines = React.useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return lines.slice(start, start + pageSize);
+    }, [lines, currentPage, pageSize]);
+
+    const discountAmountHeader = toNum(poAny?.discounted_amount ?? poAny?.discountAmount);
+    const grossAmountDirect = toNum(poAny?.gross_amount ?? poAny?.grossAmount);
+    const vatAmountDirect = toNum(poAny?.vat_amount ?? poAny?.vatAmount);
+    const ewtAmountDirect = toNum(poAny?.withholding_tax_amount ?? poAny?.withholding_amount);
+    const totalAmountDirect = toNum(poAny?.total_amount ?? poAny?.total);
+
+    const summaryGross = React.useMemo(() => {
+        return lines.reduce((acc, l) => acc + (toNum(l.price) * toNum(l.qty)), 0);
+    }, [lines]);
+
+    const summaryDiscountLines = React.useMemo(() => {
+        return lines.reduce((acc, l) => toNum(acc) + toNum(l.discountAmount), 0);
+    }, [lines]);
+
+    const discountAmount = React.useMemo(() => {
+        if (summaryDiscountLines > 0) return summaryDiscountLines;
+        return discountAmountHeader;
+    }, [summaryDiscountLines, discountAmountHeader]);
+
+    const grossAmount = React.useMemo(() => {
+        return grossAmountDirect || summaryGross;
+    }, [grossAmountDirect, summaryGross]);
+
+    const netAmount = React.useMemo(() => {
+        if (totalAmountDirect > 0) return totalAmountDirect;
+        return Math.max(0, grossAmount - discountAmount);
+    }, [totalAmountDirect, grossAmount, discountAmount]);
+
+    const vatExclusive = React.useMemo(() => {
+        return netAmount / 1.12;
+    }, [netAmount]);
+
+    const vatAmountComputed = React.useMemo(() => {
+        if (vatAmountDirect > 0) return vatAmountDirect;
+        return Math.max(0, netAmount - vatExclusive);
+    }, [vatAmountDirect, netAmount, vatExclusive]);
+
+    const ewtGoods = React.useMemo(() => {
+        if (ewtAmountDirect > 0) return ewtAmountDirect;
+        return vatExclusive * 0.01;
+    }, [ewtAmountDirect, vatExclusive]);
+
+    const totalAmount = totalAmountDirect || netAmount;
+
+    const paymentStatusLabel = React.useMemo(() => {
+        if (!selectedPaymentTermId) return "No Payment Term Selected";
+        const term = props.paymentTerms.find(t => t.id === selectedPaymentTermId);
+        if (!term) return "Unknown Payment Term";
+        return term.payment_description || term.payment_name;
+    }, [selectedPaymentTermId, props.paymentTerms]);
+
+    const approveDisabled =
+        props.disabled || props.loading || submitting || !poAny?.purchase_order_id;
+
+    async function runApprove() {
+        if (!selectedPaymentTermId) {
+            toast.error("Required Field Missing", {
+                description: "Please select a payment term before approving.",
+            });
+            return;
+        }
+
+        if (approveDisabled) return;
+
+        try {
+            setSubmitting(true);
+
+            await Promise.resolve(
+                props.onApprove?.({
+                    markAsInvoice,
+                    payment_type: selectedPaymentTermId,
+                    termsDays: undefined, // removed explicit days override for now as it's in the term
+                    // Financial totals
+                    gross_amount: grossAmount,
+                    discounted_amount: discountAmount,
+                    vat_amount: vatAmountComputed,
+                    withholding_tax_amount: ewtGoods,
+                    total_amount: totalAmount,
+                    // Relationship IDs
+                    branch_id: toNum(poAny?.branch_id?.id ?? poAny?.branch_id) || 
+                              toNum(poAny?.allocations?.[0]?.branch?.id ?? poAny?.allocations?.[0]?.branch) || 
+                              null,
+                    receiver_id: toNum(poAny?.receiver_id?.id ?? poAny?.receiver_id) || null,
+                })
+            );
+
+            setConfirmOpen(false);
+        } catch (e: unknown) {
+            setConfirmOpen(false);
+            throw e;
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
+    async function runReject() {
+        if (approveDisabled) return;
+
+        try {
+            setSubmitting(true);
+            await Promise.resolve(props.onReject?.());
+            setRejectConfirmOpen(false);
+        } catch (e: unknown) {
+            setRejectConfirmOpen(false);
+            throw e;
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
+    return (
+        <>
+            <div
+                className={cn(
+                    "min-w-0 border border-border rounded-xl bg-background shadow-sm overflow-hidden",
+                    props.disabled ? "opacity-70 pointer-events-none" : ""
+                )}
+            >
+                <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <div className="text-sm font-black text-foreground uppercase tracking-tight">
+                            Purchase Order Review
+                        </div>
+                        <div className="text-[11px] text-muted-foreground truncate">
+                            {String(poAny?.purchase_order_no ?? poAny?.poNumber ?? "Select a PO to review")}
+                        </div>
+                    </div>
+
+                    {poAny?.purchase_order_id ? (
+                        <Badge variant="secondary" className="text-[10px] font-black">
+                            ID: {String(poAny.purchase_order_id)}
+                        </Badge>
+                    ) : null}
+                </div>
+
+                <div className="p-4 space-y-4">
+                    {!props.po ? (
+                        <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                            Select a pending Purchase Order on the left to view details.
+                        </div>
+                    ) : props.loading ? (
+                        <div className="rounded-lg border border-border p-6 text-sm text-muted-foreground">
+                            Loading purchase order details...
+                        </div>
+                    ) : (
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="rounded-lg border border-border bg-background p-4">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                        PO Information
+                                    </div>
+                                    <div className="mt-2 space-y-1 text-sm">
+                                        <div className="flex justify-between gap-3">
+                                            <span className="text-muted-foreground">PO Number</span>
+                                            <span className="font-mono font-bold text-foreground">
+                                                {String(poAny?.purchase_order_no ?? poAny?.poNumber ?? "—")}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between gap-3">
+                                            <span className="text-muted-foreground">Date</span>
+                                            <span className="font-medium text-foreground">
+                                                {String(poAny?.date ?? poAny?.date_encoded ?? "—")}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between gap-3">
+                                            <span className="text-muted-foreground">Branch</span>
+                                            <span className="font-medium text-foreground truncate text-right">
+                                                {branchLabel}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-lg border border-border bg-background p-4">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                        Supplier
+                                    </div>
+                                    <div className="mt-2">
+                                        <div className="text-sm font-bold text-foreground truncate">{supplierName}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="rounded-xl border border-border bg-background p-4">
+                                <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                    Payment Status
+                                </div>
+                                <div className="mt-2 rounded-lg bg-muted/30 p-3 text-sm">
+                                    <span className="text-amber-600 dark:text-amber-400 font-bold">
+                                        Payment Status: {paymentStatusLabel}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="p-5 border border-border rounded-xl bg-muted/30 space-y-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                        Products
+                                    </div>
+                                    <Badge variant="outline" className="text-[10px] font-black uppercase">
+                                        {lines.length} item(s)
+                                    </Badge>
+                                </div>
+                                {lines.length ? (
+                                    <div className="rounded-lg border border-border bg-background overflow-hidden">
+                                        <div className="relative overflow-auto max-h-[400px]">
+                                            <table className="w-full text-left text-xs border-separate border-spacing-0">
+                                                <thead className="sticky top-0 z-10 bg-muted/90 backdrop-blur-sm shadow-sm">
+                                                <tr>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Brand</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Category</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Product Name</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Price</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">UOM</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Qty</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Gross</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Discount Type</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Discount</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Net</th>
+                                                </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-border/50">
+                                                {currentLines.map((l) => (
+                                                    <tr key={l.key} className="hover:bg-muted/30 transition-colors">
+                                                        <td className="px-3 py-2 text-muted-foreground border-b border-border/10">{l.brand}</td>
+                                                        <td className="px-3 py-2 text-muted-foreground border-b border-border/10">{l.category}</td>
+                                                        <td className="px-3 py-2 font-bold text-foreground border-b border-border/10">{l.name}</td>
+                                                        <td className="px-3 py-2 text-right tabular-nums border-b border-border/10">{fmt.format(l.price)}</td>
+                                                        <td className="px-3 py-2 text-muted-foreground border-b border-border/10">{l.uom}</td>
+                                                        <td className="px-3 py-2 text-right tabular-nums font-medium border-b border-border/10">{l.qty}</td>
+                                                        <td className="px-3 py-2 text-right tabular-nums font-medium border-b border-border/10">{fmt.format(l.gross)}</td>
+                                                        <td className="px-3 py-2 text-muted-foreground uppercase border-b border-border/10">{l.discountType}</td>
+                                                        <td className="px-3 py-2 text-right tabular-nums font-medium text-emerald-600 dark:text-emerald-400 border-b border-border/10">
+                                                            {fmt.format(l.discountAmount)}
+                                                        </td>
+                                                        <td className="px-3 py-2 text-right tabular-nums font-black text-foreground border-b border-border/10">{fmt.format(l.net)}</td>
+                                                    </tr>
+                                                ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        <div className="border-t border-border p-3 flex flex-col sm:flex-row items-center justify-between gap-4 bg-muted/20">
+                                            <div className="flex items-center gap-3 text-xs text-muted-foreground whitespace-nowrap">
+                                                <span className="font-bold">Rows per page:</span>
+                                                <Select
+                                                    value={String(pageSize)}
+                                                    onValueChange={(v) => {
+                                                        setPageSize(Number(v));
+                                                        setCurrentPage(1);
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="h-8 w-[85px] font-bold">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {[10, 20, 30, 50, 100].map((size) => (
+                                                            <SelectItem key={size} value={String(size)} className="font-bold">
+                                                                {size}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <span className="ml-2 font-medium">
+                                                    Showing {(currentPage - 1) * pageSize + 1} to{" "}
+                                                    {Math.min(currentPage * pageSize, lines.length)} of{" "}
+                                                    {lines.length} items
+                                                </span>
+                                            </div>
+
+                                            {totalPages > 1 && (
+                                                <Pagination className="w-auto mx-0">
+                                                    <PaginationContent>
+                                                        <PaginationItem>
+                                                            <PaginationPrevious
+                                                                href="#"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    if (currentPage > 1) setCurrentPage((p) => p - 1);
+                                                                }}
+                                                                className={cn(
+                                                                    "h-8 px-2 cursor-pointer",
+                                                                    currentPage === 1 && "pointer-events-none opacity-50"
+                                                                )}
+                                                            />
+                                                        </PaginationItem>
+
+                                                        <div className="flex items-center gap-1">
+                                                            {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                                                .filter(p => {
+                                                                    return p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1);
+                                                                })
+                                                                .map((p, i, arr) => (
+                                                                    <React.Fragment key={p}>
+                                                                        {i > 0 && arr[i-1] !== p - 1 && (
+                                                                            <PaginationItem>
+                                                                                <PaginationEllipsis />
+                                                                            </PaginationItem>
+                                                                        )}
+                                                                        <PaginationItem>
+                                                                            <PaginationLink
+                                                                                href="#"
+                                                                                className="h-8 w-8 cursor-pointer"
+                                                                                isActive={currentPage === p}
+                                                                                onClick={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    setCurrentPage(p);
+                                                                                }}
+                                                                            >
+                                                                                {p}
+                                                                            </PaginationLink>
+                                                                        </PaginationItem>
+                                                                    </React.Fragment>
+                                                                ))}
+                                                        </div>
+
+                                                        <PaginationItem>
+                                                            <PaginationNext
+                                                                href="#"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    if (currentPage < totalPages) setCurrentPage((p) => p + 1);
+                                                                }}
+                                                                className={cn(
+                                                                    "h-8 px-2 cursor-pointer",
+                                                                    currentPage === totalPages && "pointer-events-none opacity-50"
+                                                                )}
+                                                            />
+                                                        </PaginationItem>
+                                                    </PaginationContent>
+                                                </Pagination>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                                        No product lines found for this PO.
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-5 border border-border rounded-xl bg-muted/30 space-y-3">
+                                <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                    Financial Summary
+                                </div>
+
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground font-medium uppercase">Gross Amount</span>
+                                    <span className="font-bold text-foreground">{fmt.format(grossAmount)}</span>
+                                </div>
+
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground font-medium uppercase">Discount</span>
+                                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                        -{fmt.format(discountAmount)}
+                                    </span>
+                                </div>
+
+                                <div className="flex justify-between text-xs border-b border-border/50 pb-3">
+                                    <span className="text-muted-foreground font-medium uppercase">Net Amount</span>
+                                    <span className="font-bold text-foreground">{fmt.format(netAmount)}</span>
+                                </div>
+
+                                {markAsInvoice ? (
+                                    <>
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-muted-foreground font-medium uppercase">VAT (12%)</span>
+                                            <span className="font-bold text-foreground">{fmt.format(vatAmountComputed)}</span>
+                                        </div>
+
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-muted-foreground font-medium uppercase">EWT Goods (1%)</span>
+                                            <span className="font-bold text-destructive">-{fmt.format(ewtGoods)}</span>
+                                        </div>
+
+                                        <div className="rounded-md bg-background/60 border border-border/60 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-400 font-bold italic">
+                                            Note: VAT and EWT figures are for reference and have not been deducted from the total.
+                                        </div>
+                                    </>
+                                ) : null}
+
+                                <div className="flex justify-between items-center pt-2 border-t border-border/50 mt-2">
+                                    <span className="font-black text-foreground uppercase tracking-tighter text-sm">
+                                        Grand Total
+                                    </span>
+                                    <span className="font-black text-2xl text-primary tracking-tighter">
+                                        {fmt.format(netAmount)}
+                                    </span>
+                                </div>
+
+                                {!markAsInvoice ? (
+                                    <div className="rounded-lg bg-background/60 border border-border/60 px-3 py-2 text-[11px] text-muted-foreground">
+                                        PO not marked as invoice - Accounts payable will not be affected
+                                    </div>
+                                ) : (
+                                    <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-[11px] text-primary/70 italic">
+                                        Note: This Purchase Order is marked as an invoice and will affect accounts payable.
+                                    </div>
+                                )}
+                            </div>
+
+                            <Separator />
+
+                            <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
+                                <div className="flex items-center gap-3">
+                                    <Switch
+                                        checked={markAsInvoice}
+                                        onCheckedChange={setMarkAsInvoice}
+                                        id="markAsInvoice"
+                                    />
+                                    <Label htmlFor="markAsInvoice" className="text-sm font-bold">
+                                        Mark as Invoice
+                                    </Label>
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                        Payment Term
+                                    </div>
+
+                                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
+                                        <div className="flex flex-wrap items-center gap-1.5 bg-muted/40 p-1 rounded-xl border border-border/40">
+                                            <SearchableSelect
+                                                options={props.paymentTerms.map((t) => ({
+                                                    value: String(t.id),
+                                                    label: String(t.payment_name),
+                                                }))}
+                                                value={selectedPaymentTermId ? String(selectedPaymentTermId) : ""}
+                                                onValueChange={(v) => setSelectedPaymentTermId(Number(v))}
+                                                placeholder="Select Payment Term"
+                                                className={cn(
+                                                    "h-9 w-[240px] text-[10px] font-black uppercase tracking-tight rounded-lg bg-background border-border/50",
+                                                    !selectedPaymentTermId && "border-red-500 ring-1 ring-red-500"
+                                                )}
+                                            />
+                                        </div>
+
+                                        {/* Added the Print button here */}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="h-10 rounded-xl font-black uppercase tracking-wider"
+                                            disabled={!poAny?.purchase_order_id || !companyData}
+                                            onClick={async () => {
+                                                try {
+                                                    await generatePurchaseOrderPdf(poAny, branchLabel, supplierName, companyData as CompanyData, props.approverName || "—");
+                                                } catch (err) {
+                                                    console.error("PDF Generation failed:", err);
+                                                    toast.error("Failed to generate PDF.");
+                                                }
+                                            }}
+                                        >
+                                            <Printer className="mr-2 h-4 w-4" />
+                                            Print PO
+                                        </Button>
+
+                                        <AlertDialog open={rejectConfirmOpen} onOpenChange={(o) => !submitting && setRejectConfirmOpen(o)}>
+                                            <AlertDialogTrigger asChild>
+                                                <Button
+                                                    type="button"
+                                                    variant="destructive"
+                                                    className="h-10 rounded-xl font-black uppercase tracking-wider"
+                                                    disabled={approveDisabled}
+                                                    onClick={() => setRejectConfirmOpen(true)}
+                                                >
+                                                    {submitting ? "Rejecting..." : "Reject PO"}
+                                                </Button>
+                                            </AlertDialogTrigger>
+
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Are you sure you want to reject this Purchase Order?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        This will reject the Purchase Order. It cannot be approved or processed further.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel asChild>
+                                                        <Button type="button" variant="outline" disabled={submitting}>
+                                                            Cancel
+                                                        </Button>
+                                                    </AlertDialogCancel>
+
+                                                    <AlertDialogAction asChild>
+                                                        <Button type="button" variant="destructive" onClick={runReject} disabled={approveDisabled}>
+                                                            Confirm &amp; Reject
+                                                        </Button>
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+
+                                        <AlertDialog open={confirmOpen} onOpenChange={(o) => !submitting && setConfirmOpen(o)}>
+                                            <AlertDialogTrigger asChild>
+                                                <Button
+                                                    type="button"
+                                                    className="h-10 rounded-xl font-black uppercase tracking-wider"
+                                                    disabled={approveDisabled}
+                                                    onClick={() => setConfirmOpen(true)}
+                                                >
+                                                    {submitting ? "Approving..." : "Approve PO"}
+                                                </Button>
+                                            </AlertDialogTrigger>
+
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Are you sure this is the final approval?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        This will approve and post the Purchase Order. Please confirm before proceeding.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel asChild>
+                                                        <Button type="button" variant="outline" disabled={submitting}>
+                                                            Cancel
+                                                        </Button>
+                                                    </AlertDialogCancel>
+
+                                                    <AlertDialogAction asChild>
+                                                        <Button type="button" onClick={runApprove} disabled={approveDisabled}>
+                                                            Confirm &amp; Approve
+                                                        </Button>
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
+        </>
+    );
+}

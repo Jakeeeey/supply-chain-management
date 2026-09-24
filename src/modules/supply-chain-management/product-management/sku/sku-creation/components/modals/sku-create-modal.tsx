@@ -21,6 +21,7 @@ interface SKUModalProps {
   masterData: MasterData | null;
   onSubmit: (data: SKU) => Promise<void>;
   loading?: boolean;
+  isMasterEdit?: boolean;
 }
 
 export function SKUModal({
@@ -30,6 +31,7 @@ export function SKUModal({
   masterData,
   onSubmit,
   loading,
+  isMasterEdit,
 }: SKUModalProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -43,22 +45,24 @@ export function SKUModal({
               <Badge variant="secondary">{initialData.status}</Badge>
             )}
           </div>
-          <DialogDescription className="space-y-3">
-            {initialData?.remarks ? (
-              <div className="p-4 bg-destructive/5 border border-destructive/10 rounded-lg animate-in fade-in slide-in-from-top-1 duration-300">
-                <div className="flex items-center gap-2 text-destructive font-bold text-[10px] uppercase tracking-widest mb-2">
-                  <div className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
-                  Rejection Notes from Manager
+          <DialogDescription className="space-y-3" asChild>
+            <div>
+              {initialData?.remarks ? (
+                <div className="p-4 bg-destructive/5 border border-destructive/10 rounded-lg animate-in fade-in slide-in-from-top-1 duration-300">
+                  <div className="flex items-center gap-2 text-destructive font-bold text-[10px] uppercase tracking-widest mb-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
+                    Rejection Notes from Manager
+                  </div>
+                  <p className="text-sm text-destructive/90 leading-relaxed font-medium">
+                    {initialData.remarks}
+                  </p>
                 </div>
-                <p className="text-sm text-destructive/90 leading-relaxed font-medium">
-                  {initialData.remarks}
-                </p>
-              </div>
-            ) : initialData ? (
-              `Manage product details for ${initialData.product_name}.`
-            ) : (
-              "Enter product information to register a new SKU."
-            )}
+              ) : initialData ? (
+                `Manage product details for ${initialData.product_name}.`
+              ) : (
+                "Enter product information to register a new SKU."
+              )}
+            </div>
           </DialogDescription>
         </DialogHeader>
         <div className="px-4">
@@ -70,6 +74,7 @@ export function SKUModal({
               setOpen(false);
             }}
             loading={loading}
+            isMasterEdit={isMasterEdit}
           />
         </div>
       </DialogContent>

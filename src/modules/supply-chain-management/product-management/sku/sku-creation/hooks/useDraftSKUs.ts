@@ -15,6 +15,9 @@ export function useDraftSKUs() {
   const [draftsPage, setDraftsPage] = useState(0);
   const [draftsLimit, setDraftsLimit] = useState(10);
   const [draftsSorting, setDraftsSorting] = useState<SortingState>([]);
+  const [draftsSupplier, setDraftsSupplier] = useState<string>("");
+  const [draftsStatusFilter, setDraftsStatusFilter] = useState<string>("");
+  const [draftsType, setDraftsType] = useState<string>("");
 
   return {
     draftData,
@@ -27,5 +30,11 @@ export function useDraftSKUs() {
     setDraftsLimit,
     draftsSorting,
     setDraftsSorting,
+    draftsSupplier,
+    setDraftsSupplier,
+    draftsStatusFilter,
+    setDraftsStatusFilter,
+    draftsType,
+    setDraftsType,
   };
 }

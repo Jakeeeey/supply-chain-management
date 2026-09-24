@@ -11,6 +11,10 @@ import { API_BASE_URL, fetchItems, request } from "./sku-api";
  * Read-only query operations for SKUs.
  * No side effects — safe to call from any context.
  */
+let cachedMasterData: MasterData | null = null;
+let lastFetchedTime = 0;
+const CACHE_TTL = 30000; // 30 seconds cache TTL
+
 export const skuQueryService = {
   async fetchApproved(
     limit: number = 10,
@@ -56,7 +60,7 @@ export const skuQueryService = {
     if (facets?.uomId) {
       filter._and.push({ unit_of_measurement: { _eq: facets.uomId } });
     }
-    
+
     if (supplierId) {
       let supplierProductIds: number[] = [];
       try {
@@ -67,21 +71,21 @@ export const skuQueryService = {
           limit: -1,
         });
         if (supplierLinks) {
-           supplierProductIds = supplierLinks.map(l => l.product_id).filter(Boolean);
+          supplierProductIds = supplierLinks.map(l => l.product_id).filter(Boolean);
         }
       } catch (err) {
         console.warn("[SKU Query] Failed to fetch supplier links for filtering:", err);
       }
-      
-      filter._and.push({ 
-        product_id: { _in: supplierProductIds.length > 0 ? supplierProductIds : [-1] } 
+
+      filter._and.push({
+        product_id: { _in: supplierProductIds.length > 0 ? supplierProductIds : [-1] }
       });
     }
     const searchFilter = CellHelpers.buildSearchFilter(search);
     if (searchFilter) {
       filter._and.push(searchFilter);
     }
-    
+
     // Remove product_supplier from sort if it was accidentally passed
     const cleanSort = sort?.split(',').filter(s => !s.includes('product_supplier')).join(',') || "-created_at,-product_id";
 
@@ -103,7 +107,7 @@ export const skuQueryService = {
         // Chunk productIds into batches of 50 to avoid HTTP 431 URL length limits
         const chunkSize = 50;
         const supplierLinks: { product_id: number; supplier_id: number }[] = [];
-        
+
         for (let i = 0; i < productIds.length; i += chunkSize) {
           const chunk = productIds.slice(i, i + chunkSize);
           const { data: chunkLinks } = await fetchItems<{
@@ -160,6 +164,7 @@ export const skuQueryService = {
     facets?: {
       itemType?: string;
       isActive?: string;
+      statusFilter?: string;
     }
   ): Promise<PaginatedSKU> {
     const filter: Record<string, unknown[]> = { _and: [] };
@@ -169,11 +174,16 @@ export const skuQueryService = {
 
     if (status) {
       const target = status.toUpperCase();
-      filter._and.push(
-        target === "DRAFT"
-          ? { status: { _in: ["DRAFT", "REJECTED"] } }
-          : { status: { _eq: target } },
-      );
+      // If a specific statusFilter override is provided, use it directly
+      if (facets?.statusFilter) {
+        filter._and.push({ status: { _eq: facets.statusFilter.toUpperCase() } });
+      } else {
+        filter._and.push(
+          target === "DRAFT"
+            ? { status: { _in: ["DRAFT", "REJECTED"] } }
+            : { status: { _eq: target } },
+        );
+      }
     }
 
     if (facets?.itemType) {
@@ -200,7 +210,7 @@ export const skuQueryService = {
         allowedDraftIds = [];
       }
       filter._and.push({
-        id: { _in: allowedDraftIds.length > 0 ? allowedDraftIds : [-1] }
+        product_id: { _in: allowedDraftIds.length > 0 ? allowedDraftIds : [-1] }
       });
     }
 
@@ -266,6 +276,12 @@ export const skuQueryService = {
   },
 
   async fetchMasterData(): Promise<MasterData> {
+    const now = Date.now();
+    if (cachedMasterData && (now - lastFetchedTime < CACHE_TTL)) {
+      console.log(`[SKU Query] Returning cached masterData (age: ${now - lastFetchedTime}ms)`);
+      return cachedMasterData;
+    }
+
     const fetchResilient = async (
       names: string[],
     ): Promise<{ data: Record<string, unknown>[] }> => {
@@ -290,7 +306,7 @@ export const skuQueryService = {
       fetchResilient(["product_section", "section", "sections"]),
     ]);
 
-    return {
+    const result = {
       units: normalizeMasterData(units.data || []),
       categories: normalizeMasterData(categories.data || []),
       brands: normalizeMasterData(brands.data || []),
@@ -299,14 +315,34 @@ export const skuQueryService = {
       segments: normalizeMasterData(segments.data || []),
       sections: normalizeMasterData(sections.data || []),
     };
+
+    cachedMasterData = result;
+    lastFetchedTime = Date.now();
+    return result;
   },
 
   async checkDuplicateName(name: string): Promise<boolean> {
-    const filter = `filter[product_name][_eq]=${encodeURIComponent(name)}&limit=1`;
+    const cleanedName = name.trim().replace(/\s+/g, " ");
+    if (!cleanedName) return false;
+
+    const normalizedInput = cleanedName.toLowerCase();
+    const filter = `filter[product_name][_icontains]=${encodeURIComponent(cleanedName)}&limit=10`;
+
     const [approved, drafts] = await Promise.all([
       request<{ data: SKU[] }>(`${API_BASE_URL}/items/products?${filter}`),
       request<{ data: SKU[] }>(`${API_BASE_URL}/items/product_draft?${filter}`),
     ]);
-    return approved.data?.length > 0 || drafts.data?.length > 0;
+
+    const hasApprovedMatch = (approved.data || []).some((item) => {
+      const pName = (item.product_name || "").trim().replace(/\s+/g, " ").toLowerCase();
+      return pName === normalizedInput;
+    });
+
+    const hasDraftMatch = (drafts.data || []).some((item) => {
+      const dName = (item.product_name || "").trim().replace(/\s+/g, " ").toLowerCase();
+      return dName === normalizedInput;
+    });
+
+    return hasApprovedMatch || hasDraftMatch;
   },
 };

@@ -501,6 +501,10 @@ export const stockAdjustmentManualService = {
   async create(payload: { header: Record<string, unknown>; items: StockAdjustmentManualItem[]; userId?: number }) {
     const { header, items } = payload;
 
+    let headerId: number | null = null;
+    let generatedDocNo = "";
+    let headerRes: { data: { id: number } } | null = null;
+
     let finalRemarks = String(header.remarks || "").trim();
     // Clean any existing supplier / source tags to be safe
     finalRemarks = finalRemarks.replace(/\s*\[SUPPLIER_ID:\s*(\d+)\]/g, "").trim();
@@ -511,23 +515,43 @@ export const stockAdjustmentManualService = {
     // Stamp source type so the summary can label this record as Manual
     finalRemarks = `${finalRemarks}\n[SOURCE: MANUAL]`.trim();
 
-    const headerRes = await directusFetch<{ data: { id: number } }>(`${DIRECTUS_URL}/items/stock_adjustment_header`, {
-      method: "POST",
-      body: JSON.stringify({
-        doc_no: header.doc_no,
-        branch_id: header.branch_id,
-        supplier_id: header.supplier_id,
-        type: header.type,
-        remarks: finalRemarks,
-        amount: header.amount || items.reduce((acc: number, item: StockAdjustmentManualItem) => acc + (item.quantity * (item.cost_per_unit || 0)), 0),
-        isPosted: 0,
-        created_by: payload.userId,
-      }),
-    });
-    const headerId = headerRes.data.id;
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      // Auto-generate the document number exactly at the time of creation
+      generatedDocNo = await this.fetchNextDocNo((header.type as "IN" | "OUT") || "IN");
+
+      try {
+        headerRes = await directusFetch<{ data: { id: number } }>(`${DIRECTUS_URL}/items/stock_adjustment_header`, {
+          method: "POST",
+          body: JSON.stringify({
+            doc_no: generatedDocNo,
+            branch_id: header.branch_id,
+            supplier_id: header.supplier_id,
+            type: header.type,
+            remarks: finalRemarks,
+            amount: header.amount || items.reduce((acc: number, item: StockAdjustmentManualItem) => acc + (item.quantity * (item.cost_per_unit || 0)), 0),
+            isPosted: 0,
+            created_by: payload.userId,
+          }),
+        });
+        
+        headerId = headerRes.data.id;
+        break; // Success, exit retry loop
+      } catch (error: unknown) {
+        if (attempt === maxRetries) {
+          throw error; // Rethrow on final attempt
+        }
+        // Wait a random short duration before retrying (200ms to 700ms) to avoid overlapping retries
+        await new Promise(res => setTimeout(res, Math.random() * 500 + 200));
+      }
+    }
+
+    if (!headerId || !headerRes) {
+      throw new Error("Failed to create stock adjustment header after multiple attempts.");
+    }
 
     const itemsPayload = items.map((item: StockAdjustmentManualItem) => ({
-      doc_no: header.doc_no,
+      doc_no: generatedDocNo,
       stock_adjustment_id: headerId,
       product_id: Number(item.product_id),
       branch_id: Number(header.branch_id),
@@ -567,7 +591,7 @@ export const stockAdjustmentManualService = {
       }
     }
 
-    return headerRes.data;
+    return { ...headerRes.data, doc_no: generatedDocNo };
   },
 
   /**

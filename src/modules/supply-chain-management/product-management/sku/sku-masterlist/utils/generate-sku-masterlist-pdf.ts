@@ -1,6 +1,19 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { SKU, MasterData } from '../../sku-creation/types/sku.schema';
+import { CellHelpers } from '../../sku-creation/utils/sku-helpers';
+
+function flattenItems(items: SKU[]): SKU[] {
+  const flat: SKU[] = [];
+  items.forEach(item => {
+    flat.push(item);
+    const typedItem = item as SKU & { subRows?: SKU[] };
+    if (typedItem.subRows && typedItem.subRows.length > 0) {
+      flat.push(...flattenItems(typedItem.subRows));
+    }
+  });
+  return flat;
+}
 
 export interface SKUMasterlistPDFData {
   items: SKU[];
@@ -30,6 +43,7 @@ export const DEFAULT_PRINT_COLUMNS = ['code', 'name', 'brand', 'category', 'supp
 
 export function generateSKUMasterlistPDF(data: SKUMasterlistPDFData): jsPDF {
   const { items, masterData, selectedColumns = DEFAULT_PRINT_COLUMNS } = data;
+  const flatItems = flattenItems(items);
 
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'legal' });
 
@@ -78,20 +92,25 @@ export function generateSKUMasterlistPDF(data: SKUMasterlistPDFData): jsPDF {
   const head = hasCBM ? [headRow1, headRow2] : [headRow1];
 
   // Build rows dynamically based on selected columns
-  const rows = items.map((item) => {
-    const brandName = masterData.brands.find((b) => b.id === item.product_brand)?.name || 'N/A';
-    const catName = masterData.categories.find((c) => c.id === item.product_category)?.name || 'N/A';
-    const className = masterData.classes.find((c) => c.id === item.product_class)?.name || 'N/A';
-    const suppName = masterData.suppliers.find((s) => s.id === item.product_supplier)?.name || 'N/A';
+  const rows = flatItems.map((item) => {
+    const brandName = CellHelpers.renderMasterText(item.product_brand, masterData.brands, 'N/A');
+    const catName = CellHelpers.renderMasterText(item.product_category, masterData.categories, 'N/A');
+    const className = CellHelpers.renderMasterText(item.product_class, masterData.classes, 'N/A');
+    const suppName = CellHelpers.renderMasterText(item.product_supplier, masterData.suppliers, 'N/A');
     
     let uomName = 'N/A';
-    if (typeof item.unit_of_measurement === 'number') {
-      uomName = masterData.units.find(u => u.id === item.unit_of_measurement)?.name || 'N/A';
+    if (typeof item.unit_of_measurement === 'number' || !isNaN(Number(item.unit_of_measurement))) {
+      uomName = masterData.units.find(u => Number(u.id) === Number(item.unit_of_measurement))?.name || 'N/A';
     } else if (item.unit_of_measurement && typeof item.unit_of_measurement === 'object') {
        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-       uomName = (item.unit_of_measurement as any).unit_name || 'N/A';
+       uomName = (item.unit_of_measurement as any).unit_name || (item.unit_of_measurement as any).name || 'N/A';
     } else if (item.base_unit) {
-       uomName = masterData.units.find(u => u.id === item.base_unit)?.name || 'N/A';
+       const parsedId = parseInt(String(item.base_unit));
+       if (!isNaN(parsedId)) {
+         uomName = masterData.units.find(u => Number(u.id) === parsedId)?.name || 'N/A';
+       } else {
+         uomName = String(item.base_unit);
+       }
     }
 
     const statusMap: Record<string, string> = {
@@ -108,10 +127,11 @@ export function generateSKUMasterlistPDF(data: SKUMasterlistPDFData): jsPDF {
     columnsToPrint.forEach(col => {
       switch (col.id) {
         case 'code':
-          rowData.push(item.barcode || item.product_code || 'N/A');
+          rowData.push(item.product_code || item.barcode || 'N/A');
           break;
         case 'name':
-          rowData.push(item.product_name || 'N/A');
+          const indent = item.parent_id ? '      ' : '';
+          rowData.push(indent + (item.product_name || 'N/A'));
           break;
         case 'brand':
           rowData.push(brandName);
