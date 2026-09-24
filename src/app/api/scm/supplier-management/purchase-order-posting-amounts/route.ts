@@ -717,21 +717,21 @@ export async function GET() {
     try {
         const base = getDirectusBase();
 
-        // Step 1: Query POR first to find all purchase orders that have receipts posted in inventory (isPosted=1)
-        // but have not yet been fully posted financially (is_posted_amounts!=1).
+        // Step 1: Query POR candidates that are inventory-posted and not yet fully amount-posted
         const porCandidateUrl =
             `${base}/items/${POR_COLLECTION}?limit=-1` +
             `&filter[isPosted][_eq]=1` +
             `&filter[is_posted_amounts][_neq]=1` +
+            `&filter[is_reverted][_neq]=1` +
             `&fields=purchase_order_id`;
-
-        const porCandidateJ = await fetchJson(porCandidateUrl) as { data: { purchase_order_id: number }[] };
-        const porCandidates = Array.isArray(porCandidateJ?.data) ? porCandidateJ.data : [];
-        if (!porCandidates.length) return ok([] as PostingListItem[]);
-
+        
+        const candJ = await fetchJson(porCandidateUrl) as { data: PORRow[] };
+        const porCandidates = Array.isArray(candJ?.data) ? candJ.data : [];
         const initialCandidatePoIds = Array.from(
-            new Set(porCandidates.map(r => toNum(r?.purchase_order_id)).filter(Boolean))
+            new Set(porCandidates.map((r) => toNum(r?.purchase_order_id)).filter(Boolean))
         ) as number[];
+
+        if (!initialCandidatePoIds.length) return ok([] as PostingListItem[]);
 
         // Step 2: Fetch only the specific PO headers that qualify, in chunks of 100 to avoid large URL query string
         const poHeaders: POHeader[] = [];
@@ -1668,6 +1668,35 @@ export async function POST(req: NextRequest) {
 
             if (unpostedAmountsReceipts.length > 0) {
                 return bad("Cannot Force Post. All existing receipts must first be posted.", 400);
+            }
+
+            // 1. Find unposted receiving receipts (isPosted = 0)
+            const unpostedInventoryReceipts = porRows.filter(
+                (r) => toNum(r.isPosted) === 0 && toNum(r.is_reverted) !== 1
+            );
+
+            if (unpostedInventoryReceipts.length > 0) {
+                // 2. Check if any RFID tags exist on these open/unposted receiving lines
+                const unpostedPorIds = unpostedInventoryReceipts.map(r => toNum(r.purchase_order_product_id)).filter(Boolean);
+                if (unpostedPorIds.length > 0) {
+                    const pendingRfidItems = await fetchReceivingItems(base, unpostedPorIds);
+                    const pendingRfidCodes = pendingRfidItems.filter(i => toStr(i.rfid_code));
+                    
+                    if (pendingRfidCodes.length > 0) {
+                        return bad(
+                            `Cannot Force Post. There are ${pendingRfidCodes.length} unposted RFID tag(s) attached to pending receiving lines. ` +
+                            `Please post or void all pending receiving receipts and RFID records before using Force Post.`,
+                            400
+                        );
+                    }
+                }
+
+                // If no RFIDs, block with a general unposted receipts message
+                return bad(
+                    `Cannot Force Post. There are ${unpostedInventoryReceipts.length} unposted receiving receipt(s) still in progress. ` +
+                    `Please post or void all pending receiving receipts before using Force Post.`,
+                    400
+                );
             }
 
             // Perform PO Header force post update: setting is_posted = 1, inventory_status = 6.

@@ -1048,9 +1048,12 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
 
                 // ✅ Check Over-Receiving AFTER confirmed success
                 const currentScansTotal = (scannedCountByPorId[porIdToUse] || 0) + Number(activeItem.taggedQty || 0);
-                const expected = Number(activeItem.expectedQty || 0);
+                const expected = activeItem.isExtra ? 0 : Number(activeItem.originalOrderedQty ?? activeItem.expectedQty ?? 0);
                 if (expected > 0 && currentScansTotal >= expected) {
-                    toast.warning(`Over-Receiving: ${activeItem.name} now has ${currentScansTotal + 1} tags for ${expected} ordered.`);
+                    playBeep("error");
+                    setScanError(`Limit reached: ${activeItem.name} already has ${currentScansTotal} tag(s) for ${expected} required. Cannot add more RFID tags.`);
+                    setRfid("");
+                    return;
                 }
 
                 setScannedCountByPorId(prev => ({
