@@ -717,35 +717,20 @@ export async function GET() {
     try {
         const base = getDirectusBase();
 
-        // Step 1: Query PO first to find all open POs
-        const openPoUrl = 
-            `${base}/items/${PO_COLLECTION}?limit=-1` +
-            `&filter[_or][0][is_posted][_eq]=0` +
-            `&filter[_or][1][is_posted][_null]=true` +
+        // Step 1: Query POR candidates that are inventory-posted and not yet fully amount-posted
+        const porCandidateUrl =
+            `${base}/items/${POR_COLLECTION}?limit=-1` +
+            `&filter[isPosted][_eq]=1` +
+            `&filter[is_posted_amounts][_neq]=1` +
+            `&filter[is_reverted][_neq]=1` +
             `&fields=purchase_order_id`;
         
-        const openPoJ = await fetchJson(openPoUrl) as { data: { purchase_order_id: number }[] };
-        const openPoIds = Array.isArray(openPoJ?.data) ? openPoJ.data.map(r => toNum(r.purchase_order_id)).filter(Boolean) : [];
-        if (!openPoIds.length) return ok([] as PostingListItem[]);
+        const candJ = await fetchJson(porCandidateUrl) as { data: PORRow[] };
+        const porCandidates = Array.isArray(candJ?.data) ? candJ.data : [];
+        const initialCandidatePoIds = Array.from(
+            new Set(porCandidates.map((r) => toNum(r?.purchase_order_id)).filter(Boolean))
+        ) as number[];
 
-        // Step 1.5: Fetch POR candidates that belong to open POs and are inventory-posted
-        const initialCandidatePoIdsSet = new Set<number>();
-        for (const ids of chunk(openPoIds, 200)) {
-            const porCandidateUrl =
-                `${base}/items/${POR_COLLECTION}?limit=-1` +
-                `&filter[isPosted][_eq]=1` +
-                `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
-                `&fields=purchase_order_id`;
-            
-            const porCandidateJ = await fetchJson(porCandidateUrl) as { data: { purchase_order_id: number }[] };
-            const porCandidates = Array.isArray(porCandidateJ?.data) ? porCandidateJ.data : [];
-            for (const r of porCandidates) {
-                const pid = toNum(r.purchase_order_id);
-                if (pid) initialCandidatePoIdsSet.add(pid);
-            }
-        }
-        
-        const initialCandidatePoIds = Array.from(initialCandidatePoIdsSet);
         if (!initialCandidatePoIds.length) return ok([] as PostingListItem[]);
 
         // Step 2: Fetch only the specific PO headers that qualify, in chunks of 100 to avoid large URL query string
