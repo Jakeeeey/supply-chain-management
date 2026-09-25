@@ -11,7 +11,7 @@ import {
     resolveIpGeo,
     getCookieOptions,
     IS_SECURE_COOKIE
-} from "@/modules/supply-chain-management/inventory-management/stock-adjustment-registration/utils/auth-utils";
+} from "@/lib/auth-utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -336,20 +336,19 @@ export async function POST(req: NextRequest) {
     res.cookies.set({
         name: COOKIE_NAME,
         value: token,
-        ...getCookieOptions(remember, "/", cookieMaxAge)
+        ...getCookieOptions(remember, "/")
     });
 
     // --- Handle Refresh Token from Backend ---
     const setCookies = springRes.headers.getSetCookie();
     const refreshCookieStr = setCookies.find(c => c.startsWith(`${REFRESH_COOKIE_NAME}=`));
-
     if (refreshCookieStr) {
         const value = refreshCookieStr.split(';')[0].split('=')[1];
         if (value) {
             res.cookies.set({
                 name: REFRESH_COOKIE_NAME,
                 value: value,
-                ...getCookieOptions(remember, REFRESH_PATH, cookieMaxAge)
+                ...getCookieOptions(remember, REFRESH_PATH)
             });
         }
     }
@@ -377,3 +376,4 @@ export async function POST(req: NextRequest) {
 
     return res;
 }
+

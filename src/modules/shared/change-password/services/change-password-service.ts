@@ -101,7 +101,7 @@ export class ChangePasswordService {
         response = await performRequest(springToken);
 
         // 3. Retry if unauthorized (token might be expired)
-        if (response.status !== 200) {
+        if (response.status === 401 || response.status === 403) {
             console.log("Spring token likely expired or invalid, retrying login...");
             springToken = await this.login(email, data.oldPassword) ?? undefined;
             if (springToken) {
@@ -119,9 +119,20 @@ export class ChangePasswordService {
             return { success: true, message: "Password updated successfully" };
         }
 
-        return {
-            success: false,
-            message: "Current password is incorrect. Please try again."
-        };
+        // 4. Extract actual backend error messages if available
+        try {
+            const errorData = await response.json();
+            return { 
+                success: false, 
+                message: errorData.message || errorData.error || "Failed to update password. Please check your inputs." 
+            };
+        } catch {
+            return {
+                success: false,
+                message: response.status === 400 
+                    ? "Current password is incorrect." 
+                    : "An unexpected error occurred. Please try again."
+            };
+        }
     }
 }

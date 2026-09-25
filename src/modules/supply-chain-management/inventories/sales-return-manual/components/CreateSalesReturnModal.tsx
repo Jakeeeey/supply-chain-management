@@ -204,6 +204,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const [isThirdParty, setIsThirdParty] = useState(false);
   // Success Modal State
   const [isSuccessOpen, setSuccessOpen] = useState(false);
+  const [isConfirmCreateOpen, setIsConfirmCreateOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // UI State for Validation
@@ -624,6 +625,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       return;
     }
 
+    setIsConfirmCreateOpen(true);
+  };
+
+  const handleConfirmCreate = async () => {
+    setIsConfirmCreateOpen(false);
     try {
       setIsSubmitting(true);
       const selectedSalesmanObj = salesmen.find(
@@ -654,7 +660,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       setSuccessOpen(true);
     } catch (err: unknown) {
       console.error(err);
-      toast.error("Failed to create Sales Return.");
+      const errMsg = err instanceof Error ? err.message : "Failed to create Sales Return.";
+      toast.error("Failed to create Sales Return", { description: errMsg });
     } finally {
       setIsSubmitting(false);
     }
@@ -1648,6 +1655,44 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         customerCode={customerCode}
         lineDiscounts={lineDiscountOptions}
       />
+
+      <Dialog open={isConfirmCreateOpen} onOpenChange={setIsConfirmCreateOpen}>
+        <DialogContent className="max-w-[400px] p-6 bg-background rounded-xl shadow-2xl border-0">
+          <div className="flex flex-col items-center text-center gap-4">
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <Save className="h-6 w-6 text-primary" />
+            </div>
+            <div className="space-y-2">
+              <DialogTitle className="text-lg font-bold">
+                Create Sales Return?
+              </DialogTitle>
+              <div className="text-sm text-muted-foreground">
+                Please confirm all product entries are correct before proceeding.
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => setIsConfirmCreateOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmCreate}
+              disabled={isSubmitting}
+              className="bg-primary hover:bg-primary text-white"
+            >
+              {isSubmitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Confirm Create"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* SUCCESS MODAL */}
       <Dialog
