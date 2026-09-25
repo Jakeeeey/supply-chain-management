@@ -89,9 +89,14 @@ const DispatchClearanceSerialModule = () => {
         return null;
     }
 
+    const formatLocalISO = (d: Date) => {
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    };
+
     return {
-      start: start.toISOString(),
-      end: end.toISOString()
+      start: formatLocalISO(start),
+      end: formatLocalISO(end)
     };
   }, [customRange]);
 

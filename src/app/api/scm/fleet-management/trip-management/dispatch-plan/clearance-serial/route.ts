@@ -381,15 +381,22 @@ export async function POST(request: Request) {
             throw new Error('Failed to update post_dispatch_invoices');
         }
     
-        // 2. Update the dispatch plan status to 'Posted' - SKIP if Pre-Save
+        // 2. Update the dispatch plan status to 'Posted' and record time_of_arrival - SKIP if Pre-Save
         if (!isPreSave) {
+            const nowLocal = new Date();
+            const pad = (n: number) => String(n).padStart(2, '0');
+            const localArrival = `${nowLocal.getFullYear()}-${pad(nowLocal.getMonth() + 1)}-${pad(nowLocal.getDate())} ${pad(nowLocal.getHours())}:${pad(nowLocal.getMinutes())}:${pad(nowLocal.getSeconds())}`;
+
             const planResponse = await fetch(`${BASE_URL}/post_dispatch_plan/${dispatchId}`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${TOKEN}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ status: 'Posted' }),
+                body: JSON.stringify({ 
+                    status: 'Posted',
+                    time_of_arrival: localArrival
+                }),
             });
     
             if (!planResponse.ok) {
