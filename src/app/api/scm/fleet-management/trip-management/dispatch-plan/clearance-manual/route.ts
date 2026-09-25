@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { decodeJwtPayload, COOKIE_NAME } from '@/lib/auth-utils';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL + '/items';
 const TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
@@ -340,7 +342,7 @@ async function poster<T = unknown>(endpoint: string, data: unknown): Promise<T> 
 
 export async function POST(request: Request) {
     try {
-        const { dispatchId, invoices, isPreSave = false } = await request.json();
+        const { dispatchId, invoices, isPreSave = false, cleared_by } = await request.json();
 
         if (!dispatchId || !Array.isArray(invoices)) {
             return NextResponse.json({ error: 'Invalid request data' }, { status: 400 });
@@ -373,11 +375,32 @@ export async function POST(request: Request) {
             throw new Error('Failed to update post_dispatch_invoices');
         }
     
-        // 2. Update the dispatch plan status to 'Posted' and record time_of_arrival - SKIP if Pre-Save
+        // 2. Update the dispatch plan status to 'Posted', record time_of_arrival and cleared_by - SKIP if Pre-Save
         if (!isPreSave) {
             const nowLocal = new Date();
             const pad = (n: number) => String(n).padStart(2, '0');
             const localArrival = `${nowLocal.getFullYear()}-${pad(nowLocal.getMonth() + 1)}-${pad(nowLocal.getDate())} ${pad(nowLocal.getHours())}:${pad(nowLocal.getMinutes())}:${pad(nowLocal.getSeconds())}`;
+
+            // Extract logged-in user ID
+            let currentUserId = Number(cleared_by || 0);
+            if (!currentUserId) {
+                try {
+                    const cookieStore = await cookies();
+                    const token = cookieStore.get(COOKIE_NAME)?.value || cookieStore.get('vos_access_token')?.value || cookieStore.get('token')?.value;
+                    const jwtPayload = decodeJwtPayload(token || "");
+                    currentUserId = Number(jwtPayload?.user_id || jwtPayload?.id || jwtPayload?.sub || 0);
+                } catch {
+                    // Fallback to 0 if cookie extraction fails
+                }
+            }
+
+            const planPatchBody: Record<string, unknown> = {
+                status: 'Posted',
+                time_of_arrival: localArrival,
+            };
+            if (currentUserId > 0) {
+                planPatchBody.cleared_by = currentUserId;
+            }
 
             const planResponse = await fetch(`${BASE_URL}/post_dispatch_plan/${dispatchId}`, {
                 method: 'PATCH',
@@ -385,10 +408,7 @@ export async function POST(request: Request) {
                     'Authorization': `Bearer ${TOKEN}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ 
-                    status: 'Posted',
-                    time_of_arrival: localArrival
-                }),
+                body: JSON.stringify(planPatchBody),
             });
     
             if (!planResponse.ok) {
