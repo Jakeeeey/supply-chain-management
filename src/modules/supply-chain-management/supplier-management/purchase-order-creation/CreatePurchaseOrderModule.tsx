@@ -599,19 +599,26 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
 
                 if (!alive) return;
 
+                const getDtId = (val: any) =>
+                    typeof val === "object" && val !== null ? String(val.id ?? val.discount_type ?? "") : String(val ?? "");
+
                 const discountByProductId = new Map<string, string>();
                 for (const row of links ?? []) {
-                     
                     const r: any = row;
                     const pid = String(r?.product_id ?? "");
-                    const dtid = String(r?.discount_type ?? "");
-                    if (pid) discountByProductId.set(pid, dtid);
+                    const dtid = getDtId(r?.discount_type);
+                    if (pid && dtid) discountByProductId.set(pid, dtid);
                 }
 
                 const mappedProducts = (rawProducts ?? []).map((rp: any) => {
                     const pid = String(rp?.product_id ?? rp?.id ?? "");
+                    const parentId = String(rp?.parent_id ?? rp?.parentId ?? "");
+                    const rpDtId = getDtId(rp?.discount_type ?? rp?.discountTypeId);
+
                     const fixedDiscountTypeId =
                         discountByProductId.get(pid) ||
+                        (parentId ? discountByProductId.get(parentId) : "") ||
+                        (rpDtId && rpDtId !== "[object Object]" ? rpDtId : "") ||
                         defaultNoDiscountId ||
                         FALLBACK_NO_DISCOUNT_ID;
 
