@@ -154,12 +154,16 @@ export async function GET(req: NextRequest) {
             const pid = Number(p.product_id);
             const rid = String(p.parent_id || p.product_id);
             const exact = links.find((l) => Number(l.product_id) === pid);
+            const rawDt = exact?.discount_type ?? discountByRootId.get(rid) ?? null;
+            const dtVal = (typeof rawDt === "object" && rawDt !== null && "id" in (rawDt as Record<string, unknown>))
+                ? (rawDt as Record<string, unknown>).id
+                : rawDt;
             
             return {
                 id: exact?.id || `synth-${pid}`,
                 product_id: pid,
                 supplier_id: Number(supplierId),
-                discount_type: exact?.discount_type ?? discountByRootId.get(rid) ?? null
+                discount_type: dtVal ?? null
             };
         });
 
