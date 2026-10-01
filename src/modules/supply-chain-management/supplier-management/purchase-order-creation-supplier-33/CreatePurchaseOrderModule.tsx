@@ -598,18 +598,31 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
 
                 const discountByProductId = new Map<string, string>();
                 for (const row of links ?? []) {
-                     
                     const r: any = row;
                     const pid = String(r?.product_id ?? "");
-                    const dtid = String(r?.discount_type ?? "");
-                    if (pid) discountByProductId.set(pid, dtid);
+                    const rawDt = r?.discount_type;
+                    const dtid = (typeof rawDt === "object" && rawDt !== null && "id" in rawDt)
+                        ? String(rawDt.id ?? "")
+                        : (rawDt !== null && rawDt !== undefined ? String(rawDt) : "");
+                    if (pid && dtid && dtid !== "[object Object]") {
+                        discountByProductId.set(pid, dtid);
+                    }
                 }
 
                 setAllProducts(
                     (rawProducts ?? []).map((rp: any) => {
                         const pid = String(rp?.product_id ?? rp?.id ?? "");
+                        const parentId = rp?.parent_id ? String(rp.parent_id) : (rp?.parentId ? String(rp.parentId) : "");
+
+                        const rawAttachedDt = rp?.discount_type;
+                        const attachedDtId = (typeof rawAttachedDt === "object" && rawAttachedDt !== null && "id" in rawAttachedDt)
+                            ? String(rawAttachedDt.id ?? "")
+                            : (rawAttachedDt !== null && rawAttachedDt !== undefined ? String(rawAttachedDt) : "");
+
                         const fixedDiscountTypeId =
                             discountByProductId.get(pid) ||
+                            (attachedDtId && attachedDtId !== "[object Object]" ? attachedDtId : "") ||
+                            (parentId ? discountByProductId.get(parentId) : "") ||
                             defaultNoDiscountId ||
                             FALLBACK_NO_DISCOUNT_ID;
 

@@ -152,12 +152,15 @@ export async function GET(req: NextRequest) {
                 const rid = String(p?.parent_id || p?.product_id || "");
                 
                 // Inherit discount: direct match > family match
-                const dt = discountByProductId.get(pid) ?? discountByRootId.get(rid) ?? null;
+                const rawDt = discountByProductId.get(pid) ?? discountByRootId.get(rid) ?? null;
+                const dt = (typeof rawDt === "object" && rawDt !== null && "id" in (rawDt as Record<string, unknown>))
+                    ? (rawDt as Record<string, unknown>).id
+                    : rawDt;
 
                 return {
                     ...p,
                     unit_of_measurement: resolveUom(p),
-                    discount_type: dt,
+                    discount_type: dt ?? null,
                 };
             });
 
