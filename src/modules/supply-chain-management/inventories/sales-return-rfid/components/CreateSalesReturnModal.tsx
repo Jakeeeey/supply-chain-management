@@ -240,6 +240,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const [priceType, setPriceType] = useState("A");
 
   const [isThirdParty, setIsThirdParty] = useState(false);
+  const [isClearanceMode, setIsClearanceMode] = useState(false);
   // Success Modal State
   // Success Modal State
   const [isSuccessOpen, setSuccessOpen] = useState(false);
@@ -648,6 +649,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       const storedData = localStorage.getItem('scm_dispatch_return_data');
       if (storedData) {
         try {
+          setIsClearanceMode(true);
           const data = JSON.parse(storedData);
 
           // 1. Find and set Customer (DO THIS FIRST as it clears other fields)
@@ -915,6 +917,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         remarks,
         items: items,
         appliedInvoiceId: appliedInvoiceId ?? undefined,
+        isClearance: isClearanceMode,
       };
 
       await SalesReturnProvider.submitReturn(payload);
@@ -1149,10 +1152,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
                   <input
                     type="text"
-                    className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm"
+                    disabled={isClearanceMode}
+                    className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                     placeholder="Search Salesman..."
                     value={salesmanSearch}
                     onChange={(e) => {
+                      if (isClearanceMode) return;
                       setSalesmanSearch(e.target.value);
                       setIsSalesmanOpen(true);
                       setSelectedSalesmanId("");
@@ -1160,6 +1165,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                       setBranchName("");
                     }}
                     onFocus={() => {
+                      if (isClearanceMode) return;
                       setIsSalesmanOpen(true);
                       setSalesmanSearch("");
                     }}
@@ -1200,14 +1206,17 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
                   <input
                     type="text"
-                    className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm"
+                    disabled={isClearanceMode}
+                    className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                     placeholder="Search Customer..."
                     value={customerSearch}
                     onChange={(e) => {
+                      if (isClearanceMode) return;
                       setCustomerSearch(e.target.value);
                       setIsCustomerOpen(true);
                     }}
                     onFocus={() => {
+                      if (isClearanceMode) return;
                       setIsCustomerOpen(true);
                       setCustomerSearch("");
                     }}
@@ -1262,9 +1271,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 </label>
                 <Input
                   type="date"
+                  disabled={isClearanceMode}
                   value={returnDate}
                   onChange={(e) => setReturnDate(e.target.value)}
-                  className="h-9 w-full bg-background border-border shadow-sm text-sm"
+                  className="h-9 w-full bg-background border-border shadow-sm text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -1283,8 +1293,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
                   Price Type <span className="text-destructive">*</span>
                 </label>
-                <Select value={priceType} onValueChange={(val) => setPriceType(val)}>
-                  <SelectTrigger className="w-full h-9 border-border bg-background shadow-sm text-sm">
+                <Select value={priceType} onValueChange={(val) => setPriceType(val)} disabled={isClearanceMode}>
+                  <SelectTrigger className="w-full h-9 border-border bg-background shadow-sm text-sm disabled:opacity-60 disabled:cursor-not-allowed">
                     <SelectValue placeholder="Select Price Type" />
                   </SelectTrigger>
                   <SelectContent className="z-[200]">
@@ -1312,8 +1322,9 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 <Checkbox
                   id="create-rfid-isThirdParty"
                   checked={isThirdParty}
+                  disabled={isClearanceMode}
                   onCheckedChange={(c) => setIsThirdParty(c as boolean)}
-                  className="data-[state=checked]:bg-primary border-border"
+                  className="data-[state=checked]:bg-primary border-border disabled:opacity-60 disabled:cursor-not-allowed"
                 />
                 <label
                   htmlFor="create-rfid-isThirdParty"
