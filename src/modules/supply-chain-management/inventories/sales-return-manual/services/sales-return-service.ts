@@ -493,6 +493,11 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
   const shortTimestamp = Math.floor(Date.now() / 1000).toString().slice(-4);
   const generatedReturnNo = `SR-${shortTimestamp}-${uniqueSuffix}`;
 
+  // Price type is authoritative from the salesman's profile — never trust the client value.
+  const salesmenData = (refsResult[0].data || []) as any[];
+  const salesman = salesmenData.find((s: any) => String(s.id) === String(payload.salesmanId));
+  const authoritativePriceType = salesman?.price_type || payload.priceType || "A";
+
   const headerPayload = {
     return_number: generatedReturnNo,
     gross_amount: totalGross,
@@ -504,7 +509,7 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
     total_amount: Math.round(Number(payload.totalAmount) * 100) / 100,
     status: "Pending",
     return_date: formattedDate,
-    price_type: payload.priceType || "A",
+    price_type: authoritativePriceType,
     remarks: payload.remarks || "Created via Web App",
     order_id: payload.orderNo || "",
     isThirdParty: payload.isThirdParty ? 1 : 0,
