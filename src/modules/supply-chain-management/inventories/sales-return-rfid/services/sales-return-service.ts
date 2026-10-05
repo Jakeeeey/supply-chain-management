@@ -152,6 +152,7 @@ export async function fetchReturns(
     receivedAt: item.received_at
       ? new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.received_at))
       : "-",
+    isClearance: parseBoolean(item.isClearance),
   }));
 
   return { data: mappedData, total: result.meta?.filter_count || 0 };
@@ -572,6 +573,7 @@ export async function submitReturn(payload: any, userId: number, token: string =
     order_id: payload.orderNo || "",
     isThirdParty: payload.isThirdParty ? 1 : 0,
     isApplied: payload.appliedInvoiceId ? 1 : 0,
+    isClearance: payload.isClearance ? 1 : 0,
     created_at: nowPH(),
     updated_at: nowPH(),
   };
