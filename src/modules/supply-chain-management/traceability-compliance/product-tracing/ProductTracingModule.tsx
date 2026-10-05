@@ -82,7 +82,7 @@ export const ProductTracingModule = React.forwardRef<HTMLDivElement, React.HTMLA
     };
 
     const stats = React.useMemo(() => {
-        if (!movements.length) return { totalIn: 0, totalOut: 0, netChange: 0 };
+        if (!movements.length) return { totalIn: 0, totalOut: 0, netChange: 0, openingBalanceBase: 0 };
         
         const start = filters.startDate ? new Date(filters.startDate) : null;
         const end = filters.endDate ? new Date(filters.endDate) : null;
@@ -112,6 +112,18 @@ export const ProductTracingModule = React.forwardRef<HTMLDivElement, React.HTMLA
             }
         });
 
+        // Opening balance = net of all movements before the selected start date, so the
+        // ledger's running balance reflects true on-hand (consistent with Physical Count).
+        const openingBalanceBase = start
+            ? validMovements.reduce(
+                  (acc, row) =>
+                      new Date(row.ts) < start
+                          ? acc + (row.inBase || 0) - (row.outBase || 0)
+                          : acc,
+                  0,
+              )
+            : 0;
+
         const divisor = validMovements[0]?.familyUnitCount || 1;
         const totalInBase = filtered.reduce((acc, row) => acc + (row.inBase || 0), 0);
         const totalOutBase = filtered.reduce((acc, row) => acc + (row.outBase || 0), 0);
@@ -139,6 +151,7 @@ export const ProductTracingModule = React.forwardRef<HTMLDivElement, React.HTMLA
             totalOutBase, 
             netChangeBase, 
             breakdown,
+            openingBalanceBase,
             filtered, 
             divisor: divisor || 1, 
             unit: validMovements.find(r => r.unitCount === (divisor || 1))?.unit || validMovements[0]?.familyUnit || "Box" 
@@ -367,7 +380,7 @@ export const ProductTracingModule = React.forwardRef<HTMLDivElement, React.HTMLA
                                 {(stats.filtered?.length || movements.length)} records
                             </span>
                         </div>
-                        <ProductTracingTable data={stats.filtered || movements} isLoading={isLoading} />
+                        <ProductTracingTable data={stats.filtered || movements} isLoading={isLoading} openingBalanceBase={stats.openingBalanceBase} />
                     </div>
                 </div>
             )}
