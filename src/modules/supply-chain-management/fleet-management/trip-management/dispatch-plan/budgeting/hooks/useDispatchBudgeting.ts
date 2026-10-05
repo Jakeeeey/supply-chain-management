@@ -82,6 +82,7 @@ export function useDispatchBudgeting() {
   const updateBudget = async (
     planId: number,
     budgets: { coa_id: number; amount: number; remarks?: string }[],
+    fuelLiter?: number | null,
   ) => {
     setIsSubmitting(true);
     try {
@@ -90,7 +91,7 @@ export function useDispatchBudgeting() {
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ budgets }),
+          body: JSON.stringify({ budgets, fuel_liter: fuelLiter }),
         },
       );
       const result = await res.json();
@@ -112,6 +113,19 @@ export function useDispatchBudgeting() {
     return result.data || [];
   };
 
+  const fetchPlanFuelAllocation = async (planId: number) => {
+    try {
+      const res = await fetch(
+        `/api/scm/fleet-management/trip-management/dispatch-plan/budgeting?plan_id=${planId}`,
+        { cache: "no-store" }
+      );
+      const result = await res.json();
+      return result.data?.fuel_allocation || null;
+    } catch {
+      return null;
+    }
+  };
+
   return {
     masterData,
     isLoadingMasterData,
@@ -121,5 +135,7 @@ export function useDispatchBudgeting() {
     updateBudget,
     isSubmitting,
     fetchPlanBudgets,
+    fetchPlanFuelAllocation,
   };
 }
+
