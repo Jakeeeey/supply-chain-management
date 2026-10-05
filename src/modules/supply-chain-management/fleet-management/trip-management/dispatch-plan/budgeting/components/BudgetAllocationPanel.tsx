@@ -31,7 +31,8 @@ import {
   Trash2,
   Truck,
   Users,
-  Wallet
+  Wallet,
+  Fuel,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
@@ -48,9 +49,11 @@ interface BudgetAllocationPanelProps {
   coaOptions: { coa_id: number; account_title: string; gl_code: string }[];
   onSave: (
     budgets: { coa_id: number; amount: number; remarks?: string }[],
+    fuelLiter?: number | null,
   ) => Promise<void>;
-    isSubmitting: boolean;
-    fetchPlanBudgets: (planId: number) => Promise<unknown[]>;
+  isSubmitting: boolean;
+  fetchPlanBudgets: (planId: number) => Promise<unknown[]>;
+  fetchPlanFuelAllocation?: (planId: number) => Promise<{ liter?: number } | null>;
 }
 
 interface Budget {
@@ -65,13 +68,14 @@ export function BudgetAllocationPanel({
   onSave,
   isSubmitting,
   fetchPlanBudgets,
+  fetchPlanFuelAllocation,
 }: BudgetAllocationPanelProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   const form = useForm<UpdateBudgetValues>({
     resolver: zodResolver(UpdateBudgetSchema),
-    defaultValues: { budgets: [] },
+    defaultValues: { budgets: [], fuel_liter: undefined },
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -81,16 +85,21 @@ export function BudgetAllocationPanel({
 
   useEffect(() => {
     if (!plan) {
-      form.reset({ budgets: [] });
+      form.reset({ budgets: [], fuel_liter: undefined });
       return;
     }
 
     const loadBudgets = async () => {
       setIsLoading(true);
       try {
-        const budgets = await fetchPlanBudgets(Number(plan.id));
+        const [budgets, fuelAlloc] = await Promise.all([
+          fetchPlanBudgets(Number(plan.id)),
+          fetchPlanFuelAllocation ? fetchPlanFuelAllocation(Number(plan.id)) : Promise.resolve(null),
+        ]);
+        const fuelVal = fuelAlloc?.liter != null ? Number(fuelAlloc.liter) : undefined;
         if (budgets.length > 0) {
           form.reset({
+            fuel_liter: fuelVal,
             budgets: (budgets as Budget[]).map((b) => ({
               coa_id: b.coa_id,
               amount: Number(b.amount),
@@ -98,29 +107,30 @@ export function BudgetAllocationPanel({
             })),
           });
         } else {
-          form.reset({ budgets: [{ coa_id: 0, amount: 0, remarks: "" }] });
+          form.reset({ fuel_liter: fuelVal, budgets: [{ coa_id: 0, amount: 0, remarks: "" }] });
         }
       } catch {
         toast.error("Failed to fetch existing budgets");
-        form.reset({ budgets: [{ coa_id: 0, amount: 0, remarks: "" }] });
+        form.reset({ fuel_liter: undefined, budgets: [{ coa_id: 0, amount: 0, remarks: "" }] });
       } finally {
         setIsLoading(false);
       }
     };
 
     loadBudgets();
-  }, [plan, form, fetchPlanBudgets]);
+  }, [plan, form, fetchPlanBudgets, fetchPlanFuelAllocation]);
 
   const onSubmit = async (data: UpdateBudgetValues) => {
     if (!plan) return;
     try {
-      await onSave(data.budgets || []);
+      await onSave(data.budgets || [], data.fuel_liter);
       toast.success("Budgets successfully updated.");
     } catch (err: unknown) {
       console.error("Failed to save budget allocation:", err instanceof Error ? err.message : String(err));
       toast.error("Failed to save budget allocation.");
     }
   };
+
 
   // ── Empty state ────────────────────────────────────────────
   if (!plan) {
@@ -282,7 +292,54 @@ export function BudgetAllocationPanel({
                   </div>
                 </div>
               )}
+
+              <FormField
+                control={form.control}
+                name="fuel_liter"
+                render={({ field }) => (
+                  <FormItem className="rounded-lg border border-border/50 bg-muted/5 p-3.5 hover:bg-muted/10 transition-colors">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="p-1.5 rounded-md bg-primary/10 text-primary shrink-0">
+                          <Fuel className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-foreground">
+                            Fuel Allocation per Liters
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Specify fuel volume allocated in Liters
+                          </p>
+                        </div>
+                      </div>
+                      <FormControl>
+                        <div className="relative w-44 shrink-0">
+                          <Input
+                            type="number"
+                            placeholder="0.00"
+                            min="0"
+                            step="0.01"
+                            className="font-medium tabular-nums h-9 pr-12 text-right"
+                            value={field.value ?? ""}
+                            disabled={!isEditable}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              field.onChange(val === "" ? undefined : parseFloat(val));
+                            }}
+                          />
+                          <span className="absolute right-3 top-2.5 text-xs text-muted-foreground font-medium pointer-events-none">
+                            Liters
+                          </span>
+                        </div>
+                      </FormControl>
+                    </div>
+                    <FormMessage className="text-[10px]" />
+                  </FormItem>
+                )}
+              />
+
               <div className="space-y-2">
+
                 {fields.map((field, index) => {
                   const selectedCoaIds = new Set(
                     (form.getValues("budgets") || [])
