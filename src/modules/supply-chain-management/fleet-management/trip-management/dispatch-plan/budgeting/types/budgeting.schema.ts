@@ -8,6 +8,8 @@ export const BudgetLineSchema = z.object({
 
 export const UpdateBudgetSchema = z.object({
   budgets: z.array(BudgetLineSchema).optional(),
+  fuel_liter: z.number({ message: "Fuel liters must be a valid number" }).min(0, "Fuel liters cannot be negative").optional().nullable(),
 });
 
 export type UpdateBudgetValues = z.infer<typeof UpdateBudgetSchema>;
+
