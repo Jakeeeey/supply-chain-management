@@ -111,3 +111,29 @@ export interface BarcodeHistoryEntry {
   updated_at: string | null;
   record_type: "Regular" | "Bundle";
 }
+
+export interface RefData {
+  id: number;
+  name: string;
+  code?: string;
+}
+
+export interface UpdateBarcodeDTO {
+  barcode: string;
+  barcode_type_id: number;
+  barcode_date: string;
+
+  // Dimensions (nullable if dimensions are cleared)
+  cbm_length?: number | null;
+  cbm_width?: number | null;
+  cbm_height?: number | null;
+  cbm_unit_id?: number | null;
+
+  // Weight
+  weight?: number;
+  weight_unit_id?: number;
+
+  // Audit
+  updated_by?: number;
+  updated_at?: string;
+}

@@ -1,6 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "sonner";
-import { Product, BarcodeType, WeightUnit, CbmUnit } from "../types";
+import {
+  Product,
+  BarcodeType,
+  WeightUnit,
+  CbmUnit,
+  RefData,
+  UpdateBarcodeDTO,
+} from "../types";
 import {
   getMasterlistProducts,
   getMasterlistBundles,
@@ -19,14 +26,36 @@ export function useBarcodeMasterlist() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
+  // Reference data
+  const [barcodeTypes, setBarcodeTypes] = useState<RefData[]>([]);
+  const [weightUnits, setWeightUnits] = useState<RefData[]>([]);
+  const [cbmUnits, setCbmUnits] = useState<RefData[]>([]);
+  const [timezone, setTimezone] = useState<string>("Asia/Manila");
+
+  // All existing barcodes for duplicate checking
+  const [allBarcodes, setAllBarcodes] = useState<
+    { product_id: string; barcode: string; product_name: string }[]
+  >([]);
+
   // --- FETCH DATA ---
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const [productsData, bundlesData] = await Promise.all([
+      const [
+        productsData,
+        bundlesData,
+        btRes,
+        wuRes,
+        cuRes,
+        tzRes,
+      ] = await Promise.all([
         getMasterlistProducts(),
         getMasterlistBundles(),
+        fetch("/api/scm/product-management/barcode-management/barcode-masterlist?scope=barcode_type"),
+        fetch("/api/scm/product-management/barcode-management/barcode-masterlist?scope=weight_unit"),
+        fetch("/api/scm/product-management/barcode-management/barcode-masterlist?scope=cbm_unit"),
+        fetch("/api/scm/product-management/barcode-management/barcode-masterlist?scope=timezone"),
       ]);
 
       // Client-side safety filter: reject empty/dash SKU or empty barcode
@@ -78,7 +107,36 @@ export function useBarcodeMasterlist() {
         record_type: "bundle" as const,
       }));
 
-      setAllProducts([...validProducts, ...validBundles]);
+      const mergedProducts = [...validProducts, ...validBundles];
+      setAllProducts(mergedProducts);
+
+      // Populate existing barcodes list for duplicate checking
+      const existingBarcodes = mergedProducts
+        .filter((p) => p.barcode && p.barcode.trim() !== "")
+        .map((p) => ({
+          product_id: String(p.product_id),
+          barcode: p.barcode!,
+          product_name: p.product_name || p.description || "Unknown",
+        }));
+      setAllBarcodes(existingBarcodes);
+
+      // Parse ref data
+      if (btRes.ok) {
+        const btJson = await btRes.json();
+        setBarcodeTypes(Array.isArray(btJson.data) ? btJson.data : []);
+      }
+      if (wuRes.ok) {
+        const wuJson = await wuRes.json();
+        setWeightUnits(Array.isArray(wuJson.data) ? wuJson.data : []);
+      }
+      if (cuRes.ok) {
+        const cuJson = await cuRes.json();
+        setCbmUnits(Array.isArray(cuJson.data) ? cuJson.data : []);
+      }
+      if (tzRes.ok) {
+        const tzJson = await tzRes.json();
+        if (tzJson.data) setTimezone(tzJson.data);
+      }
     } catch (err: unknown) {
       console.error("Failed to fetch data", err);
       const message = err instanceof Error ? err.message : "Failed to load masterlist data.";
@@ -105,7 +163,6 @@ export function useBarcodeMasterlist() {
         (product.product_code || "").toLowerCase().includes(searchLower) ||
         (product.barcode || "").includes(searchLower);
 
-
       const matchesRecordType =
         recordTypeFilter === "all" || product.record_type === recordTypeFilter;
 
@@ -125,6 +182,98 @@ export function useBarcodeMasterlist() {
     setCurrentPage(1);
   }, [searchQuery, recordTypeFilter]);
 
+  // --- UPDATE BARCODE HANDLER ---
+  const handleUpdateBarcode = async (
+    targetProduct: Product,
+    payload: UpdateBarcodeDTO,
+  ) => {
+    const isBundle = targetProduct.record_type === "bundle";
+    const patchUrl = isBundle
+      ? `/api/scm/product-management/barcode-management/barcode-masterlist?id=${targetProduct.product_id}&record_type=bundle`
+      : `/api/scm/product-management/barcode-management/barcode-masterlist?id=${targetProduct.product_id}`;
+
+    const patchBody = isBundle
+      ? {
+          barcode_value: payload.barcode,
+          barcode_type_id: payload.barcode_type_id,
+          barcode_date: payload.barcode_date,
+          weight: payload.weight,
+          weight_unit_id: payload.weight_unit_id,
+          cbm_length: payload.cbm_length ?? null,
+          cbm_width: payload.cbm_width ?? null,
+          cbm_height: payload.cbm_height ?? null,
+          cbm_unit_id: payload.cbm_unit_id ?? null,
+        }
+      : payload;
+
+    const response = await fetch(patchUrl, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patchBody),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json();
+      if (response.status === 409) {
+        toast.error("Duplicate Barcode!", {
+          description: errData.error || "This barcode is already in use.",
+        });
+        return;
+      }
+      throw new Error(errData.error || "Failed to update barcode");
+    }
+
+    // Optimistically update product in local state
+    const rawBt = barcodeTypes.find((bt) => bt.id === payload.barcode_type_id);
+    const matchedBarcodeType: BarcodeType | null = rawBt
+      ? { id: rawBt.id, name: rawBt.name }
+      : null;
+
+    const rawWu = weightUnits.find((wu) => wu.id === payload.weight_unit_id);
+    const matchedWeightUnit: WeightUnit | null = rawWu
+      ? { id: rawWu.id, code: rawWu.code || "", name: rawWu.name }
+      : null;
+
+    const rawCu = payload.cbm_unit_id
+      ? cbmUnits.find((cu) => cu.id === payload.cbm_unit_id)
+      : undefined;
+    const matchedCbmUnit: CbmUnit | null = rawCu
+      ? { id: rawCu.id, code: rawCu.code || "", name: rawCu.name }
+      : null;
+
+    setAllProducts((prev) =>
+      prev.map((p) => {
+        if (p.product_id === targetProduct.product_id) {
+          return {
+            ...p,
+            barcode: payload.barcode,
+            barcode_type_id: matchedBarcodeType,
+            barcode_date: payload.barcode_date,
+            weight: payload.weight !== undefined ? payload.weight : p.weight,
+            weight_unit_id: matchedWeightUnit || p.weight_unit_id,
+            cbm_length: payload.cbm_length !== undefined ? payload.cbm_length : null,
+            cbm_width: payload.cbm_width !== undefined ? payload.cbm_width : null,
+            cbm_height: payload.cbm_height !== undefined ? payload.cbm_height : null,
+            cbm_unit_id: matchedCbmUnit,
+          };
+        }
+        return p;
+      }),
+    );
+
+    // Update allBarcodes list
+    setAllBarcodes((prev) => [
+      ...prev.filter((b) => b.product_id !== String(targetProduct.product_id)),
+      {
+        product_id: String(targetProduct.product_id),
+        barcode: payload.barcode,
+        product_name: targetProduct.product_name || targetProduct.description || "Unknown",
+      },
+    ]);
+
+    toast.success("Barcode & logistics updated successfully!");
+  };
+
   return {
     products,
     allProducts,
@@ -137,6 +286,12 @@ export function useBarcodeMasterlist() {
     setSearchQuery,
     recordTypeFilter,
     setRecordTypeFilter,
+    barcodeTypes,
+    weightUnits,
+    cbmUnits,
+    allBarcodes,
+    timezone,
+    handleUpdateBarcode,
     error,
     refresh: fetchData,
   };
