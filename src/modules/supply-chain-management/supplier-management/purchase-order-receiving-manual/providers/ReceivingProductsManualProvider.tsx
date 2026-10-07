@@ -195,6 +195,10 @@ type Ctx = {
     // ✅ UNITS
     units: UnitOption[];
     unitsLoading: boolean;
+
+    // ✅ COMPANY CODE
+    companyCode: string | null;
+    isMarikina: boolean;
 };
 
 const ReceivingProductsManualContext = React.createContext<Ctx | null>(null);
@@ -294,6 +298,26 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
     // ✅ UNITS
     const [units, setUnits] = React.useState<UnitOption[]>([]);
     const [unitsLoading, setUnitsLoading] = React.useState(false);
+
+    // ✅ COMPANY CODE
+    const [companyCode, setCompanyCode] = React.useState<string | null>(null);
+    const isMarikina = React.useMemo(() => {
+        return companyCode?.trim().toUpperCase() === "MEN2-MARIKINA";
+    }, [companyCode]);
+
+    React.useEffect(() => {
+        (async () => {
+            try {
+                const r = await fetch("/api/scm/supplier-management/purchase-order-creation/company", { cache: "no-store" });
+                const j = await r.json().catch(() => ({}));
+                if (j?.data?.company_code) {
+                    setCompanyCode(String(j.data.company_code));
+                }
+            } catch {
+                setCompanyCode(null);
+            }
+        })();
+    }, []);
 
     const refreshList = React.useCallback(async () => {
         setListLoading(true);
@@ -660,14 +684,35 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                 allocs.push(branchAlloc);
             }
 
-            const existingItem = branchAlloc.items.find(i => i.productId === item.productId);
-            if (!existingItem) {
+            const existingExtraItem = branchAlloc.items.find(i => i.productId === item.productId && i.isExtra);
+            const existingStandardItem = branchAlloc.items.find(i => i.productId === item.productId && !i.isExtra);
+            
+            // For MEN2-MARIKINA: allow re-adding when standard item reached 0 remaining qty
+            // For other companies: only allow adding if item was never part of standard PO items
+            let canAddExtra = false;
+            if (!existingExtraItem) {
+                if (isMarikina) {
+                    if (existingStandardItem) {
+                        const ordered = Number(existingStandardItem.originalOrderedQty ?? existingStandardItem.expectedQty ?? 0);
+                        const posted = Number(existingStandardItem.postedQty ?? 0);
+                        const unposted = Number(existingStandardItem.unpostedQty ?? 0);
+                        const standardHasRemaining = Math.max(0, ordered - posted - unposted) > 0;
+                        canAddExtra = !standardHasRemaining;
+                    } else {
+                        canAddExtra = true;
+                    }
+                } else {
+                    canAddExtra = !existingStandardItem;
+                }
+            }
+
+            if (canAddExtra) {
                 const uPrice = item.unitPrice || 0;
                 const dPct = item.discountPercent || 0;
                 const dAmt = Number((uPrice * (dPct / 100)).toFixed(2));
                 
                 branchAlloc.items = [...branchAlloc.items, {
-                    id: `${item.productId}-${item.branchId}`,
+                    id: `extra-${item.productId}-${item.branchId}`,
                     porId: "",
                     productId: String(item.productId),
                     branchId: String(item.branchId),
@@ -698,52 +743,84 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
             setVerifiedProductIds(prev => [...new Set([...prev, item.productId])]);
         }
         return added;
-    }, []);
+    }, [isMarikina]);
 
     const removeExtraProductLocally = React.useCallback((productId: string) => {
+        const pIdStr = String(productId);
+        
+        // Collect all item IDs for this product before removing from allocations
+        const itemIdsToRemove: string[] = [];
         setSelectedPO(prev => {
             if (!prev) return prev;
+            prev.allocations.forEach(a => {
+                a.items.forEach(i => {
+                    if (String(i.productId) === pIdStr && i.isExtra) {
+                        if (i.id) itemIdsToRemove.push(String(i.id));
+                        if (i.porId) itemIdsToRemove.push(String(i.porId));
+                    }
+                });
+            });
+
             const updated = { ...prev };
             updated.allocations = updated.allocations.map(a => ({
                 ...a,
-                items: a.items.filter(i => i.productId !== productId || !i.isExtra)
+                items: a.items.filter(i => String(i.productId) !== pIdStr || !i.isExtra)
             }));
             return updated;
         });
-        setVerifiedProductIds(prev => prev.filter(id => id !== productId));
+
+        setVerifiedProductIds(prev => prev.filter(id => String(id) !== pIdStr));
+
         setManualCounts(prev => {
             const next = { ...prev };
-            // Find all instances across branches (unlikely for extra but safe)
-            delete next[productId]; 
-            // In manual receiving, IDs in manualCounts are often productId or productId-branchId
-            // Let's just clear anything matching
+            delete next[pIdStr];
+            delete next[productId];
+            itemIdsToRemove.forEach(id => delete next[id]);
             Object.keys(next).forEach(k => {
-                if (k.startsWith(`${productId}-`)) delete next[k];
+                if (k.startsWith(`${pIdStr}-`) || k.startsWith(`extra-${pIdStr}-`)) {
+                    delete next[k];
+                }
+            });
+            return next;
+        });
+
+        setMetaDataByPorId(prev => {
+            const next = { ...prev };
+            delete next[pIdStr];
+            delete next[productId];
+            itemIdsToRemove.forEach(id => delete next[id]);
+            Object.keys(next).forEach(k => {
+                if (k.startsWith(`${pIdStr}-`) || k.startsWith(`extra-${pIdStr}-`)) {
+                    delete next[k];
+                }
             });
             return next;
         });
     }, []);
 
     const toggleProductVerification = React.useCallback((productId: string) => {
+        const pIdStr = String(productId);
         setVerifiedProductIds(prev => {
-            if (prev.includes(productId)) {
-                // Clear from manualCounts when unchecking to prevent ghost items in totals
+            if (prev.includes(productId) || prev.includes(pIdStr)) {
+                // Clear from manualCounts & metadata when unchecking to prevent ghost items in totals
                 setManualCounts(prevCounts => {
                     const next = { ...prevCounts };
-                    
-                    // Clear by basic productId patterns (for extra items)
+                    delete next[pIdStr];
                     delete next[productId];
                     Object.keys(next).forEach(k => {
-                        if (k.startsWith(`${productId}-`)) delete next[k];
+                        if (k.startsWith(`${pIdStr}-`) || k.startsWith(`extra-${pIdStr}-`)) {
+                            delete next[k];
+                        }
                     });
 
-                    // Clear by allocation item ID (for standard items)
+                    // Clear by allocation item ID (for standard items & extra items)
                     if (selectedPO?.allocations) {
                         selectedPO.allocations.forEach(a => {
                             if (Array.isArray(a.items)) {
                                 a.items.forEach(i => {
-                                    if (String(i.productId) === String(productId)) {
-                                        delete next[i.id];
+                                    if (String(i.productId) === pIdStr) {
+                                        if (i.id) delete next[String(i.id)];
+                                        if (i.porId) delete next[String(i.porId)];
                                     }
                                 });
                             }
@@ -752,7 +829,34 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
 
                     return next;
                 });
-                return prev.filter(id => id !== productId);
+
+                setMetaDataByPorId(prevMeta => {
+                    const next = { ...prevMeta };
+                    delete next[pIdStr];
+                    delete next[productId];
+                    Object.keys(next).forEach(k => {
+                        if (k.startsWith(`${pIdStr}-`) || k.startsWith(`extra-${pIdStr}-`)) {
+                            delete next[k];
+                        }
+                    });
+
+                    if (selectedPO?.allocations) {
+                        selectedPO.allocations.forEach(a => {
+                            if (Array.isArray(a.items)) {
+                                a.items.forEach(i => {
+                                    if (String(i.productId) === pIdStr) {
+                                        if (i.id) delete next[String(i.id)];
+                                        if (i.porId) delete next[String(i.porId)];
+                                    }
+                                });
+                            }
+                        });
+                    }
+
+                    return next;
+                });
+
+                return prev.filter(id => String(id) !== pIdStr && id !== productId);
             }
             return [...prev, productId];
         });
@@ -1061,6 +1165,9 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
 
         units,
         unitsLoading,
+
+        companyCode,
+        isMarikina,
     };
 
     return <ReceivingProductsManualContext.Provider value={value}>{children}</ReceivingProductsManualContext.Provider>;
