@@ -4,19 +4,57 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useStockTransferBase } from '../../shared/hooks/use-stock-transfer-base';
 import { stockTransferLifecycleService } from '../../services/stock-transfer.lifecycle';
 import { toast } from 'sonner';
-import type { OrderGroup, OrderGroupItem, ProductRow } from '../../types/stock-transfer.types';
+import type { OrderGroup, OrderGroupItem, ProductRow, CurrentUser } from '../../types/stock-transfer.types';
 
 /**
  * Hook for managing the "Stock Transfer Dispatch" phase (Manual Entry).
  */
-export function useStockTransferDispatchManual() {
+const LOCAL_STORAGE_KEY = 'scm_dispatch_manual_qtys_v1';
+
+export function useStockTransferDispatchManual(currentUser?: CurrentUser) {
   const base = useStockTransferBase({ 
     statuses: ['For Picking', 'Picking', 'Picked'] 
   });
 
+  const storageKey = currentUser?.email
+    ? `${LOCAL_STORAGE_KEY}_user_${currentUser.email}`
+    : LOCAL_STORAGE_KEY;
+
   const [fetchingAvailable, setFetchingAvailable] = useState(false);
   const [scannedInventory, setScannedInventory] = useState<Record<number, number>>({});
-  const [scannedQtys, setScannedQtys] = useState<Record<number, number>>({});
+  const [scannedQtys, setScannedQtys] = useState<Record<number, number>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem(storageKey);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Persist manually entered picked quantities so navigating away/back does not lose them.
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(storageKey, JSON.stringify(scannedQtys));
+    }
+  }, [scannedQtys, storageKey]);
+
+  // Rehydrate picked quantities already saved on the transfer rows (e.g. after "Mark as Done Picking").
+  useEffect(() => {
+    setScannedQtys(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (const group of base.baseOrderGroups) {
+        for (const item of group.items) {
+          if (next[item.id] === undefined && typeof item.picked_quantity === 'number' && item.picked_quantity > 0) {
+            next[item.id] = item.picked_quantity;
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [base.baseOrderGroups]);
 
   const updateScannedQty = useCallback((id: number, qty: number, maxQty: number) => {
     setScannedQtys(prev => {
@@ -130,6 +168,11 @@ export function useStockTransferDispatchManual() {
       );
 
       toast.success(`Order ${orderNo} successfully dispatched manually.`);
+      setScannedQtys(prev => {
+        const next = { ...prev };
+        group.items.forEach((i: OrderGroupItem) => { delete next[i.id]; });
+        return next;
+      });
       base.setSelectedOrderNo(null);
       await base.refresh();
     } catch (err: unknown) {

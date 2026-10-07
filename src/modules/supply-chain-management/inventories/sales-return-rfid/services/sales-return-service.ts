@@ -568,7 +568,7 @@ export async function submitReturn(payload: any, userId: number, token: string =
     total_amount: Math.round(Number(payload.totalAmount) * 100) / 100,
     status: "Pending",
     return_date: formattedDate,
-    price_type: payload.priceType || "A",
+    price_type: salesman?.price_type || payload.priceType || "A",
     remarks: payload.remarks || "Created via Web App",
     order_id: payload.orderNo || "",
     isThirdParty: payload.isThirdParty ? 1 : 0,
