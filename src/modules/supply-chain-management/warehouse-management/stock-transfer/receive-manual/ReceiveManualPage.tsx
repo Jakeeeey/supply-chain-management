@@ -7,6 +7,7 @@ import { useStockTransferReceiveManual } from './hooks/use-stock-transfer-receiv
 import { OrderGroupItem, UnitOfMeasurement, CurrentUser } from '../types/stock-transfer.types';
 import { cn } from '@/lib/utils';
 import { StockTransferReceivingPreview } from '../shared/components/StockTransferReceivingPreview';
+import { calculateUnitPrice } from '../services/stock-transfer.helpers';
 
 // Shared components
 import { OrderSelectionModal } from '../shared/components/OrderSelectionModal';
@@ -303,7 +304,7 @@ export default function StockTransferReceiveManualView({ currentUser }: { curren
                               />
                           </TableCell>
                           <TableCell className="text-right text-xs font-semibold font-mono text-foreground">
-                            ₱{((currentQty || 0) * Number(product?.cost_per_unit || 0)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                            ₱{(targetQty * calculateUnitPrice(item)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                           </TableCell>
                         </TableRow>
                       );
@@ -314,10 +315,8 @@ export default function StockTransferReceiveManualView({ currentUser }: { curren
                       <TableCell colSpan={4} className="text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Total Verification Value</TableCell>
                       <TableCell className="text-right text-sm font-bold text-foreground font-mono">
                          ₱{selectedGroup.items.reduce((sum: number, item: OrderGroupItem) => {
-                          const rqty = receivedQtys[item.id] ?? 0;
-                          const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
-                          const unitPrice = Number(product?.cost_per_unit || 0);
-                          return sum + (rqty * unitPrice);
+                          const targetQty = Math.max(0, item.scanned_quantity ?? item.picked_quantity ?? item.allocated_quantity ?? 0);
+                          return sum + (targetQty * calculateUnitPrice(item));
                         }, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                       </TableCell>
                     </TableRow>

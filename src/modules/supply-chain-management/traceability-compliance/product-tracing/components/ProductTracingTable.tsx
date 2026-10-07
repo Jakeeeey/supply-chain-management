@@ -28,14 +28,16 @@ import { ListIcon, EyeIcon } from "lucide-react";
 type Props = React.HTMLAttributes<HTMLDivElement> & {
     data: ProductMovementRow[];
     isLoading?: boolean;
+    /** Net balance carried in from before the filtered window, so the ledger reflects true on-hand. */
+    openingBalanceBase?: number;
 };
 
-export const ProductTracingTable = React.forwardRef<HTMLDivElement, Props>(({ data, isLoading, className, ...props }, ref) => {
+export const ProductTracingTable = React.forwardRef<HTMLDivElement, Props>(({ data, isLoading, openingBalanceBase, className, ...props }, ref) => {
     const [selectedDocNo, setSelectedDocNo] = React.useState<string | null>(null);
 
     // Calculate balances then group
     const groupedRows = React.useMemo(() => {
-        let currentBaseBalance = 0;
+        let currentBaseBalance = openingBalanceBase ?? 0;
         
         // Pass 1: Add individual balances
         const enriched = data.map(row => {
@@ -85,7 +87,7 @@ export const ProductTracingTable = React.forwardRef<HTMLDivElement, Props>(({ da
         });
 
         return groups;
-    }, [data]);
+    }, [data, openingBalanceBase]);
 
     const selectedGroup = React.useMemo(() => {
         if (!selectedDocNo) return null;

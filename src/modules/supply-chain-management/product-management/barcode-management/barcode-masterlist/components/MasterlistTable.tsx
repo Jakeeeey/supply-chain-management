@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { Pencil } from "lucide-react";
 import { Product, Unit } from "../types";
 
 interface MasterlistTableProps {
@@ -17,8 +19,8 @@ interface MasterlistTableProps {
   selectedIds: string[];
   onToggleSelect: (product: Product) => void;
   onToggleAll: (allIds: string[]) => void;
-  // ✅ FIX: Added missing prop definition
   onViewDetails: (product: Product) => void;
+  onEditBarcode: (product: Product) => void;
 }
 
 export function MasterlistTable({
@@ -27,7 +29,8 @@ export function MasterlistTable({
   selectedIds,
   onToggleSelect,
   onToggleAll,
-  onViewDetails, // ✅ FIX: Destructure prop here
+  onViewDetails,
+  onEditBarcode,
 }: MasterlistTableProps) {
   const handleSelectAll = () => {
     const ids = products.map((p) => String(p.product_id));
@@ -59,13 +62,14 @@ export function MasterlistTable({
             <TableHead>Inventory Type</TableHead>
             <TableHead>UOM</TableHead>
             <TableHead>Date Linked</TableHead>
+            <TableHead className="w-[80px] text-center">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {products.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={isSelectionMode ? 7 : 6}
+                colSpan={isSelectionMode ? 8 : 7}
                 className="text-center h-24 text-muted-foreground"
               >
                 No records found.
@@ -141,6 +145,20 @@ export function MasterlistTable({
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {dateLinked}
+                  </TableCell>
+                  <TableCell
+                    className="text-center"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                      title="Edit Barcode & Logistics"
+                      onClick={() => onEditBarcode(product)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               );
