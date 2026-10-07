@@ -35,7 +35,7 @@ type SupplierProduct = {
 };
 
 export function AddExtraProductModal({ isOpen, onClose }: AddExtraProductModalProps) {
-    const { getSupplierProducts, addExtraProductLocally, selectedPO } = useReceivingProductsManual();
+    const { getSupplierProducts, addExtraProductLocally, selectedPO, isMarikina } = useReceivingProductsManual();
     
     const [searchQuery, setSearchQuery] = React.useState("");
     const [isLoading, setIsLoading] = React.useState(false);
@@ -121,7 +121,22 @@ export function AddExtraProductModal({ isOpen, onClose }: AddExtraProductModalPr
     const isAlreadyAdded = (productId: string) => {
         if (!selectedPO?.allocations) return false;
         return selectedPO.allocations.some(a => 
-            a.items.some((i: ReceivingPOItem) => i.productId === productId)
+            a.items.some((i: ReceivingPOItem) => {
+                if (i.productId !== productId) return false;
+                if (i.isExtra) return true; // already added as an extra item
+
+                // For MEN2-MARIKINA: disable only if standard item still has remaining quantity
+                if (isMarikina) {
+                    const ordered = Number(i.originalOrderedQty ?? i.expectedQty ?? 0);
+                    const posted = Number(i.postedQty ?? 0);
+                    const unposted = Number(i.unpostedQty ?? 0);
+                    const remaining = Math.max(0, ordered - posted - unposted);
+                    return remaining > 0;
+                }
+
+                // For other companies: disable if product is part of standard PO items
+                return true;
+            })
         );
     };
 
