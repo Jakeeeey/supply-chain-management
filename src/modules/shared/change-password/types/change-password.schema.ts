@@ -13,7 +13,7 @@ export const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\
 export const ChangePasswordSchema = z.object({
     oldPassword: z.string().min(1, "Old password is required"),
     newPassword: z.string()
-        .min(15, "Password must be at least 15 characters long")
+        .min(8, "Password must be at least 8 characters long")
         .max(64, "Password must be no more than 64 characters long")
         .regex(passwordRegex, {
             message: "Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character"

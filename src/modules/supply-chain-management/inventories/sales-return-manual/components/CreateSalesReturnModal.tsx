@@ -202,8 +202,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const [priceType, setPriceType] = useState("A");
 
   const [isThirdParty, setIsThirdParty] = useState(false);
+  const [isClearanceMode, setIsClearanceMode] = useState(false);
   // Success Modal State
   const [isSuccessOpen, setSuccessOpen] = useState(false);
+  const [isConfirmCreateOpen, setIsConfirmCreateOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // UI State for Validation
@@ -435,6 +437,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       const storedData = localStorage.getItem('scm_dispatch_return_data');
       if (storedData) {
         try {
+          setIsClearanceMode(true);
           const data = JSON.parse(storedData);
 
           // 1. Find and set Customer (DO THIS FIRST as it clears other fields)
@@ -450,11 +453,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             setCustomerSearch(data.customerName || "");
           }
 
-          // 1.5 Find and set Salesman
+          // 1.5 Find and set Salesman (Strictly by ID or Code to prevent matching wrong salesman with same name)
           const foundSalesman = salesmen.find(s =>
-            (data.salesmanId && s.id === data.salesmanId) ||
-            (data.salesmanCode && s.code === data.salesmanCode) ||
-            (data.salesmanName && s.name === data.salesmanName)
+            (data.salesmanId && (s.id === data.salesmanId || String(s.id) === String(data.salesmanId))) ||
+            (data.salesmanCode && s.code === data.salesmanCode)
           );
           if (foundSalesman) {
             handleSelectSalesman(foundSalesman);
@@ -624,6 +626,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       return;
     }
 
+    setIsConfirmCreateOpen(true);
+  };
+
+  const handleConfirmCreate = async () => {
+    setIsConfirmCreateOpen(false);
     try {
       setIsSubmitting(true);
       const selectedSalesmanObj = salesmen.find(
@@ -647,6 +654,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         remarks,
         items: items,
         appliedInvoiceId: appliedInvoiceId ?? undefined,
+        isClearance: isClearanceMode,
       };
 
       await SalesReturnProvider.submitReturn(payload);
@@ -654,7 +662,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       setSuccessOpen(true);
     } catch (err: unknown) {
       console.error(err);
-      toast.error("Failed to create Sales Return.");
+      const errMsg = err instanceof Error ? err.message : "Failed to create Sales Return.";
+      toast.error("Failed to create Sales Return", { description: errMsg });
     } finally {
       setIsSubmitting(false);
     }
@@ -856,10 +865,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
                   <input
                     type="text"
-                    className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm"
+                    disabled={isClearanceMode}
+                    className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                     placeholder="Search Salesman..."
                     value={salesmanSearch}
                     onChange={(e) => {
+                      if (isClearanceMode) return;
                       setSalesmanSearch(e.target.value);
                       setIsSalesmanOpen(true);
                       setSelectedSalesmanId("");
@@ -867,6 +878,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                       setBranchName("");
                     }}
                     onFocus={() => {
+                      if (isClearanceMode) return;
                       setIsSalesmanOpen(true);
                       setSalesmanSearch("");
                     }}
@@ -905,14 +917,17 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
                   <input
                     type="text"
-                    className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm"
+                    disabled={isClearanceMode}
+                    className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                     placeholder="Search Customer..."
                     value={customerSearch}
                     onChange={(e) => {
+                      if (isClearanceMode) return;
                       setCustomerSearch(e.target.value);
                       setIsCustomerOpen(true);
                     }}
                     onFocus={() => {
+                      if (isClearanceMode) return;
                       setIsCustomerOpen(true);
                       setCustomerSearch("");
                     }}
@@ -967,9 +982,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 </label>
                 <Input
                   type="date"
+                  disabled={isClearanceMode}
                   value={returnDate}
                   onChange={(e) => setReturnDate(e.target.value)}
-                  className="h-9 w-full bg-background border-border shadow-sm text-sm"
+                  className="h-9 w-full bg-background border-border shadow-sm text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -988,8 +1004,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
                   Price Type <span className="text-destructive">*</span>
                 </label>
-                <Select value={priceType} onValueChange={setPriceType}>
-                  <SelectTrigger className="w-full h-9 bg-background border-border focus:ring-2 focus:ring-primary shadow-sm text-sm">
+                <Select value={priceType} onValueChange={setPriceType} disabled={isClearanceMode}>
+                  <SelectTrigger className="w-full h-9 bg-background border-border focus:ring-2 focus:ring-primary shadow-sm text-sm disabled:opacity-60 disabled:cursor-not-allowed">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent className="bg-background border border-border shadow-xl z-50">
@@ -1017,8 +1033,9 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 <Checkbox
                   id="create-manual-isThirdParty"
                   checked={isThirdParty}
+                  disabled={isClearanceMode}
                   onCheckedChange={(c) => setIsThirdParty(c as boolean)}
-                  className="data-[state=checked]:bg-primary border-border"
+                  className="data-[state=checked]:bg-primary border-border disabled:opacity-60 disabled:cursor-not-allowed"
                 />
                 <label
                   htmlFor="create-manual-isThirdParty"
@@ -1648,6 +1665,44 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         customerCode={customerCode}
         lineDiscounts={lineDiscountOptions}
       />
+
+      <Dialog open={isConfirmCreateOpen} onOpenChange={setIsConfirmCreateOpen}>
+        <DialogContent className="max-w-[400px] p-6 bg-background rounded-xl shadow-2xl border-0">
+          <div className="flex flex-col items-center text-center gap-4">
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <Save className="h-6 w-6 text-primary" />
+            </div>
+            <div className="space-y-2">
+              <DialogTitle className="text-lg font-bold">
+                Create Sales Return?
+              </DialogTitle>
+              <div className="text-sm text-muted-foreground">
+                Please confirm all product entries are correct before proceeding.
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => setIsConfirmCreateOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmCreate}
+              disabled={isSubmitting}
+              className="bg-primary hover:bg-primary text-white"
+            >
+              {isSubmitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Confirm Create"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* SUCCESS MODAL */}
       <Dialog

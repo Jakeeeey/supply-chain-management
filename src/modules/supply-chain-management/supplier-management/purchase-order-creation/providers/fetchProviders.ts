@@ -68,6 +68,10 @@ export async function fetchPaymentTerms(): Promise<PaymentTerm[]> {
     return fetchData<PaymentTerm[]>("/api/scm/supplier-management/payment-terms");
 }
 
+export async function fetchCompany(): Promise<{ company_code?: string; company_name?: string } | null> {
+    return fetchData<{ company_code?: string; company_name?: string } | null>(`${BASE}/company`);
+}
+
 /** ✅ Save PO to API route */
 export async function createPurchaseOrder(payload: unknown): Promise<unknown> {
     return fetchData<unknown>(`${BASE}`, {
@@ -75,3 +79,4 @@ export async function createPurchaseOrder(payload: unknown): Promise<unknown> {
         body: JSON.stringify(payload),
     });
 }
+

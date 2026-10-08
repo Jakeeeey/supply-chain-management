@@ -16,10 +16,10 @@ export const useChangePassword = () => {
         },
     });
 
-    const onSubmit = async (data: ChangePasswordInput) => {
+    const submitPasswordChange = async (data: ChangePasswordInput): Promise<boolean> => {
         setIsSubmitting(true);
         try {
-            const response = await fetch("/api/hrm/change-password", {
+            const response = await fetch("/api/shared/change-password", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(data),
@@ -32,16 +32,19 @@ export const useChangePassword = () => {
                     description: "Your password has been changed successfully.",
                 });
                 form.reset();
+                return true;
             } else {
                 toast.error("Update Failed", {
                     description: result.message || "Current password is incorrect. Please try again.",
                 });
+                return false;
             }
         } catch (error) {
             console.error("Submission error:", error);
             toast.error("Error", {
                 description: "A network error occurred. Please try again.",
             });
+            return false;
         } finally {
             setIsSubmitting(false);
         }
@@ -50,6 +53,6 @@ export const useChangePassword = () => {
     return {
         form,
         isSubmitting,
-        handleSubmit: form.handleSubmit(onSubmit),
+        submitPasswordChange,
     };
 };

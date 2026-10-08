@@ -31,43 +31,47 @@ export function useSalesReturnList() {
     return str.replace(/\s+/g, "").toUpperCase();
   };
 
+  // Load references once on mount
+  useEffect(() => {
+    const loadRefs = async () => {
+      try {
+        const [cust, sales] = await Promise.all([
+          SalesReturnProvider.getCustomersList(),
+          SalesReturnProvider.getSalesmenList(),
+        ]);
+        setOptions({ customers: cust, salesmen: sales });
+      } catch (err) {
+        console.error("Error loading filter references:", err);
+      }
+    };
+    loadRefs();
+  }, []);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
       // 1. Determine if we're searching (hybrid strategy)
       const isSearching = search.trim().length > 0;
 
-      // 2. Fetch Returns, Customers, and Salesmen in parallel
-      // When searching: fetch ALL returns (limit=-1) so we can filter by name client-side
-      // When not searching: use normal server-side pagination
-      const [returnsResult, customersList, salesmenList] = await Promise.all([
-        SalesReturnProvider.getReturns(
-          isSearching ? 1 : page,
-          isSearching ? -1 : pageSize,
-          filters,
-        ),
-        SalesReturnProvider.getCustomersList(),
-        SalesReturnProvider.getSalesmenList(),
-      ]);
+      // 2. Fetch Returns server-side
+      const returnsResult = await SalesReturnProvider.getReturns(
+        isSearching ? 1 : page,
+        isSearching ? -1 : pageSize,
+        filters,
+      );
 
-      // 3. Update Options State (for Filter Dropdowns)
-      setOptions({
-        salesmen: salesmenList,
-        customers: customersList,
-      });
-
-      // 4. Create Lookup Maps (Normalizing Keys)
+      // 3. Create Lookup Maps (Normalizing Keys) using the preloaded options
       const customerMap = new Map<string, string>();
-      customersList.forEach((c) => {
+      options.customers.forEach((c) => {
         customerMap.set(normalize(c.value), c.label);
       });
 
       const salesmanMap = new Map<string, string>();
-      salesmenList.forEach((s) => {
+      options.salesmen.forEach((s) => {
         salesmanMap.set(s.value.toString(), s.label);
       });
 
-      // 5. Map Names into Data (enrich with resolved names)
+      // 4. Map Names into Data (enrich with resolved names)
       let mappedData = returnsResult.data.map((item) => {
         const cleanCustomerCode = normalize(item.customerCode);
         const customerName = customerMap.get(cleanCustomerCode);
@@ -80,7 +84,7 @@ export function useSalesReturnList() {
         };
       });
 
-      // 6. Client-side search filtering (AFTER names are resolved)
+      // 5. Client-side search filtering (AFTER names are resolved)
       if (isSearching) {
         const lowerSearch = search.toLowerCase().trim();
         mappedData = mappedData.filter((item) => {
@@ -123,7 +127,7 @@ export function useSalesReturnList() {
     } finally {
       setLoading(false);
     }
-  }, [search, page, pageSize, filters]);
+  }, [search, page, pageSize, filters, options.customers, options.salesmen]);
 
   // Reset to page 1 when search or filters change
   useEffect(() => {

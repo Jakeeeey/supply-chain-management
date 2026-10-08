@@ -447,12 +447,14 @@ export function ProductLookupModal({
   );
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen}>
       <DialogContent
         className={cn(
           "flex flex-col p-0 overflow-hidden bg-background border-0 shadow-2xl [&>button]:hidden",
           "h-[90vh] w-[95vw] max-w-[1400px]! z-200",
         )}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         {/* --- HEADER --- */}
         <div className="flex justify-between items-center px-6 py-4 bg-background border-b border-border z-20 shrink-0">

@@ -15,29 +15,17 @@ export const getColumns = (
   {
     accessorKey: "supplierName",
     header: "SUPPLIER",
-    cell: ({ row, table }) => {
-      const prevRow = table.getRowModel().rows[row.index - 1];
-      const isDuplicate = prevRow && prevRow.original.productName === row.original.productName && prevRow.original.brand === row.original.brand;
-      return <span className={isDuplicate ? "opacity-0 select-none" : ""}>{row.getValue("supplierName")}</span>;
-    }
+    cell: ({ row }) => <span>{row.getValue("supplierName")}</span>
   },
   {
     accessorKey: "brand",
     header: "BRAND",
-    cell: ({ row, table }) => {
-      const prevRow = table.getRowModel().rows[row.index - 1];
-      const isDuplicate = prevRow && prevRow.original.productName === row.original.productName && prevRow.original.brand === row.original.brand;
-      return <span className={isDuplicate ? "opacity-0 select-none" : ""}>{row.getValue("brand")}</span>;
-    }
+    cell: ({ row }) => <span>{row.getValue("brand")}</span>
   },
   {
     accessorKey: "category",
     header: "CATEGORY",
-    cell: ({ row, table }) => {
-      const prevRow = table.getRowModel().rows[row.index - 1];
-      const isDuplicate = prevRow && prevRow.original.productName === row.original.productName && prevRow.original.brand === row.original.brand;
-      return <span className={isDuplicate ? "opacity-0 select-none" : ""}>{row.getValue("category")}</span>;
-    }
+    cell: ({ row }) => <span>{row.getValue("category")}</span>
   },
   {
     accessorKey: "productName",

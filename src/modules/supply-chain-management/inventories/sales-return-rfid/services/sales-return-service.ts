@@ -152,6 +152,7 @@ export async function fetchReturns(
     receivedAt: item.received_at
       ? new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.received_at))
       : "-",
+    isClearance: parseBoolean(item.isClearance),
   }));
 
   return { data: mappedData, total: result.meta?.filter_count || 0 };
@@ -258,7 +259,7 @@ export async function fetchReturnDetails(
       sales_return_type_id: detail.sales_return_type_id
         ? Number(detail.sales_return_type_id)
         : "",
-      returnType: returnTypeObj ? returnTypeObj.type_name : "Good Order",
+      returnType: returnTypeObj ? returnTypeObj.type_name : "",
       rfidTags: rfidMap.get(detail.detail_id || detail.id) || [],
       rfidTagIds: rfidTagIdMap.get(detail.detail_id || detail.id) || [],
       priceA: product.priceA,
@@ -522,6 +523,18 @@ export async function submitReturn(payload: any, userId: number, token: string =
   // Build aggregate discount percentage map from junction + line_discount tables
   const lineDiscountMap = await buildDiscountPercentMap();
 
+  const validatedItems = payload.items.map((item: any) => {
+    const matchedType = returnTypes.find(
+      (t: API_SalesReturnType) => t.type_name === item.returnType,
+    );
+    const typeId = matchedType ? matchedType.type_id : null;
+
+    if (item.unitOrder !== 3 && !typeId) {
+      throw new Error("Return Type is required for all non-RFID items.");
+    }
+    return { ...item, resolvedTypeId: typeId };
+  });
+
   const totalGross = payload.items.reduce(
     (sum: number, item: any) =>
       Math.round((sum + Number(item.quantity) * Number(item.unitPrice)) * 100) / 100,
@@ -555,11 +568,12 @@ export async function submitReturn(payload: any, userId: number, token: string =
     total_amount: Math.round(Number(payload.totalAmount) * 100) / 100,
     status: "Pending",
     return_date: formattedDate,
-    price_type: payload.priceType || "A",
+    price_type: salesman?.price_type || payload.priceType || "A",
     remarks: payload.remarks || "Created via Web App",
     order_id: payload.orderNo || "",
     isThirdParty: payload.isThirdParty ? 1 : 0,
     isApplied: payload.appliedInvoiceId ? 1 : 0,
+    isClearance: payload.isClearance ? 1 : 0,
     created_at: nowPH(),
     updated_at: nowPH(),
   };
@@ -586,13 +600,8 @@ export async function submitReturn(payload: any, userId: number, token: string =
     }
   }
 
-  const detailPromises = payload.items.map(async (item: any) => {
-    const matchedType = returnTypes.find(
-      (t: API_SalesReturnType) => t.type_name === item.returnType,
-    );
-    const typeId = matchedType
-      ? matchedType.type_id
-      : returnTypes[0]?.type_id || 1;
+  const detailPromises = validatedItems.map(async (item: any) => {
+    const typeId = item.resolvedTypeId;
 
     const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
     const discId =
@@ -621,13 +630,15 @@ export async function submitReturn(payload: any, userId: number, token: string =
 
     // Save RFID tags if present
     if (item.rfidTags && Array.isArray(item.rfidTags) && item.rfidTags.length > 0) {
-      const detailId = (detailResult.data as any)?.detail_id;
+      const detailId = (detailResult.data as any)?.detail_id || (detailResult.data as any)?.id;
       if (detailId) {
-        for (const tag of item.rfidTags) {
+        const uniqueTags = Array.from(new Set(item.rfidTags.map((t: string) => String(t).trim().toUpperCase())));
+        for (const tag of uniqueTags) {
           await repo.createRfidTag({
             sales_return_detail_id: detailId,
             rfid_tag: tag,
             created_by: userId,
+            created_at: nowPH(),
           });
         }
       }
@@ -721,12 +732,6 @@ export async function updateReturn(
       }
 
       if (payload.appliedInvoiceId) {
-        // Rule B: Prevent linking to a posted invoice
-        const targetInvoiceData = await repo.getInvoiceStatus(payload.appliedInvoiceId);
-        if (parseBoolean(targetInvoiceData?.data?.isPosted)) {
-          throw new Error("This invoice has already been posted. You can only link to invoices that are not yet posted.");
-        }
-
         // Link or Update
         if (existingLink) {
           await repo.updateJunctionLink(existingLink.id, {
@@ -762,11 +767,11 @@ export async function updateReturn(
   );
 
   const payloadIds = payload.items
-    .filter((item: any) => typeof item.id === "number")
-    .map((item: any) => item.id);
+    .map((item: any) => Number(item.id))
+    .filter((id: number) => !isNaN(id));
 
   const itemsToDelete = currentItems.filter(
-    (dbItem) => !payloadIds.includes(dbItem.id),
+    (dbItem) => dbItem.id !== undefined && !payloadIds.includes(Number(dbItem.id)),
   );
 
   for (const item of itemsToDelete) {
@@ -777,9 +782,11 @@ export async function updateReturn(
     const matchedType = returnTypes.find(
       (t: API_SalesReturnType) => t.type_name === item.returnType,
     );
-    const typeId = matchedType
-      ? matchedType.type_id
-      : returnTypes[0]?.type_id || 1;
+    const typeId = matchedType ? matchedType.type_id : null;
+
+    if (!typeId) {
+      throw new Error("Return Type is required for all items.");
+    }
 
     const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
     const discId =
@@ -820,6 +827,7 @@ export async function updateReturn(
               sales_return_detail_id: detailId,
               rfid_tag: tag,
               created_by: userId,
+              created_at: nowPH(),
             });
           }
         }
@@ -833,20 +841,23 @@ export async function updateReturn(
         const existingTagsRes = await repo.getRfidTagsByDetailId(item.id);
         const existingTags = (existingTagsRes.data || []) as any[];
 
+        const uniqueIncomingTags = Array.from(new Set<string>((item.rfidTags as any[]).map((t: any) => String(t).trim().toUpperCase())));
+
         // 2. Identify tags to delete
-        const tagsToDelete = existingTags.filter(et => !item.rfidTags.includes(et.rfid_tag));
+        const tagsToDelete = existingTags.filter(et => !uniqueIncomingTags.includes(String(et.rfid_tag).trim().toUpperCase()));
         for (const t of tagsToDelete) {
           await repo.deleteRfidTag(t.id);
         }
 
         // 3. Identify tags to add
-        const currentTagStrings = existingTags.map(et => et.rfid_tag);
-        const tagsToAdd = item.rfidTags.filter((tag: string) => !currentTagStrings.includes(tag));
+        const currentTagStrings = existingTags.map(et => String(et.rfid_tag).trim().toUpperCase());
+        const tagsToAdd = uniqueIncomingTags.filter((tag: string) => !currentTagStrings.includes(tag));
         for (const tag of tagsToAdd) {
           await repo.createRfidTag({
             sales_return_detail_id: item.id,
             rfid_tag: tag,
             created_by: userId,
+            created_at: nowPH(),
           });
         }
       }
@@ -972,7 +983,7 @@ export async function presaveDetail(
   const matchedType = returnTypes.find(
     (t: API_SalesReturnType) => t.type_name === payload.returnType,
   );
-  const typeId = matchedType ? matchedType.type_id : (returnTypes[0]?.type_id || 1);
+  const typeId = matchedType ? matchedType.type_id : null;
 
   const gross = Math.round(Number(payload.quantity) * Number(payload.unitPrice) * 100) / 100;
   const discId = payload.discountType && payload.discountType !== "No Discount" && payload.discountType !== ""
@@ -1023,6 +1034,7 @@ export async function presaveRfidTag(
     sales_return_detail_id: payload.detailId,
     rfid_tag: payload.rfidTag,
     created_by: userId,
+    created_at: nowPH(),
   });
   return { tagId: Number((result.data as any)?.id) };
 }

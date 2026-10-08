@@ -631,40 +631,40 @@ export default function PurchaseOrderSummaryModule({
                     <Table>
                       <TableHeader className="bg-muted/80">
                         <TableRow className="hover:bg-transparent border-b border-border">
-                          <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12 px-6">PO Number</TableHead>
-                          <TableHead className="font-bold text-[10px] uppercase tracking-widest px-4">Type</TableHead>
-                          <TableHead className="font-bold text-[10px] uppercase tracking-widest px-4">Supplier</TableHead>
-                          <TableHead className="font-bold text-[10px] uppercase tracking-widest px-4">Date</TableHead>
-                          <TableHead className="font-bold text-[10px] uppercase tracking-widest text-center px-4">Inv Status</TableHead>
-                          <TableHead className="font-bold text-[10px] uppercase tracking-widest text-center px-4">Pay Status</TableHead>
-                          <TableHead className="font-bold text-[10px] uppercase tracking-widest px-6">Remarks</TableHead>
+                          <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12 px-6 whitespace-nowrap">PO Number</TableHead>
+                          <TableHead className="font-bold text-[10px] uppercase tracking-widest px-4 whitespace-nowrap">Type</TableHead>
+                          <TableHead className="font-bold text-[10px] uppercase tracking-widest px-4 min-w-[200px]">Supplier</TableHead>
+                          <TableHead className="font-bold text-[10px] uppercase tracking-widest px-4 whitespace-nowrap">Date</TableHead>
+                          <TableHead className="font-bold text-[10px] uppercase tracking-widest text-center px-4 min-w-[120px] whitespace-nowrap">Inv Status</TableHead>
+                          <TableHead className="font-bold text-[10px] uppercase tracking-widest text-center px-4 min-w-[120px] whitespace-nowrap">Pay Status</TableHead>
+                          <TableHead className="font-bold text-[10px] uppercase tracking-widest px-6 min-w-[160px]">Remarks</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         <TableRow className="hover:bg-transparent border-none">
-                          <TableCell className="font-black text-primary font-mono py-6 px-6 text-sm tracking-tighter">
+                          <TableCell className="font-black text-primary font-mono py-6 px-6 text-sm tracking-tighter whitespace-nowrap">
                             {selectedPO.purchase_order_no}
                           </TableCell>
                           <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap px-4 uppercase">
                             {selectedPO.transaction_type === 1 ? "Trade" : "Non-Trade"}
                           </TableCell>
-                          <TableCell className="text-xs font-black text-foreground max-w-[180px] px-4 uppercase tracking-tight">
+                          <TableCell className="text-xs font-black text-foreground min-w-[200px] max-w-[260px] px-4 uppercase tracking-tight break-words whitespace-normal">
                             {supplierName}
                           </TableCell>
                           <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap px-4">
                             {selectedPO.date || "--"}
                           </TableCell>
-                          <TableCell className="text-center px-4">
-                            <Badge variant="outline" className={`${getInventoryStatusColor(invStatusText)} px-3 py-1 text-[10px] font-black border-2 rounded-lg uppercase shrink-0 shadow-sm`}>
+                          <TableCell className="text-center px-4 whitespace-nowrap">
+                            <Badge variant="outline" className={`${getInventoryStatusColor(invStatusText)} px-3 py-1 text-[10px] font-black border-2 rounded-lg uppercase shrink-0 shadow-sm whitespace-nowrap inline-flex`}>
                               {invStatusText}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-center px-4">
-                            <Badge variant="outline" className={`${getPaymentStatusColor(payStatusText)} px-3 py-1 text-[10px] font-black border-2 rounded-lg uppercase shrink-0 shadow-sm`}>
+                          <TableCell className="text-center px-4 whitespace-nowrap">
+                            <Badge variant="outline" className={`${getPaymentStatusColor(payStatusText)} px-3 py-1 text-[10px] font-black border-2 rounded-lg uppercase shrink-0 shadow-sm whitespace-nowrap inline-flex`}>
                               {payStatusText}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground italic min-w-[160px] px-6">
+                          <TableCell className="text-xs text-muted-foreground italic min-w-[160px] px-6 break-words whitespace-normal">
                             {selectedPO.remark || "--"}
                           </TableCell>
                         </TableRow>

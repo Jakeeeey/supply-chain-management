@@ -798,7 +798,7 @@ export function UpdateSalesReturnModal({
               <Checkbox
                 id="isThirdParty"
                 checked={headerData.isThirdParty || false}
-                disabled={!canEditAll}
+                disabled={loading || !canEditAll}
                 onCheckedChange={(checked) =>
                   setHeaderData({
                     ...headerData,
@@ -834,6 +834,7 @@ export function UpdateSalesReturnModal({
                     size="sm"
                     className="bg-primary hover:bg-primary text-white gap-2 shadow-md shadow-primary/20"
                     onClick={() => setIsProductLookupOpen(true)}
+                    disabled={loading}
                   >
                     <Plus className="h-4 w-4" /> Add Product
                   </Button>
@@ -944,7 +945,7 @@ export function UpdateSalesReturnModal({
                               </TableCell>
                               {/* Quantity */}
                               <TableCell className="text-center align-middle p-2">
-                                {canEditAll ? (
+                                {canEditAll && !loading ? (
                                   <Input
                                     type="number"
                                     className="h-9 w-full text-center text-sm border-border px-2"
@@ -961,7 +962,7 @@ export function UpdateSalesReturnModal({
                               </TableCell>
                               {/* Price */}
                               <TableCell className="text-right align-middle p-2">
-                                {canEditAll ? (
+                                {canEditAll && !loading ? (
                                   <Input
                                     type="number"
                                     className="h-9 w-full text-right text-sm border-border px-2"
@@ -981,7 +982,7 @@ export function UpdateSalesReturnModal({
                               </TableCell>
                               {/* Discount */}
                               <TableCell className="align-middle p-2">
-                                {canEditAll ? (
+                                {canEditAll && !loading ? (
                                   (() => {
                                     const noDiscountOpt = discountOptions.find(o => o.discount_type === "No Discount");
                                     const defaultVal = noDiscountOpt ? noDiscountOpt.id.toString() : "No Discount";
@@ -1000,6 +1001,7 @@ export function UpdateSalesReturnModal({
                                         }))}
                                         placeholder="Select Discount..."
                                         className="h-9 w-full text-xs"
+                                        disabled={loading}
                                       />
                                     );
                                   })()
@@ -1017,10 +1019,11 @@ export function UpdateSalesReturnModal({
                               </TableCell>
                               {/* Reason */}
                               <TableCell className="align-middle p-2">
-                                {canEditAll ? (
+                                {canEditAll && !loading ? (
                                   <ReasonInputSection
                                     value={item.reason || ""}
                                     onChange={(val) => handleDetailChange(idx, "reason", val)}
+                                    disabled={loading}
                                   />
                                 ) : (
                                   <span className="text-sm text-muted-foreground italic truncate block max-w-[120px]" title={item.reason || ""}>
@@ -1029,8 +1032,9 @@ export function UpdateSalesReturnModal({
                                 )}
                               </TableCell>
                               <TableCell className="align-middle p-2">
-                                {canEditAll ? (
+                                {canEditAll && !loading ? (
                                   <LocalSearchableSelect
+                                    disabled={loading}
                                     value={item.returnType || ""}
                                     onValueChange={(val) => {
                                       handleDetailChange(idx, "returnType", val);
@@ -1053,9 +1057,9 @@ export function UpdateSalesReturnModal({
                                   <Badge variant="outline" className="font-normal">{item.returnType || "Unassigned"}</Badge>
                                 )}
                               </TableCell>
-                              {canEditAll && (
+                              {canEditAll && !loading && (
                                 <TableCell className="align-middle p-2 text-center">
-                                  <button onClick={() => handleDeleteRow(idx)} className="text-destructive/70 hover:text-destructive transition-colors" title="Remove row">
+                                  <button onClick={() => !loading && handleDeleteRow(idx)} disabled={loading} className="text-destructive/70 hover:text-destructive transition-colors disabled:opacity-50" title="Remove row">
                                     <Trash2 className="h-4 w-4" />
                                   </button>
                                 </TableCell>
@@ -1350,10 +1354,11 @@ export function UpdateSalesReturnModal({
                     Order No. <span className="text-destructive">*</span>
                   </Label>
                   {/* Order No Dropdown */}
-                  {canEditAll ? (
+                  {canEditAll && !loading ? (
                     <div className="relative group">
                       <input
                         type="text"
+                        disabled={loading}
                         className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${
                           orderError
                             ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
@@ -1366,7 +1371,7 @@ export function UpdateSalesReturnModal({
                           setHeaderData({ ...headerData, orderNo: e.target.value });
                           setIsOrderDropdownOpen(true);
                         }}
-                        onFocus={() => setIsOrderDropdownOpen(true)}
+                        onFocus={() => !loading && setIsOrderDropdownOpen(true)}
                       />
                       <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       {isOrderDropdownOpen && (
@@ -1413,10 +1418,11 @@ export function UpdateSalesReturnModal({
                     Invoice No. <span className="text-destructive">*</span>
                   </Label>
                   {/* Invoice No Dropdown */}
-                  {canEditAll ? (
+                  {canEditAll && !loading ? (
                     <div className="relative group">
                       <input
                         type="text"
+                        disabled={loading}
                         className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${
                           invoiceError
                             ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
@@ -1429,7 +1435,7 @@ export function UpdateSalesReturnModal({
                           setHeaderData({ ...headerData, invoiceNo: e.target.value });
                           setIsInvoiceDropdownOpen(true);
                         }}
-                        onFocus={() => setIsInvoiceDropdownOpen(true)}
+                        onFocus={() => !loading && setIsInvoiceDropdownOpen(true)}
                       />
                       <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       {isInvoiceDropdownOpen && (
@@ -1475,7 +1481,7 @@ export function UpdateSalesReturnModal({
               <RemarksInputSection
                 value={headerData.remarks || ""}
                 onChange={(val) => setHeaderData({ ...headerData, remarks: val })}
-                disabled={!canEditLimited}
+                disabled={loading || !canEditLimited}
               />
             </div>
 
@@ -1560,7 +1566,7 @@ export function UpdateSalesReturnModal({
 
         {/* FOOTER ACTIONS */}
         <div className="border-t border-border p-5 bg-background flex justify-end gap-3 shrink-0">
-          <Button variant="outline" onClick={handlePrintInNewTab}>
+          <Button variant="outline" onClick={handlePrintInNewTab} disabled={loading}>
             <Printer className="h-4 w-4 mr-2" /> Print Slip
           </Button>
           <Button variant="outline" onClick={onClose}>
@@ -1569,14 +1575,14 @@ export function UpdateSalesReturnModal({
           <Button
             className="min-w-[100px]"
             onClick={handleReceiveClick}
-            disabled={!isPending}
+            disabled={loading || !isPending}
           >
             Receive
           </Button>
           <Button
             className="bg-primary hover:bg-primary text-white min-w-40"
             onClick={handleUpdateClick}
-            disabled={!canEditLimited}
+            disabled={loading || !canEditLimited}
           >
             Update Sales Return
           </Button>

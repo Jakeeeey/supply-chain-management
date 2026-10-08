@@ -44,7 +44,7 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
     fetchingAvailable,
     scannedQtys,
     updateScannedQty,
-  } = useStockTransferDispatchManual();
+  } = useStockTransferDispatchManual(currentUser);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);

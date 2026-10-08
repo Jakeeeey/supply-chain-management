@@ -129,6 +129,7 @@ export async function fetchReturns(
     receivedAt: item.received_at
       ? new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.received_at))
       : "-",
+    isClearance: parseBoolean(item.isClearance),
   }));
 
   return { data: mappedData, total: result.meta?.filter_count || 0 };
@@ -208,7 +209,7 @@ export async function fetchReturnDetails(
       sales_return_type_id: detail.sales_return_type_id
         ? Number(detail.sales_return_type_id)
         : "",
-      returnType: returnTypeObj ? returnTypeObj.type_name : "Good Order",
+      returnType: returnTypeObj ? returnTypeObj.type_name : "",
       priceA: product.priceA,
       priceB: product.priceB,
       priceC: product.priceC,
@@ -458,6 +459,18 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
   // Build aggregate discount percentage map from junction + line_discount tables
   const lineDiscountMap = await buildDiscountPercentMap();
 
+  const validatedItems = payload.items.map((item: any) => {
+    const matchedType = returnTypes.find(
+      (t: API_SalesReturnType) => t.type_name === item.returnType,
+    );
+    const typeId = matchedType ? matchedType.type_id : null;
+
+    if (item.unitOrder !== 3 && !typeId) {
+      throw new Error("Return Type is required for all non-RFID items.");
+    }
+    return { ...item, resolvedTypeId: typeId };
+  });
+
   const totalGross = payload.items.reduce(
     (sum: number, item: any) =>
       Math.round((sum + Number(item.quantity) * Number(item.unitPrice)) * 100) / 100,
@@ -480,6 +493,11 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
   const shortTimestamp = Math.floor(Date.now() / 1000).toString().slice(-4);
   const generatedReturnNo = `SR-${shortTimestamp}-${uniqueSuffix}`;
 
+  // Price type is authoritative from the salesman's profile — never trust the client value.
+  const salesmenData = (refsResult[0].data || []) as any[];
+  const salesman = salesmenData.find((s: any) => String(s.id) === String(payload.salesmanId));
+  const authoritativePriceType = salesman?.price_type || payload.priceType || "A";
+
   const headerPayload = {
     return_number: generatedReturnNo,
     gross_amount: totalGross,
@@ -491,11 +509,12 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
     total_amount: Math.round(Number(payload.totalAmount) * 100) / 100,
     status: "Pending",
     return_date: formattedDate,
-    price_type: payload.priceType || "A",
+    price_type: authoritativePriceType,
     remarks: payload.remarks || "Created via Web App",
     order_id: payload.orderNo || "",
     isThirdParty: payload.isThirdParty ? 1 : 0,
     isApplied: payload.appliedInvoiceId ? 1 : 0,
+    isClearance: payload.isClearance ? 1 : 0,
     created_at: nowPH(),
     updated_at: nowPH(),
   };
@@ -522,13 +541,8 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
     }
   }
 
-  const detailPromises = payload.items.map(async (item: any) => {
-    const matchedType = returnTypes.find(
-      (t: API_SalesReturnType) => t.type_name === item.returnType,
-    );
-    const typeId = matchedType
-      ? matchedType.type_id
-      : returnTypes[0]?.type_id || 1;
+  const detailPromises = validatedItems.map(async (item: any) => {
+    const typeId = item.resolvedTypeId;
 
     const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
     const discId =
@@ -578,6 +592,18 @@ export async function updateReturn(
   // Fetch line discounts
   const refsResult = await repo.getRawReferences();
   const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
+
+  const validatedItems = payload.items.map((item: any) => {
+    const matchedType = returnTypes.find(
+      (t: API_SalesReturnType) => t.type_name === item.returnType,
+    );
+    const typeId = matchedType ? matchedType.type_id : null;
+
+    if (!typeId) {
+      throw new Error("Return Type is required for all items.");
+    }
+    return { ...item, resolvedTypeId: typeId };
+  });
 
   // Build aggregate discount percentage map from junction + line_discount tables
   const lineDiscountMap = await buildDiscountPercentMap();
@@ -642,12 +668,6 @@ export async function updateReturn(
       }
 
       if (payload.appliedInvoiceId) {
-        // Rule B: Prevent linking to a posted invoice
-        const targetInvoiceData = await repo.getInvoiceStatus(payload.appliedInvoiceId);
-        if (parseBoolean(targetInvoiceData?.data?.isPosted)) {
-          throw new Error("This invoice has already been posted. You can only link to invoices that are not yet posted.");
-        }
-
         // Link or Update
         if (existingLink) {
           await repo.updateJunctionLink(existingLink.id, {
@@ -683,24 +703,19 @@ export async function updateReturn(
   );
 
   const payloadIds = payload.items
-    .filter((item: any) => typeof item.id === "number")
-    .map((item: any) => item.id);
+    .map((item: any) => Number(item.id))
+    .filter((id: number) => !isNaN(id));
 
   const itemsToDelete = currentItems.filter(
-    (dbItem) => !payloadIds.includes(dbItem.id),
+    (dbItem) => dbItem.id !== undefined && !payloadIds.includes(Number(dbItem.id)),
   );
 
   for (const item of itemsToDelete) {
     if (item.id) await repo.deleteReturnDetail(item.id as number);
   }
 
-  for (const item of payload.items) {
-    const matchedType = returnTypes.find(
-      (t: API_SalesReturnType) => t.type_name === item.returnType,
-    );
-    const typeId = matchedType
-      ? matchedType.type_id
-      : returnTypes[0]?.type_id || 1;
+  for (const item of validatedItems) {
+    const typeId = item.resolvedTypeId;
 
     const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
     const discId =

@@ -262,7 +262,7 @@ async function fetchPORByPOIds(base: string, poIds: number[]) {
 }
 
 async function fetchPOProductsByPOId(base: string, poId: number): Promise<POProductRow[]> {
-    const url = `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount,discount_type.*`;
+    const url = `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount,discount_type.*,is_ExtraItem`;
     const j = await fetchJson<{ data: POProductRow[] }>(url);
     return (j?.data ?? []);
 }
@@ -372,8 +372,9 @@ async function ensureOpenReceivingRow(args: {
 }) {
     const { base, poId, productId, branchId, unitPrice, discountTypeId, discountPercent, isInvoice } = args;
 
-    const findUrl = `${base}/items/${POR_COLLECTION}?limit=1&sort=-purchase_order_product_id&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[product_id][_eq]=${encodeURIComponent(String(productId))}&filter[branch_id][_eq]=${encodeURIComponent(String(branchId))}&filter[isPosted][_eq]=0&filter[receipt_no][_null]=true&fields=purchase_order_product_id,received_quantity,receipt_no`;
-    const found = await fetchJson<{ data: Record<string, unknown>[] }>(findUrl);
+    const bFilter = branchId > 0 ? `filter[branch_id][_eq]=${encodeURIComponent(String(branchId))}` : `filter[branch_id][_null]=true`;
+    const findUrl = `${base}/items/${POR_COLLECTION}?limit=1&sort=-purchase_order_product_id&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[product_id][_eq]=${encodeURIComponent(String(productId))}&${bFilter}&filter[isPosted][_eq]=0&filter[receipt_no][_null]=true&fields=purchase_order_product_id,received_quantity,receipt_no`;
+    const found = await fetchJson<{ data: Record<string, unknown>[] }>(findUrl).catch(() => ({ data: [] }));
     const row = Array.isArray(found?.data) ? found.data[0] : null;
     if (row?.purchase_order_product_id) return { porId: toNum(row.purchase_order_product_id), receivedQty: toNum(row.received_quantity), created: false };
 
@@ -385,7 +386,7 @@ async function ensureOpenReceivingRow(args: {
     const withholdingAmount = isInvoice ? Number((vatExcl * 0.01).toFixed(2)) : 0;
 
     const insertPayload: Record<string, unknown> = {
-        purchase_order_id: poId, product_id: productId, branch_id: branchId,
+        purchase_order_id: poId, product_id: productId, branch_id: branchId > 0 ? branchId : null,
         received_quantity: 0, unit_price: unitPrice, discounted_amount: discountedAmount,
         discount_type: discountTypeId, vat_amount: vatAmount,
         withholding_amount: withholdingAmount, total_amount: Number(netPrice.toFixed(2)),
@@ -397,6 +398,67 @@ async function ensureOpenReceivingRow(args: {
         method: "POST", body: JSON.stringify(insertPayload)
     });
     return { porId: toNum(created?.data?.purchase_order_product_id), receivedQty: 0, created: true };
+}
+
+async function ensurePOProductExtraRow(args: {
+    base: string;
+    poId: number;
+    productId: number;
+    branchId: number;
+    unitPrice: number;
+    discountTypeId: number | null;
+    discountPercent: number;
+    existingLines?: POProductRow[];
+}) {
+    const { base, poId, productId, branchId, unitPrice, discountTypeId, discountPercent, existingLines } = args;
+
+    // 1. If line is already present in existing PO lines, reuse it without inserting
+    if (existingLines && existingLines.length > 0) {
+        const matching = existingLines.find(l => toNum(l.product_id) === productId && toNum(l.branch_id ?? 0) === branchId);
+        if (matching?.purchase_order_product_id) {
+            return { popId: toNum(matching.purchase_order_product_id), created: false };
+        }
+    }
+
+    // 2. Check if line already exists in purchase_order_products table
+    const bFilter = branchId > 0 ? `filter[branch_id][_eq]=${encodeURIComponent(String(branchId))}` : `filter[branch_id][_null]=true`;
+    const findUrl = `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[product_id][_eq]=${encodeURIComponent(String(productId))}&${bFilter}&fields=purchase_order_product_id,is_ExtraItem`;
+    const found = await fetchJson<{ data: Record<string, unknown>[] }>(findUrl).catch(() => ({ data: [] }));
+    const row = Array.isArray(found?.data) ? found.data[0] : null;
+    if (row?.purchase_order_product_id) {
+        return { popId: toNum(row.purchase_order_product_id), created: false };
+    }
+
+    const lineGross = unitPrice;
+    const discountedAmount = Number((lineGross * (discountPercent / 100)).toFixed(2));
+    const netPrice = lineGross - discountedAmount;
+
+    const payload: Record<string, unknown> = {
+        purchase_order_id: poId,
+        product_id: productId,
+        branch_id: branchId > 0 ? branchId : null,
+        ordered_quantity: 0,
+        unit_price: unitPrice,
+        approved_price: unitPrice,
+        discount_type: discountTypeId,
+        discounted_price: netPrice,
+        vat_amount: 0,
+        withholding_amount: 0,
+        total_amount: 0,
+        received: 0,
+        is_ExtraItem: 1
+    };
+
+    const insertUrl = `${base}/items/${PO_PRODUCTS_COLLECTION}`;
+    const created = await fetchJson<{ data: Record<string, unknown> }>(insertUrl, {
+        method: "POST",
+        body: JSON.stringify(payload)
+    }).catch((err) => {
+        console.warn("Failed to insert extra product to purchase_order_products (might already exist):", err);
+        return null;
+    });
+
+    return { popId: toNum(created?.data?.purchase_order_product_id), created: true };
 }
 
 // =====================
@@ -812,8 +874,14 @@ export async function POST(req: NextRequest) {
             const productIdsSet = new Set<number>();
             lines.forEach(l => productIdsSet.add(toNum(l.product_id)));
             porRows.forEach(r => productIdsSet.add(toNum(r.product_id)));
-            // Also include from porCounts keys if they are composite pid-bid
-            Object.keys(porCounts).forEach(k => { if (k.includes("-")) productIdsSet.add(toNum(k.split("-")[0])); });
+            // Also include from porCounts keys if they are composite pid-bid or extra-pid-bid
+            Object.keys(porCounts).forEach(k => { 
+                if (k.includes("-")) {
+                    const cleanKey = k.startsWith("extra-") ? k.slice(6) : k;
+                    const p = cleanKey.split("-")[0];
+                    if (p) productIdsSet.add(toNum(p));
+                }
+            });
 
             const linksMap = await fetchProductSupplierLinks(base, Array.from(productIdsSet), toNum(po?.supplier_name));
 
@@ -821,7 +889,8 @@ export async function POST(req: NextRequest) {
                 const qty = toNum(qtyNum);
                 if (qty <= 0) continue;
                 if (String(key).includes("-")) {
-                    const [pidStr, bidStr] = key.split("-");
+                    const cleanKey = String(key).startsWith("extra-") ? String(key).slice(6) : String(key);
+                    const [pidStr, bidStr] = cleanKey.split("-");
                     const pid = toNum(pidStr), bid = toNum(bidStr);
                     const ml = lines.find(l => toNum(l.product_id) === pid && toNum(l.branch_id) === bid);
                     let uPrice = 0;
@@ -845,6 +914,21 @@ export async function POST(req: NextRequest) {
                     // ✅ Removed unused isExclLine
 
                     const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
+                    
+                    // ✅ If this is an extra item (not in original lines, or extra prefix), ensure row in purchase_order_products with is_ExtraItem: 1
+                    if (!ml || String(key).startsWith("extra-")) {
+                        await ensurePOProductExtraRow({
+                            base,
+                            poId: thePoId,
+                            productId: pid,
+                            branchId: bid,
+                            unitPrice: uPrice,
+                            discountTypeId: resolvedId,
+                            discountPercent: linePct,
+                            existingLines: lines
+                        });
+                    }
+
                     const ensured = await ensureOpenReceivingRow({ base, poId: thePoId, productId: pid, branchId: bid, unitPrice: uPrice, discountTypeId: resolvedId, discountPercent: linePct, isInvoice: poIsInvoice });
                     porCounts[String(ensured.porId)] = qty;
                     delete porCounts[key];
@@ -963,18 +1047,28 @@ export async function POST(req: NextRequest) {
                     processedPorIds.add(porId);
                 }
 
+                // Deduplicate patch payloads by purchase_order_product_id (last write wins)
+                const dedupedMap = new Map<number, Partial<PORow>>();
+                for (const p of batchUpdatePayloads) {
+                    if (p.purchase_order_product_id) {
+                        dedupedMap.set(toNum(p.purchase_order_product_id), p);
+                    }
+                }
+                const finalBatchUpdates = Array.from(dedupedMap.values());
+
                 // ✅ Step 3: Execute ATOMIC Batch Operations
-                if (batchUpdatePayloads.length > 0) {
+                if (finalBatchUpdates.length > 0) {
                     await fetchJson(`${base}/items/${POR_COLLECTION}`, {
                         method: "PATCH",
-                        body: JSON.stringify(batchUpdatePayloads)
+                        body: JSON.stringify(finalBatchUpdates)
                     });
                 }
 
-                if (deleteIds.length > 0) {
+                const uniqueDeleteIds = Array.from(new Set(deleteIds));
+                if (uniqueDeleteIds.length > 0) {
                     await fetchJson(`${base}/items/${POR_COLLECTION}`, {
                         method: "DELETE",
-                        body: JSON.stringify(deleteIds)
+                        body: JSON.stringify(uniqueDeleteIds)
                     });
                 }
             } catch (error: unknown) {
@@ -988,15 +1082,16 @@ export async function POST(req: NextRequest) {
             const allPorsForPo = await fetchPORByPOIds(base, [thePoId]);
             const draftsToClean = allPorsForPo.filter(r => (!toStr(r.receipt_no) || (toNum(r.is_reverted) === 1 && isEdit && r.receipt_no === receiptNo)) && !processedPorIds.has(toNum(r.purchase_order_product_id)));
 
+            const originalLines = lines.filter(l => toNum(l.ordered_quantity) > 0 && toNum(l.is_ExtraItem) !== 1);
             const cleanupDeletes: number[] = [];
             const cleanupPatches: Partial<PORow>[] = [];
 
             for (const dr of draftsToClean) {
                 const drId = toNum(dr.purchase_order_product_id);
-                const isExtra = !lines.some(l => toNum(l.product_id) === toNum(dr.product_id) && toNum(l.branch_id) === toNum(dr.branch_id));
+                const isExtra = !originalLines.some(l => toNum(l.product_id) === toNum(dr.product_id) && toNum(l.branch_id ?? 0) === toNum(dr.branch_id ?? 0));
 
-                if (isExtra) {
-                    // Permanently delete orphaned extra items
+                if (isExtra || (!toStr(dr.receipt_no) && toNum(dr.received_quantity) <= 0)) {
+                    // Permanently delete orphaned extra items and blank draft rows
                     cleanupDeletes.push(drId);
                 } else if (toNum(dr.received_quantity) > 0) {
                     // Reset standard items to 0 if they were previously part of a reverted receipt
@@ -1017,11 +1112,35 @@ export async function POST(req: NextRequest) {
             }
 
             try {
-                if (cleanupDeletes.length > 0) {
-                    await fetchJson(`${base}/items/${POR_COLLECTION}`, { method: "DELETE", body: JSON.stringify(cleanupDeletes) });
+                const uniqueCleanupDeletes = Array.from(new Set(cleanupDeletes));
+                if (uniqueCleanupDeletes.length > 0) {
+                    await fetchJson(`${base}/items/${POR_COLLECTION}`, { method: "DELETE", body: JSON.stringify(uniqueCleanupDeletes) });
                 }
                 if (cleanupPatches.length > 0) {
                     await fetchJson(`${base}/items/${POR_COLLECTION}`, { method: "PATCH", body: JSON.stringify(cleanupPatches) });
+                }
+
+                // Delete orphaned extra items from purchase_order_products if no receipts with quantity remain for them
+                const allDeletedPorIds = new Set([...deleteIds, ...cleanupDeletes]);
+                const remainingPors = allPorsForPo.filter(r => !allDeletedPorIds.has(toNum(r.purchase_order_product_id)));
+
+                // Proactively check ALL extra rows in purchase_order_products for this PO
+                const extraPops = lines.filter(l => toNum(l.is_ExtraItem) === 1 || toNum(l.ordered_quantity) === 0);
+                for (const exp of extraPops) {
+                    const ePid = toNum(exp.product_id);
+                    const eBid = toNum(exp.branch_id ?? 0);
+                    const hasActiveReceipt = remainingPors.some(r => 
+                        toNum(r.product_id) === ePid && 
+                        toNum(r.branch_id ?? 0) === eBid && 
+                        (Boolean(toStr(r.receipt_no)) || toNum(r.received_quantity) > 0)
+                    );
+
+                    if (!hasActiveReceipt) {
+                        const popIdToDelete = toNum(exp.purchase_order_product_id);
+                        if (popIdToDelete) {
+                            await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${popIdToDelete}`, { method: "DELETE" }).catch(() => {});
+                        }
+                    }
                 }
             } catch (err) {
                 console.error("Cleanup failed:", err);

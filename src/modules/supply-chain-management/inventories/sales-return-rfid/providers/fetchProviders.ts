@@ -260,22 +260,22 @@ export const SalesReturnProvider = {
   },
 
   // --- INTERNAL: Cached reference fetcher ---
-  _referencesCache: null as any,
+  _referencesPromise: null as Promise<any> | null,
   _referencesCacheTime: 0,
 
   async _getReferences() {
     const now = Date.now();
-    // Cache references for 30 seconds to avoid redundant calls
-    if (this._referencesCache && now - this._referencesCacheTime < 30000) {
-      return this._referencesCache;
+    if (now - this._referencesCacheTime >= 30000) {
+      this._referencesPromise = null;
     }
-    const res = await fetch(`${API_BASE}?action=references`, {
-      cache: "no-store",
-    });
-    const result = await handleResponse<any>(res);
-    this._referencesCache = result;
+    if (this._referencesPromise) {
+      return this._referencesPromise;
+    }
     this._referencesCacheTime = now;
-    return result;
+    this._referencesPromise = fetch(`${API_BASE}?action=references`, {
+      cache: "no-store",
+    }).then((res) => handleResponse<any>(res));
+    return this._referencesPromise;
   },
 
   // --- INTERNAL: Cached product catalog fetcher ---

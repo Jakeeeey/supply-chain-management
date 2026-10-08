@@ -60,11 +60,10 @@ const PurchaseOrderSummary =
  
 type RawSupplier = { id?: string | number; supplier_id?: string | number; supplier_name?: string; name?: string; payment_terms?: string; delivery_terms?: string; apBalance?: number; ap_balance?: number; supplier_type?: string; supplierType?: string };
 type RawBranch = { id?: string | number; branch_id?: string | number; branch_code?: string; branch_name?: string; branch_description?: string };
-type RawProduct = { product_id?: string | number; id?: string | number; product_name?: string; name?: string; product_code?: string; barcode?: string; sku?: string; category?: string; product_category_name?: string; product_category?: any; brand?: string; product_brand_name?: string; product_brand?: any; cost_price_unit?: number; priceA?: number; price_per_unit?: number; cost_per_unit?: number; price?: number; unit_of_measurement?: any; uom_id?: number | string; unit_id?: number | string; unit_of_measurement_count?: number; description?: string; short_description?: string; uom_name?: string; uom?: any; unit_name?: string };
+type RawProduct = { parent_id?: string | number | null; parentId?: string | number | null; product_id?: string | number; productId?: string | number; id?: string | number; product_name?: string; name?: string; product_code?: string; barcode?: string; sku?: string; category?: string; product_category_name?: string; product_category?: any; brand?: string; product_brand_name?: string; product_brand?: any; cost_price_unit?: number; priceA?: number; price_per_unit?: number; cost_per_unit?: number; price?: number; unit_of_measurement?: any; unitOfMeasurement?: any; uom_id?: number | string; unit_id?: number | string; unit_of_measurement_count?: number; unitOfMeasurementCount?: number; description?: string; short_description?: string; uom_name?: string; uom?: any; unit_name?: string };
 type RawDiscountType = { id?: string | number; discount_type?: string; name?: string; total_percent?: string | number; percent?: string | number };
 
 const BOX_UOM_ID = 11;
-const PIECE_UOM_ID = 1;
 const FALLBACK_NO_DISCOUNT_ID = "24";
 
 function normalizeSupplier(raw: RawSupplier): Supplier {
@@ -92,6 +91,7 @@ function normalizeDiscountType(raw: RawDiscountType): DiscountType {
         Number.parseFloat(String(raw?.total_percent ?? raw?.percent ?? "0")) || 0;
     return { id, name, percent };
 }
+
 
 /**
  * ✅ BOX conversion rules:
@@ -127,15 +127,16 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
 
     const baseUnitPrice = Number(raw?.cost_per_unit ?? 0);
 
-    const baseUomIdRaw = Number(
+    const baseUomId = Number(
         raw?.unit_of_measurement?.unit_id ??
             raw?.unit_of_measurement ??
+            raw?.unitOfMeasurement ??
             raw?.uom_id ??
-            raw?.unit_id
+            raw?.unit_id ??
+            BOX_UOM_ID
     );
-    const baseUomId = Number.isFinite(baseUomIdRaw) ? baseUomIdRaw : 1;
 
-    const baseUomCountRaw = Number(raw?.unit_of_measurement_count ?? 1);
+    const baseUomCountRaw = Number(raw?.unit_of_measurement_count ?? raw?.unitOfMeasurementCount ?? 1);
     const piecesPerBaseUnit = Math.max(
         1,
         Number.isFinite(baseUomCountRaw) ? baseUomCountRaw : 1
@@ -172,14 +173,18 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
         uom: String(
             raw?.unit_of_measurement?.unit_shortcut ??
                 raw?.unit_of_measurement?.unit_name ??
+                raw?.unitOfMeasurement?.unit_shortcut ??
+                raw?.unitOfMeasurement?.unit_name ??
                 raw?.uom_name ??
                 raw?.uom?.unit_name ??
                 raw?.unit_name ??
                 "BOX"
-        ).toUpperCase() || "BOX",
+        ).toUpperCase(),
         uomId: Number(
             raw?.unit_of_measurement?.unit_id ??
                 raw?.unit_of_measurement ??
+                raw?.unitOfMeasurement?.unit_id ??
+                raw?.unitOfMeasurement ??
                 raw?.uom_id ??
                 raw?.unit_id ??
                 BOX_UOM_ID
@@ -188,10 +193,14 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
             String(
                 raw?.unit_of_measurement?.unit_shortcut ??
                     raw?.unit_of_measurement?.unit_name ??
+                    raw?.unitOfMeasurement?.unit_shortcut ??
+                    raw?.unitOfMeasurement?.unit_name ??
                     "BOX"
             ).toUpperCase(),
         ],
 
+        parentId: raw?.parent_id ? String(raw.parent_id) : (raw?.parentId ? String(raw.parentId) : null),
+        uomCount: piecesPerBaseUnit,
         discountTypeId: String(fixedDiscountTypeId || ""),
     } as Product;
 }
@@ -482,7 +491,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
     const [allocations, setAllocations] = React.useState<BranchAllocation[]>([]);
 
     const [allProducts, setAllProducts] = React.useState<Product[]>([]);
-
+    const [companyCode, setCompanyCode] = React.useState<string>("");
 
     const [pickerOpen, setPickerOpen] = React.useState(false);
     const [pickerBranchId, setPickerBranchId] = React.useState<string>("");
@@ -512,7 +521,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
         return discountTypes[0]?.id ?? FALLBACK_NO_DISCOUNT_ID;
     }, [discountTypes]);
 
-    // Load suppliers + branches + discount types
+    // Load suppliers + branches + discount types + company
     React.useEffect(() => {
         let alive = true;
 
@@ -526,6 +535,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                     provider.fetchBranches(),
                     provider.fetchDiscountTypes(),
                     provider.fetchPaymentTerms(),
+                    provider.fetchCompany(),
                 ]);
 
                 if (!alive) return;
@@ -551,6 +561,10 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                 } else {
                     setPaymentTerms([]);
                     console.warn("Payment terms failed:", results[3].reason);
+                }
+
+                if (results[4].status === "fulfilled" && results[4].value?.company_code) {
+                    setCompanyCode(String(results[4].value.company_code));
                 }
             } catch (e: unknown) {
                 if (!alive) return;
@@ -590,29 +604,51 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
 
                 if (!alive) return;
 
+                const getDtId = (val: any) =>
+                    typeof val === "object" && val !== null ? String(val.id ?? val.discount_type ?? "") : String(val ?? "");
+
                 const discountByProductId = new Map<string, string>();
                 for (const row of links ?? []) {
-                     
                     const r: any = row;
                     const pid = String(r?.product_id ?? "");
-                    const dtid = String(r?.discount_type ?? "");
-                    if (pid) discountByProductId.set(pid, dtid);
+                    const dtid = getDtId(r?.discount_type);
+                    if (pid && dtid) discountByProductId.set(pid, dtid);
                 }
 
-                setAllProducts(
-                    (rawProducts ?? []).map((rp: any) => {
-                        const pid = String(rp?.product_id ?? rp?.id ?? "");
-                        const fixedDiscountTypeId =
-                            discountByProductId.get(pid) ||
-                            defaultNoDiscountId ||
-                            FALLBACK_NO_DISCOUNT_ID;
+                const mappedProducts = (rawProducts ?? []).map((rp: any) => {
+                    const pid = String(rp?.product_id ?? rp?.id ?? "");
+                    const parentId = String(rp?.parent_id ?? rp?.parentId ?? "");
+                    const rpDtId = getDtId(rp?.discount_type ?? rp?.discountTypeId);
 
-                        const np = normalizeProduct(rp, fixedDiscountTypeId);
+                    const fixedDiscountTypeId =
+                        discountByProductId.get(pid) ||
+                        (parentId ? discountByProductId.get(parentId) : "") ||
+                        (rpDtId && rpDtId !== "[object Object]" ? rpDtId : "") ||
+                        defaultNoDiscountId ||
+                        FALLBACK_NO_DISCOUNT_ID;
 
-                        return np;
-                    })
-                    .filter((np: any) => np.uomId === BOX_UOM_ID || np.uomId === PIECE_UOM_ID)
-                );
+                    const np = normalizeProduct(rp, fixedDiscountTypeId);
+
+                    return np;
+                });
+
+                // Company-specific UOM handling:
+                // MEN2-Marikina: show all available UOMs
+                // MEN2-DAGUPAN (and default): group by base product and pick highest UOM
+                if (companyCode?.trim().toUpperCase() === "MEN2-MARIKINA") {
+                    setAllProducts(mappedProducts);
+                } else {
+                    const productGroups = new Map<string, Product>();
+                    for (const np of mappedProducts) {
+                        const groupId = np.parentId || np.id;
+                        const existing = productGroups.get(groupId);
+                        if (!existing || (np.uomCount ?? 0) > (existing.uomCount ?? 0)) {
+                            productGroups.set(groupId, np);
+                        }
+                    }
+                    setAllProducts(Array.from(productGroups.values()));
+                }
+
                 setIsInvoice(false);
             } catch (e: unknown) {
                 if (!alive) return;
@@ -624,7 +660,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
         return () => {
             alive = false;
         };
-    }, [selectedSupplier?.id, defaultNoDiscountId]);
+    }, [selectedSupplier?.id, defaultNoDiscountId, companyCode]);
 
     // Sync allocations with selectedBranchIds
     React.useEffect(() => {
@@ -881,7 +917,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                         branchName: x.branchName,
                         productId: it.id,
                         qtyBoxes: it.orderQty,
-                        uomId: BOX_UOM_ID,
+                        uomId: it.uomId || BOX_UOM_ID,
                         pricePerBox: it.price,
                         pcsPerBox: it.unitsPerBox ?? 1,
                         baseUomId: it.baseUomId ?? null,

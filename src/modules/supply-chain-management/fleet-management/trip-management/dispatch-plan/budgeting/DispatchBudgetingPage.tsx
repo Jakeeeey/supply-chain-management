@@ -14,6 +14,7 @@ export default function DispatchBudgetingPage() {
     updateBudget,
     isSubmitting,
     fetchPlanBudgets,
+    fetchPlanFuelAllocation,
   } = useDispatchBudgeting();
 
   const [selectedPlanOverride, setSelectedPlanOverride] = useState<DispatchPlanSummary | null>(null);
@@ -32,14 +33,16 @@ export default function DispatchBudgetingPage() {
         <BudgetAllocationPanel
           plan={selectedPlan}
           coaOptions={masterData?.coa || []}
-          onSave={async (budgets) => {
+          onSave={async (budgets, fuelLiter) => {
             if (!selectedPlan) return;
-            await updateBudget(Number(selectedPlan.id), budgets);
+            await updateBudget(Number(selectedPlan.id), budgets, fuelLiter);
           }}
           isSubmitting={isSubmitting}
           fetchPlanBudgets={fetchPlanBudgets}
+          fetchPlanFuelAllocation={fetchPlanFuelAllocation}
         />
       </div>
     </div>
   );
 }
+

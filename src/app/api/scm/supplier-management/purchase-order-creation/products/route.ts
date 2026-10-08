@@ -112,14 +112,9 @@ export async function GET(req: NextRequest) {
             // 1.2) Fetch the full family (parent + all children)
             // Filter: (product_id is a root OR parent_id is a root) AND UOM is 11 (Box) or 1 (Piece)
             const familyFilter = {
-                _and: [
-                    {
-                        _or: [
-                            { product_id: { _in: rootIds } },
-                            { parent_id: { _in: rootIds } }
-                        ]
-                    },
-                    { unit_of_measurement: { _in: [11, 1] } } // ✅ BOX or PIECE products
+                _or: [
+                    { product_id: { _in: rootIds } },
+                    { parent_id: { _in: rootIds } }
                 ]
             };
             const productsUrl =
@@ -157,46 +152,20 @@ export async function GET(req: NextRequest) {
                 const rid = String(p?.parent_id || p?.product_id || "");
                 
                 // Inherit discount: direct match > family match
-                const dt = discountByProductId.get(pid) ?? discountByRootId.get(rid) ?? null;
+                const rawDt = discountByProductId.get(pid) ?? discountByRootId.get(rid) ?? null;
+                const dt = (typeof rawDt === "object" && rawDt !== null && "id" in (rawDt as Record<string, unknown>))
+                    ? (rawDt as Record<string, unknown>).id
+                    : rawDt;
 
                 return {
                     ...p,
                     unit_of_measurement: resolveUom(p),
-                    discount_type: dt,
+                    discount_type: dt ?? null,
                 };
             });
 
-            // ✅ Prioritize BOX (11) over PIECE (1) per family
-            const familyMap = new Map<string, Record<string, unknown>[]>();
-            for (const r of rows) {
-                const rid = String(r.parent_id || r.product_id || "");
-                if (!familyMap.has(rid)) familyMap.set(rid, []);
-                familyMap.get(rid)!.push(r);
-            }
-
-            const prioritizedRows: Record<string, unknown>[] = [];
-            for (const family of familyMap.values()) {
-                const boxProduct = family.find((p) => {
-                    const rawUom = p.unit_of_measurement;
-                    const uomObj = rawUom as Record<string, unknown>;
-                    const uomId = Number(typeof rawUom === "object" && rawUom !== null ? uomObj.unit_id ?? uomObj.id : rawUom);
-                    return uomId === 11;
-                });
-                
-                if (boxProduct) {
-                    prioritizedRows.push(boxProduct);
-                } else {
-                    const pieceProduct = family.find((p) => {
-                        const rawUom = p.unit_of_measurement;
-                        const uomObj = rawUom as Record<string, unknown>;
-                        const uomId = Number(typeof rawUom === "object" && rawUom !== null ? uomObj.unit_id ?? uomObj.id : rawUom);
-                        return uomId === 1;
-                    });
-                    if (pieceProduct) prioritizedRows.push(pieceProduct);
-                }
-            }
-
-            return NextResponse.json({ data: prioritizedRows });
+            // Return all rows; the frontend will group and pick the highest UOM variant
+            return NextResponse.json({ data: rows });
         }
 
         // 2) If ids provided: fetch products by ids

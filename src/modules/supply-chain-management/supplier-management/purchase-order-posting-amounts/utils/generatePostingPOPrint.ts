@@ -57,6 +57,7 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
         /* ── Info Grid (2 columns) ───────────────────────────────── */
         const col1x = margin;
         const col2x = pageW / 2 + 4;
+        const colWidth = (pageW / 2) - margin - 6;
 
         // Row 1: Supplier | Status
         doc.setFontSize(7);
@@ -69,7 +70,9 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0, 0, 0);
-        doc.text(po.supplier?.name || "Unknown Supplier", col1x, y);
+        const supplierName = po.supplier?.name || "Unknown Supplier";
+        const supplierLines = doc.splitTextToSize(supplierName, colWidth);
+        doc.text(supplierLines, col1x, y);
 
         const statusText = po.status || 'Unknown';
         const isReceived = statusText.toLowerCase() === 'received' || statusText.toLowerCase() === 'closed';
@@ -78,7 +81,8 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
         doc.setTextColor(isReceived ? 22 : 194, isReceived ? 163 : 120, isReceived ? 74 : 10);
         doc.text(statusText.toUpperCase(), col2x, y);
 
-        y += 8;
+        const supplierHeight = Array.isArray(supplierLines) ? supplierLines.length * 4.5 : 4.5;
+        y += Math.max(supplierHeight, 4.5) + 4;
 
         // Row 2: Date | PO Number
         doc.setFontSize(7);

@@ -51,6 +51,7 @@ export interface SalesReturn {
   receivedAt?: string;
   createdDate?: string;
   createdAt?: string;
+  isClearance?: boolean;
 }
 
 // --- BASIC ENTITIES ---
