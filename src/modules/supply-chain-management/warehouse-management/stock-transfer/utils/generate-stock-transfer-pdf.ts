@@ -258,6 +258,7 @@ export interface PicklistPDFData {
   sourceBranch?: string;
   targetBranch?: string;
   requestedDate?: string;
+  includeSalesmanCopy?: boolean;
 }
 
 export interface ReceivingPDFData {
@@ -273,12 +274,14 @@ export interface ReceivingPDFData {
 }
 
 /**
- * Generates a Picklist PDF for warehouse picking.
- * Grouped by Supplier/Brand and includes checkboxes.
+ * Renders a single picklist sheet (Picker copy or Salesman copy).
  */
-export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
+function renderSinglePicklistSheet(
+  doc: jsPDF,
+  data: PicklistPDFData,
+  copyType: 'picker' | 'salesman'
+): void {
   const { orderNo, pickerName, date, requestedDate, items, companyData, salesmanName, sourceBranch, targetBranch } = data;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
 
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -306,11 +309,47 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
     return sum + (qty * unitPrice);
   }, 0);
 
-  // ── Title & Picker Info ───────────────────────────────────────
+  // ── Title & Copy Badge ───────────────────────────────────────
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text(orderNo.toUpperCase(), margin, y);
+
+  const orderNoWidth = doc.getTextWidth(orderNo.toUpperCase());
+  const grandTotalStr = `GRAND TOTAL: PHP ${grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+  doc.setFontSize(11);
+  const grandTotalWidth = doc.getTextWidth(grandTotalStr);
+  const availableWidthForBadge = pageW - margin * 2 - grandTotalWidth - 12;
+
+  if (copyType === 'salesman') {
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(180, 83, 9); // Amber-700
+    const badgeText = '[ SALESMAN COPY ]';
+    const badgeWidth = doc.getTextWidth(badgeText);
+
+    if (orderNoWidth + badgeWidth + 4 < availableWidthForBadge) {
+      doc.text(badgeText, margin + orderNoWidth + 4, y);
+    } else {
+      doc.text(badgeText, margin, y + 4.5);
+      y += 4.5;
+    }
+    doc.setTextColor(0, 0, 0);
+  } else if (data.includeSalesmanCopy) {
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(100, 100, 100);
+    const badgeText = '[ PICKER COPY ]';
+    const badgeWidth = doc.getTextWidth(badgeText);
+
+    if (orderNoWidth + badgeWidth + 4 < availableWidthForBadge) {
+      doc.text(badgeText, margin + orderNoWidth + 4, y);
+    } else {
+      doc.text(badgeText, margin, y + 4.5);
+      y += 4.5;
+    }
+    doc.setTextColor(0, 0, 0);
+  }
   
   // Grand Total on Top Right
   doc.setFontSize(11);
@@ -336,7 +375,7 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
   y += 5;
 
   if (salesmanName) {
-    doc.setTextColor(0, 0, 0); // Changed from blue to black
+    doc.setTextColor(0, 0, 0);
     doc.text(`Salesman: ${salesmanName.toUpperCase()}`, margin, y);
     y += 5;
   }
@@ -344,7 +383,7 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
   // Branch Info
   if (sourceBranch || targetBranch) {
     doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal'); // Changed from bold to normal
+    doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 100, 100);
     const branchText = `Source: ${sourceBranch || 'N/A'}   |   Target: ${targetBranch || 'N/A'}`;
     doc.text(branchText, margin, y);
@@ -526,24 +565,60 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
   const sigY = Math.max(y + 16, pageH - 40);
   const sigW = (contentW - 40) / 2;
 
-  // Picker Confirmation
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.4);
-  doc.line(margin, sigY, margin + sigW, sigY);
-  
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.text(pickerName.toUpperCase(), margin, sigY - 2);
-  
-  doc.setFontSize(7);
-  doc.text('PICKER CONFIRMATION', margin, sigY + 5);
 
-  // Verification Officer
-  doc.line(pageW - margin - sigW, sigY, pageW - margin, sigY);
-  doc.text('VERIFICATION OFFICER', pageW - margin, sigY + 5, { align: 'right' });
+  if (copyType === 'salesman') {
+    // Salesman Acknowledgment
+    doc.line(margin, sigY, margin + sigW, sigY);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text((salesmanName || '').toUpperCase(), margin, sigY - 2);
+    doc.setFontSize(7);
+    doc.text('SALESMAN ACKNOWLEDGMENT', margin, sigY + 5);
+
+    // Dispatched By / Warehouse In-charge
+    doc.line(pageW - margin - sigW, sigY, pageW - margin, sigY);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DISPATCHED BY / WAREHOUSE IN-CHARGE', pageW - margin, sigY + 5, { align: 'right' });
+  } else {
+    // Picker Confirmation
+    doc.line(margin, sigY, margin + sigW, sigY);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text(pickerName.toUpperCase(), margin, sigY - 2);
+    doc.setFontSize(7);
+    doc.text('PICKER CONFIRMATION', margin, sigY + 5);
+
+    // Verification Officer
+    doc.line(pageW - margin - sigW, sigY, pageW - margin, sigY);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.text('VERIFICATION OFFICER', pageW - margin, sigY + 5, { align: 'right' });
+  }
+}
+
+/**
+ * Generates a Picklist PDF for warehouse picking.
+ * Grouped by Supplier/Brand and includes checkboxes.
+ * If includeSalesmanCopy is true, renders an additional "Salesman Copy" on the next page.
+ */
+export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
+
+  // 1. Render Picker Copy
+  renderSinglePicklistSheet(doc, data, 'picker');
+
+  // 2. Render Salesman Copy on next page if enabled
+  if (data.includeSalesmanCopy) {
+    doc.addPage();
+    renderSinglePicklistSheet(doc, data, 'salesman');
+  }
 
   return doc;
 }
+
 
 /**
  * Generates a Receiving Checklist PDF.
