@@ -403,40 +403,6 @@ export function UpdateSalesReturnModal({
     }
   }, [returnId, headerData.returnNo, headerData.customerCode, headerData.salesmanId]);
 
-  // 🟢 NEW: Effect to automatically update prices when Price Type changes
-  useEffect(() => {
-    if (details.length > 0) {
-      setDetails((prevDetails) =>
-        prevDetails.map((item) => {
-          const key = `price${headerData.priceType}` as string;
-          const basePrice = Number(item[key as keyof SalesReturnItem]) || Number(item.priceA) || Number(item.unitPrice) || 0;
-
-          const newUnitPrice = basePrice;
-
-          const newGross = Math.round(Number(item.quantity) * newUnitPrice * 100) / 100;
-          let newDiscountAmt = 0;
-
-          if (item.discountType && item.discountType !== "No Discount") {
-            const selectedOption = discountOptions.find(
-              (d) => d.id.toString() === item.discountType?.toString(),
-            );
-            if (selectedOption) {
-              const percentage = parseFloat(selectedOption.total_percent) || 0;
-              newDiscountAmt = Math.round(newGross * (percentage / 100) * 100) / 100;
-            }
-          }
-
-          return {
-            ...item,
-            unitPrice: newUnitPrice,
-            grossAmount: newGross,
-            discountAmount: newDiscountAmt,
-            totalAmount: Math.round((newGross - newDiscountAmt) * 100) / 100,
-          };
-        })
-      );
-    }
-  }, [headerData.priceType, discountOptions, details.length]);
 
   // Click outside handler for order/invoice dropdowns
   useEffect(() => {
