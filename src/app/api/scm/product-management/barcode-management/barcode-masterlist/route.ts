@@ -35,20 +35,18 @@ async function fetchDirectus(endpoint: string, params: Record<string, string>) {
   return json.data;
 }
 
-async function updateDirectus(id: string, body: Record<string, unknown>) {
-  const res = await fetch(`${DIRECTUS_URL}/items/products/${id}`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${ACCESS_TOKEN}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error?.message || "Update Failed");
-  return json.data;
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    let b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    return JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
+  } catch {
+    return null;
+  }
 }
+
 
 export async function GET(req: NextRequest) {
   if (!DIRECTUS_URL) return json({ error: "Missing Base URL" }, 500);
@@ -60,6 +58,22 @@ export async function GET(req: NextRequest) {
     // ---------------------------------------------------------
     // 1. REFERENCE DATA (Strict Checks)
     // ---------------------------------------------------------
+    if (scope === "timezone") {
+      let tz = "Asia/Manila";
+      try {
+        const settings = (await fetchDirectus("/items/general_setting", {
+          limit: "100",
+        })) as { setting_key: string; setting_value: string }[] | undefined;
+        const tzSetting = settings?.find((s) => s.setting_key === "time_zone");
+        if (tzSetting?.setting_value) {
+          tz = tzSetting.setting_value;
+        }
+      } catch (e) {
+        console.warn("Failed to fetch timezone from general_setting, falling back to Asia/Manila", e);
+      }
+      return json({ data: tz });
+    }
+
     if (scope === "barcode_type") {
       const data = await fetchDirectus("/items/barcode_type", {
         fields: "id,name",
@@ -347,13 +361,133 @@ export async function PATCH(req: NextRequest) {
   if (!DIRECTUS_URL) return json({ error: "Missing Base URL" }, 500);
   const url = new URL(req.url);
   const id = url.searchParams.get("id");
+  const recordType = url.searchParams.get("record_type") || "product";
 
   if (!id) return json({ error: "Product ID required" }, 400);
 
   try {
     const body = await req.json();
-    const result = await updateDirectus(id, body);
-    return json({ data: result });
+
+    // Extract user ID from JWT cookie for audit trail
+    const token = req.cookies.get("vos_access_token")?.value;
+    const jwtPayload = token ? decodeJwtPayload(token) : null;
+    const userId = jwtPayload?.user_id ?? jwtPayload?.userId ?? jwtPayload?.sub ?? null;
+
+    // Inject audit fields: user_id is int in both products and product_bundles
+    if (userId) {
+      const parsedUserId = typeof userId === "string" ? parseInt(userId, 10) : typeof userId === "number" ? userId : NaN;
+      if (!Number.isNaN(parsedUserId)) {
+        body.updated_by = parsedUserId;
+      }
+    }
+
+    // Fetch timezone dynamically from database
+    let tz = "Asia/Manila";
+    try {
+      const settings = (await fetchDirectus("/items/general_setting", {
+        limit: "100",
+      })) as { setting_key: string; setting_value: string }[] | undefined;
+      const tzSetting = settings?.find((s) => s.setting_key === "time_zone");
+      if (tzSetting?.setting_value) {
+        tz = tzSetting.setting_value;
+      }
+    } catch (e) {
+      console.warn("Failed to fetch timezone from general_setting, falling back to Asia/Manila", e);
+    }
+
+    // updated_at is datetime (YYYY-MM-DD HH:mm:ss or ISO without ms)
+    body.updated_at = new Date().toLocaleString("sv-SE", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).replace(" ", "T");
+
+    // barcode_date in DDL is 'date' (YYYY-MM-DD)
+    if (body.barcode_date) {
+      body.barcode_date = body.barcode_date.split("T")[0];
+    } else {
+      const nowFormatted = new Date().toLocaleString("sv-SE", {
+        timeZone: tz,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+      body.barcode_date = nowFormatted;
+    }
+
+    // SERVER-SIDE UNIQUENESS CHECK: Query both products AND bundles for this barcode (excluding current record)
+    const barcodeToCheck = recordType === "bundle" ? body.barcode_value : body.barcode;
+    if (barcodeToCheck) {
+      // Check products table (PK is product_id)
+      const checkProductUrl = new URL(`${DIRECTUS_URL}/items/products`);
+      checkProductUrl.searchParams.append("fields", "product_id,product_name,barcode");
+      checkProductUrl.searchParams.append("filter[barcode][_eq]", barcodeToCheck);
+      checkProductUrl.searchParams.append("filter[isActive][_eq]", "1");
+      if (recordType !== "bundle") {
+        checkProductUrl.searchParams.append("filter[product_id][_neq]", id);
+      }
+      checkProductUrl.searchParams.append("limit", "1");
+
+      const checkProductRes = await fetch(checkProductUrl.toString(), {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${ACCESS_TOKEN}`,
+        },
+        cache: "no-store",
+      });
+      const checkProductData = await checkProductRes.json();
+      if (checkProductData.data && checkProductData.data.length > 0) {
+        const conflict = checkProductData.data[0];
+        return json(
+          { error: `Barcode already assigned to product: "${conflict.product_name || conflict.product_id}"` },
+          409,
+        );
+      }
+
+      // Check bundles table (PK is id)
+      const checkBundleUrl = new URL(`${DIRECTUS_URL}/items/product_bundles`);
+      checkBundleUrl.searchParams.append("fields", "id,bundle_name,barcode_value");
+      checkBundleUrl.searchParams.append("filter[barcode_value][_eq]", barcodeToCheck);
+      if (recordType === "bundle") {
+        checkBundleUrl.searchParams.append("filter[id][_neq]", id);
+      }
+      checkBundleUrl.searchParams.append("limit", "1");
+
+      const checkBundleRes = await fetch(checkBundleUrl.toString(), {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${ACCESS_TOKEN}`,
+        },
+        cache: "no-store",
+      });
+      const checkBundleData = await checkBundleRes.json();
+      if (checkBundleData.data && checkBundleData.data.length > 0) {
+        const conflict = checkBundleData.data[0];
+        return json(
+          { error: `Barcode already assigned to bundle: "${conflict.bundle_name || conflict.id}"` },
+          409,
+        );
+      }
+    }
+
+    // Determine which collection to PATCH
+    const patchCollection = recordType === "bundle" ? "product_bundles" : "products";
+    const res = await fetch(`${DIRECTUS_URL}/items/${patchCollection}/${id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${ACCESS_TOKEN}`,
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    return json(data, res.status);
   } catch (e: unknown) {
     const err = e as Error;
     return json({ error: err.message }, 500);

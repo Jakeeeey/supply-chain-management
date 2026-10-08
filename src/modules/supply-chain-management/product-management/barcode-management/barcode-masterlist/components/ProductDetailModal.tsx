@@ -30,7 +30,9 @@ import {
   Layers,
   PackageOpen,
   Loader2,
+  Pencil,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Product, Unit, Category, BundleItem, getSupplierName } from "../types";
 import { getBundleItems } from "../providers/fetchProviders";
 
@@ -38,12 +40,14 @@ interface ProductDetailModalProps {
   open: boolean;
   product: Product | null;
   onClose: () => void;
+  onEditBarcode?: (product: Product) => void;
 }
 
 export function ProductDetailModal({
   open,
   product,
   onClose,
+  onEditBarcode,
 }: ProductDetailModalProps) {
   const [bundleItems, setBundleItems] = useState<BundleItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
@@ -217,9 +221,24 @@ export function ProductDetailModal({
 
             {/* Barcode Information */}
             <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <BarcodeIcon className="h-4 w-4" /> Barcode Information
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <BarcodeIcon className="h-4 w-4" /> Barcode Information
+                </h4>
+                {onEditBarcode && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1.5"
+                    onClick={() => {
+                      onClose();
+                      onEditBarcode(product);
+                    }}
+                  >
+                    <Pencil className="h-3 w-3" /> Edit Barcode
+                  </Button>
+                )}
+              </div>
               <Card>
                 <CardContent className="p-4">
                   <div className="grid grid-cols-2 gap-4">

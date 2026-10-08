@@ -29,6 +29,7 @@ import { PrintFormatModal, openPrintTab } from "./components/PrintModal";
 // ✅ NEW: Import Detail Modal
 import { ProductDetailModal } from "./components/ProductDetailModal";
 import { BarcodeHistoryModal } from "./components/BarcodeHistoryModal";
+import { EditBarcodeModal } from "./components/EditBarcodeModal";
 import { Product } from "./types";
 import ErrorPage from "@/components/shared/ErrorPage";
 
@@ -43,6 +44,12 @@ export default function BarcodeMasterlistModule() {
     totalItems,
     recordTypeFilter,
     setRecordTypeFilter,
+    barcodeTypes,
+    weightUnits,
+    cbmUnits,
+    allBarcodes,
+    timezone,
+    handleUpdateBarcode,
     error,
     refresh,
     setSearchQuery,
@@ -70,8 +77,11 @@ export default function BarcodeMasterlistModule() {
   // History Modal State
   const [showHistory, setShowHistory] = useState(false);
 
-  // ✅ NEW: Detail Modal State
+  // Detail Modal State
   const [viewProduct, setViewProduct] = useState<Product | null>(null);
+
+  // Edit Barcode Modal State
+  const [editProduct, setEditProduct] = useState<Product | null>(null);
 
   useEffect(() => {
     setPageInput(String(currentPage));
@@ -256,8 +266,8 @@ export default function BarcodeMasterlistModule() {
         selectedIds={selectedIds}
         onToggleSelect={handleToggleSelect}
         onToggleAll={handleToggleAll}
-        // ✅ NEW: Handle Row Click
         onViewDetails={setViewProduct}
+        onEditBarcode={setEditProduct}
       />
 
       {/* PAGINATION */}
@@ -324,18 +334,49 @@ export default function BarcodeMasterlistModule() {
         count={selectedIds.length}
       />
 
-
-      {/* ✅ NEW: Detail Modal Component */}
+      {/* Detail Modal Component */}
       <ProductDetailModal
         open={!!viewProduct}
         product={viewProduct}
         onClose={() => setViewProduct(null)}
+        onEditBarcode={setEditProduct}
       />
 
       {/* History Modal */}
       <BarcodeHistoryModal
         open={showHistory}
         onClose={() => setShowHistory(false)}
+      />
+
+      {/* Edit Barcode Modal */}
+      <EditBarcodeModal
+        open={!!editProduct}
+        product={editProduct}
+        allProducts={allProducts}
+        allBarcodes={allBarcodes}
+        barcodeTypes={barcodeTypes}
+        weightUnits={weightUnits}
+        cbmUnits={cbmUnits}
+        onClose={() => setEditProduct(null)}
+        onSave={async (target, payload) => {
+          await handleUpdateBarcode(target, payload);
+          if (viewProduct && viewProduct.product_id === target.product_id) {
+            setViewProduct((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    barcode: payload.barcode,
+                    barcode_date: payload.barcode_date,
+                    weight: payload.weight !== undefined ? payload.weight : prev.weight,
+                    cbm_length: payload.cbm_length !== undefined ? payload.cbm_length : null,
+                    cbm_width: payload.cbm_width !== undefined ? payload.cbm_width : null,
+                    cbm_height: payload.cbm_height !== undefined ? payload.cbm_height : null,
+                  }
+                : null,
+            );
+          }
+        }}
+        timezone={timezone}
       />
     </div>
   );

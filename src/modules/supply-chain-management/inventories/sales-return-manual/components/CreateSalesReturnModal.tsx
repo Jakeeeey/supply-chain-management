@@ -453,11 +453,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             setCustomerSearch(data.customerName || "");
           }
 
-          // 1.5 Find and set Salesman
+          // 1.5 Find and set Salesman (Strictly by ID or Code to prevent matching wrong salesman with same name)
           const foundSalesman = salesmen.find(s =>
-            (data.salesmanId && s.id === data.salesmanId) ||
-            (data.salesmanCode && s.code === data.salesmanCode) ||
-            (data.salesmanName && s.name === data.salesmanName)
+            (data.salesmanId && (s.id === data.salesmanId || String(s.id) === String(data.salesmanId))) ||
+            (data.salesmanCode && s.code === data.salesmanCode)
           );
           if (foundSalesman) {
             handleSelectSalesman(foundSalesman);
