@@ -491,7 +491,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
     const [allocations, setAllocations] = React.useState<BranchAllocation[]>([]);
 
     const [allProducts, setAllProducts] = React.useState<Product[]>([]);
-
+    const [companyCode, setCompanyCode] = React.useState<string>("");
 
     const [pickerOpen, setPickerOpen] = React.useState(false);
     const [pickerBranchId, setPickerBranchId] = React.useState<string>("");
@@ -521,7 +521,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
         return discountTypes[0]?.id ?? FALLBACK_NO_DISCOUNT_ID;
     }, [discountTypes]);
 
-    // Load suppliers + branches + discount types
+    // Load suppliers + branches + discount types + company
     React.useEffect(() => {
         let alive = true;
 
@@ -535,6 +535,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                     provider.fetchBranches(),
                     provider.fetchDiscountTypes(),
                     provider.fetchPaymentTerms(),
+                    provider.fetchCompany(),
                 ]);
 
                 if (!alive) return;
@@ -560,6 +561,10 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                 } else {
                     setPaymentTerms([]);
                     console.warn("Payment terms failed:", results[3].reason);
+                }
+
+                if (results[4].status === "fulfilled" && results[4].value?.company_code) {
+                    setCompanyCode(String(results[4].value.company_code));
                 }
             } catch (e: unknown) {
                 if (!alive) return;
@@ -627,17 +632,23 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                     return np;
                 });
 
-                // Group by base product (parentId if exists, otherwise id)
-                const productGroups = new Map<string, Product>();
-                for (const np of mappedProducts) {
-                    const groupId = np.parentId || np.id;
-                    const existing = productGroups.get(groupId);
-                    if (!existing || (np.uomCount ?? 0) > (existing.uomCount ?? 0)) {
-                        productGroups.set(groupId, np);
+                // Company-specific UOM handling:
+                // MEN2-Marikina: show all available UOMs
+                // MEN2-DAGUPAN (and default): group by base product and pick highest UOM
+                if (companyCode?.trim().toUpperCase() === "MEN2-MARIKINA") {
+                    setAllProducts(mappedProducts);
+                } else {
+                    const productGroups = new Map<string, Product>();
+                    for (const np of mappedProducts) {
+                        const groupId = np.parentId || np.id;
+                        const existing = productGroups.get(groupId);
+                        if (!existing || (np.uomCount ?? 0) > (existing.uomCount ?? 0)) {
+                            productGroups.set(groupId, np);
+                        }
                     }
+                    setAllProducts(Array.from(productGroups.values()));
                 }
 
-                setAllProducts(Array.from(productGroups.values()));
                 setIsInvoice(false);
             } catch (e: unknown) {
                 if (!alive) return;
@@ -649,7 +660,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
         return () => {
             alive = false;
         };
-    }, [selectedSupplier?.id, defaultNoDiscountId]);
+    }, [selectedSupplier?.id, defaultNoDiscountId, companyCode]);
 
     // Sync allocations with selectedBranchIds
     React.useEffect(() => {

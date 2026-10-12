@@ -29,6 +29,7 @@ export function ProductVerificationStep({ onContinue, onBack }: { onContinue: ()
         removeExtraProductLocally,
         manualCounts,
         setManualCounts,
+        isMarikina,
     } = useReceivingProductsManual();
 
     const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
@@ -43,10 +44,22 @@ export function ProductVerificationStep({ onContinue, onBack }: { onContinue: ()
                 id: String(it.id),
                 branchName: a?.branch?.name ?? "Unassigned",
             }));
-        }).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        })
+        .filter((it) => {
+            // For MEN2-MARIKINA: hide fulfilled items (remaining == 0) unless they are active extra items
+            // For other companies: keep all items visible regardless of remaining qty
+            if (!isMarikina) return true;
+            if (it.isExtra) return true;
+            const ordered = Number(it.originalOrderedQty ?? it.expectedQty ?? 0);
+            const posted = Number(it.postedQty ?? 0);
+            const unposted = Number(it.unpostedQty ?? 0);
+            const remaining = Math.max(0, ordered - posted - unposted);
+            return remaining > 0;
+        })
+        .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
         return all;
-    }, [selectedPO]);
+    }, [selectedPO, isMarikina]);
 
     const allItems = React.useMemo(() => {
         if (!searchQuery.trim()) return flattenedAllItems;
