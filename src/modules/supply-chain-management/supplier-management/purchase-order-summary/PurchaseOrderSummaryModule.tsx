@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FilterX, ListFilter, Printer, Calendar, Search, ChevronDown, X, Package, FileText, ChevronRight, Paperclip, Download, Eye, Image as ImageIcon } from "lucide-react";
+import { FilterX, ListFilter, Printer, Calendar, Search, ChevronDown, X, Package, FileText, ChevronRight, Paperclip, Download, Eye, Image as ImageIcon, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -105,6 +105,13 @@ export default function PurchaseOrderSummaryModule({
   // Attachment Preview Modal state
   const [previewAttachment, setPreviewAttachment] = useState<ReceiptAttachment | null>(null);
   const [isAttachmentModalOpen, setIsAttachmentModalOpen] = useState(false);
+  const [imageZoom, setImageZoom] = useState(1);
+  const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const currentPosRef = useRef({ x: 0, y: 0 });
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const rafIdRef = useRef<number | null>(null);
 
   // PO Detail state (Allocations & Receipts)
   const [allocations, setAllocations] = useState<Allocation[]>([]);
@@ -1101,34 +1108,102 @@ export default function PurchaseOrderSummaryModule({
         open={isAttachmentModalOpen}
         onOpenChange={(open) => {
           setIsAttachmentModalOpen(open);
-          if (!open) setPreviewAttachment(null);
+          if (!open) {
+            setPreviewAttachment(null);
+            setImageZoom(1);
+            setPanPosition({ x: 0, y: 0 });
+            setIsDragging(false);
+          }
         }}
       >
         <DialogContent className="sm:max-w-4xl max-w-[95vw] max-h-[90vh] flex flex-col p-4 sm:p-6">
           <DialogHeader className="shrink-0 pb-3 border-b border-border">
-            <div className="flex items-center justify-between pr-6">
-              <DialogTitle className="text-sm sm:text-base font-bold flex items-center gap-2 truncate">
+            <div className="flex items-center justify-between pr-6 gap-2">
+              <DialogTitle className="text-sm sm:text-base font-bold flex items-center gap-2 truncate min-w-0">
                 <Paperclip className="w-4 h-4 text-primary shrink-0" />
                 <span className="truncate">{previewAttachment?.file_name || "Attachment Preview"}</span>
               </DialogTitle>
-              {previewAttachment && (
-                <a
-                  href={`${(process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "")}/assets/${previewAttachment.directus_file_id}?download=true`}
-                  download={previewAttachment.file_name}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0"
-                >
-                  <Button size="sm" variant="outline" className="text-xs font-semibold gap-1.5 h-8">
-                    <Download className="w-3.5 h-3.5" />
-                    Download
-                  </Button>
-                </a>
-              )}
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Image Zoom Controls (Exclusive to images, stable layout) */}
+                {previewAttachment?.mime_type?.startsWith("image/") && (
+                  <div className="flex items-center bg-muted/60 border border-border rounded-lg p-0.5 shadow-xs">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      title="Zoom Out"
+                      disabled={imageZoom <= 0.5}
+                      onClick={() => {
+                        setImageZoom((prev) => {
+                          const next = Math.max(0.5, Number((prev - 0.25).toFixed(2)));
+                          if (next === 1) setPanPosition({ x: 0, y: 0 });
+                          return next;
+                        });
+                      }}
+                    >
+                      <ZoomOut className="w-3.5 h-3.5" />
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImageZoom(1);
+                        setPanPosition({ x: 0, y: 0 });
+                      }}
+                      title="Click to reset zoom and pan"
+                      className="text-[10px] font-mono font-bold w-12 text-center py-0.5 text-foreground hover:text-primary transition-colors cursor-pointer select-none"
+                    >
+                      {Math.round(imageZoom * 100)}%
+                    </button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      title="Zoom In"
+                      disabled={imageZoom >= 3.5}
+                      onClick={() => setImageZoom((prev) => Math.min(3.5, Number((prev + 0.25).toFixed(2))))}
+                    >
+                      <ZoomIn className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className={`h-7 w-7 border-l border-border/60 ml-0.5 rounded-l-none transition-opacity ${
+                        imageZoom === 1 && panPosition.x === 0 && panPosition.y === 0
+                          ? "opacity-35 pointer-events-none text-muted-foreground"
+                          : "text-muted-foreground hover:text-primary opacity-100"
+                      }`}
+                      title="Reset Zoom & Pan"
+                      onClick={() => {
+                        setImageZoom(1);
+                        setPanPosition({ x: 0, y: 0 });
+                      }}
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </Button>
+                  </div>
+                )}
+                {previewAttachment && (
+                  <a
+                    href={`${(process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "")}/assets/${previewAttachment.directus_file_id}?download=true`}
+                    download={previewAttachment.file_name}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0"
+                  >
+                    <Button size="sm" variant="outline" className="text-xs font-semibold gap-1.5 h-8">
+                      <Download className="w-3.5 h-3.5" />
+                      Download
+                    </Button>
+                  </a>
+                )}
+              </div>
             </div>
           </DialogHeader>
 
-          <div className="flex-1 overflow-auto py-4 flex items-center justify-center min-h-[300px] max-h-[72vh] bg-muted/20 rounded-lg border border-border/60">
+          <div className="flex-1 overflow-hidden py-2 flex items-center justify-center min-h-[300px] max-h-[72vh] bg-muted/20 rounded-lg border border-border/60 relative">
             {previewAttachment && (() => {
               const fileUrl = `${(process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "")}/assets/${previewAttachment.directus_file_id}`;
               const isImg = previewAttachment.mime_type?.startsWith("image/");
@@ -1136,13 +1211,86 @@ export default function PurchaseOrderSummaryModule({
 
               if (isImg) {
                 return (
-                  <div className="relative max-h-full max-w-full flex items-center justify-center p-2">
+                  <div
+                    className={`w-full h-full min-h-[350px] max-h-[68vh] overflow-hidden flex items-center justify-center p-2 relative select-none ${
+                      isDragging ? "cursor-grabbing" : imageZoom > 1 ? "cursor-grab" : "cursor-default"
+                    }`}
+                    onMouseDown={(e) => {
+                      if (e.button !== 0) return; // only left click
+                      setIsDragging(true);
+                      dragStartRef.current = {
+                        x: e.clientX - panPosition.x,
+                        y: e.clientY - panPosition.y,
+                      };
+                      currentPosRef.current = { x: panPosition.x, y: panPosition.y };
+                    }}
+                    onMouseMove={(e) => {
+                      if (!isDragging) return;
+                      const newX = e.clientX - dragStartRef.current.x;
+                      const newY = e.clientY - dragStartRef.current.y;
+                      currentPosRef.current = { x: newX, y: newY };
+
+                      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+                      rafIdRef.current = requestAnimationFrame(() => {
+                        if (imgRef.current) {
+                          imgRef.current.style.transform = `translate3d(${newX}px, ${newY}px, 0) scale(${imageZoom})`;
+                        }
+                      });
+                    }}
+                    onMouseUp={() => {
+                      if (isDragging) {
+                        setIsDragging(false);
+                        setPanPosition(currentPosRef.current);
+                      }
+                    }}
+                    onMouseLeave={() => {
+                      if (isDragging) {
+                        setIsDragging(false);
+                        setPanPosition(currentPosRef.current);
+                      }
+                    }}
+                    onWheel={(e) => {
+                      e.preventDefault();
+                      setImageZoom((prev) => {
+                        const delta = e.deltaY < 0 ? 0.2 : -0.2;
+                        const next = Math.max(0.5, Math.min(3.5, Number((prev + delta).toFixed(2))));
+                        if (next === 1) {
+                          setPanPosition({ x: 0, y: 0 });
+                          currentPosRef.current = { x: 0, y: 0 };
+                        }
+                        return next;
+                      });
+                    }}
+                    onDoubleClick={() => {
+                      if (imageZoom !== 1) {
+                        setImageZoom(1);
+                        setPanPosition({ x: 0, y: 0 });
+                        currentPosRef.current = { x: 0, y: 0 };
+                      } else {
+                        setImageZoom(2);
+                      }
+                    }}
+                  >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
+                      ref={imgRef}
                       src={fileUrl}
                       alt={previewAttachment.file_name}
-                      className="max-h-[68vh] max-w-full object-contain rounded-md shadow-sm"
+                      draggable={false}
+                      style={{
+                        transform: `translate3d(${panPosition.x}px, ${panPosition.y}px, 0) scale(${imageZoom})`,
+                        transformOrigin: "center center",
+                        transition: isDragging ? "none" : "transform 0.12s cubic-bezier(0.16, 1, 0.3, 1)",
+                        willChange: "transform",
+                        backfaceVisibility: "hidden",
+                      }}
+                      className="max-h-[64vh] max-w-full object-contain rounded-md shadow-sm pointer-events-none select-none"
                     />
+                    <div className="absolute bottom-2 left-3 text-[9px] text-muted-foreground/60 pointer-events-none flex items-center gap-2">
+                      <span>• Drag to pan</span>
+                      <span>• Scroll to zoom</span>
+                      <span>• Double-click to toggle 100%/200%</span>
+                    </div>
                   </div>
                 );
               }
