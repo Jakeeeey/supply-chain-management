@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FilterX, ListFilter, Printer, Calendar, Search, ChevronDown, X, Package, FileText, ChevronRight } from "lucide-react";
+import { FilterX, ListFilter, Printer, Calendar, Search, ChevronDown, X, Package, FileText, ChevronRight, Paperclip, Download, Eye, Image as ImageIcon, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -59,12 +59,22 @@ interface ReceiptItem {
   expiryDate: string;
 }
 
+export interface ReceiptAttachment {
+  id: number;
+  directus_file_id: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  date_uploaded?: string;
+}
+
 interface Receipt {
   receiptNo: string;
   receiptDate: string;
   isPosted: boolean;
   statusLabel?: string;
   items: ReceiptItem[];
+  attachments?: ReceiptAttachment[];
 }
 
 interface Props {
@@ -91,6 +101,17 @@ export default function PurchaseOrderSummaryModule({
 
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  // Attachment Preview Modal state
+  const [previewAttachment, setPreviewAttachment] = useState<ReceiptAttachment | null>(null);
+  const [isAttachmentModalOpen, setIsAttachmentModalOpen] = useState(false);
+  const [imageZoom, setImageZoom] = useState(1);
+  const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const currentPosRef = useRef({ x: 0, y: 0 });
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const rafIdRef = useRef<number | null>(null);
 
   // PO Detail state (Allocations & Receipts)
   const [allocations, setAllocations] = useState<Allocation[]>([]);
@@ -828,6 +849,12 @@ export default function PurchaseOrderSummaryModule({
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-4 shrink-0">
+                                  {receipt.attachments && receipt.attachments.length > 0 && (
+                                    <Badge variant="outline" className="text-[9px] font-bold px-2 py-0.5 border-primary/30 bg-primary/10 text-primary gap-1 flex items-center">
+                                      <Paperclip className="w-2.5 h-2.5" />
+                                      {receipt.attachments.length} {receipt.attachments.length === 1 ? "file" : "files"}
+                                    </Badge>
+                                  )}
                                   <span className="text-[10px] text-muted-foreground">{receipt.receiptDate || '—'}</span>
                                   <span className="text-[10px] font-bold text-muted-foreground">{totalQty} items</span>
                                   <span className="text-[10px] font-black font-mono text-primary">₱{totalAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -836,9 +863,85 @@ export default function PurchaseOrderSummaryModule({
 
                               {/* Receipt Items Table */}
                               {isExpanded && (
-                                <div className="border-t border-border overflow-x-auto">
-                                  <Table>
-                                    <TableHeader className="bg-muted/30">
+                                <div className="border-t border-border">
+                                  {/* Attached Documents & Images */}
+                                  {receipt.attachments && receipt.attachments.length > 0 && (
+                                    <div className="p-3 bg-muted/20 border-b border-border/70">
+                                      <div className="flex items-center gap-1.5 mb-2.5">
+                                        <Paperclip className="w-3.5 h-3.5 text-primary" />
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-foreground">
+                                          Attached Documents & Images ({receipt.attachments.length})
+                                        </span>
+                                      </div>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                        {receipt.attachments.map((file) => {
+                                          const isImg = file.mime_type?.startsWith("image/");
+                                          const fileUrl = `${(process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "")}/assets/${file.directus_file_id}`;
+                                          const formattedSize = file.file_size
+                                            ? file.file_size < 1024 * 1024
+                                              ? `${(file.file_size / 1024).toFixed(1)} KB`
+                                              : `${(file.file_size / (1024 * 1024)).toFixed(2)} MB`
+                                            : "";
+
+                                          return (
+                                            <div
+                                              key={file.id || file.directus_file_id}
+                                              className="flex items-center justify-between p-2 rounded-lg border border-border bg-card/80 hover:bg-card hover:border-primary/40 transition-all text-xs"
+                                            >
+                                              <div className="flex items-center gap-2 min-w-0 pr-2">
+                                                <div className="w-7 h-7 rounded-md bg-muted flex items-center justify-center shrink-0 text-muted-foreground">
+                                                  {isImg ? <ImageIcon className="w-3.5 h-3.5 text-primary" /> : <FileText className="w-3.5 h-3.5 text-muted-foreground" />}
+                                                </div>
+                                                <div className="min-w-0">
+                                                  <p className="text-[10px] font-semibold text-foreground truncate max-w-[130px]" title={file.file_name}>
+                                                    {file.file_name}
+                                                  </p>
+                                                  <p className="text-[8px] text-muted-foreground">
+                                                    {formattedSize || file.mime_type || "Attachment"}
+                                                  </p>
+                                                </div>
+                                              </div>
+                                              <div className="flex items-center gap-1 shrink-0">
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                                  title="Preview"
+                                                  onClick={() => {
+                                                    setPreviewAttachment(file);
+                                                    setIsAttachmentModalOpen(true);
+                                                  }}
+                                                >
+                                                  <Eye className="w-3.5 h-3.5" />
+                                                </Button>
+                                                <a
+                                                  href={`${fileUrl}?download=true`}
+                                                  download={file.file_name}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                >
+                                                  <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                                    title="Download"
+                                                  >
+                                                    <Download className="w-3.5 h-3.5" />
+                                                  </Button>
+                                                </a>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <div className="overflow-x-auto">
+                                    <Table>
+                                      <TableHeader className="bg-muted/30">
                                       <TableRow className="hover:bg-transparent border-b border-border">
                                         <TableHead className="text-[9px] font-bold uppercase tracking-widest h-9 px-4">Product</TableHead>
                                         <TableHead className="text-[9px] font-bold uppercase tracking-widest px-3">Branch</TableHead>
@@ -876,7 +979,8 @@ export default function PurchaseOrderSummaryModule({
                                     </TableBody>
                                   </Table>
                                 </div>
-                              )}
+                              </div>
+                            )}
                             </div>
                           );
                         })}
@@ -995,6 +1099,239 @@ export default function PurchaseOrderSummaryModule({
               <Printer className="w-3.5 h-3.5 mb-0.5" />
               Confirm & Print
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ATTACHMENT PREVIEW MODAL */}
+      <Dialog
+        open={isAttachmentModalOpen}
+        onOpenChange={(open) => {
+          setIsAttachmentModalOpen(open);
+          if (!open) {
+            setPreviewAttachment(null);
+            setImageZoom(1);
+            setPanPosition({ x: 0, y: 0 });
+            setIsDragging(false);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-4xl max-w-[95vw] max-h-[90vh] flex flex-col p-4 sm:p-6">
+          <DialogHeader className="shrink-0 pb-3 border-b border-border">
+            <div className="flex items-center justify-between pr-6 gap-2">
+              <DialogTitle className="text-sm sm:text-base font-bold flex items-center gap-2 truncate min-w-0">
+                <Paperclip className="w-4 h-4 text-primary shrink-0" />
+                <span className="truncate">{previewAttachment?.file_name || "Attachment Preview"}</span>
+              </DialogTitle>
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Image Zoom Controls (Exclusive to images, stable layout) */}
+                {previewAttachment?.mime_type?.startsWith("image/") && (
+                  <div className="flex items-center bg-muted/60 border border-border rounded-lg p-0.5 shadow-xs">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      title="Zoom Out"
+                      disabled={imageZoom <= 0.5}
+                      onClick={() => {
+                        setImageZoom((prev) => {
+                          const next = Math.max(0.5, Number((prev - 0.25).toFixed(2)));
+                          if (next === 1) setPanPosition({ x: 0, y: 0 });
+                          return next;
+                        });
+                      }}
+                    >
+                      <ZoomOut className="w-3.5 h-3.5" />
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImageZoom(1);
+                        setPanPosition({ x: 0, y: 0 });
+                      }}
+                      title="Click to reset zoom and pan"
+                      className="text-[10px] font-mono font-bold w-12 text-center py-0.5 text-foreground hover:text-primary transition-colors cursor-pointer select-none"
+                    >
+                      {Math.round(imageZoom * 100)}%
+                    </button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      title="Zoom In"
+                      disabled={imageZoom >= 3.5}
+                      onClick={() => setImageZoom((prev) => Math.min(3.5, Number((prev + 0.25).toFixed(2))))}
+                    >
+                      <ZoomIn className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className={`h-7 w-7 border-l border-border/60 ml-0.5 rounded-l-none transition-opacity ${
+                        imageZoom === 1 && panPosition.x === 0 && panPosition.y === 0
+                          ? "opacity-35 pointer-events-none text-muted-foreground"
+                          : "text-muted-foreground hover:text-primary opacity-100"
+                      }`}
+                      title="Reset Zoom & Pan"
+                      onClick={() => {
+                        setImageZoom(1);
+                        setPanPosition({ x: 0, y: 0 });
+                      }}
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </Button>
+                  </div>
+                )}
+                {previewAttachment && (
+                  <a
+                    href={`${(process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "")}/assets/${previewAttachment.directus_file_id}?download=true`}
+                    download={previewAttachment.file_name}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0"
+                  >
+                    <Button size="sm" variant="outline" className="text-xs font-semibold gap-1.5 h-8">
+                      <Download className="w-3.5 h-3.5" />
+                      Download
+                    </Button>
+                  </a>
+                )}
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-hidden py-2 flex items-center justify-center min-h-[300px] max-h-[72vh] bg-muted/20 rounded-lg border border-border/60 relative">
+            {previewAttachment && (() => {
+              const fileUrl = `${(process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "")}/assets/${previewAttachment.directus_file_id}`;
+              const isImg = previewAttachment.mime_type?.startsWith("image/");
+              const isPdf = previewAttachment.mime_type === "application/pdf";
+
+              if (isImg) {
+                return (
+                  <div
+                    className={`w-full h-full min-h-[350px] max-h-[68vh] overflow-hidden flex items-center justify-center p-2 relative select-none ${
+                      isDragging ? "cursor-grabbing" : imageZoom > 1 ? "cursor-grab" : "cursor-default"
+                    }`}
+                    onMouseDown={(e) => {
+                      if (e.button !== 0) return; // only left click
+                      setIsDragging(true);
+                      dragStartRef.current = {
+                        x: e.clientX - panPosition.x,
+                        y: e.clientY - panPosition.y,
+                      };
+                      currentPosRef.current = { x: panPosition.x, y: panPosition.y };
+                    }}
+                    onMouseMove={(e) => {
+                      if (!isDragging) return;
+                      const newX = e.clientX - dragStartRef.current.x;
+                      const newY = e.clientY - dragStartRef.current.y;
+                      currentPosRef.current = { x: newX, y: newY };
+
+                      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+                      rafIdRef.current = requestAnimationFrame(() => {
+                        if (imgRef.current) {
+                          imgRef.current.style.transform = `translate3d(${newX}px, ${newY}px, 0) scale(${imageZoom})`;
+                        }
+                      });
+                    }}
+                    onMouseUp={() => {
+                      if (isDragging) {
+                        setIsDragging(false);
+                        setPanPosition(currentPosRef.current);
+                      }
+                    }}
+                    onMouseLeave={() => {
+                      if (isDragging) {
+                        setIsDragging(false);
+                        setPanPosition(currentPosRef.current);
+                      }
+                    }}
+                    onWheel={(e) => {
+                      e.preventDefault();
+                      setImageZoom((prev) => {
+                        const delta = e.deltaY < 0 ? 0.2 : -0.2;
+                        const next = Math.max(0.5, Math.min(3.5, Number((prev + delta).toFixed(2))));
+                        if (next === 1) {
+                          setPanPosition({ x: 0, y: 0 });
+                          currentPosRef.current = { x: 0, y: 0 };
+                        }
+                        return next;
+                      });
+                    }}
+                    onDoubleClick={() => {
+                      if (imageZoom !== 1) {
+                        setImageZoom(1);
+                        setPanPosition({ x: 0, y: 0 });
+                        currentPosRef.current = { x: 0, y: 0 };
+                      } else {
+                        setImageZoom(2);
+                      }
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      ref={imgRef}
+                      src={fileUrl}
+                      alt={previewAttachment.file_name}
+                      draggable={false}
+                      style={{
+                        transform: `translate3d(${panPosition.x}px, ${panPosition.y}px, 0) scale(${imageZoom})`,
+                        transformOrigin: "center center",
+                        transition: isDragging ? "none" : "transform 0.12s cubic-bezier(0.16, 1, 0.3, 1)",
+                        willChange: "transform",
+                        backfaceVisibility: "hidden",
+                      }}
+                      className="max-h-[64vh] max-w-full object-contain rounded-md shadow-sm pointer-events-none select-none"
+                    />
+                    <div className="absolute bottom-2 left-3 text-[9px] text-muted-foreground/60 pointer-events-none flex items-center gap-2">
+                      <span>• Drag to pan</span>
+                      <span>• Scroll to zoom</span>
+                      <span>• Double-click to toggle 100%/200%</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (isPdf) {
+                return (
+                  <iframe
+                    src={fileUrl}
+                    title={previewAttachment.file_name}
+                    className="w-full h-[68vh] rounded-md border-0"
+                  />
+                );
+              }
+
+              return (
+                <div className="flex flex-col items-center justify-center p-8 text-center space-y-3">
+                  <FileText className="w-12 h-12 text-muted-foreground/60" />
+                  <div>
+                    <p className="text-sm font-bold text-foreground">{previewAttachment.file_name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {previewAttachment.mime_type || "Unknown file type"}
+                      {previewAttachment.file_size ? ` • ${(previewAttachment.file_size / 1024).toFixed(1)} KB` : ""}
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground max-w-xs">
+                    In-browser preview is only available for images and PDF documents. You can download this file to view it.
+                  </p>
+                  <a
+                    href={`${fileUrl}?download=true`}
+                    download={previewAttachment.file_name}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button size="sm" className="gap-1.5 font-semibold text-xs">
+                      <Download className="w-3.5 h-3.5" />
+                      Download File
+                    </Button>
+                  </a>
+                </div>
+              );
+            })()}
           </div>
         </DialogContent>
       </Dialog>
