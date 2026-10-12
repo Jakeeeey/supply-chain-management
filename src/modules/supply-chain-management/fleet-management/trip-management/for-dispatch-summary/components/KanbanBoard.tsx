@@ -118,9 +118,9 @@ export function KanbanBoard({ dispatchPlanGroups, loading }: KanbanBoardProps) {
             <DispatchPlanColumnHeader group={group} />
 
             {/* Invoice Cards (grouped by customer) */}
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
               {group.invoices.length === 1 && group.invoices[0].invoiceId === "" ? (
-                <div className="flex items-center justify-center p-4 border border-dashed rounded-md bg-muted/20">
+                <div className="flex items-center justify-center p-3 border border-dashed rounded-md bg-muted/20">
                   <span className="text-xs text-muted-foreground text-center">
                     No invoices assigned to this dispatch plan.
                   </span>
