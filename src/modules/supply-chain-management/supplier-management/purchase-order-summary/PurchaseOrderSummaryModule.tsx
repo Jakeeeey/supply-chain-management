@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FilterX, ListFilter, Printer, Calendar, Search, ChevronDown, X, Package, FileText, ChevronRight } from "lucide-react";
+import { FilterX, ListFilter, Printer, Calendar, Search, ChevronDown, X, Package, FileText, ChevronRight, Paperclip, Download, Eye, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -59,12 +59,22 @@ interface ReceiptItem {
   expiryDate: string;
 }
 
+export interface ReceiptAttachment {
+  id: number;
+  directus_file_id: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  date_uploaded?: string;
+}
+
 interface Receipt {
   receiptNo: string;
   receiptDate: string;
   isPosted: boolean;
   statusLabel?: string;
   items: ReceiptItem[];
+  attachments?: ReceiptAttachment[];
 }
 
 interface Props {
@@ -91,6 +101,10 @@ export default function PurchaseOrderSummaryModule({
 
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  // Attachment Preview Modal state
+  const [previewAttachment, setPreviewAttachment] = useState<ReceiptAttachment | null>(null);
+  const [isAttachmentModalOpen, setIsAttachmentModalOpen] = useState(false);
 
   // PO Detail state (Allocations & Receipts)
   const [allocations, setAllocations] = useState<Allocation[]>([]);
@@ -828,6 +842,12 @@ export default function PurchaseOrderSummaryModule({
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-4 shrink-0">
+                                  {receipt.attachments && receipt.attachments.length > 0 && (
+                                    <Badge variant="outline" className="text-[9px] font-bold px-2 py-0.5 border-primary/30 bg-primary/10 text-primary gap-1 flex items-center">
+                                      <Paperclip className="w-2.5 h-2.5" />
+                                      {receipt.attachments.length} {receipt.attachments.length === 1 ? "file" : "files"}
+                                    </Badge>
+                                  )}
                                   <span className="text-[10px] text-muted-foreground">{receipt.receiptDate || '—'}</span>
                                   <span className="text-[10px] font-bold text-muted-foreground">{totalQty} items</span>
                                   <span className="text-[10px] font-black font-mono text-primary">₱{totalAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -836,9 +856,85 @@ export default function PurchaseOrderSummaryModule({
 
                               {/* Receipt Items Table */}
                               {isExpanded && (
-                                <div className="border-t border-border overflow-x-auto">
-                                  <Table>
-                                    <TableHeader className="bg-muted/30">
+                                <div className="border-t border-border">
+                                  {/* Attached Documents & Images */}
+                                  {receipt.attachments && receipt.attachments.length > 0 && (
+                                    <div className="p-3 bg-muted/20 border-b border-border/70">
+                                      <div className="flex items-center gap-1.5 mb-2.5">
+                                        <Paperclip className="w-3.5 h-3.5 text-primary" />
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-foreground">
+                                          Attached Documents & Images ({receipt.attachments.length})
+                                        </span>
+                                      </div>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                        {receipt.attachments.map((file) => {
+                                          const isImg = file.mime_type?.startsWith("image/");
+                                          const fileUrl = `${(process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "")}/assets/${file.directus_file_id}`;
+                                          const formattedSize = file.file_size
+                                            ? file.file_size < 1024 * 1024
+                                              ? `${(file.file_size / 1024).toFixed(1)} KB`
+                                              : `${(file.file_size / (1024 * 1024)).toFixed(2)} MB`
+                                            : "";
+
+                                          return (
+                                            <div
+                                              key={file.id || file.directus_file_id}
+                                              className="flex items-center justify-between p-2 rounded-lg border border-border bg-card/80 hover:bg-card hover:border-primary/40 transition-all text-xs"
+                                            >
+                                              <div className="flex items-center gap-2 min-w-0 pr-2">
+                                                <div className="w-7 h-7 rounded-md bg-muted flex items-center justify-center shrink-0 text-muted-foreground">
+                                                  {isImg ? <ImageIcon className="w-3.5 h-3.5 text-primary" /> : <FileText className="w-3.5 h-3.5 text-muted-foreground" />}
+                                                </div>
+                                                <div className="min-w-0">
+                                                  <p className="text-[10px] font-semibold text-foreground truncate max-w-[130px]" title={file.file_name}>
+                                                    {file.file_name}
+                                                  </p>
+                                                  <p className="text-[8px] text-muted-foreground">
+                                                    {formattedSize || file.mime_type || "Attachment"}
+                                                  </p>
+                                                </div>
+                                              </div>
+                                              <div className="flex items-center gap-1 shrink-0">
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                                  title="Preview"
+                                                  onClick={() => {
+                                                    setPreviewAttachment(file);
+                                                    setIsAttachmentModalOpen(true);
+                                                  }}
+                                                >
+                                                  <Eye className="w-3.5 h-3.5" />
+                                                </Button>
+                                                <a
+                                                  href={`${fileUrl}?download=true`}
+                                                  download={file.file_name}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                >
+                                                  <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                                    title="Download"
+                                                  >
+                                                    <Download className="w-3.5 h-3.5" />
+                                                  </Button>
+                                                </a>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <div className="overflow-x-auto">
+                                    <Table>
+                                      <TableHeader className="bg-muted/30">
                                       <TableRow className="hover:bg-transparent border-b border-border">
                                         <TableHead className="text-[9px] font-bold uppercase tracking-widest h-9 px-4">Product</TableHead>
                                         <TableHead className="text-[9px] font-bold uppercase tracking-widest px-3">Branch</TableHead>
@@ -876,7 +972,8 @@ export default function PurchaseOrderSummaryModule({
                                     </TableBody>
                                   </Table>
                                 </div>
-                              )}
+                              </div>
+                            )}
                             </div>
                           );
                         })}
@@ -995,6 +1092,98 @@ export default function PurchaseOrderSummaryModule({
               <Printer className="w-3.5 h-3.5 mb-0.5" />
               Confirm & Print
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ATTACHMENT PREVIEW MODAL */}
+      <Dialog
+        open={isAttachmentModalOpen}
+        onOpenChange={(open) => {
+          setIsAttachmentModalOpen(open);
+          if (!open) setPreviewAttachment(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-4xl max-w-[95vw] max-h-[90vh] flex flex-col p-4 sm:p-6">
+          <DialogHeader className="shrink-0 pb-3 border-b border-border">
+            <div className="flex items-center justify-between pr-6">
+              <DialogTitle className="text-sm sm:text-base font-bold flex items-center gap-2 truncate">
+                <Paperclip className="w-4 h-4 text-primary shrink-0" />
+                <span className="truncate">{previewAttachment?.file_name || "Attachment Preview"}</span>
+              </DialogTitle>
+              {previewAttachment && (
+                <a
+                  href={`${(process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "")}/assets/${previewAttachment.directus_file_id}?download=true`}
+                  download={previewAttachment.file_name}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0"
+                >
+                  <Button size="sm" variant="outline" className="text-xs font-semibold gap-1.5 h-8">
+                    <Download className="w-3.5 h-3.5" />
+                    Download
+                  </Button>
+                </a>
+              )}
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-auto py-4 flex items-center justify-center min-h-[300px] max-h-[72vh] bg-muted/20 rounded-lg border border-border/60">
+            {previewAttachment && (() => {
+              const fileUrl = `${(process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "")}/assets/${previewAttachment.directus_file_id}`;
+              const isImg = previewAttachment.mime_type?.startsWith("image/");
+              const isPdf = previewAttachment.mime_type === "application/pdf";
+
+              if (isImg) {
+                return (
+                  <div className="relative max-h-full max-w-full flex items-center justify-center p-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={fileUrl}
+                      alt={previewAttachment.file_name}
+                      className="max-h-[68vh] max-w-full object-contain rounded-md shadow-sm"
+                    />
+                  </div>
+                );
+              }
+
+              if (isPdf) {
+                return (
+                  <iframe
+                    src={fileUrl}
+                    title={previewAttachment.file_name}
+                    className="w-full h-[68vh] rounded-md border-0"
+                  />
+                );
+              }
+
+              return (
+                <div className="flex flex-col items-center justify-center p-8 text-center space-y-3">
+                  <FileText className="w-12 h-12 text-muted-foreground/60" />
+                  <div>
+                    <p className="text-sm font-bold text-foreground">{previewAttachment.file_name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {previewAttachment.mime_type || "Unknown file type"}
+                      {previewAttachment.file_size ? ` • ${(previewAttachment.file_size / 1024).toFixed(1)} KB` : ""}
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground max-w-xs">
+                    In-browser preview is only available for images and PDF documents. You can download this file to view it.
+                  </p>
+                  <a
+                    href={`${fileUrl}?download=true`}
+                    download={previewAttachment.file_name}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button size="sm" className="gap-1.5 font-semibold text-xs">
+                      <Download className="w-3.5 h-3.5" />
+                      Download File
+                    </Button>
+                  </a>
+                </div>
+              );
+            })()}
           </div>
         </DialogContent>
       </Dialog>

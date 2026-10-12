@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Paperclip, FileText, Image as ImageIcon } from "lucide-react";
 import { useReceivingProductsManual, ReceivingPOItem } from "../../providers/ReceivingProductsManualProvider";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -40,6 +40,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         setMetaDataByPorId,
         verifiedProductIds,
         editingReceiptId,
+        attachments,
     } = useReceivingProductsManual();
 
     const [clientSaveError, setClientSaveError] = React.useState("");
@@ -407,7 +408,44 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                         </div>
                     )}
 
-                    <div className="mt-4 flex flex-col md:flex-row justify-end gap-6 border-t pt-4">
+                    <div className="mt-4 flex flex-col md:flex-row justify-between gap-6 border-t pt-4">
+                        {/* Attachments Summary */}
+                        <div className="flex-1 max-w-sm space-y-2">
+                            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-700">
+                                <Paperclip className="h-3.5 w-3.5 text-indigo-600" />
+                                <span>Attached Files ({attachments?.length || 0})</span>
+                            </div>
+                            {attachments && attachments.length > 0 ? (
+                                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                                    {attachments.map((att, idx) => (
+                                        <div
+                                            key={`${att.directus_file_id}-${idx}`}
+                                            className="flex items-center gap-2 p-1.5 rounded bg-slate-50 border border-slate-200 text-xs"
+                                        >
+                                            {att.mime_type?.startsWith("image/") ? (
+                                                <ImageIcon className="h-3.5 w-3.5 text-sky-500 shrink-0" />
+                                            ) : (
+                                                <FileText className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                            )}
+                                            <span className="truncate text-[11px] font-medium text-slate-700" title={att.file_name}>
+                                                {att.file_name}
+                                            </span>
+                                            {att.file_size ? (
+                                                <span className="text-[10px] text-muted-foreground ml-auto shrink-0">
+                                                    {(att.file_size / 1024).toFixed(0)} KB
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-[11px] text-muted-foreground italic">
+                                    No attachments included with this receipt.
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Financials Summary */}
                         <div className="flex-1 max-w-sm ml-auto space-y-2 text-sm">
                             <div className="flex justify-between items-center text-slate-600">
                                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Gross Amount:</span>
