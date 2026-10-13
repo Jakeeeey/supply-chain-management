@@ -11,7 +11,19 @@ import { getLiteralPHTTime } from "@/modules/supply-chain-management/product-man
  */
 export const skuLifecycleService = {
   async submitMasterEdit(id: number | string, editedFields: Partial<SKU>): Promise<SKU> {
-    const { units = [], ...baseData } = editedFields;
+    const { units = [], ...rawBaseData } = editedFields as Partial<SKU> & Record<string, unknown>;
+    // Strip primary keys and metadata from editedFields so they never overwrite draft IDs
+    const baseData = { ...rawBaseData };
+    delete baseData.id;
+    delete baseData.product_id;
+    delete baseData.created_at;
+    delete baseData.updated_at;
+    delete baseData.created_by;
+    delete baseData.updated_by;
+    delete baseData.date_created;
+    delete baseData.date_updated;
+    delete baseData.user_created;
+    delete baseData.user_updated;
     const nowPHT = getLiteralPHTTime();
 
     // 1. Fetch the current master product to get all existing fields
@@ -91,7 +103,7 @@ export const skuLifecycleService = {
       ? (masterData.units.find((u) => Number(u.id) === Number(units[0].unit_id))?.name || null)
       : null;
 
-    // 4. Merge parent unit fields
+    // 4. Merge parent unit fields (strictly omitting any product_id or id)
     const parentPayload = {
       ...baseFields,
       ...baseData,
@@ -101,6 +113,9 @@ export const skuLifecycleService = {
       created_at: nowPHT,
       last_updated: nowPHT,
     } as Record<string, unknown>;
+
+    delete parentPayload.id;
+    delete parentPayload.product_id;
 
     if (units.length > 0) {
       const u = units[0];
@@ -116,12 +131,20 @@ export const skuLifecycleService = {
     }
 
     // 5. Create or update the parent draft record
+    // Look up pending edit draft by remarks (MASTER_EDIT:<id>) with status FOR_APPROVAL,
+    // or fallback to product_code if available and parent_id is null.
+    const parentFilterConditions: Record<string, unknown>[] = [
+      { remarks: { _eq: `MASTER_EDIT:${id}` } },
+      { parent_id: { _null: true } },
+      { status: { _eq: "FOR_APPROVAL" } },
+    ];
+    if (codes[0]) {
+      parentFilterConditions.push({ product_code: { _eq: codes[0] } });
+    }
+
     const { data: existingDrafts } = await fetchItems<SKU>("/items/product_draft", {
       filter: JSON.stringify({
-        _and: [
-          { product_code: { _eq: codes[0] } },
-          { parent_id: { _null: true } }
-        ]
+        _or: parentFilterConditions,
       }),
       limit: 1,
     });
@@ -248,21 +271,42 @@ export const skuLifecycleService = {
             date_added: nowPHT,
             created_at: nowPHT,
             last_updated: nowPHT,
-          };
+          } as Record<string, unknown>;
+
+          delete childDraftPayload.id;
+          delete childDraftPayload.product_id;
 
           // Check if child draft already exists
           let childDraftId: number | string | undefined = undefined;
-          const { data: existingChildren } = await fetchItems<SKU>("/items/product_draft", {
-            filter: JSON.stringify({
+          const childFilterOr: Record<string, unknown>[] = [];
+          if (childMasterId) {
+            childFilterOr.push({
+              _and: [
+                { remarks: { _eq: `MASTER_EDIT:${childMasterId}` } },
+                { parent_id: { _eq: draftId } },
+                { status: { _eq: "FOR_APPROVAL" } },
+              ],
+            });
+          }
+          if (childCode) {
+            childFilterOr.push({
               _and: [
                 { product_code: { _eq: childCode } },
-                { parent_id: { _eq: draftId } }
-              ]
-            }),
-            limit: 1,
-          });
-          if (existingChildren && existingChildren.length > 0) {
-            childDraftId = existingChildren[0].id || existingChildren[0].product_id;
+                { parent_id: { _eq: draftId } },
+              ],
+            });
+          }
+
+          if (childFilterOr.length > 0) {
+            const { data: existingChildren } = await fetchItems<SKU>("/items/product_draft", {
+              filter: JSON.stringify({
+                _or: childFilterOr,
+              }),
+              limit: 1,
+            });
+            if (existingChildren && existingChildren.length > 0) {
+              childDraftId = existingChildren[0].id || existingChildren[0].product_id;
+            }
           }
 
           let childDraft: SKU;

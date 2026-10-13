@@ -375,3 +375,28 @@ export async function insertStockTransferAttachments(
   await createItems("items/stock_transfer_attachment", entries);
 }
 
+/**
+ * Fetches a general setting by setting_key from Directus general_setting collection.
+ */
+export interface GeneralSettingRow {
+  id: number;
+  setting_key: string;
+  setting_value: string;
+}
+
+export async function fetchGeneralSetting(settingKey: string): Promise<string | null> {
+  try {
+    const res = await fetchItems<GeneralSettingRow>("items/general_setting", {
+      "filter[setting_key][_eq]": settingKey,
+      limit: 1,
+    });
+    if (res.data && res.data.length > 0) {
+      return res.data[0].setting_value;
+    }
+    return null;
+  } catch (error) {
+    console.error(`[Stock Transfer Repo] Failed to fetch general setting '${settingKey}':`, error);
+    return null;
+  }
+}
+

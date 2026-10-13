@@ -10,17 +10,17 @@ interface DispatchPlanColumnHeaderProps {
 
 export function DispatchPlanColumnHeader({ group }: DispatchPlanColumnHeaderProps) {
   return (
-    <div className="flex flex-col gap-2 rounded-md bg-foreground px-4 py-3 text-background">
+    <div className="flex flex-col gap-1.5 rounded-md bg-foreground px-3 py-2 text-background">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold tracking-wide">
+        <span className="text-xs font-semibold tracking-wide">
           {group.dispatchDocNo || "Unknown Plan"}
         </span>
-        <Badge variant="secondary" className="px-1.5 py-0 h-5 text-[10px] text-foreground bg-background">
+        <Badge variant="secondary" className="px-1.5 py-0 h-4 text-[9px] text-foreground bg-background">
           {group.invoices.length} {group.invoices.length === 1 ? "ORDER" : "ORDERS"}
         </Badge>
       </div>
 
-      <div className="flex flex-col gap-1 mt-1">
+      <div className="flex flex-col gap-0.5">
         <div className="flex items-center gap-1.5 text-background/80">
           <CalendarClock className="h-3 w-3 shrink-0" />
           <span className="text-[10px] uppercase tracking-wide">

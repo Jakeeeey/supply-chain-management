@@ -236,7 +236,29 @@ export async function POST(req: NextRequest) {
                 if (toNum(row.is_posted_amounts) !== 1) receipt.isPostedAmounts = false;
             }
 
-            // Assign status labels after grouping
+            // 3. Fetch Attachments for this PO
+            const attachmentsMap = new Map<string, Array<{ id: number; directus_file_id: string; file_name: string; file_size: number; mime_type: string; date_uploaded: string }>>();
+            try {
+                const attUrl = `${base}/items/purchase_order_receiving_attachment?limit=-1&filter[purchase_order_id][_eq]=${poId}&fields=id,purchase_order_id,receipt_no,directus_file_id,file_name,file_size,mime_type,date_uploaded`;
+                const attJson = await fetchJson<{ data: Array<{ id: number; receipt_no: string; directus_file_id: string; file_name: string; file_size: number; mime_type: string; date_uploaded: string }> }>(attUrl);
+                for (const att of (attJson?.data || [])) {
+                    const rno = toStr(att.receipt_no);
+                    const list = attachmentsMap.get(rno) || [];
+                    list.push({
+                        id: toNum(att.id),
+                        directus_file_id: toStr(att.directus_file_id),
+                        file_name: toStr(att.file_name, "Document"),
+                        file_size: toNum(att.file_size),
+                        mime_type: toStr(att.mime_type),
+                        date_uploaded: toStr(att.date_uploaded)
+                    });
+                    attachmentsMap.set(rno, list);
+                }
+            } catch (attErr) {
+                console.warn("Failed to fetch attachments for PO Summary:", attErr);
+            }
+
+            // Assign status labels and attachments after grouping
             for (const r of Array.from(receiptMap.values())) {
                 if (!r.isPosted) {
                     r.statusLabel = "UNPOSTED"; // Warehouse hasn't posted
@@ -247,7 +269,12 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            const receipts = Array.from(receiptMap.values()).sort((a, b) => b.receiptNo.localeCompare(a.receiptNo));
+            const receipts = Array.from(receiptMap.values())
+                .map(r => ({
+                    ...r,
+                    attachments: attachmentsMap.get(r.receiptNo) || []
+                }))
+                .sort((a, b) => b.receiptNo.localeCompare(a.receiptNo));
 
             return NextResponse.json({ data: { allocations, receipts } });
         }

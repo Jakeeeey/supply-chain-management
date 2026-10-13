@@ -23,6 +23,7 @@ interface StockTransferPicklistPreviewProps {
   sourceBranch?: string;
   targetBranch?: string;
   requestedDate?: string;
+  includeSalesmanCopy?: boolean;
 }
 
 export function StockTransferPicklistPreview({
@@ -35,31 +36,46 @@ export function StockTransferPicklistPreview({
   sourceBranch,
   targetBranch,
   requestedDate,
+  includeSalesmanCopy: propIncludeSalesmanCopy,
 }: StockTransferPicklistPreviewProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [generating, setGenerating] = useState(open);
   const [companyData, setCompanyData] = useState<CompanyData | null>(null);
+  const [includeSalesmanCopy, setIncludeSalesmanCopy] = useState<boolean>(propIncludeSalesmanCopy ?? false);
 
   useEffect(() => {
     setGenerating(open);
   }, [open]);
 
-  // Fetch company data on mount
+  // Fetch company data and general settings on mount and when modal opens
   useEffect(() => {
-    const fetchCompany = async () => {
+    if (!open) return;
+
+    const fetchCompanyAndSettings = async () => {
       try {
-        const res = await fetch('/api/pdf/company');
-        if (res.ok) {
-          const result = await res.json();
+        const [companyRes, settingsRes] = await Promise.all([
+          fetch('/api/pdf/company'),
+          fetch('/api/scm/warehouse-management/stock-transfer?action=settings'),
+        ]);
+
+        if (companyRes.ok) {
+          const result = await companyRes.json();
           const company = result.data?.[0] || (Array.isArray(result.data) ? null : result.data);
           setCompanyData(company);
         }
+
+        if (settingsRes.ok) {
+          const settings = await settingsRes.json();
+          if (propIncludeSalesmanCopy === undefined) {
+            setIncludeSalesmanCopy(Boolean(settings?.stock_transfer_picklist_printable_salesman));
+          }
+        }
       } catch (err) {
-        console.error('Error fetching company data:', err);
+        console.error('Error fetching company or settings data:', err);
       }
     };
-    fetchCompany();
-  }, []);
+    fetchCompanyAndSettings();
+  }, [open, propIncludeSalesmanCopy]);
 
   useEffect(() => {
     if (!open) return;
@@ -75,6 +91,7 @@ export function StockTransferPicklistPreview({
         salesmanName,
         sourceBranch,
         targetBranch,
+        includeSalesmanCopy,
       });
 
       const blob = doc.output('blob');
@@ -84,7 +101,7 @@ export function StockTransferPicklistPreview({
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [open, orderNo, pickerName, items, companyData, salesmanName, sourceBranch, targetBranch, requestedDate]);
+  }, [open, orderNo, pickerName, items, companyData, salesmanName, sourceBranch, targetBranch, requestedDate, includeSalesmanCopy]);
 
   const handleClose = useCallback(() => {
     if (pdfUrl) {
@@ -105,13 +122,14 @@ export function StockTransferPicklistPreview({
       salesmanName,
       sourceBranch,
       targetBranch,
+      includeSalesmanCopy,
     });
     doc.autoPrint();
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  }, [orderNo, pickerName, items, companyData, salesmanName, sourceBranch, targetBranch, requestedDate]);
+  }, [orderNo, pickerName, items, companyData, salesmanName, sourceBranch, targetBranch, requestedDate, includeSalesmanCopy]);
 
   const handleSave = useCallback(() => {
     const doc = generateStockTransferPicklistPDF({
@@ -124,10 +142,11 @@ export function StockTransferPicklistPreview({
       salesmanName,
       sourceBranch,
       targetBranch,
+      includeSalesmanCopy,
     });
     const filename = `PICKLIST-${orderNo || 'UNSAVED'}.pdf`;
     doc.save(filename);
-  }, [orderNo, pickerName, items, companyData, salesmanName, sourceBranch, targetBranch, requestedDate]);
+  }, [orderNo, pickerName, items, companyData, salesmanName, sourceBranch, targetBranch, requestedDate, includeSalesmanCopy]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
