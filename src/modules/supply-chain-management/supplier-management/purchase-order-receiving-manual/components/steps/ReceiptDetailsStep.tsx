@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Pencil, XCircle, AlertCircle } from "lucide-react";
+import { Pencil, XCircle, AlertCircle, Paperclip, UploadCloud, Trash2, FileText, Image as ImageIcon, Loader2 } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -18,6 +18,11 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useReceivingProductsManual } from "../../providers/ReceivingProductsManualProvider";
+import { AttachmentItem } from "../../types";
+
+const MAX_ATTACHMENTS = 20;
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+const UPLOAD_API_URL = "/api/scm/supplier-management/purchase-order-receiving-manual/upload";
 
 
 
@@ -43,7 +48,83 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
         loadReceipt,
         editingReceiptId,
         clearEditingReceiptId,
+        attachments,
+        setAttachments,
     } = useReceivingProductsManual();
+
+    const [isUploading, setIsUploading] = React.useState(false);
+    const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+
+        // Reset input immediately so same file can be selected again if needed
+        if (fileInputRef.current) fileInputRef.current.value = "";
+
+        const currentCount = attachments.length;
+        if (currentCount + files.length > MAX_ATTACHMENTS) {
+            toast.error("Upload limit reached", {
+                description: `You can upload a maximum of ${MAX_ATTACHMENTS} attachments. Current: ${currentCount}.`
+            });
+            return;
+        }
+
+        setIsUploading(true);
+        let successCount = 0;
+
+        for (const file of files) {
+            if (file.size > MAX_FILE_SIZE) {
+                toast.error(`File too large: ${file.name}`, {
+                    description: `Maximum file size allowed is 20MB (${(file.size / (1024 * 1024)).toFixed(1)}MB).`
+                });
+                continue;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append("file", file);
+
+                const res = await fetch(UPLOAD_API_URL, {
+                    method: "POST",
+                    body: formData,
+                });
+
+                const json = await res.json().catch(() => ({}));
+
+                if (!res.ok) {
+                    toast.error(`Failed to upload ${file.name}`, {
+                        description: json.error || `Server error: ${res.status}`
+                    });
+                    continue;
+                }
+
+                const uploadedData = json.data;
+                const newAttachment: AttachmentItem = {
+                    directus_file_id: uploadedData.id,
+                    file_name: uploadedData.filename_download || file.name,
+                    file_size: uploadedData.filesize || file.size,
+                    mime_type: uploadedData.type || file.type,
+                };
+
+                setAttachments((prev) => [...prev, newAttachment]);
+                successCount++;
+            } catch (err: unknown) {
+                toast.error(`Error uploading ${file.name}`, {
+                    description: (err as Error).message
+                });
+            }
+        }
+
+        setIsUploading(false);
+        if (successCount > 0) {
+            toast.success(`Successfully uploaded ${successCount} ${successCount === 1 ? "file" : "files"}.`);
+        }
+    };
+
+    const handleRemoveAttachment = (indexToRemove: number) => {
+        setAttachments((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+    };
 
     const [receiptNoDupError, setReceiptNoDupError] = React.useState<string | null>(null);
     const [checkingDup, setCheckingDup] = React.useState(false);
@@ -326,7 +407,97 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                         />
                     </div>
 
-                    <Button type="button" className="w-full" onClick={handleContinue} disabled={!!receiptNoDupError || checkingDup}>
+                    {/* ✅ Attachments Upload Section */}
+                    <div className="grid gap-2 pt-2 border-t border-border">
+                        <div className="flex items-center justify-between">
+                            <Label className="flex items-center gap-1.5 font-semibold text-xs">
+                                <Paperclip className="h-3.5 w-3.5 text-primary" />
+                                <span>Receipt Attachments</span>
+                                <span className="text-[10px] text-muted-foreground font-normal">
+                                    ({attachments.length}/{MAX_ATTACHMENTS})
+                                </span>
+                            </Label>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                multiple
+                                accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                className="hidden"
+                                onChange={handleFileUpload}
+                                disabled={isUploading || attachments.length >= MAX_ATTACHMENTS}
+                            />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs gap-1"
+                                disabled={isUploading || attachments.length >= MAX_ATTACHMENTS}
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                {isUploading ? (
+                                    <>
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                        <span>Uploading...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <UploadCloud className="h-3.5 w-3.5" />
+                                        <span>Add Files</span>
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+
+                        <p className="text-[11px] text-muted-foreground">
+                            Attach delivery receipts, invoices, or images (max 20MB per file, up to 20 files).
+                        </p>
+
+                        {/* Staged / Existing attachments list */}
+                        {attachments.length > 0 && (
+                            <div className="mt-1 space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                {attachments.map((att, idx) => {
+                                    const isImg = att.mime_type?.startsWith("image/");
+                                    const sizeKb = att.file_size ? (att.file_size / 1024).toFixed(0) + " KB" : "";
+                                    return (
+                                        <div
+                                            key={`${att.directus_file_id}-${idx}`}
+                                            className="flex items-center justify-between gap-2 p-2 rounded-md bg-muted/40 border border-border/60 text-xs"
+                                        >
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                {isImg ? (
+                                                    <ImageIcon className="h-4 w-4 text-sky-500 shrink-0" />
+                                                ) : (
+                                                    <FileText className="h-4 w-4 text-amber-500 shrink-0" />
+                                                )}
+                                                <div className="flex flex-col min-w-0">
+                                                    <span className="truncate font-medium text-foreground text-[11px]" title={att.file_name}>
+                                                        {att.file_name}
+                                                    </span>
+                                                    {sizeKb && (
+                                                        <span className="text-[10px] text-muted-foreground">
+                                                            {sizeKb}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                                                onClick={() => handleRemoveAttachment(idx)}
+                                                title="Remove attachment"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    <Button type="button" className="w-full mt-2" onClick={handleContinue} disabled={!!receiptNoDupError || checkingDup || isUploading}>
                         Continue Product Verification
                     </Button>
                 </div>
