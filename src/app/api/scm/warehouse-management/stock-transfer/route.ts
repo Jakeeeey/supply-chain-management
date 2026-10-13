@@ -39,6 +39,19 @@ export async function GET(request: NextRequest) {
   const token = request.cookies.get("vos_access_token")?.value;
 
   try {
+    // 0. General Settings Lookup
+    if (action === "settings") {
+      const key = searchParams.get("key");
+      if (key) {
+        const val = await repo.fetchGeneralSetting(key);
+        return NextResponse.json({ [key]: val });
+      }
+      const salesmanPrintableVal = await repo.fetchGeneralSetting("stock_transfer_picklist_printable_salesman");
+      return NextResponse.json({
+        stock_transfer_picklist_printable_salesman: salesmanPrintableVal?.trim() === "1",
+      });
+    }
+
     // 1. RFID Lookup
     if (action === "lookup_rfid" && rfid) {
       const cacheKey = `rfid:${rfid}:${branchId || ""}`;

@@ -50,30 +50,31 @@ export function InvoiceCard({ group }: InvoiceCardProps) {
     <Card className="gap-0 rounded-md border border-border py-0">
       <Accordion type="single" collapsible className="w-full">
         <AccordionItem value="item-1" className="border-b-0">
-          {/* Main Details (Always Visible) */}
-          <AccordionTrigger className="px-4 py-3 hover:no-underline [&[data-state=open]>div>svg]:rotate-180">
-            <div className="flex w-full flex-col gap-2 text-left">
-              {/* Customer Name */}
-              <div className="mt-1">
-                <p className="text-xs font-semibold text-foreground break-words whitespace-normal leading-tight">
-                  {group.customerName}
-                </p>
-              </div>
+          {/* Main Details (Always Visible - Compact 2-Row Layout) */}
+          <AccordionTrigger className="px-3 py-2 hover:no-underline [&[data-state=open]>svg]:rotate-180">
+            <div className="flex w-full flex-col gap-1 text-left">
+              {/* Row 1: Customer Name */}
+              <p
+                className="text-xs font-semibold text-foreground line-clamp-1 leading-snug"
+                title={group.customerName}
+              >
+                {group.customerName}
+              </p>
 
-              {/* Sequence + Invoice Count */}
-              <div className="flex items-center justify-between mt-1">
-                <div className="flex items-center gap-2">
+              {/* Row 2: Sequence and Invoices Count */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <Badge
                     variant="secondary"
-                    className="rounded-sm px-1.5 py-0.5 text-[10px] font-semibold"
+                    className="rounded-sm px-1.5 py-0 h-4 text-[10px] font-semibold"
                   >
                     {group.sequence}
                   </Badge>
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
-                    Sequence
+                    Seq
                   </span>
                 </div>
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal">
                   {invoiceCount} {invoiceCount === 1 ? "Invoice" : "Invoices"}
                 </Badge>
               </div>

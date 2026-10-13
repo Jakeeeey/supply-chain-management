@@ -70,3 +70,13 @@ export type ReceivedLine = {
     receivedNowQty: number; // qty received during this session
     rfids: string[];
 };
+
+export type AttachmentItem = {
+    id?: number;
+    directus_file_id: string;
+    file_name: string;
+    file_size?: number;
+    mime_type?: string;
+    date_uploaded?: string;
+};
+

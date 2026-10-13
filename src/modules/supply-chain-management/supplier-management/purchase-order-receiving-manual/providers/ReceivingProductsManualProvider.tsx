@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { AttachmentItem } from "../types";
 
 type POStatus = "OPEN" | "PARTIAL" | "CLOSED";
 
@@ -96,6 +97,7 @@ export type ReceivingPODetail = {
     priceType?: string;
     isInvoice?: boolean;
     draftData?: DraftDataItem[];
+    draftAttachments?: AttachmentItem[];
 };
 
 export type SavedItem = {
@@ -155,6 +157,10 @@ type Ctx = {
     setReceiptType: (v: string) => void;
     receiptDate: string;
     setReceiptDate: (v: string) => void;
+
+    // attachments
+    attachments: AttachmentItem[];
+    setAttachments: React.Dispatch<React.SetStateAction<AttachmentItem[]>>;
 
     receiptTypes: ReceiptTypeOption[];
 
@@ -232,6 +238,7 @@ type DraftState = {
     receiptType: string;
     receiptDate: string;
     metaDataByPorId?: Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>;
+    attachments?: AttachmentItem[];
     savedAt: number;
 };
 
@@ -267,6 +274,13 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
     const [receiptTypes, setReceiptTypes] = React.useState<ReceiptTypeOption[]>([]);
     const [receiptDate, setReceiptDate] = React.useState(todayYMD());
 
+    // attachments
+    const [attachments, setAttachments] = React.useState<AttachmentItem[]>([]);
+    const attachmentsRef = React.useRef<AttachmentItem[]>([]);
+    React.useEffect(() => {
+        attachmentsRef.current = attachments;
+    }, [attachments]);
+
     const [manualCounts, setManualCounts] = React.useState<Record<string, number>>({});
 
     const [savingReceipt, setSavingReceipt] = React.useState(false);
@@ -286,6 +300,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         setManualCounts({});
         setVerifiedProductIds([]);
         setMetaDataByPorId({});
+        setAttachments([]);
     }, []);
 
     // ✅ METADATA
@@ -409,6 +424,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         setManualCounts({});
         setVerifiedProductIds([]);
         setMetaDataByPorId({});
+        setAttachments([]);
         setEditingReceiptId(null);
         if (opts?.clearStorage && opts?.poId) {
             clearDraft(opts.poId);
@@ -421,7 +437,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         const poId = selectedPO?.id;
         if (!poId) return;
         // Only save if there's meaningful data
-        if (Object.keys(manualCounts).length === 0) return;
+        if (Object.keys(manualCounts).length === 0 && attachments.length === 0) return;
         saveDraft(poId, {
             manualCounts,
             verifiedProductIds,
@@ -429,9 +445,10 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
             receiptType,
             receiptDate,
             metaDataByPorId,
+            attachments,
             savedAt: Date.now(),
         });
-    }, [selectedPO?.id, manualCounts, verifiedProductIds, receiptNo, receiptType, receiptDate, metaDataByPorId]);
+    }, [selectedPO?.id, manualCounts, verifiedProductIds, receiptNo, receiptType, receiptDate, metaDataByPorId, attachments]);
 
     const openPOById = React.useCallback(
         async (poId: string) => {
@@ -473,6 +490,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                     setManualCounts({});
                     setVerifiedProductIds([]);
                     setMetaDataByPorId({});
+                    setAttachments([]);
                     setReceiptDate(todayYMD());
                     setReceiptNo("");
                     setReceiptType("");
@@ -485,13 +503,15 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                     const hasDraftData = draft ? (
                         Object.keys(draft.manualCounts || {}).length > 0 ||
                         (draft.verifiedProductIds && draft.verifiedProductIds.length > 0) ||
-                        Object.keys(draft.metaDataByPorId || {}).length > 0
+                        Object.keys(draft.metaDataByPorId || {}).length > 0 ||
+                        (draft.attachments && draft.attachments.length > 0)
                     ) : false;
 
                     if (hasDraftData && draft) {
                         setManualCounts(draft.manualCounts || {});
                         setVerifiedProductIds(draft.verifiedProductIds || []);
                         setMetaDataByPorId(draft.metaDataByPorId || {});
+                        setAttachments(draft.attachments || []);
                         setReceiptNo(draft.receiptNo || "");
                         setReceiptType(draft.receiptType || "");
                         setReceiptDate(draft.receiptDate || todayYMD());
@@ -501,6 +521,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                         setManualCounts({});
                         setVerifiedProductIds([]);
                         setMetaDataByPorId({});
+                        setAttachments([]);
                         setReceiptDate(todayYMD());
                         setReceiptNo("");
                         setReceiptType("");
@@ -582,6 +603,11 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                     setManualCounts(counts);
                     setVerifiedProductIds(verifiedIds);
                     setMetaDataByPorId(meta);
+                    if (detail?.draftAttachments && detail.draftAttachments.length > 0) {
+                        setAttachments(detail.draftAttachments);
+                    } else {
+                        setAttachments([]);
+                    }
                     const firstDraft = detail?.draftData?.[0];
                     setReceiptDate(firstDraft?.receiptDate || todayYMD());
                     setReceiptNo(firstDraft?.receiptNo || "");
@@ -592,13 +618,15 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                     const hasDraftData = draft ? (
                         Object.keys(draft.manualCounts || {}).length > 0 ||
                         (draft.verifiedProductIds && draft.verifiedProductIds.length > 0) ||
-                        Object.keys(draft.metaDataByPorId || {}).length > 0
+                        Object.keys(draft.metaDataByPorId || {}).length > 0 ||
+                        (draft.attachments && draft.attachments.length > 0)
                     ) : false;
 
                     if (hasDraftData && draft) {
                         setManualCounts(draft.manualCounts || {});
                         setVerifiedProductIds(draft.verifiedProductIds || []);
                         setMetaDataByPorId(draft.metaDataByPorId || {});
+                        setAttachments(draft.attachments || []);
                         setReceiptNo(draft.receiptNo || "");
                         setReceiptType(draft.receiptType || "");
                         setReceiptDate(draft.receiptDate || todayYMD());
@@ -607,6 +635,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                         setReceiptDate(todayYMD());
                         setReceiptNo("");
                         setReceiptType("");
+                        setAttachments([]);
                     }
                 }
 
@@ -900,8 +929,15 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action: "load_receipt", poId: selectedPO.id, receiptNo: rNo })
             });
-            const j = await asJson(r) as { data?: { items?: { product_id: string; branch_id: string; received_quantity: number; lot_id?: string; batch_no?: string; expiry_date?: string; receipt_type?: string | { id?: string | number } }[] } };
+            const j = await asJson(r) as { 
+                data?: { 
+                    items?: { product_id: string; branch_id: string; received_quantity: number; lot_id?: string; batch_no?: string; expiry_date?: string; receipt_type?: string | { id?: string | number } }[];
+                    attachments?: AttachmentItem[];
+                } 
+            };
             const items = j?.data?.items || [];
+            const loadedAttachments = j?.data?.attachments || [];
+            setAttachments(loadedAttachments);
             
             if (items.length > 0) {
                 const rt = items[0].receipt_type;
@@ -1024,6 +1060,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                     porCounts: filteredCounts,
                     porMetaData: porMetaData ?? {},
                     isEdit: !!editingReceiptId,
+                    attachments: attachmentsRef.current ?? attachments ?? [],
                 }),
             });
 
@@ -1106,7 +1143,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         } finally {
             setSavingReceipt(false);
         }
-    }, [selectedPO, receiptNo, receiptType, receiptDate, manualCounts, refreshList, resetSession, receiverId, verifiedProductIds, editingReceiptId]);
+    }, [selectedPO, receiptNo, receiptType, receiptDate, manualCounts, refreshList, resetSession, receiverId, verifiedProductIds, editingReceiptId, attachments]);
 
     const value: Ctx = {
         list,
@@ -1133,6 +1170,9 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         receiptTypes,
         receiptDate,
         setReceiptDate,
+
+        attachments,
+        setAttachments,
 
         manualCounts: manualCounts ?? {},
         setManualCounts,

@@ -91,6 +91,17 @@ function nowISO() {
     return formatter.format(d).replace(' ', 'T') + 'Z';
 }
 
+function nowPHDateTime() {
+    const d = new Date();
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+    });
+    return formatter.format(d).replace('T', ' ');
+}
+
 interface DiscountLine {
     id?: string | number;
     description?: string;
@@ -110,6 +121,7 @@ const SUPPLIERS_COLLECTION = "suppliers";
 const PRODUCTS_COLLECTION = "products";
 const BRANCHES_COLLECTION = "branches";
 const POR_COLLECTION = "purchase_order_receiving";
+const POR_ATTACHMENTS_COLLECTION = "purchase_order_receiving_attachment";
 const LOTS_COLLECTION = "lots";
 const UNITS_COLLECTION = "units";
 const PRODUCT_SUPPLIER_COLLECTION = "product_per_supplier";
@@ -524,7 +536,18 @@ export async function POST(req: NextRequest) {
             const { poId, receiptNo } = body;
             const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=purchase_order_product_id,product_id,branch_id,received_quantity,lot_id,batch_no,expiry_date,receipt_date,is_reverted,discount_type,discounted_amount,receipt_type`;
             const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
-            return ok({ items: j?.data || [] });
+
+            // Fetch attachments for this receipt
+            let attachments: Array<Record<string, unknown>> = [];
+            try {
+                const attUrl = `${base}/items/${POR_ATTACHMENTS_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=id,purchase_order_id,receipt_no,directus_file_id,file_name,file_size,mime_type,date_uploaded`;
+                const attJ = await fetchJson<{ data: Record<string, unknown>[] }>(attUrl);
+                attachments = attJ?.data || [];
+            } catch (attErr) {
+                console.warn("Failed to fetch attachments for receipt:", attErr);
+            }
+
+            return ok({ items: j?.data || [], attachments });
         }
 
         // ✅ Real-time receipt number duplicate check (lightweight — used by frontend onBlur)
@@ -769,6 +792,17 @@ export async function POST(req: NextRequest) {
                 return { receiptNo: rno, receiptDate: rs[0]?.receipt_date || rs[0]?.received_date || "", isPosted: rs.every(r => toNum(r.isPosted) === 1), isReverted, itemsCount: rs.length };
             }).sort((a, b) => (b.receiptNo ?? "").localeCompare(a.receiptNo ?? ""));
 
+            // Fetch attachments for any reverted receipt or draft
+            let draftAttachments: Array<Record<string, unknown>> = [];
+            const revertedReceiptNo = draftRows.find(r => toStr(r.receipt_no))?.receipt_no;
+            if (revertedReceiptNo) {
+                try {
+                    const attUrl = `${base}/items/${POR_ATTACHMENTS_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${toNum(po.purchase_order_id)}&filter[receipt_no][_eq]=${encodeURIComponent(String(revertedReceiptNo))}&fields=id,purchase_order_id,receipt_no,directus_file_id,file_name,file_size,mime_type,date_uploaded`;
+                    const attJ = await fetchJson<{ data: Record<string, unknown>[] }>(attUrl);
+                    draftAttachments = attJ?.data || [];
+                } catch { }
+            }
+
             return ok({
                 id: String(po.purchase_order_id), poNumber: toStr(po.purchase_order_no),
                 supplier: { id: String(po.supplier_name), name: supplierMap.get(toNum(po.supplier_name)) || "Supplier" },
@@ -779,6 +813,7 @@ export async function POST(req: NextRequest) {
                 createdAt: po.date_encoded ? new Date(po.date_encoded).toISOString() : new Date().toISOString(),
                 history,
                 draftData: draftData.length > 0 ? draftData : undefined,
+                draftAttachments: draftAttachments.length > 0 ? draftAttachments : undefined,
             });
         }
 
@@ -831,9 +866,14 @@ export async function POST(req: NextRequest) {
         }
 
         if (action === "save_receipt") {
-            const { poId, receiptNo, receiptDate, receiptType, porCounts, porMetaData, receiverId, isEdit } = body;
+            const { poId, receiptNo, receiptDate, receiptType, porCounts, porMetaData, receiverId, isEdit, attachments: rawAttachments } = body;
             const thePoId = toNum(poId);
             if (!thePoId) return bad("Missing PO ID");
+
+            const submittedAttachments = Array.isArray(rawAttachments) ? rawAttachments : [];
+            if (submittedAttachments.length > 20) {
+                return bad("Maximum of 20 attachments allowed per receipt.", 400);
+            }
 
             // ✅ Receipt Number Validation
             const trimmedReceiptNo = toStr(receiptNo).trim();
@@ -1145,6 +1185,94 @@ export async function POST(req: NextRequest) {
             } catch (err) {
                 console.error("Cleanup failed:", err);
                 // We don't rollback the main save for cleanup failure, but we log it.
+            }
+
+            // ✅ ATTACHMENT SYNCHRONIZATION
+            // Synchronize purchase_order_receiving_attachment records with submittedAttachments
+            try {
+                // Fetch existing attachment records for this (purchase_order_id, receipt_no)
+                const existingAttUrl = `${base}/items/${POR_ATTACHMENTS_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${thePoId}&filter[receipt_no][_eq]=${encodeURIComponent(trimmedReceiptNo)}&fields=id,directus_file_id`;
+                const existingAttJ = await fetchJson<{ data: Array<{ id: number; directus_file_id: string }> }>(existingAttUrl).catch(() => ({ data: [] }));
+                const existingRows = existingAttJ?.data || [];
+
+                const incomingFileIds = new Set(
+                    submittedAttachments
+                        .map((a: Record<string, unknown>) => toStr(a.directus_file_id))
+                        .filter(Boolean)
+                );
+
+                // Identify attachments to delete (in DB but no longer submitted)
+                const attIdsToDelete = existingRows
+                    .filter(r => !incomingFileIds.has(toStr(r.directus_file_id)))
+                    .map(r => toNum(r.id))
+                    .filter(id => id > 0);
+
+                if (attIdsToDelete.length > 0) {
+                    try {
+                        await fetchJson(`${base}/items/${POR_ATTACHMENTS_COLLECTION}`, {
+                            method: "DELETE",
+                            body: JSON.stringify(attIdsToDelete)
+                        });
+                    } catch (batchDelErr) {
+                        console.warn("Batch delete failed, attempting individual delete:", batchDelErr);
+                        for (const delId of attIdsToDelete) {
+                            await fetchJson(`${base}/items/${POR_ATTACHMENTS_COLLECTION}/${delId}`, {
+                                method: "DELETE"
+                            }).catch(e => console.error(`Failed to delete attachment ${delId}:`, e));
+                        }
+                    }
+                }
+
+                // Identify attachments to insert (submitted but not yet in DB)
+                const existingFileIds = new Set(existingRows.map(r => toStr(r.directus_file_id)));
+                const currentPHTime = nowPHDateTime();
+
+                const attsToInsert = submittedAttachments
+                    .filter((a: Record<string, unknown>) => {
+                        const fileId = toStr(a.directus_file_id);
+                        return fileId && !existingFileIds.has(fileId);
+                    })
+                    .map((a: Record<string, unknown>) => ({
+                        purchase_order_id: thePoId,
+                        receipt_no: trimmedReceiptNo,
+                        directus_file_id: toStr(a.directus_file_id),
+                        file_name: toStr(a.file_name || a.filename_download) || null,
+                        file_size: toNum(a.file_size || a.filesize) || null,
+                        mime_type: toStr(a.mime_type || a.type) || null,
+                        uploaded_by: toNum(receiverId) || null,
+                        date_uploaded: currentPHTime
+                    }));
+
+                if (attsToInsert.length > 0) {
+                    try {
+                        if (attsToInsert.length === 1) {
+                            await fetchJson(`${base}/items/${POR_ATTACHMENTS_COLLECTION}`, {
+                                method: "POST",
+                                body: JSON.stringify(attsToInsert[0])
+                            });
+                        } else {
+                            // Try batch creation first
+                            try {
+                                await fetchJson(`${base}/items/${POR_ATTACHMENTS_COLLECTION}`, {
+                                    method: "POST",
+                                    body: JSON.stringify(attsToInsert)
+                                });
+                            } catch (bulkErr) {
+                                console.warn("Directus batch attachment insert failed, inserting individually:", bulkErr);
+                                for (const att of attsToInsert) {
+                                    await fetchJson(`${base}/items/${POR_ATTACHMENTS_COLLECTION}`, {
+                                        method: "POST",
+                                        body: JSON.stringify(att)
+                                    }).catch(singleErr => console.error("Failed to insert single attachment:", singleErr));
+                                }
+                            }
+                        }
+                    } catch (insErr) {
+                        console.error("Failed to insert attachments into Directus:", insErr);
+                    }
+                }
+            } catch (attSyncErr) {
+                console.error("Failed to synchronize attachments:", attSyncErr);
             }
 
             const fLines = await fetchPOProductsByPOId(base, thePoId), fPors = await fetchPORByPOIds(base, [thePoId]);
