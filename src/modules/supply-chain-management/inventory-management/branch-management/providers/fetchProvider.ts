@@ -37,14 +37,22 @@ export async function saveBranch(branchData: Record<string, unknown>): Promise<u
  * Source: https://psgc.gitlab.io/api/
  */
 
+export const NCR_REGION_CODE = "130000000";
+
 export async function fetchProvinces(): Promise<Province[]> {
     const res = await fetch("https://psgc.gitlab.io/api/provinces");
     if (!res.ok) return [];
-    return res.json();
+    const provinces: Province[] = await res.json();
+    // PSGC models Metro Manila as a region with no province, so NCR branches would
+    // otherwise have no province to select; surface it as a province-level option.
+    return [{ code: NCR_REGION_CODE, name: "National Capital Region" }, ...provinces];
 }
 
 export async function fetchCities(provinceCode: string): Promise<City[]> {
-    const res = await fetch(`https://psgc.gitlab.io/api/provinces/${provinceCode}/cities-municipalities`);
+    const url = provinceCode === NCR_REGION_CODE
+        ? `https://psgc.gitlab.io/api/regions/${provinceCode}/cities-municipalities`
+        : `https://psgc.gitlab.io/api/provinces/${provinceCode}/cities-municipalities`;
+    const res = await fetch(url);
     if (!res.ok) return [];
     return res.json();
 }
