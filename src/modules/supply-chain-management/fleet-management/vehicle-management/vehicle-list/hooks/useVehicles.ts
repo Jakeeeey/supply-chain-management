@@ -17,6 +17,7 @@ import {
   listUsers,
   listDispatchPlans,
   createVehicle,
+  updateVehicle,
   listFuelTypes,
   listEngineTypes,
 } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/providers/fetchProviders";
@@ -174,6 +175,12 @@ function mapVehicle(
     currentMileage,
     image: String(v?.image ?? "").trim() || null,
 
+    make: v?.make ?? null,
+    model: v?.model ?? null,
+    yearModel: v?.year_model ?? null,
+    vinNo: v?.vin_no ?? null,
+    engineNo: v?.engine_no ?? null,
+
     raw: v,
   };
 }
@@ -247,8 +254,27 @@ export function useVehicles() {
       setSaving(true);
       setError(null);
       try {
-        await createVehicle(payload);
+        const created = await createVehicle(payload);
         await refresh();
+        return created;
+      } catch (e) {
+        setError(String(e instanceof Error ? e.message : e));
+        throw e;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [refresh]
+  );
+
+  const editVehicle = React.useCallback(
+    async (id: number, payload: Record<string, unknown>) => {
+      setSaving(true);
+      setError(null);
+      try {
+        const updated = await updateVehicle(id, payload);
+        await refresh();
+        return updated;
       } catch (e) {
         setError(String(e instanceof Error ? e.message : e));
         throw e;
@@ -268,6 +294,7 @@ export function useVehicles() {
     rows: filtered,
     refresh,
     addVehicle,
+    editVehicle,
     typeMap,
     fuelMap,
     engineMap,

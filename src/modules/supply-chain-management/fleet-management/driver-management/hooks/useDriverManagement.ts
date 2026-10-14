@@ -69,17 +69,20 @@ export function useDriverManagement() {
                     const userName = d.user
                         ? `${d.user.user_fname} ${d.user.user_mname || ""} ${d.user.user_lname}`.toLowerCase()
                         : "";
-                    const contactDetails = [
+                    const details = [
                         d.contact_phone,
                         d.contact_email,
                         d.emergency_contact_name,
                         d.emergency_contact_phone,
+                        d.license_no,
+                        d.license_classification,
+                        d.license_restrictions,
                     ]
                         .filter(Boolean)
                         .join(" ")
                         .toLowerCase();
 
-                    return userIdStr.includes(query) || userName.includes(query) || contactDetails.includes(query);
+                    return userIdStr.includes(query) || userName.includes(query) || details.includes(query);
                 }
 
                 return true;

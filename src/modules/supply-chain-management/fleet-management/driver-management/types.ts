@@ -3,6 +3,13 @@ export interface Driver {
     user_id: number;
     branch_id: number;
     bad_branch_id: number | null;
+    license_no?: string | null;
+    license_classification?: string | null;
+    license_restrictions?: string | null;
+    license_expiry_date?: string | null;
+    license_file_record_id?: number | null;
+    license_verified_by?: number | null;
+    license_verified_at?: string | null;
     contact_phone?: string | null;
     contact_email?: string | null;
     contact_address?: string | null;
@@ -16,14 +23,29 @@ export interface Driver {
     updated_at: string | null;
 }
 
+export interface EmployeeFileRecord {
+    id: number;
+    user_id: number;
+    list_id: number;
+    record_name: string;
+    description?: string | null;
+    file_ref: string;
+    is_deleted?: number | boolean;
+    created_at?: string;
+    updated_at?: string;
+}
+
 export interface DriverWithDetails extends Driver {
     user?: User;
     good_branch?: Branch;
     bad_branch?: Branch;
+    license_file_record?: EmployeeFileRecord;
+    verified_by_user?: User;
 }
 
 export interface DriverManagementCapabilities {
     driverContactFields: boolean;
+    driverLicenseFields?: boolean;
 }
 
 export interface User {

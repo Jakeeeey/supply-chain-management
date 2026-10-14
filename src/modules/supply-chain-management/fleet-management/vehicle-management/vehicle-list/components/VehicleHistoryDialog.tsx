@@ -55,10 +55,20 @@ export function VehicleHistoryDialog({
   open,
   onOpenChange,
   vehicle,
+  typeOptions = [],
+  fuelOptions = [],
+  engineOptions = [],
+  saving = false,
+  onUpdateVehicle,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   vehicle: VehicleRow | null;
+  typeOptions?: Array<{ id: number; name: string }>;
+  fuelOptions?: Array<{ id: number; name: string }>;
+  engineOptions?: Array<{ id: number; name: string }>;
+  saving?: boolean;
+  onUpdateVehicle?: (id: number, payload: Record<string, unknown>) => Promise<void>;
 }) {
   if (!vehicle) return null;
 
@@ -114,7 +124,14 @@ export function VehicleHistoryDialog({
               <ScrollArea className="h-[calc(80vh-200px)] pr-3">
                 <div className="w-full">
                   <TabsContent value="details" className="mt-0">
-                    <DetailsTab vehicle={vehicle} />
+                    <DetailsTab
+                      vehicle={vehicle}
+                      typeOptions={typeOptions}
+                      fuelOptions={fuelOptions}
+                      engineOptions={engineOptions}
+                      saving={saving}
+                      onUpdateVehicle={onUpdateVehicle}
+                    />
                   </TabsContent>
 
                   <TabsContent value="trips" className="mt-0">
