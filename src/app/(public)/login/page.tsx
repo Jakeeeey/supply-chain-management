@@ -284,6 +284,11 @@ function LoginForm() {
 
             let next = searchParams.get("next") || "/main-dashboard"
             if (!next.startsWith("/")) next = "/main-dashboard"
+            try {
+                sessionStorage.setItem("just_logged_in", "true")
+            } catch {
+                // Ignore storage errors if disabled
+            }
             window.location.href = next
         } catch (err: unknown) {
             const errorInfo = err as { message?: string }
