@@ -129,8 +129,8 @@ export default function DriverManagementModule() {
             <div className="bg-card/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-stretch md:items-center gap-6">
                 <div className="relative flex-1 w-full flex gap-2">
                     <Input
-                        placeholder="Search ID, driver, contact, or emergency contact..."
-                        aria-label="Search drivers by ID, name, phone, email, or emergency contact"
+                        placeholder="Search ID, driver, license no, contact, or emergency contact..."
+                        aria-label="Search drivers by ID, name, license no, phone, email, or emergency contact"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="flex-1 h-12 bg-background border-input rounded-xl transition-all outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 focus-visible:border-ring"

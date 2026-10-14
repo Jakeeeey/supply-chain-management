@@ -2,11 +2,18 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Upload, X } from "lucide-react";
+import { Plus, Upload, X, FileText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import type { CreateVehicleForm } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/types";
-import { uploadVehicleImage } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/providers/fetchProviders";
+import type {
+  CreateVehicleForm,
+  DocumentUploadItem,
+  VehiclesApiRow,
+} from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/types";
+import {
+  uploadVehicleImage,
+  uploadVehicleDocument,
+} from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/providers/fetchProviders";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,7 +38,7 @@ function toIntOrNull(v: string) {
   return Number.isFinite(n) ? Math.trunc(n) : null;
 }
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // ✅ 5MB
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
 
 export function AddVehicleDialog({
   open,
@@ -48,11 +55,16 @@ export function AddVehicleDialog({
   fuelOptions: Array<{ id: number; name: string }>;
   engineOptions: Array<{ id: number; name: string }>;
   saving: boolean;
-  onCreate: (payload: Record<string, unknown>) => Promise<void>;
+  onCreate: (payload: Record<string, unknown>) => Promise<VehiclesApiRow | undefined>;
 }) {
   const [form, setForm] = React.useState<CreateVehicleForm>({
     plateNumber: "",
     vehicleName: "",
+    make: "",
+    model: "",
+    yearModel: "",
+    vinNo: "",
+    engineNo: "",
     year: "",
     typeId: null,
     status: "Active",
@@ -69,14 +81,28 @@ export function AddVehicleDialog({
     cbmWidth: "",
     cbmHeight: "",
     imageFile: null,
+    documents: [],
   });
 
   const [touched, setTouched] = React.useState(false);
 
-  // upload UI
+  // vehicle photo upload UI
   const fileRef = React.useRef<HTMLInputElement | null>(null);
   const [dragActive, setDragActive] = React.useState(false);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+
+  // dynamic document rows state
+  const [pendingDocs, setPendingDocs] = React.useState<DocumentUploadItem[]>([
+    {
+      id: "doc-init-1",
+      file: null,
+      documentType: "OR",
+      documentNo: "",
+      issuedDate: "",
+      expiryDate: "",
+      remarks: "",
+    },
+  ]);
 
   React.useEffect(() => {
     if (!form.imageFile) {
@@ -119,7 +145,7 @@ export function AddVehicleDialog({
     const missing: string[] = [];
     if (!requiredOk(form.plateNumber)) missing.push("Plate Number");
     if (!requiredOk(form.vehicleName)) missing.push("Vehicle Name");
-    if (!requiredOk(form.year)) missing.push("Year");
+    if (!requiredOk(form.year)) missing.push("Year To Last");
     if (form.typeId === null) missing.push("Type");
     if (form.fuelTypeId === null) missing.push("Fuel Type");
     if (form.engineTypeId === null) missing.push("Engine Type");
@@ -142,7 +168,6 @@ export function AddVehicleDialog({
       return;
     }
 
-    // ✅ 5MB limit
     if (f.size > MAX_IMAGE_BYTES) {
       toast.error("File too large", { description: "Maximum image size is 5MB." });
       return;
@@ -157,6 +182,31 @@ export function AddVehicleDialog({
     setDragActive(false);
     const f = e.dataTransfer.files?.[0];
     acceptFile(f || null);
+  }
+
+  function handleAddDocumentRow() {
+    setPendingDocs((prev) => [
+      ...prev,
+      {
+        id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        file: null,
+        documentType: "CR",
+        documentNo: "",
+        issuedDate: "",
+        expiryDate: "",
+        remarks: "",
+      },
+    ]);
+  }
+
+  function updateDocRow(index: number, updates: Partial<DocumentUploadItem>) {
+    setPendingDocs((prev) =>
+      prev.map((d, i) => (i === index ? { ...d, ...updates } : d))
+    );
+  }
+
+  function removeDocRow(index: number) {
+    setPendingDocs((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function handleSubmit() {
@@ -185,6 +235,7 @@ export function AddVehicleDialog({
     }
 
     const yearInt = toIntOrNull(form.year);
+    const yearModelInt = toIntOrNull(form.yearModel);
     const mileageInt = toIntOrNull(String(form.mileageKm || ""));
 
     const payload: Record<string, unknown> = {
@@ -194,7 +245,14 @@ export function AddVehicleDialog({
       status: form.status || "Active",
     };
 
-    // ✅ Year goes to year_to_last
+    // 5 new columns
+    if (form.make.trim()) payload.make = form.make.trim();
+    if (form.model.trim()) payload.model = form.model.trim();
+    if (yearModelInt !== null) payload.year_model = yearModelInt;
+    if (form.vinNo.trim()) payload.vin_no = form.vinNo.trim();
+    if (form.engineNo.trim()) payload.engine_no = form.engineNo.trim();
+
+    // Year goes to year_to_last
     if (yearInt !== null) payload.year_to_last = yearInt;
 
     if (mileageInt !== null) payload.current_mileage = mileageInt;
@@ -203,7 +261,7 @@ export function AddVehicleDialog({
 
     if (form.rfid.trim()) payload.rfid_code = form.rfid.trim();
 
-    // new fields
+    // specs
     const seatsInt = toIntOrNull(form.seats || "");
     if (seatsInt !== null) payload.seats = seatsInt;
 
@@ -215,19 +273,43 @@ export function AddVehicleDialog({
     payload.cbm_width = form.cbmWidth;
     payload.cbm_height = form.cbmHeight;
 
-    // ✅ reuse vehicles.image
     if (imageId) payload.image = imageId;
 
     try {
-      await onCreate(payload);
+      const created = await onCreate(payload);
 
-      toast.success("Vehicle added", {
-        description: "Vehicle was added successfully.",
+      // Upload attached registration documents if any
+      const vehicleId = created?.vehicle_id;
+      if (vehicleId && pendingDocs.length > 0) {
+        for (const doc of pendingDocs) {
+          if (!doc.file) continue;
+          try {
+            await uploadVehicleDocument(doc.file, {
+              vehicleId,
+              documentType: doc.documentType,
+              documentNo: doc.documentNo,
+              issuedDate: doc.issuedDate,
+              expiryDate: doc.expiryDate,
+              remarks: doc.remarks,
+            });
+          } catch (docErr) {
+            console.error("Failed to upload document:", doc.file.name, docErr);
+          }
+        }
+      }
+
+      toast.success("Vehicle registered", {
+        description: "Vehicle profile and documents saved successfully.",
       });
 
       setForm({
         plateNumber: "",
         vehicleName: "",
+        make: "",
+        model: "",
+        yearModel: "",
+        vinNo: "",
+        engineNo: "",
         year: "",
         typeId: null,
         status: "Active",
@@ -244,7 +326,19 @@ export function AddVehicleDialog({
         cbmWidth: "",
         cbmHeight: "",
         imageFile: null,
+        documents: [],
       });
+      setPendingDocs([
+        {
+          id: "doc-init-1",
+          file: null,
+          documentType: "OR",
+          documentNo: "",
+          issuedDate: "",
+          expiryDate: "",
+          remarks: "",
+        },
+      ]);
 
       setTouched(false);
       onOpenChange(false);
@@ -264,274 +358,469 @@ export function AddVehicleDialog({
       <DialogContent
         className={cn(
           "p-0",
-          "w-[calc(100%-1.5rem)] sm:w-full sm:max-w-3xl",
-          "max-h-[90dvh] overflow-hidden"
+          "w-[calc(100%-1.5rem)] sm:w-full sm:max-w-4xl",
+          "max-h-[92dvh] overflow-hidden"
         )}
       >
-        <div className="flex max-h-[90dvh] flex-col">
+        <div className="flex max-h-[92dvh] flex-col">
           {/* HEADER */}
           <DialogHeader className="px-6 py-4 border-b">
-            <DialogTitle className="text-lg font-semibold">Add New Vehicle</DialogTitle>
-            <DialogDescription className="sr-only">
-              Fill in the details to add a new vehicle to the fleet.
+            <DialogTitle className="text-lg font-semibold">Register Vehicle</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              Enter vehicle profile, specifications, and upload registration documents (OR/CR, Insurance).
             </DialogDescription>
           </DialogHeader>
 
           {/* CONTENT */}
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="grid gap-2">
-                <Label>
-                  Plate Number <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={form.plateNumber}
-                  onChange={(e) => set("plateNumber", e.target.value)}
-                  className={touched && !requiredOk(form.plateNumber) ? "ring-1 ring-destructive" : ""}
-                  placeholder="e.g. CAD 4419"
-                />
-              </div>
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+            {/* Section 1: Identification & Registration Details */}
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-3">Vehicle Information</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="grid gap-2">
+                  <Label>
+                    Plate Number <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={form.plateNumber}
+                    onChange={(e) => set("plateNumber", e.target.value)}
+                    className={touched && !requiredOk(form.plateNumber) ? "ring-1 ring-destructive" : ""}
+                    placeholder="e.g. CAD 4419"
+                  />
+                </div>
 
-              <div className="grid gap-2">
-                <Label>
-                  Vehicle Name <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={form.vehicleName}
-                  onChange={(e) => set("vehicleName", e.target.value)}
-                  className={touched && !requiredOk(form.vehicleName) ? "ring-1 ring-destructive" : ""}
-                  placeholder="e.g. Toyota Hilux"
-                />
-              </div>
+                <div className="grid gap-2">
+                  <Label>
+                    Vehicle Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={form.vehicleName}
+                    onChange={(e) => set("vehicleName", e.target.value)}
+                    className={touched && !requiredOk(form.vehicleName) ? "ring-1 ring-destructive" : ""}
+                    placeholder="e.g. Toyota Hilux Fleet 01"
+                  />
+                </div>
 
-              <div className="grid gap-2">
-                <Label>
-                  Year To Last <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={form.year}
-                  onChange={(e) => set("year", e.target.value)}
-                  className={touched && !requiredOk(form.year) ? "ring-1 ring-destructive" : ""}
-                  placeholder="e.g. 2026"
-                  inputMode="numeric"
-                />
-              </div>
+                <div className="grid gap-2">
+                  <Label>Make</Label>
+                  <Input
+                    value={form.make}
+                    onChange={(e) => set("make", e.target.value)}
+                    placeholder="e.g. Toyota, Isuzu, Mitsubishi"
+                  />
+                </div>
 
-              <div className="grid gap-2">
-                <Label>
-                  Vehicle Type <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={form.typeId === null ? "" : String(form.typeId)}
-                  onValueChange={(v) => set("typeId", v ? Number(v) : null)}
-                >
-                  <SelectTrigger className={touched && form.typeId === null ? "ring-1 ring-destructive" : ""}>
-                    <SelectValue placeholder="Select Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {typeOptions.length === 0 ? (
-                      <SelectItem value="no-options" disabled>
-                        No Types Available
-                      </SelectItem>
-                    ) : (
-                      typeOptions.map((t) => (
-                        <SelectItem key={t.id} value={String(t.id)}>
-                          {t.name}
+                <div className="grid gap-2">
+                  <Label>Model</Label>
+                  <Input
+                    value={form.model}
+                    onChange={(e) => set("model", e.target.value)}
+                    placeholder="e.g. Hilux, Elf, Canter"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Year Model</Label>
+                  <Input
+                    value={form.yearModel}
+                    onChange={(e) => set("yearModel", e.target.value)}
+                    placeholder="e.g. 2024"
+                    inputMode="numeric"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>
+                    Vehicle Type <span className="text-destructive">*</span>
+                  </Label>
+                  <Select
+                    value={form.typeId === null ? "" : String(form.typeId)}
+                    onValueChange={(v) => set("typeId", v ? Number(v) : null)}
+                  >
+                    <SelectTrigger className={touched && form.typeId === null ? "ring-1 ring-destructive" : ""}>
+                      <SelectValue placeholder="Select Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {typeOptions.length === 0 ? (
+                        <SelectItem value="no-options" disabled>
+                          No Types Available
                         </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
+                      ) : (
+                        typeOptions.map((t) => (
+                          <SelectItem key={t.id} value={String(t.id)}>
+                            {t.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="grid gap-2">
-                <Label>Status</Label>
-                <Select value={form.status || ""} onValueChange={(v) => set("status", v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Inactive">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="grid gap-2">
+                  <Label>VIN / Chassis No.</Label>
+                  <Input
+                    value={form.vinNo}
+                    onChange={(e) => set("vinNo", e.target.value)}
+                    placeholder="e.g. JTF31092837..."
+                  />
+                </div>
 
-              <div className="grid gap-2">
-                <Label>Current Mileage</Label>
-                <Input
-                  value={form.mileageKm || ""}
-                  onChange={(e) => set("mileageKm", e.target.value)}
-                  placeholder="0"
-                  inputMode="numeric"
-                />
-              </div>
+                <div className="grid gap-2">
+                  <Label>Engine No.</Label>
+                  <Input
+                    value={form.engineNo}
+                    onChange={(e) => set("engineNo", e.target.value)}
+                    placeholder="e.g. 2KD-1234567"
+                  />
+                </div>
 
-              <div className="grid gap-2">
-                <Label>
-                  Fuel Type <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={form.fuelTypeId === null ? "" : String(form.fuelTypeId)}
-                  onValueChange={(v) => set("fuelTypeId", v ? Number(v) : null)}
-                >
-                  <SelectTrigger className={touched && form.fuelTypeId === null ? "ring-1 ring-destructive" : ""}>
-                    <SelectValue placeholder="Select Fuel Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fuelOptions.length === 0 ? (
-                      <SelectItem value="no-options" disabled>
-                        No Fuel Types Available
-                      </SelectItem>
-                    ) : (
-                      fuelOptions.map((f) => (
-                        <SelectItem key={f.id} value={String(f.id)}>
-                          {f.name}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-2">
-                <Label>
-                  Engine Type <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={form.engineTypeId === null ? "" : String(form.engineTypeId)}
-                  onValueChange={(v) => set("engineTypeId", v ? Number(v) : null)}
-                >
-                  <SelectTrigger className={touched && form.engineTypeId === null ? "ring-1 ring-destructive" : ""}>
-                    <SelectValue placeholder="Select Engine Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {engineOptions.length === 0 ? (
-                      <SelectItem value="no-options" disabled>
-                        No Engine Types Available
-                      </SelectItem>
-                    ) : (
-                      engineOptions.map((en) => (
-                        <SelectItem key={en.id} value={String(en.id)}>
-                          {en.name}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-2">
-                <Label>RFID</Label>
-                <Input
-                  value={form.rfid}
-                  onChange={(e) => set("rfid", e.target.value)}
-                  placeholder="Enter RFID code"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label>
-                  Seats <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={form.seats || ""}
-                  onChange={(e) => set("seats", e.target.value)}
-                  className={touched && !requiredOk(form.seats || "") ? "ring-1 ring-destructive" : ""}
-                  placeholder="0"
-                  inputMode="numeric"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label>
-                  Maximum Weight (kg)<span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={form.maximumWeight || ""}
-                  onChange={(e) => set("maximumWeight", e.target.value)}
-                  className={touched && !requiredOk(form.maximumWeight || "") ? "ring-1 ring-destructive" : ""}
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label>
-                  Minimum Load (₱ value)<span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={form.minimumLoad || ""}
-                  onChange={(e) => set("minimumLoad", e.target.value)}
-                  className={touched && !requiredOk(form.minimumLoad || "") ? "ring-1 ring-destructive" : ""}
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label>
-                  Max Liters <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={form.maxLiters || ""}
-                  onChange={(e) => set("maxLiters", e.target.value)}
-                  className={touched && !requiredOk(form.maxLiters || "") ? "ring-1 ring-destructive" : ""}
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label>
-                  Purchased Date <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  type="date"
-                  value={form.purchasedDate || ""}
-                  onChange={(e) => set("purchasedDate", e.target.value)}
-                  className={touched && !requiredOk(form.purchasedDate || "") ? "ring-1 ring-destructive" : ""}
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label>
-                  CBM Length <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={form.cbmLength || ""}
-                  onChange={(e) => set("cbmLength", e.target.value)}
-                  className={touched && !requiredOk(form.cbmLength || "") ? "ring-1 ring-destructive" : ""}
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label>
-                  CBM Width <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={form.cbmWidth || ""}
-                  onChange={(e) => set("cbmWidth", e.target.value)}
-                  className={touched && !requiredOk(form.cbmWidth || "") ? "ring-1 ring-destructive" : ""}
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label>
-                  CBM Height <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={form.cbmHeight || ""}
-                  onChange={(e) => set("cbmHeight", e.target.value)}
-                  className={touched && !requiredOk(form.cbmHeight || "") ? "ring-1 ring-destructive" : ""}
-                  placeholder="0.00"
-                />
+                <div className="grid gap-2">
+                  <Label>Status</Label>
+                  <Select value={form.status || ""} onValueChange={(v) => set("status", v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Active">Active</SelectItem>
+                      <SelectItem value="Inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
-            {/* Upload Photo */}
-            <div className="mt-6">
-              <Label>Vehicle Photo</Label>
+            {/* Section 2: Technical & Operational Specs */}
+            <div className="pt-2 border-t">
+              <h3 className="text-sm font-semibold text-foreground mb-3">Specifications & Operations</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="grid gap-2">
+                  <Label>
+                    Year To Last <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={form.year}
+                    onChange={(e) => set("year", e.target.value)}
+                    className={touched && !requiredOk(form.year) ? "ring-1 ring-destructive" : ""}
+                    placeholder="e.g. 2026"
+                    inputMode="numeric"
+                  />
+                </div>
 
+                <div className="grid gap-2">
+                  <Label>Current Mileage (km)</Label>
+                  <Input
+                    value={form.mileageKm || ""}
+                    onChange={(e) => set("mileageKm", e.target.value)}
+                    placeholder="0"
+                    inputMode="numeric"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>
+                    Fuel Type <span className="text-destructive">*</span>
+                  </Label>
+                  <Select
+                    value={form.fuelTypeId === null ? "" : String(form.fuelTypeId)}
+                    onValueChange={(v) => set("fuelTypeId", v ? Number(v) : null)}
+                  >
+                    <SelectTrigger className={touched && form.fuelTypeId === null ? "ring-1 ring-destructive" : ""}>
+                      <SelectValue placeholder="Select Fuel Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {fuelOptions.length === 0 ? (
+                        <SelectItem value="no-options" disabled>
+                          No Fuel Types Available
+                        </SelectItem>
+                      ) : (
+                        fuelOptions.map((f) => (
+                          <SelectItem key={f.id} value={String(f.id)}>
+                            {f.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>
+                    Engine Type <span className="text-destructive">*</span>
+                  </Label>
+                  <Select
+                    value={form.engineTypeId === null ? "" : String(form.engineTypeId)}
+                    onValueChange={(v) => set("engineTypeId", v ? Number(v) : null)}
+                  >
+                    <SelectTrigger className={touched && form.engineTypeId === null ? "ring-1 ring-destructive" : ""}>
+                      <SelectValue placeholder="Select Engine Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {engineOptions.length === 0 ? (
+                        <SelectItem value="no-options" disabled>
+                          No Engine Types Available
+                        </SelectItem>
+                      ) : (
+                        engineOptions.map((en) => (
+                          <SelectItem key={en.id} value={String(en.id)}>
+                            {en.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>RFID Code</Label>
+                  <Input
+                    value={form.rfid}
+                    onChange={(e) => set("rfid", e.target.value)}
+                    placeholder="Enter RFID code"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>
+                    Seats <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={form.seats || ""}
+                    onChange={(e) => set("seats", e.target.value)}
+                    className={touched && !requiredOk(form.seats || "") ? "ring-1 ring-destructive" : ""}
+                    placeholder="0"
+                    inputMode="numeric"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>
+                    Maximum Weight (kg) <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={form.maximumWeight || ""}
+                    onChange={(e) => set("maximumWeight", e.target.value)}
+                    className={touched && !requiredOk(form.maximumWeight || "") ? "ring-1 ring-destructive" : ""}
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>
+                    Minimum Load (₱ value) <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={form.minimumLoad || ""}
+                    onChange={(e) => set("minimumLoad", e.target.value)}
+                    className={touched && !requiredOk(form.minimumLoad || "") ? "ring-1 ring-destructive" : ""}
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>
+                    Max Liters <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={form.maxLiters || ""}
+                    onChange={(e) => set("maxLiters", e.target.value)}
+                    className={touched && !requiredOk(form.maxLiters || "") ? "ring-1 ring-destructive" : ""}
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>
+                    Purchased Date <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    type="date"
+                    value={form.purchasedDate || ""}
+                    onChange={(e) => set("purchasedDate", e.target.value)}
+                    className={touched && !requiredOk(form.purchasedDate || "") ? "ring-1 ring-destructive" : ""}
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>
+                    CBM Length <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={form.cbmLength || ""}
+                    onChange={(e) => set("cbmLength", e.target.value)}
+                    className={touched && !requiredOk(form.cbmLength || "") ? "ring-1 ring-destructive" : ""}
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>
+                    CBM Width <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={form.cbmWidth || ""}
+                    onChange={(e) => set("cbmWidth", e.target.value)}
+                    className={touched && !requiredOk(form.cbmWidth || "") ? "ring-1 ring-destructive" : ""}
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>
+                    CBM Height <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={form.cbmHeight || ""}
+                    onChange={(e) => set("cbmHeight", e.target.value)}
+                    className={touched && !requiredOk(form.cbmHeight || "") ? "ring-1 ring-destructive" : ""}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Upload Registration Documents */}
+            <div className="pt-2 border-t">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Registration Documents</h3>
+                  <p className="text-xs text-muted-foreground">Attach OR, CR, Insurance policies, or other vehicle papers.</p>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddDocumentRow}
+                  className="gap-1.5 h-8 text-xs"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Another Document
+                </Button>
+              </div>
+
+              {/* Dynamic Document Rows */}
+              <div className="space-y-3">
+                {pendingDocs.map((doc, idx) => (
+                  <div key={doc.id || idx} className="rounded-lg border bg-muted/20 p-4 space-y-3">
+                    <div className="flex items-center justify-between border-b pb-2">
+                      <div className="text-xs font-semibold text-foreground flex items-center gap-2">
+                        <FileText className="h-3.5 w-3.5 text-primary" />
+                        Document #{idx + 1}
+                      </div>
+
+                      {pendingDocs.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive gap-1"
+                          onClick={() => removeDocRow(idx)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs">Document Type</Label>
+                        <Select
+                          value={doc.documentType}
+                          onValueChange={(v) =>
+                            updateDocRow(idx, { documentType: v as "OR" | "CR" | "Insurance" | "Other" })
+                          }
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="OR">Official Receipt (OR)</SelectItem>
+                            <SelectItem value="CR">Certificate of Reg. (CR)</SelectItem>
+                            <SelectItem value="Insurance">Insurance</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs">Document No.</Label>
+                        <Input
+                          className="h-9"
+                          value={doc.documentNo || ""}
+                          onChange={(e) => updateDocRow(idx, { documentNo: e.target.value })}
+                          placeholder="e.g. OR-884920"
+                        />
+                      </div>
+
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs">Issued Date</Label>
+                        <Input
+                          type="date"
+                          className="h-9"
+                          value={doc.issuedDate || ""}
+                          onChange={(e) => updateDocRow(idx, { issuedDate: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs">Expiry Date</Label>
+                        <Input
+                          type="date"
+                          className="h-9"
+                          value={doc.expiryDate || ""}
+                          onChange={(e) => updateDocRow(idx, { expiryDate: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 items-end">
+                      <div className="sm:col-span-3 grid gap-1.5">
+                        <Label className="text-xs">Remarks / Notes</Label>
+                        <Input
+                          className="h-9"
+                          value={doc.remarks || ""}
+                          onChange={(e) => updateDocRow(idx, { remarks: e.target.value })}
+                          placeholder="e.g. Comprehensive insurance with TPL"
+                        />
+                      </div>
+
+                      <div>
+                        <input
+                          id={`doc-file-${doc.id || idx}`}
+                          type="file"
+                          accept="image/*,application/pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) updateDocRow(idx, { file: f });
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            "h-9 w-full gap-2 text-xs truncate",
+                            doc.file && "border-primary text-primary"
+                          )}
+                          onClick={() => {
+                            const el = document.getElementById(`doc-file-${doc.id || idx}`);
+                            el?.click();
+                          }}
+                        >
+                          <Upload className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{doc.file ? doc.file.name : "Attach File"}</span>
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Section 4: Vehicle Photo */}
+            <div className="pt-2 border-t">
+              <Label>Vehicle Photo</Label>
               <input
                 ref={fileRef}
                 type="file"
@@ -611,7 +900,7 @@ export function AddVehicleDialog({
                         <img
                           src={previewUrl}
                           alt="Vehicle preview"
-                          className="h-48 w-full object-cover"
+                          className="h-44 w-full object-cover"
                         />
                       </div>
                     ) : null}
@@ -619,8 +908,6 @@ export function AddVehicleDialog({
                 ) : null}
               </Card>
             </div>
-
-            <div className="h-6" />
           </div>
 
           {/* FOOTER */}
@@ -643,7 +930,7 @@ export function AddVehicleDialog({
                 className="w-full gap-2 sm:w-auto"
               >
                 <Plus className="h-4 w-4" />
-                Add Vehicle
+                Save Vehicle Profile
               </Button>
             </div>
           </div>

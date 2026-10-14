@@ -11,7 +11,7 @@ import { AddVehicleDialog } from "@/modules/supply-chain-management/fleet-manage
 import { VehicleHistoryDialog } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/components/VehicleHistoryDialog";
 
 export default function VehicleListModule() {
-  const { loading, saving, query, setQuery, rows, addVehicle, typeMap, fuelMap, engineMap } =
+  const { loading, saving, query, setQuery, rows, addVehicle, editVehicle, typeMap, fuelMap, engineMap } =
     useVehicles();
 
   const [statusFilter, setStatusFilter] = React.useState<string>("all");
@@ -111,6 +111,29 @@ export default function VehicleListModule() {
         open={openHistory}
         onOpenChange={setOpenHistory}
         vehicle={selected}
+        typeOptions={typeOptions}
+        fuelOptions={fuelOptions}
+        engineOptions={engineOptions}
+        saving={saving}
+        onUpdateVehicle={async (id, payload) => {
+          await editVehicle(id, payload);
+          // update local selected instance as well
+          setSelected((prev) => {
+            if (!prev || prev.id !== id) return prev;
+            return {
+              ...prev,
+              plateNo: String(payload.vehicle_plate || prev.plateNo),
+              vehicleName: String(payload.name || prev.vehicleName),
+              status: String(payload.status || prev.status),
+              make: String(payload.make ?? prev.make ?? ""),
+              model: String(payload.model ?? prev.model ?? ""),
+              yearModel: payload.year_model !== undefined ? Number(payload.year_model) : prev.yearModel,
+              vinNo: String(payload.vin_no ?? prev.vinNo ?? ""),
+              engineNo: String(payload.engine_no ?? prev.engineNo ?? ""),
+              raw: { ...prev.raw, ...payload },
+            };
+          });
+        }}
       />
     </div>
   );

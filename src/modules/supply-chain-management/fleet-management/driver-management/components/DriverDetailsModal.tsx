@@ -12,7 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { IdCard, MapPin, Phone, ShieldAlert, UserRound } from "lucide-react";
+import { IdCard, MapPin, Phone, ShieldAlert, UserRound, FileCheck2, ExternalLink } from "lucide-react";
 import type { Branch, DriverWithDetails, User } from "../types";
 
 interface DriverDetailsModalProps {
@@ -128,6 +128,81 @@ export function DriverDetailsModal({
                         <DetailSection icon={<MapPin className="size-4" />} title="Branch Assignment">
                             <DetailItem label="Good Branch" value={<BranchBadge branch={driver.good_branch} fallback="Not provided" />} />
                             <DetailItem label="Bad Branch" value={<BranchBadge branch={driver.bad_branch} fallback="None" />} />
+                        </DetailSection>
+
+                        <DetailSection icon={<FileCheck2 className="size-4" />} title="Driver's License & Document Records">
+                            <DetailItem label="License Number" value={displayValue(driver.license_no)} />
+                            <DetailItem label="Classification" value={displayValue(driver.license_classification)} />
+                            <DetailItem label="Restrictions / Conditions" value={displayValue(driver.license_restrictions)} />
+                            <DetailItem
+                                label="Expiry Date"
+                                value={
+                                    driver.license_expiry_date ? (
+                                        <div className="flex items-center gap-2">
+                                            <span>{driver.license_expiry_date.split("T")[0]}</span>
+                                            {(() => {
+                                                const exp = new Date(driver.license_expiry_date);
+                                                const today = new Date();
+                                                today.setHours(0, 0, 0, 0);
+                                                const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                                                if (diffDays < 0) {
+                                                    return <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20 text-[9px] font-bold">Expired</Badge>;
+                                                }
+                                                if (diffDays <= 60) {
+                                                    return <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[9px] font-bold">Expiring Soon</Badge>;
+                                                }
+                                                return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[9px]">Valid</Badge>;
+                                            })()}
+                                        </div>
+                                    ) : (
+                                        "Not provided"
+                                    )
+                                }
+                            />
+                            <DetailItem
+                                label="Document Management Record"
+                                value={
+                                    driver.license_file_record ? (
+                                        <div className="flex flex-col gap-1">
+                                            <span className="font-semibold text-foreground">{driver.license_file_record.record_name}</span>
+                                            <span className="text-xs text-muted-foreground">{driver.license_file_record.description || "ID document"}</span>
+                                            {driver.license_file_record.file_ref && (
+                                                <a
+                                                    href={`${(process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "")}/assets/${driver.license_file_record.file_ref}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-1 text-xs text-primary font-bold hover:underline mt-1"
+                                                >
+                                                    View Scanned Document <ExternalLink className="h-3 w-3" />
+                                                </a>
+                                            )}
+                                        </div>
+                                    ) : driver.license_file_record_id ? (
+                                        `Linked Record ID #${driver.license_file_record_id}`
+                                    ) : (
+                                        "No document attached"
+                                    )
+                                }
+                            />
+                            <DetailItem
+                                label="Fleet Admin Verification"
+                                value={
+                                    driver.license_verified_at ? (
+                                        <div className="flex flex-col gap-0.5">
+                                            <Badge variant="outline" className="w-fit bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-bold text-[9px]">
+                                                Verified
+                                            </Badge>
+                                            <span className="text-xs text-muted-foreground">
+                                                {driver.verified_by_user ? `${driver.verified_by_user.user_fname} ${driver.verified_by_user.user_lname}` : "Admin"} on {new Date(driver.license_verified_at).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <Badge variant="outline" className="w-fit bg-muted/40 text-muted-foreground text-[9px]">
+                                            Pending Verification
+                                        </Badge>
+                                    )
+                                }
+                            />
                         </DetailSection>
 
                         {driverContactFieldsSupported && (
