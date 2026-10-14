@@ -290,6 +290,31 @@ export default async function ERPMainDashboardPage() {
         if (process.env.NODE_ENV === 'development') console.error("[Announcement Debug] Caught exception in fetch process:", err);
     }
 
+    // Check general_setting for system_type === 'Dealerover'
+    let isDealerOver = false;
+    try {
+        const directusUrl = directusBase?.replace(/\/+$/, "") || "";
+        const targetToken = process.env.DIRECTUS_STATIC_TOKEN || "";
+        const settingFilter = JSON.stringify({
+            _and: [
+                { setting_key: { _eq: "system_type" } },
+                { setting_value: { _eq: "Dealerover" } }
+            ]
+        });
+        const settingRes = await fetch(`${directusUrl}/items/general_setting?filter=${encodeURIComponent(settingFilter)}&limit=1`, {
+            headers: { "Authorization": `Bearer ${targetToken}` },
+            cache: "no-store"
+        });
+        if (settingRes.ok) {
+            const settingJson = await settingRes.json();
+            isDealerOver = Array.isArray(settingJson.data) && settingJson.data.length > 0;
+        }
+    } catch (err) {
+        if (process.env.NODE_ENV === "development") {
+            console.error("[Dashboard Server] General setting fetch error:", err);
+        }
+    }
+
     const userFullName = [payload.FirstName, payload.LastName].filter(Boolean).join(" ") || "User";
     const userEmail = payload.email || "";
 
@@ -299,6 +324,7 @@ export default async function ERPMainDashboardPage() {
             userFullName={userFullName}
             userEmail={userEmail}
             announcements={announcementsData}
+            isDealerOver={isDealerOver}
         />
     );
 }
