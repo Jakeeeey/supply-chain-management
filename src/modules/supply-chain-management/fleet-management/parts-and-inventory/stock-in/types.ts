@@ -1,4 +1,4 @@
-import type { VehiclePart } from "../../registration/types";
+import type { VehiclePart } from "../registration/types";
 
 export interface Branch {
   id: number;
