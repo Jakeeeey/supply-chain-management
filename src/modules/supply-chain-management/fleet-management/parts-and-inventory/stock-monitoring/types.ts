@@ -1,4 +1,4 @@
-import type { VehiclePart, VehiclePartClassification } from "../registration/types";
+import type { VehiclePart } from "../registration/types";
 import type { Branch } from "../stock-in/types";
 
 export interface PartStock {

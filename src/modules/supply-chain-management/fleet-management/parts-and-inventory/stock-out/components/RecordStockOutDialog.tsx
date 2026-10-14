@@ -13,15 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { Branch } from "../../stock-in/types";
-import type { StockItem } from "../../stock-monitoring/types";
+import type { VehiclePart } from "../../registration/types";
+import type { PartStock } from "../../stock-monitoring/types";
 import { fetchAvailableStock, submitStockOut } from "../provider/fetchProviders";
 import { SearchableStockOutSelect } from "./SearchableStockOutSelect";
 import { AlertCircle, AlertTriangle, Loader2 } from "lucide-react";
@@ -41,7 +35,7 @@ export function RecordStockOutDialog({
   onSuccess,
 }: RecordStockOutDialogProps) {
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>("");
-  const [availableStock, setAvailableStock] = React.useState<StockItem[]>([]);
+  const [availableStock, setAvailableStock] = React.useState<PartStock[]>([]);
   const [loadingStock, setLoadingStock] = React.useState(false);
 
   const [selectedPartId, setSelectedPartId] = React.useState<string>("");
@@ -81,13 +75,23 @@ export function RecordStockOutDialog({
       .finally(() => setLoadingStock(false));
   }, [selectedBranchId]);
 
+  // Helper to extract VehiclePart safely
+  const getPartFromStock = (s: PartStock): VehiclePart | null => {
+    return typeof s.part_id === "object" && s.part_id !== null ? (s.part_id as VehiclePart) : null;
+  };
+
   // Find currently selected stock item
   const selectedStockItem = React.useMemo(() => {
-    return availableStock.find((item) => String(item.part_id.id) === selectedPartId);
+    return availableStock.find((item) => {
+      const p = getPartFromStock(item);
+      const id = p ? p.id : Number(item.part_id);
+      return String(id) === selectedPartId;
+    });
   }, [availableStock, selectedPartId]);
 
+  const selectedPartObj = selectedStockItem ? getPartFromStock(selectedStockItem) : null;
   const maxAvailable = selectedStockItem ? Number(selectedStockItem.on_hand) : 0;
-  const currentUnitCost = selectedStockItem ? Number(selectedStockItem.part_id.unit_cost || 0) : 0;
+  const currentUnitCost = selectedPartObj ? Number(selectedPartObj.unit_cost || 0) : 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,10 +226,17 @@ export function RecordStockOutDialog({
               {loadingStock && <span className="text-[11px] text-muted-foreground animate-pulse">Loading stock...</span>}
             </div>
             <SearchableStockOutSelect
-              options={availableStock.map((s) => ({
-                value: String(s.part_id.id),
-                label: `${s.part_id.part_code} — ${s.part_id.part_name} (Avail: ${s.on_hand} ${s.part_id.unit || "pc"})`,
-              }))}
+              options={availableStock.map((s) => {
+                const p = getPartFromStock(s);
+                const id = p ? p.id : Number(s.part_id);
+                const code = p?.part_code || `PRT-${id}`;
+                const name = p?.part_name || "Unknown Part";
+                const unit = p?.unit || "pc";
+                return {
+                  value: String(id),
+                  label: `${code} — ${name} (Avail: ${s.on_hand} ${unit})`,
+                };
+              })}
               value={selectedPartId}
               onValueChange={(val) => {
                 setSelectedPartId(val);
@@ -247,7 +258,7 @@ export function RecordStockOutDialog({
             <div className="p-2.5 rounded-md bg-muted/60 text-xs flex items-center justify-between border">
               <div>
                 <span className="text-muted-foreground">Available on-hand:</span>{" "}
-                <span className="font-bold text-foreground">{maxAvailable} {selectedStockItem.part_id.unit || "pc"}</span>
+                <span className="font-bold text-foreground">{maxAvailable} {selectedPartObj?.unit || "pc"}</span>
               </div>
               <div>
                 <span className="text-muted-foreground">Unit Cost:</span>{" "}

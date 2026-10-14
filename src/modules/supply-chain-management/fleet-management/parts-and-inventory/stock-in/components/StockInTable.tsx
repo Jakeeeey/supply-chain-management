@@ -47,7 +47,7 @@ export function StockInTable({ movements, branches = [], loading }: StockInTable
         <Inbox className="h-10 w-10 text-muted-foreground/60 mb-3" />
         <h3 className="text-sm font-semibold">No stock-in transactions found</h3>
         <p className="text-xs text-muted-foreground mt-1">
-          Click "Stock In Items" to record newly delivered supplies.
+          Click &quot;Stock In Items&quot; to record newly delivered supplies.
         </p>
       </div>
     );

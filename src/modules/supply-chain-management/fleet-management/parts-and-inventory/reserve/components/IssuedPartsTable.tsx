@@ -37,7 +37,7 @@ export function IssuedPartsTable({ items, loading }: IssuedPartsTableProps) {
         <Layers className="h-10 w-10 text-muted-foreground/60 mb-3" />
         <h3 className="text-sm font-semibold">No parts issued to Job Orders yet</h3>
         <p className="text-xs text-muted-foreground mt-1">
-          Click "Issue Parts to JO" to allocate and deduct inventory parts for maintenance.
+          Click &quot;Issue Parts to JO&quot; to allocate and deduct inventory parts for maintenance.
         </p>
       </div>
     );

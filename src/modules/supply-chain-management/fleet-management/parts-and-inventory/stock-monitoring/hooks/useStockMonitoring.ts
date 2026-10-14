@@ -245,7 +245,7 @@ export function useStockMonitoring() {
     }
 
     return result;
-  }, [stockRecords, parts, classifications, branches, viewMode, branchFilter, classMap, branchMap]);
+  }, [stockRecords, parts, viewMode, branchFilter, classMap, branchMap]);
 
   // Filter items
   const filteredItems = React.useMemo(() => {

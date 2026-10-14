@@ -1,6 +1,4 @@
 import type { PartStock, StockApiResponse } from "../types";
-import type { VehiclePart, VehiclePartClassification } from "../../registration/types";
-import type { Branch } from "../../stock-in/types";
 import { fetchVehicleParts, fetchClassifications } from "../../registration/provider/fetchProviders";
 import { fetchBranches } from "../../stock-in/provider/fetchProviders";
 

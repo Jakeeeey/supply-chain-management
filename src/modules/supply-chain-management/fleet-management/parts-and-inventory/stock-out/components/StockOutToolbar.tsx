@@ -3,13 +3,6 @@
 import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Search, RotateCw, PlusCircle } from "lucide-react";
 import type { Branch } from "../../stock-in/types";
 import { SearchableStockOutSelect } from "./SearchableStockOutSelect";

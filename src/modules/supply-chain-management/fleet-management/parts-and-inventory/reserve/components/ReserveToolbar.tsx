@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Search, RefreshCw, FileText } from "lucide-react";
+import { Plus, Search, RefreshCw } from "lucide-react";
 import type { JobOrderRef } from "../types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";

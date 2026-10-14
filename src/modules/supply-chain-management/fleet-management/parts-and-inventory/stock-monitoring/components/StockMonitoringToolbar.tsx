@@ -1,18 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { Search, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Search, RefreshCw } from "lucide-react";
 import type { Branch } from "../../stock-in/types";
 import type { VehiclePartClassification } from "../../registration/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SearchableFilterSelect } from "./SearchableFilterSelect";
 

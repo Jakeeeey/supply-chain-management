@@ -1,5 +1,4 @@
 import type { BatchStockInInput, Branch, StockMovement, StockMovementsApiResponse } from "../types";
-import type { VehiclePart } from "../../registration/types";
 import { fetchVehicleParts } from "../../registration/provider/fetchProviders";
 
 const BASE_URL = "/api/scm/fleet-management/parts-and-inventory/stock-in";

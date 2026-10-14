@@ -58,7 +58,7 @@ export function PartsTable({ parts, classifications = [], loading, onEdit, onDel
         <Layers className="h-10 w-10 text-muted-foreground/60 mb-3" />
         <h3 className="text-sm font-semibold">No vehicle parts registered</h3>
         <p className="text-xs text-muted-foreground mt-1">
-          Click "Register Part" to add new parts to the catalog.
+          Click &quot;Register Part&quot; to add new parts to the catalog.
         </p>
       </div>
     );

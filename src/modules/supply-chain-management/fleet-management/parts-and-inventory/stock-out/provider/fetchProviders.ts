@@ -1,7 +1,6 @@
 import type { OutboundMovement, StockOutPayload } from "../types";
 import type { Branch } from "../../stock-in/types";
-import type { VehiclePart } from "../../registration/types";
-import type { StockItem } from "../../stock-monitoring/types";
+import type { PartStock } from "../../stock-monitoring/types";
 
 export async function fetchOutboundMovements(params: {
   search?: string;
@@ -33,7 +32,7 @@ export async function fetchBranches(): Promise<Branch[]> {
   return Array.isArray(json?.data) ? json.data : [];
 }
 
-export async function fetchAvailableStock(branchId: number): Promise<StockItem[]> {
+export async function fetchAvailableStock(branchId: number): Promise<PartStock[]> {
   const res = await fetch(`/api/scm/fleet-management/parts-and-inventory/stock-monitoring?branch_id=${branchId}`, {
     cache: "no-store",
   });
