@@ -9,6 +9,7 @@ import type {
   VehiclePartApiRow,
   VehicleInstalledPartApiRow,
   VehicleJobOrderApiRow,
+  BranchApiRow,
 } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/types";
 
 type DirectusListResponse<T> = { data: T[] };
