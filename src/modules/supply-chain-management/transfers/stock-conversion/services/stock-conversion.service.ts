@@ -168,9 +168,9 @@ export const stockConversionService = {
 
     const t5 = Date.now();
     const [familyByParent, familyBySelf, familyByName] = await Promise.all([
-      stockConversionRepo.fetchItemsInChunks<DirectusProduct>("products", "parent_id", allPotentialParentIds, "product_id,product_name,parent_id,unit_of_measurement,unit_of_measurement_count,product_code,cost_per_unit,price_per_unit,product_per_supplier.supplier_id.id,product_per_supplier.supplier_id.supplier_name,product_per_supplier.supplier_id.supplier_shortcut"),
-      stockConversionRepo.fetchItemsInChunks<DirectusProduct>("products", "product_id", currentParentIds as (number | string)[], "product_id,product_name,parent_id,unit_of_measurement,unit_of_measurement_count,product_code,cost_per_unit,price_per_unit,product_per_supplier.supplier_id.id,product_per_supplier.supplier_id.supplier_name,product_per_supplier.supplier_id.supplier_shortcut"),
-      stockConversionRepo.fetchItemsInChunks<DirectusProduct>("products", "product_name", productNamesToFetch, "product_id,product_name,parent_id,unit_of_measurement,unit_of_measurement_count,product_code,cost_per_unit,price_per_unit,product_per_supplier.supplier_id.id,product_per_supplier.supplier_id.supplier_name,product_per_supplier.supplier_id.supplier_shortcut")
+      stockConversionRepo.fetchItemsInChunks<DirectusProduct>("products", "parent_id", allPotentialParentIds, "product_id,product_name,parent_id,unit_of_measurement,unit_of_measurement_count,product_code,cost_per_unit,price_per_unit,product_brand,product_category,product_per_supplier.supplier_id.id,product_per_supplier.supplier_id.supplier_name,product_per_supplier.supplier_id.supplier_shortcut"),
+      stockConversionRepo.fetchItemsInChunks<DirectusProduct>("products", "product_id", currentParentIds as (number | string)[], "product_id,product_name,parent_id,unit_of_measurement,unit_of_measurement_count,product_code,cost_per_unit,price_per_unit,product_brand,product_category,product_per_supplier.supplier_id.id,product_per_supplier.supplier_id.supplier_name,product_per_supplier.supplier_id.supplier_shortcut"),
+      stockConversionRepo.fetchItemsInChunks<DirectusProduct>("products", "product_name", productNamesToFetch, "product_id,product_name,parent_id,unit_of_measurement,unit_of_measurement_count,product_code,cost_per_unit,price_per_unit,product_brand,product_category,product_per_supplier.supplier_id.id,product_per_supplier.supplier_id.supplier_name,product_per_supplier.supplier_id.supplier_shortcut")
     ]);
     console.log(`[Perf] Step 4.5 - familyEnrichment: ${Date.now() - t5}ms`);
     console.log(`[Perf] TOTAL so far: ${Date.now() - t0}ms`);
@@ -241,8 +241,18 @@ export const stockConversionService = {
       const groupKey = parentId ? `ID-${parentId}` : (parentIds.has(pId) ? `ID-${pId}` : `NAME-${normalizedName}`);
       const group = productGroups.get(groupKey) || [p];
 
-      const brandId = Number(typeof p.product_brand === 'object' ? (p.product_brand as DirectusLookup)?.brand_id : p.product_brand);
-      const categoryId = Number(typeof p.product_category === 'object' ? (p.product_category as DirectusLookup)?.category_id : p.product_category);
+      const readBrandId = (prod: DirectusProduct) => Number(typeof prod.product_brand === 'object' ? (prod.product_brand as DirectusLookup)?.brand_id : prod.product_brand);
+      const readCategoryId = (prod: DirectusProduct) => Number(typeof prod.product_category === 'object' ? (prod.product_category as DirectusLookup)?.category_id : prod.product_category);
+
+      const brandId = readBrandId(p);
+      const categoryId = readCategoryId(p);
+
+      // Sub-unit / converted variants often leave brand & category blank on their own row,
+      // so inherit them from the parent product (mirrors the supplier fallback below).
+      const fallbackProduct = parentId ? uniqueFamilyProducts.find(pf => Number(pf.product_id || pf.id) === parentId) : null;
+      const brandName = brandMap.get(brandId) || (fallbackProduct ? brandMap.get(readBrandId(fallbackProduct)) : undefined) || "Unknown";
+      const categoryName = catMap.get(categoryId) || (fallbackProduct ? catMap.get(readCategoryId(fallbackProduct)) : undefined) || "Unknown";
+
       const unitId = Number(typeof p.unit_of_measurement === 'object' ? (p.unit_of_measurement as DirectusLookup)?.unit_id : p.unit_of_measurement);
 
       const availableUnits = group
@@ -287,7 +297,6 @@ export const stockConversionService = {
         return null;
       };
 
-      const fallbackProduct = parentId ? uniqueFamilyProducts.find(pf => Number(pf.product_id || pf.id) === parentId) : null;
       const supInfo = findInMap(pId) || findInExpanded(p) || (fallbackProduct ? (findInMap(parentId!) || findInExpanded(fallbackProduct)) : null);
 
       if (supInfo) {
@@ -307,8 +316,8 @@ export const stockConversionService = {
         productId: pId,
         supplierName: finalSupplierName,
         supplierShortcut: finalSupplierShortcut,
-        brand: brandMap.get(brandId) || "Unknown",
-        category: catMap.get(categoryId) || "Unknown",
+        brand: brandName,
+        category: categoryName,
         productCode: p.product_code || "",
         productName: p.product_name || "",
         productDescription: p.description || p.product_name || "",
