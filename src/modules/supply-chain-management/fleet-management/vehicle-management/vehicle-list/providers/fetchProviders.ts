@@ -9,6 +9,7 @@ import type {
   VehiclePartApiRow,
   VehicleInstalledPartApiRow,
   VehicleJobOrderApiRow,
+  BranchApiRow,
 } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/types";
 
 type DirectusListResponse<T> = { data: T[] };
@@ -208,12 +209,42 @@ export async function listVehicleInstalledParts(vehicleId: number): Promise<Vehi
 }
 
 /**
+ * List branches
+ */
+export async function listBranches(): Promise<BranchApiRow[]> {
+  const res = await fetch("/api/scm/fleet-management/parts-and-inventory/branches", {
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  const json = (await res.json()) as DirectusListResponse<BranchApiRow>;
+  return json?.data ?? [];
+}
+
+/**
+ * List stock for a branch from stock-monitoring
+ */
+export async function listBranchStock(branchId: number): Promise<Array<{
+  id: number;
+  part_id: number | { id: number; part_name?: string; part_code?: string };
+  branch_id: number | { id: number; branch_name?: string };
+  on_hand: number;
+}>> {
+  const res = await fetch(`/api/scm/fleet-management/parts-and-inventory/stock-monitoring?branch_id=${branchId}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  const json = await res.json();
+  return Array.isArray(json?.data) ? json.data : [];
+}
+
+/**
  * Install / link a part to a vehicle
  */
 export async function installVehiclePart(payload: {
   vehicle_id: number;
   part_id: number;
   quantity: number;
+  branch_id?: number | null;
   serial_no?: string;
   remarks?: string;
 }): Promise<VehicleInstalledPartApiRow> {

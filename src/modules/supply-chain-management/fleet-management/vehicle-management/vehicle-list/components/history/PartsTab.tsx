@@ -6,11 +6,14 @@ import type {
   VehicleRow,
   VehicleInstalledPartApiRow,
   VehiclePartApiRow,
+  BranchApiRow,
 } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/types";
 import {
   listVehicleInstalledParts,
   listVehicleParts,
   installVehiclePart,
+  listBranches,
+  listBranchStock,
 } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/providers/fetchProviders";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, RefreshCw, Package, CheckCircle2 } from "lucide-react";
+import { Plus, RefreshCw, Package, CheckCircle2, Warehouse } from "lucide-react";
 import { toast } from "sonner";
 
 function PartsSkeleton({ rows = 3 }: { rows?: number }) {
@@ -66,25 +69,36 @@ export default function PartsTab({ vehicle }: { vehicle: VehicleRow }) {
   const [loading, setLoading] = React.useState(true);
   const [partsCatalogue, setPartsCatalogue] = React.useState<VehiclePartApiRow[]>([]);
   const [installedParts, setInstalledParts] = React.useState<VehicleInstalledPartApiRow[]>([]);
+  const [branches, setBranches] = React.useState<BranchApiRow[]>([]);
 
   // Add / Link part form
   const [showAssignForm, setShowAssignForm] = React.useState(false);
+  const [selectedBranchId, setSelectedBranchId] = React.useState<string>("");
   const [selectedPartId, setSelectedPartId] = React.useState<string>("");
   const [quantity, setQuantity] = React.useState("1");
   const [serialNo, setSerialNo] = React.useState("");
   const [remarks, setRemarks] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
 
+  // Available stock from selected branch
+  const [branchStock, setBranchStock] = React.useState<Array<{ part_id: number | { id: number }; on_hand: number }>>([]);
+  const [loadingStock, setLoadingStock] = React.useState(false);
+
   const loadData = React.useCallback(async () => {
     if (!vehicleId) return;
     setLoading(true);
     try {
-      const [installed, catalogue] = await Promise.all([
+      const [installed, catalogue, branchList] = await Promise.all([
         listVehicleInstalledParts(vehicleId).catch(() => []),
         listVehicleParts().catch(() => []),
+        listBranches().catch(() => []),
       ]);
       setInstalledParts(installed || []);
       setPartsCatalogue(catalogue || []);
+      setBranches(branchList || []);
+      if (branchList && branchList.length > 0 && !selectedBranchId) {
+        setSelectedBranchId(String(branchList[0].id));
+      }
     } catch (e) {
       toast.error("Failed to load parts", {
         description: String(e instanceof Error ? e.message : e),
@@ -92,11 +106,48 @@ export default function PartsTab({ vehicle }: { vehicle: VehicleRow }) {
     } finally {
       setLoading(false);
     }
-  }, [vehicleId]);
+  }, [vehicleId, selectedBranchId]);
 
   React.useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Load stock whenever selectedBranchId changes
+  React.useEffect(() => {
+    if (!selectedBranchId) {
+      setBranchStock([]);
+      return;
+    }
+    let isMounted = true;
+    setLoadingStock(true);
+    listBranchStock(Number(selectedBranchId))
+      .then((stocks) => {
+        if (isMounted) {
+          setBranchStock(stocks || []);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setBranchStock([]);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingStock(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedBranchId]);
+
+  // Current stock for selected part in selected branch
+  const selectedPartOnHand = React.useMemo(() => {
+    if (!selectedPartId) return null;
+    const pId = Number(selectedPartId);
+    const item = branchStock.find((s) => {
+      const spId = typeof s.part_id === "object" && s.part_id !== null ? s.part_id.id : Number(s.part_id);
+      return spId === pId;
+    });
+    return item ? Number(item.on_hand) || 0 : 0;
+  }, [branchStock, selectedPartId]);
 
   async function handleAssignPart(e: React.FormEvent) {
     e.preventDefault();
@@ -111,18 +162,24 @@ export default function PartsTab({ vehicle }: { vehicle: VehicleRow }) {
       return;
     }
 
+    if (selectedPartOnHand !== null && qty > selectedPartOnHand) {
+      toast.error(`Insufficient stock in inventory! Only ${selectedPartOnHand} available.`);
+      return;
+    }
+
     setSubmitting(true);
     try {
       await installVehiclePart({
         vehicle_id: vehicleId,
         part_id: Number(selectedPartId),
         quantity: qty,
+        branch_id: selectedBranchId ? Number(selectedBranchId) : null,
         serial_no: serialNo.trim() || undefined,
         remarks: remarks.trim() || undefined,
       });
 
-      toast.success("Part linked successfully", {
-        description: "The part has been assigned to this vehicle.",
+      toast.success("Part linked and inventory updated successfully!", {
+        description: `Deducted ${qty} unit(s) from inventory.`,
       });
 
       setShowAssignForm(false);
@@ -187,9 +244,53 @@ export default function PartsTab({ vehicle }: { vehicle: VehicleRow }) {
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
                 <div className="grid gap-1.5 md:col-span-2">
-                  <Label className="text-xs">
-                    Select Part <span className="text-destructive">*</span>
+                  <Label className="text-xs flex items-center gap-1.5">
+                    <Warehouse className="h-3.5 w-3.5 text-muted-foreground" />
+                    Source Branch / Warehouse <span className="text-destructive">*</span>
                   </Label>
+                  <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder="Select warehouse / branch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {branches.length === 0 ? (
+                        <SelectItem value="none" disabled>
+                          No branches available
+                        </SelectItem>
+                      ) : (
+                        branches.map((b) => (
+                          <SelectItem key={b.id} value={String(b.id)}>
+                            {b.branch_name} {b.location ? `(${b.location})` : ""}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-1.5 md:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">
+                      Select Part <span className="text-destructive">*</span>
+                    </Label>
+                    {selectedPartId && (
+                      <span className="text-[11px] text-muted-foreground">
+                        {loadingStock ? (
+                          "Checking stock..."
+                        ) : selectedPartOnHand !== null ? (
+                          <span
+                            className={
+                              selectedPartOnHand > 0
+                                ? "text-emerald-600 font-medium"
+                                : "text-destructive font-semibold"
+                            }
+                          >
+                            On-Hand: {selectedPartOnHand}
+                          </span>
+                        ) : null}
+                      </span>
+                    )}
+                  </div>
                   <Select value={selectedPartId} onValueChange={setSelectedPartId}>
                     <SelectTrigger className="h-9 text-xs">
                       <SelectValue placeholder="Choose part from catalogue" />
@@ -217,6 +318,7 @@ export default function PartsTab({ vehicle }: { vehicle: VehicleRow }) {
                   <Input
                     type="number"
                     min="1"
+                    max={selectedPartOnHand !== null && selectedPartOnHand > 0 ? selectedPartOnHand : undefined}
                     className="h-9 text-xs"
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
