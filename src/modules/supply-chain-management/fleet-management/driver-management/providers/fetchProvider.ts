@@ -47,3 +47,24 @@ export async function deleteDriver(id: number): Promise<unknown> {
     }
     return res.json();
 }
+
+export async function uploadDriverLicenseFile(file: File, userId: number): Promise<{ file_id: string; record_id?: number }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("user_id", String(userId));
+    formData.append("record_name", "Driver's License");
+    formData.append("description", "Scanned Driver License from Fleet Management");
+
+    const res = await fetch("/api/scm/fleet-management/driver-management/license-upload", {
+        method: "POST",
+        body: formData,
+    });
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || err.details || "Failed to upload license document");
+    }
+
+    return res.json();
+}
+

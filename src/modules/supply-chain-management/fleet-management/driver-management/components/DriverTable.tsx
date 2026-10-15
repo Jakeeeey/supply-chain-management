@@ -44,6 +44,7 @@ function DriverTableSkeleton({ driverContactFieldsSupported }: { driverContactFi
                     <TableRow className="hover:bg-transparent border-white/10 bg-muted/40 font-bold uppercase tracking-widest text-[10px]">
                         <TableHead className="py-4 text-primary/90">No.</TableHead>
                         <TableHead className="py-4 text-foreground/70">Driver</TableHead>
+                        <TableHead className="py-4 text-foreground/70">License & Expiry</TableHead>
                         {driverContactFieldsSupported && (
                             <>
                                 <TableHead className="py-4 text-foreground/70">Contact</TableHead>
@@ -60,6 +61,7 @@ function DriverTableSkeleton({ driverContactFieldsSupported }: { driverContactFi
                         <TableRow key={i} className="border-white/5">
                             <TableCell className="py-4"><Skeleton className="h-4 w-8" /></TableCell>
                             <TableCell className="py-4"><Skeleton className="h-4 w-40" /></TableCell>
+                            <TableCell className="py-4"><Skeleton className="h-4 w-32" /></TableCell>
                             {driverContactFieldsSupported && (
                                 <>
                                     <TableCell className="py-4"><Skeleton className="h-4 w-32" /></TableCell>
@@ -113,6 +115,7 @@ export function DriverTable({
                         <TableRow className="hover:bg-transparent border-white/10 bg-muted/40">
                             <TableHead className="py-4 font-bold text-[10px] uppercase tracking-widest text-primary/90 w-12">No.</TableHead>
                             <TableHead className="py-4 font-bold text-[10px] uppercase tracking-widest text-foreground/70">Driver</TableHead>
+                            <TableHead className="py-4 font-bold text-[10px] uppercase tracking-widest text-foreground/70">License & Expiry</TableHead>
                             {driverContactFieldsSupported && (
                                 <>
                                     <TableHead className="py-4 font-bold text-[10px] uppercase tracking-widest text-foreground/70">Contact</TableHead>
@@ -144,6 +147,50 @@ export function DriverTable({
                                                 {driverName}
                                             </span>
                                         </div>
+                                    </TableCell>
+                                    <TableCell className="py-4">
+                                        {driver.license_no ? (
+                                            <div className="flex flex-col gap-1 max-w-[200px]">
+                                                <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
+                                                    <span>{driver.license_no}</span>
+                                                    {driver.license_classification && (
+                                                        <span className="text-[10px] text-muted-foreground font-normal">
+                                                            ({driver.license_classification})
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {driver.license_expiry_date ? (() => {
+                                                    const exp = new Date(driver.license_expiry_date);
+                                                    const today = new Date();
+                                                    today.setHours(0, 0, 0, 0);
+                                                    const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                                                    
+                                                    if (diffDays < 0) {
+                                                        return (
+                                                            <Badge variant="outline" className="text-[9px] w-fit bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 font-bold">
+                                                                Expired ({driver.license_expiry_date.split("T")[0]})
+                                                            </Badge>
+                                                        );
+                                                    } else if (diffDays <= 60) {
+                                                        return (
+                                                            <Badge variant="outline" className="text-[9px] w-fit bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 font-bold">
+                                                                Expiring Soon ({diffDays}d)
+                                                            </Badge>
+                                                        );
+                                                    } else {
+                                                        return (
+                                                            <Badge variant="outline" className="text-[9px] w-fit bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+                                                                Valid ({driver.license_expiry_date.split("T")[0]})
+                                                            </Badge>
+                                                        );
+                                                    }
+                                                })() : (
+                                                    <span className="text-[11px] text-muted-foreground/60 italic">No expiry date</span>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <EmptyValue />
+                                        )}
                                     </TableCell>
                                     {driverContactFieldsSupported && (
                                         <>

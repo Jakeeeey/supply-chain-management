@@ -12,6 +12,7 @@ import {
     Activity,
     ChevronDown,
     Megaphone,
+    Trophy,
 } from "lucide-react";
 import { useThemeTransition } from "@/components/theme/ThemeTransitionOverlay";
 import { ChangePasswordModal } from "@/modules/shared/change-password/components/ChangePasswordModal";
@@ -34,9 +35,10 @@ import { cn } from "@/lib/utils";
 interface UserMenuProps {
     fullName: string;
     email: string;
+    isDealerOver?: boolean;
 }
 
-export function UserMenu({ fullName, email }: UserMenuProps) {
+export function UserMenu({ fullName, email, isDealerOver }: UserMenuProps) {
     const router = useRouter();
     const { theme } = useTheme();
     const { triggerTransition } = useThemeTransition();
@@ -69,6 +71,12 @@ export function UserMenu({ fullName, email }: UserMenuProps) {
 
     const handleLogout = async () => {
         try {
+            try {
+                localStorage.removeItem("dealerover_salesman_ranking");
+                sessionStorage.removeItem("just_logged_in");
+            } catch {
+                // Ignore storage error
+            }
             await fetch("/api/auth/logout", { method: "POST" });
             router.push("/login");
             router.refresh();
@@ -182,6 +190,27 @@ export function UserMenu({ fullName, email }: UserMenuProps) {
                             </span>
                         )}
                     </DropdownMenuItem>
+
+                    
+                    {isDealerOver && (
+                        <DropdownMenuItem
+                            onClick={() => window.dispatchEvent(new CustomEvent("open-dealerover-salesman-rankings"))}
+                            className="group flex items-center justify-between rounded-xl px-2.5 py-1.5 cursor-pointer transition-all hover:bg-amber-500/10 dark:hover:bg-amber-500/10 mt-0.5 focus:bg-amber-500/10 dark:focus:bg-amber-500/10"
+                        >
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-1 rounded-lg bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/20 group-hover:border-amber-500/40 transition-colors">
+                                    <Trophy className="h-3 w-3 text-amber-500" />
+                                </div>
+                                <div className="flex flex-col leading-none">
+                                    <span className="text-[10px] font-black uppercase tracking-wide text-amber-600 dark:text-amber-400">Salesman Rankings</span>
+                                    <span className="text-[8px] font-bold text-slate-400 opacity-70 mt-0.5 uppercase tracking-[0.05em]">Dealerover</span>
+                                </div>
+                            </div>
+                            <span className="flex h-4 px-1.5 items-center justify-center rounded-full bg-amber-500/20 text-[8px] font-black text-amber-600 dark:text-amber-400 border border-amber-500/30 uppercase tracking-widest">
+                                Top
+                            </span>
+                        </DropdownMenuItem>
+                    )}
 
                     {[
                         { icon: User, label: "Profile Blueprint", sub: "Settings" },
