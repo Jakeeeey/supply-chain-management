@@ -57,3 +57,19 @@ export async function createPurchaseRequest(payload: CreatePurchaseRequestPayloa
 
   return res.json();
 }
+
+export async function updatePurchaseRequestStatus(id: number, action: "approve" | "receive" | "cancel"): Promise<unknown> {
+  const res = await fetch("/api/scm/fleet-management/parts-and-inventory/purchase-order", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, action }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData?.error || `Failed to ${action} purchase request`);
+  }
+
+  return res.json();
+}
+

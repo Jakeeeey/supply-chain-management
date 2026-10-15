@@ -17,12 +17,14 @@ export default function PurchaseOrderModule() {
     branches,
     parts,
     loading,
+    actionLoading,
     search,
     setSearch,
     selectedBranch,
     setSelectedBranch,
     metrics,
     refresh,
+    onStatusUpdate,
   } = usePurchaseOrderModule();
 
   const [createModalOpen, setCreateModalOpen] = React.useState(false);
@@ -80,7 +82,13 @@ export default function PurchaseOrderModule() {
         </TabsContent>
 
         <TabsContent value="history" className="space-y-3 m-0">
-          <PurchaseRequestsHistoryTable items={prs} loading={loading} />
+          <PurchaseRequestsHistoryTable
+            items={prs}
+            parts={parts}
+            loading={loading}
+            actionLoading={actionLoading}
+            onStatusUpdate={onStatusUpdate}
+          />
         </TabsContent>
       </Tabs>
 

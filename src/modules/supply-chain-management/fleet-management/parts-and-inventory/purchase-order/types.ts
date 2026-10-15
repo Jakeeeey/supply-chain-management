@@ -35,7 +35,10 @@ export interface PurchaseRequest {
   expected_delivery_date?: string | null;
   status: PurchaseRequestStatus;
   notes?: string | null;
-  requested_by?: string | null;
+  requested_by?: number | string | null;
+  requested_at?: string | null;
+  decided_by?: number | string | null;
+  decided_at?: string | null;
   created_at: string;
 }
 

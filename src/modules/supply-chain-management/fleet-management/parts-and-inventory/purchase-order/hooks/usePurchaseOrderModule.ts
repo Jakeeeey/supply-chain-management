@@ -2,7 +2,7 @@ import * as React from "react";
 import type { PurchaseRequest, ReorderTriggerItem } from "../types";
 import type { Branch } from "../../stock-in/types";
 import type { VehiclePart } from "../../registration/types";
-import { fetchReorderTriggersAndPRs, fetchBranches, fetchParts } from "../provider/fetchProviders";
+import { fetchReorderTriggersAndPRs, fetchBranches, fetchParts, updatePurchaseRequestStatus } from "../provider/fetchProviders";
 
 export function usePurchaseOrderModule() {
   const [prs, setPrs] = React.useState<PurchaseRequest[]>([]);
@@ -11,6 +11,7 @@ export function usePurchaseOrderModule() {
   const [parts, setParts] = React.useState<VehiclePart[]>([]);
 
   const [loading, setLoading] = React.useState(true);
+  const [actionLoading, setActionLoading] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [selectedBranch, setSelectedBranch] = React.useState("all");
 
@@ -45,6 +46,21 @@ export function usePurchaseOrderModule() {
   React.useEffect(() => {
     loadTriggersAndPrs();
   }, [loadTriggersAndPrs]);
+
+  const handleStatusUpdate = async (id: number, action: "approve" | "receive" | "cancel") => {
+    try {
+      setActionLoading(true);
+      await updatePurchaseRequestStatus(id, action);
+      await loadTriggersAndPrs();
+      return true;
+    } catch (e: unknown) {
+      const err = e as Error;
+      alert(err.message || "Failed to update status");
+      return false;
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   // Filter triggers by search query
   const filteredTriggers = React.useMemo(() => {
@@ -100,11 +116,13 @@ export function usePurchaseOrderModule() {
     branches,
     parts,
     loading,
+    actionLoading,
     search,
     setSearch,
     selectedBranch,
     setSelectedBranch,
     metrics,
     refresh: loadTriggersAndPrs,
+    onStatusUpdate: handleStatusUpdate,
   };
 }

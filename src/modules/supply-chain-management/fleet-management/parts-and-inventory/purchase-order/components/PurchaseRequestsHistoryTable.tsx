@@ -14,14 +14,32 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { FileText, MoreHorizontal, CheckCircle2, PackagePlus, XCircle } from "lucide-react";
 
 interface PurchaseRequestsHistoryTableProps {
   items: PurchaseRequest[];
+  parts?: VehiclePart[];
   loading: boolean;
+  actionLoading?: boolean;
+  onStatusUpdate?: (id: number, action: "approve" | "receive" | "cancel") => Promise<boolean>;
 }
 
-export function PurchaseRequestsHistoryTable({ items, loading }: PurchaseRequestsHistoryTableProps) {
+export function PurchaseRequestsHistoryTable({
+  items,
+  parts = [],
+  loading,
+  actionLoading,
+  onStatusUpdate,
+}: PurchaseRequestsHistoryTableProps) {
   if (loading && items.length === 0) {
     return (
       <div className="rounded-md border p-4 space-y-3">
@@ -58,15 +76,18 @@ export function PurchaseRequestsHistoryTable({ items, loading }: PurchaseRequest
             <TableHead>Supplier</TableHead>
             <TableHead className="text-center">Status</TableHead>
             <TableHead>Notes</TableHead>
+            <TableHead className="text-right w-[80px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {items.map((item) => {
+            const rawPartId = typeof item.part_id === "object" && item.part_id !== null ? Number(item.part_id.id) : Number(item.part_id);
+            const foundCatalogPart = parts.find((p) => Number(p.id) === rawPartId);
             const part =
-              typeof item.part_id === "object" && item.part_id !== null
+              (typeof item.part_id === "object" && item.part_id !== null
                 ? (item.part_id as VehiclePart)
-                : null;
-            const partCode = part?.part_code || (typeof item.part_id === "number" ? `Part #${item.part_id}` : "—");
+                : null) || foundCatalogPart;
+            const partCode = part?.part_code || (rawPartId ? `Part #${rawPartId}` : "—");
             const partName = part?.part_name || "—";
             const unit = part?.unit || "pc";
 
@@ -88,6 +109,8 @@ export function PurchaseRequestsHistoryTable({ items, loading }: PurchaseRequest
               statusBadge = "bg-blue-500/10 text-blue-700 border-blue-200 dark:text-blue-400";
             } else if (item.status === "Received") {
               statusBadge = "bg-emerald-500/10 text-emerald-700 border-emerald-200 dark:text-emerald-400 font-semibold";
+            } else if (item.status === "Cancelled") {
+              statusBadge = "bg-zinc-500/10 text-zinc-700 border-zinc-200 dark:text-zinc-400";
             }
 
             return (
@@ -117,6 +140,69 @@ export function PurchaseRequestsHistoryTable({ items, loading }: PurchaseRequest
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground max-w-[180px] truncate">
                   {item.notes || "—"}
+                </TableCell>
+                <TableCell className="text-right">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" disabled={actionLoading}>
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+
+                      {item.status === "Pending" && (
+                        <>
+                          <DropdownMenuItem
+                            onClick={() => onStatusUpdate?.(item.id, "approve")}
+                            className="text-blue-600 focus:text-blue-600 cursor-pointer"
+                          >
+                            <CheckCircle2 className="h-4 w-4 mr-2" />
+                            Approve PO
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => onStatusUpdate?.(item.id, "cancel")}
+                            className="text-destructive focus:text-destructive cursor-pointer"
+                          >
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Cancel Request
+                          </DropdownMenuItem>
+                        </>
+                      )}
+
+                      {(item.status === "Approved" || item.status === "Ordered") && (
+                        <>
+                          <DropdownMenuItem
+                            onClick={() => onStatusUpdate?.(item.id, "receive")}
+                            className="text-emerald-600 focus:text-emerald-600 cursor-pointer font-medium"
+                          >
+                            <PackagePlus className="h-4 w-4 mr-2" />
+                            Receive Stock
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => onStatusUpdate?.(item.id, "cancel")}
+                            className="text-destructive focus:text-destructive cursor-pointer"
+                          >
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Cancel PO
+                          </DropdownMenuItem>
+                        </>
+                      )}
+
+                      {item.status === "Received" && (
+                        <div className="px-2 py-1.5 text-xs text-muted-foreground italic">
+                          Already received & stocked in
+                        </div>
+                      )}
+
+                      {item.status === "Cancelled" && (
+                        <div className="px-2 py-1.5 text-xs text-muted-foreground italic">
+                          Request cancelled
+                        </div>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </TableCell>
               </TableRow>
             );
