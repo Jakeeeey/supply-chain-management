@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search, RotateCw, Filter } from "lucide-react";
+import { Search, RotateCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { DashboardCardType } from "../types";

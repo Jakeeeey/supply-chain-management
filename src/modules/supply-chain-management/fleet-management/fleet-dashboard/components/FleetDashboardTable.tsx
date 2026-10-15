@@ -27,9 +27,15 @@ import type {
   DashboardOutsideVehicleItem,
 } from "../types";
 
+type DashboardRowItem =
+  | DashboardVehicleItem
+  | DashboardDriverItem
+  | DashboardJobOrderItem
+  | DashboardOutsideVehicleItem;
+
 interface FleetDashboardTableProps {
   activeCard: DashboardCardType;
-  rows: any[];
+  rows: DashboardRowItem[];
   loading: boolean;
   currentPage: number;
   totalPages: number;
