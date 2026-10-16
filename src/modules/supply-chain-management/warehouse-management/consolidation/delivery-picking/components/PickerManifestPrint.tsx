@@ -37,10 +37,13 @@ interface AutoTablePageData {
     pageNumber: number;
 }
 
+type CopyType = 'office' | 'delivery';
+
 export const generatePickerPDF = async (
     groupedManifest: Record<string, PickerItem[]>,
     batchNo: string,
-    totalSalesOrderAmount?: number
+    totalSalesOrderAmount?: number,
+    includeDeliveryCopy: boolean = false
 ) => {
 
     // ✅ Dynamically import libraries and use strict type casting
@@ -52,26 +55,22 @@ export const generatePickerPDF = async (
 
     const doc = new JsPDFClass();
 
-    Object.entries(groupedManifest).forEach(([rawPickerName, items], index) => {
-        const isUnassigned = !rawPickerName ||
-            rawPickerName.toLowerCase().includes("null") ||
-            rawPickerName.includes("GENERAL");
-        const pickerName = isUnassigned ? "GENERAL / UNASSIGNED" : rawPickerName;
-
-        if (index > 0) doc.addPage();
-
+    const renderSingleSheet = (
+        pickerName: string,
+        items: PickerItem[],
+        copyType: CopyType,
+        startYOffset: number = 0
+    ): number => {
         // 🚀 1. PRE-CALCULATE DATA FOR THE HEADER
         const uomTotals: Record<string, number> = {};
         const uniquePdps = new Set<string>();
         const uniqueDrivers = new Set<string>();
 
         items.forEach(item => {
-            // Aggregate UOMs
             const qty = item.quantity || item.orderedQuantity || 0;
             const uom = (item.unit || item.unitName || "UNITS").toUpperCase();
             uomTotals[uom] = (uomTotals[uom] || 0) + qty;
 
-            // Aggregate unique PDPs
             if (item.dispatchNos) {
                 const pdpString = Array.isArray(item.dispatchNos)
                     ? item.dispatchNos.join(", ")
@@ -82,7 +81,6 @@ export const generatePickerPDF = async (
                 }
             }
 
-            // Aggregate unique Drivers
             if (item.drivers) {
                 const driverString = Array.isArray(item.drivers)
                     ? item.drivers.join(", ")
@@ -101,28 +99,41 @@ export const generatePickerPDF = async (
         const pdpListString = Array.from(uniquePdps).join(", ");
         const driverListString = Array.from(uniqueDrivers).join(", ");
 
+        const baseTopY = startYOffset > 0 ? startYOffset : 12;
 
         // --- 2. MINIMALIST INK-SAVING HEADER WITH SUMMARIES ---
-        doc.setFontSize(12).setFont("helvetica", "bold");
-        doc.text(`${batchNo}`, 14, 12);
+        doc.setFontSize(12).setFont("helvetica", "bold").setTextColor(0, 0, 0);
+        doc.text(`${batchNo}`, 14, baseTopY);
+        const batchNoWidth = doc.getTextWidth(`${batchNo}`);
+
+        // Header copy badge if delivery copy is enabled or office copy
+        if (includeDeliveryCopy) {
+            const badgeText = copyType === 'delivery' ? '[ DELIVERY COPY ]' : '[ OFFICE COPY ]';
+            doc.setFontSize(8.5).setFont("helvetica", "bold");
+            if (copyType === 'delivery') {
+                doc.setTextColor(37, 99, 235); // Blue-600
+            } else {
+                doc.setTextColor(100, 100, 100);
+            }
+            doc.text(badgeText, 14 + batchNoWidth + 4, baseTopY);
+        }
 
         doc.setFontSize(7).setFont("helvetica", "normal").setTextColor(80, 80, 80);
-        doc.text(new Date().toLocaleDateString(), 198, 12, { align: 'right' });
+        doc.text(new Date().toLocaleDateString(), 198, baseTopY, { align: 'right' });
 
         doc.setFontSize(8).setFont("helvetica", "bold").setTextColor(0, 0, 0);
-        doc.text(`Picker:`, 14, 16);
+        doc.text(`Picker:`, 14, baseTopY + 4);
         doc.setFont("helvetica", "normal");
-        doc.text(`${pickerName.toUpperCase()}`, 25, 16);
+        doc.text(`${pickerName.toUpperCase()}`, 25, baseTopY + 4);
 
         // Render PDPs in Header
         doc.setFont("helvetica", "bold").setTextColor(80, 80, 80);
-        doc.text(`PDPs:`, 14, 20);
+        doc.text(`PDPs:`, 14, baseTopY + 8);
         doc.setFont("helvetica", "normal");
         const splitPdps = doc.splitTextToSize(pdpListString || "N/A", 160);
-        doc.text(splitPdps, 23, 20);
+        doc.text(splitPdps, 23, baseTopY + 8);
 
-        // Calculate next Y position based on how many lines the PDPs took
-        let nextY = 20 + (splitPdps.length * 3.5);
+        let nextY = baseTopY + 8 + (splitPdps.length * 3.5);
 
         // Render Drivers in Header
         doc.setFont("helvetica", "bold").setTextColor(80, 80, 80);
@@ -152,14 +163,11 @@ export const generatePickerPDF = async (
             nextY += 4;
         }
 
-        // Calculate dynamic start Y for the table so it doesn't overlap the header
         const tableStartY = nextY + 2;
-
 
         // --- 3. FLAT DATA PROCESSING WITH SPACE OPTIMIZATIONS ---
         const tableRows: TableCell[][] = [];
 
-        // Sort items by Category, Brand, and Name for organized picking
         const sortedItems = [...items].sort((a, b) => {
             const catA = (a.categoryName || "").toUpperCase();
             const catB = (b.categoryName || "").toUpperCase();
@@ -187,7 +195,7 @@ export const generatePickerPDF = async (
             const formattedAmt = `PHP ${amt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
             tableRows.push([
-                "", // Checkbox
+                "",
                 (item.categoryName || "GENERAL").toUpperCase(),
                 (item.brandName || "NO BRAND").toUpperCase(),
                 item.productName.toUpperCase(),
@@ -199,7 +207,7 @@ export const generatePickerPDF = async (
 
         // --- 4. TIGHT SPACE-OPTIMIZED TABLE RENDER ---
         autoTable(doc, {
-            startY: tableStartY, // Starts dynamically below the extended header
+            startY: tableStartY,
             head: [["", "CATEGORY", "BRAND", "DESCRIPTION", "UNIT", "QTY", "TOTAL AMOUNT"]],
             body: tableRows,
             theme: "plain",
@@ -231,13 +239,16 @@ export const generatePickerPDF = async (
             },
             didDrawPage: (data: AutoTablePageData) => {
                 doc.setFontSize(7).setTextColor(161, 161, 170);
-                doc.text(`Batch: ${batchNo} | Page ${data.pageNumber}`, 14, doc.internal.pageSize.height - 8);
+                const copyFooter = includeDeliveryCopy
+                    ? ` | ${copyType === 'delivery' ? 'DELIVERY COPY' : 'OFFICE COPY'}`
+                    : '';
+                doc.text(`Batch: ${batchNo}${copyFooter} | Page ${data.pageNumber}`, 14, doc.internal.pageSize.height - 4);
             }
         });
 
         // --- 5. TIGHT FOOTER SIGNATURES ---
         const extendedDoc = doc as import("jspdf").jsPDF & { lastAutoTable: { finalY: number } };
-        let finalY = extendedDoc.lastAutoTable.finalY + 10;
+        let finalY = extendedDoc.lastAutoTable.finalY + 8;
 
         if (finalY > 275) {
             doc.addPage();
@@ -246,13 +257,58 @@ export const generatePickerPDF = async (
 
         doc.setDrawColor(0, 0, 0);
         doc.setLineWidth(0.2);
-        doc.line(14, finalY + 6, 70, finalY + 6);
-        doc.setFontSize(6).setTextColor(50, 50, 50).text("PICKER CONFIRMATION", 14, finalY + 9);
-        doc.setFontSize(8).setFont("helvetica", "bold").setTextColor(0, 0, 0).text(pickerName, 14, finalY + 4);
+        doc.line(14, finalY + 5, 70, finalY + 5);
+        doc.setFontSize(6).setTextColor(50, 50, 50).text("PICKER CONFIRMATION", 14, finalY + 8);
+        doc.setFontSize(8).setFont("helvetica", "bold").setTextColor(0, 0, 0).text(pickerName, 14, finalY + 3.5);
 
-        doc.line(130, finalY + 6, 186, finalY + 6);
-        doc.setFontSize(6).setTextColor(50, 50, 50).text("VERIFICATION OFFICER", 130, finalY + 9);
+        doc.line(130, finalY + 5, 186, finalY + 5);
+        doc.setFontSize(6).setTextColor(50, 50, 50).text("VERIFICATION OFFICER", 130, finalY + 8);
+
+        return finalY + 12;
+    };
+
+    const drawCutLine = (y: number) => {
+        doc.setDrawColor(180, 180, 180);
+        doc.setLineWidth(0.2);
+        doc.setLineDashPattern([2, 2], 0);
+        doc.line(14, y, 90, y);
+        doc.line(125, y, 198, y);
+        doc.setLineDashPattern([], 0);
+
+        doc.setFontSize(6.5).setFont("helvetica", "bold").setTextColor(130, 130, 130);
+        doc.text("✂ CUT HERE", 107.5, y + 1, { align: "center" });
+    };
+
+    let isFirstPage = true;
+
+    Object.entries(groupedManifest).forEach(([rawPickerName, items]) => {
+        const isUnassigned = !rawPickerName ||
+            rawPickerName.toLowerCase().includes("null") ||
+            rawPickerName.includes("GENERAL");
+        const pickerName = isUnassigned ? "GENERAL / UNASSIGNED" : rawPickerName;
+
+        if (!isFirstPage) {
+            doc.addPage();
+        }
+        isFirstPage = false;
+
+        // Render Office Copy
+        const officeEndHeight = renderSingleSheet(pickerName, items, 'office', 12);
+
+        // Render Delivery Copy if enabled
+        if (includeDeliveryCopy) {
+            // Check if Delivery Copy can fit in the lower half of the page
+            if (officeEndHeight <= 135) {
+                const cutY = officeEndHeight + 5;
+                drawCutLine(cutY);
+                renderSingleSheet(pickerName, items, 'delivery', cutY + 8);
+            } else {
+                // If it exceeds half page, place on next page
+                doc.addPage();
+                renderSingleSheet(pickerName, items, 'delivery', 12);
+            }
+        }
     });
 
     doc.save(`PICKLIST_${batchNo}.pdf`);
-};
+};

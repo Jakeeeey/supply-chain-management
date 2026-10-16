@@ -19,6 +19,7 @@ import {ConsolidatorDto, ConsolidatorDetailsDto, ConsolidatorDispatchesDto} from
 import {getStatusBadge} from "./ConsolidatorTable";
 import {StartPickingDialog} from "./StartPickingDialog";
 import { generatePickerPDF } from "./PickerManifestPrint";
+import { fetchDeliveryPickingPrintableDeliveryCopy } from "../providers/fetchProvider";
 
 interface ConsolidatorDetailSheetProps {
     consolidator: ConsolidatorDto | null;
@@ -75,10 +76,14 @@ export function ConsolidatorDetailSheet({consolidator, isOpen, onClose, onStatus
     const fetchAndPrintManifest = async () => {
         setIsPrinting(true);
         try {
-            const manifestRes = await fetch(`/api/scm/warehouse-management/consolidation/delivery-picking/manifest/${consolidator.consolidatorNo}`);
+            const [manifestRes, includeDeliveryCopy] = await Promise.all([
+                fetch(`/api/scm/warehouse-management/consolidation/delivery-picking/manifest/${consolidator.consolidatorNo}`),
+                fetchDeliveryPickingPrintableDeliveryCopy()
+            ]);
+
             if (manifestRes.ok) {
                 const data = await manifestRes.json();
-                generatePickerPDF(data, consolidator.consolidatorNo, consolidator.totalSalesOrderAmount);
+                generatePickerPDF(data, consolidator.consolidatorNo, consolidator.totalSalesOrderAmount, includeDeliveryCopy);
             }
         } catch (err) {
             console.error("VOS: PDF Generation Failed", err);
@@ -99,10 +104,14 @@ export function ConsolidatorDetailSheet({consolidator, isOpen, onClose, onStatus
 
                 if (!res.ok) throw new Error("Failed to initialize picking.");
 
-                const manifestRes = await fetch(`/api/scm/warehouse-management/consolidation/delivery-picking/manifest/${consolidator.consolidatorNo}`);
+                const [manifestRes, includeDeliveryCopy] = await Promise.all([
+                    fetch(`/api/scm/warehouse-management/consolidation/delivery-picking/manifest/${consolidator.consolidatorNo}`),
+                    fetchDeliveryPickingPrintableDeliveryCopy()
+                ]);
+
                 const data = await manifestRes.json();
 
-                generatePickerPDF(data, consolidator.consolidatorNo, consolidator.totalSalesOrderAmount);
+                generatePickerPDF(data, consolidator.consolidatorNo, consolidator.totalSalesOrderAmount, includeDeliveryCopy);
 
                 setIsStartPickingOpen(false);
                 onStatusUpdate?.();
@@ -114,6 +123,7 @@ export function ConsolidatorDetailSheet({consolidator, isOpen, onClose, onStatus
             }
         });
     };
+
 
     return (
         <>

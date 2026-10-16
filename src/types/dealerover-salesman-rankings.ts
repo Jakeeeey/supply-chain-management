@@ -18,7 +18,9 @@ export interface DealerSalesInvoiceItem {
     invoice_id: number;
     net_amount: number | null;
     salesman_id: number | null;
+    customer_code?: string | null;
     invoice_date: string | null;
+    created_date?: string | null;
 }
 
 export interface SalesmanRankingEntry {
@@ -31,6 +33,8 @@ export interface SalesmanRankingEntry {
     dealer_code: string;
     total_net_amount: number;
     total_invoices: number;
+    total_customers?: number;
+    latest_created_date?: string | null;
 }
 
 export interface DealerStatusCheckpoint {
