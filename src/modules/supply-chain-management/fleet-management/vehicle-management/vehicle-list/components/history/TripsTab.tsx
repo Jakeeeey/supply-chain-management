@@ -1,4 +1,4 @@
-//src/modules/vehicle-management/vehicle-list/components/history/TripsTab.tsx
+// src/modules/vehicle-management/vehicle-list/components/history/TripsTab.tsx
 "use client";
 
 import * as React from "react";
@@ -9,6 +9,9 @@ import { listDispatchPlansByVehicle } from "@/modules/supply-chain-management/fl
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { RefreshCw, Navigation, Route } from "lucide-react";
 
 function toMs(v?: string | null) {
   if (!v) return 0;
@@ -56,6 +59,14 @@ function fmtDuration(dispatchIso?: string | null, arrivalIso?: string | null) {
   if (h <= 0) return `${m} mins`;
   if (m === 0) return `${h} hrs`;
   return `${h} hrs ${m} mins`;
+}
+
+function tripStatusVariant(status?: string | null) {
+  const s = String(status || "").toLowerCase();
+  if (s.includes("completed") || s.includes("delivered")) return "default";
+  if (s.includes("progress") || s.includes("transit") || s.includes("dispatched")) return "secondary";
+  if (s.includes("cancelled")) return "destructive";
+  return "outline";
 }
 
 function TripsSkeleton({ rows = 3 }: { rows?: number }) {
@@ -142,58 +153,138 @@ export default function TripsTab({ vehicle }: { vehicle: VehicleRow }) {
     return <TripsSkeleton rows={3} />;
   }
 
-  if (rows.length === 0) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-sm font-semibold">Trips</div>
-          <div className="mt-2 text-sm text-muted-foreground">
-            No trips recorded yet.
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  // Summary statistics
+  const totalTrips = rows.length;
+  const completedTrips = rows.filter((r) =>
+    String(r.status || "").toLowerCase().includes("completed")
+  ).length;
+  const inTransitTrips = rows.filter((r) => {
+    const s = String(r.status || "").toLowerCase();
+    return s.includes("transit") || s.includes("dispatched") || s.includes("progress");
+  }).length;
+  const totalDist = rows.reduce((acc, r) => acc + toNumberSafe(r.total_distance), 0);
 
   return (
-    <div className="grid gap-4">
-      {rows.map((p) => {
-        const date = fmtDate(pickPlanDate(p));
-        const route = "N/A"; // leave blank until you have location joins
-        const distance = fmtDistanceKm(p.total_distance);
-        const duration = fmtDuration(
-          p.estimated_time_of_dispatch || p.time_of_dispatch,
-          p.estimated_time_of_arrival || p.time_of_arrival
-        );
+    <div className="space-y-4">
+      {/* Trip & Dispatch Summary Card */}
+      <Card>
+        <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold">Trip Summary & Dispatch Integration</div>
+            <div className="text-xs text-muted-foreground">
+              Real-time summary of trips executed and dispatched for this vehicle.
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={load}
+            className="h-8 gap-1.5"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Refresh
+          </Button>
+        </CardContent>
+      </Card>
 
-        return (
-          <Card key={String(p.id ?? `${date}-${Math.random()}`)}>
-            <CardContent className="p-5">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="grid gap-1">
-                  <div className="text-xs text-muted-foreground">Date</div>
-                  <div className="text-sm font-medium">{date}</div>
-                </div>
+      {/* Metric Tiles */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs text-muted-foreground">Total Trips</div>
+            <div className="text-xl font-bold mt-1">{totalTrips}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs text-muted-foreground">Active Dispatch</div>
+            <div className="text-xl font-bold mt-1 text-primary">{inTransitTrips}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs text-muted-foreground">Completed</div>
+            <div className="text-xl font-bold mt-1 text-green-600 dark:text-green-400">
+              {completedTrips}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs text-muted-foreground">Total Distance</div>
+            <div className="text-xl font-bold mt-1">{totalDist.toLocaleString()} km</div>
+          </CardContent>
+        </Card>
+      </div>
 
-                <div className="grid gap-1">
-                  <div className="text-xs text-muted-foreground">Route</div>
-                  <div className="text-sm font-medium">{route}</div>
-                </div>
+      {rows.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <Navigation className="h-10 w-10 text-muted-foreground/60 mx-auto mb-2" />
+            <div className="text-sm font-semibold">No dispatch trips recorded yet</div>
+            <div className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+              When this vehicle is assigned to delivery dispatch plans, completed and ongoing trip summaries will appear here automatically.
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-3">
+          {rows.map((p) => {
+            const date = fmtDate(pickPlanDate(p));
+            const routeStr = p.route || (p.origin && p.destination ? `${p.origin} → ${p.destination}` : "Standard Route");
+            const distance = fmtDistanceKm(p.total_distance);
+            const duration = fmtDuration(
+              p.estimated_time_of_dispatch || p.time_of_dispatch,
+              p.estimated_time_of_arrival || p.time_of_arrival
+            );
 
-                <div className="grid gap-1">
-                  <div className="text-xs text-muted-foreground">Distance</div>
-                  <div className="text-sm font-medium">{distance}</div>
-                </div>
+            return (
+              <Card key={String(p.id ?? `${date}-${Math.random()}`)} className="hover:border-primary/40 transition">
+                <CardContent className="p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
+                    <div className="flex items-center gap-2">
+                      <Route className="h-4 w-4 text-primary shrink-0" />
+                      <div className="text-sm font-semibold">{p.doc_no || `Trip #${p.id}`}</div>
+                    </div>
+                    <Badge variant={tripStatusVariant(p.status)} className="px-2.5">
+                      {p.status || "Completed"}
+                    </Badge>
+                  </div>
 
-                <div className="grid gap-1">
-                  <div className="text-xs text-muted-foreground">Duration</div>
-                  <div className="text-sm font-medium">{duration}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-4 pt-3">
+                    <div className="grid gap-1">
+                      <div className="text-xs text-muted-foreground">Date</div>
+                      <div className="text-sm font-medium">{date}</div>
+                    </div>
+
+                    <div className="grid gap-1">
+                      <div className="text-xs text-muted-foreground">Route</div>
+                      <div className="text-sm font-medium truncate">{routeStr}</div>
+                    </div>
+
+                    <div className="grid gap-1">
+                      <div className="text-xs text-muted-foreground">Distance</div>
+                      <div className="text-sm font-medium">{distance}</div>
+                    </div>
+
+                    <div className="grid gap-1">
+                      <div className="text-xs text-muted-foreground">Duration</div>
+                      <div className="text-sm font-medium">{duration}</div>
+                    </div>
+                  </div>
+
+                  {p.remarks && (
+                    <div className="text-xs text-muted-foreground mt-2 border-t pt-2">
+                      Remarks: {p.remarks}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

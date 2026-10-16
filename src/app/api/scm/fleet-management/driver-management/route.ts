@@ -16,6 +16,15 @@ const DRIVER_CONTACT_FIELDS = [
     "emergency_contact_phone",
     "emergency_contact_address",
 ] as const;
+const DRIVER_LICENSE_FIELDS = [
+    "license_no",
+    "license_classification",
+    "license_restrictions",
+    "license_expiry_date",
+    "license_file_record_id",
+    "license_verified_by",
+    "license_verified_at",
+] as const;
 const DRIVER_CONTACT_FIELD_CACHE_TTL_MS = 5 * 60 * 1000;
 const DRIVER_BASE_FIELDS = [
     "id",
@@ -266,30 +275,87 @@ function hasContactFieldIntent(body: Record<string, unknown>) {
     return DRIVER_CONTACT_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(body, field));
 }
 
-async function driverPayload(body: Record<string, unknown>) {
-    const payload = {
+async function validateUserIdExists(userId: number | null | undefined): Promise<number | null> {
+    if (!userId || isNaN(userId)) return null;
+    try {
+        const res = await fetch(`${DIRECTUS_BASE}/items/user?filter[user_id][_eq]=${userId}&limit=1&fields=user_id`, {
+            cache: "no-store",
+            headers: directusHeaders(),
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.data) && data.data.length > 0) {
+                return Number(data.data[0].user_id);
+            }
+        }
+    } catch {
+        // Fallback to null on error
+    }
+    return null;
+}
+
+async function licensePayload(body: Record<string, unknown>, currentUserId?: number | null) {
+    const payload: Record<string, unknown> = {};
+    if ("license_no" in body) payload.license_no = nullableString(body.license_no);
+    if ("license_classification" in body) payload.license_classification = nullableString(body.license_classification);
+    if ("license_restrictions" in body) payload.license_restrictions = nullableString(body.license_restrictions);
+    if ("license_expiry_date" in body) payload.license_expiry_date = nullableString(body.license_expiry_date);
+    if ("license_file_record_id" in body) {
+        payload.license_file_record_id = body.license_file_record_id ? Number(body.license_file_record_id) : null;
+    }
+    
+    // Determine verification state
+    const isVerifiedExplicit = body.is_verified === true || body.license_verified === true || !!body.license_verified_at;
+    let candidateUserId: number | null = null;
+    if ("license_verified_by" in body && body.license_verified_by) {
+        candidateUserId = Number(body.license_verified_by);
+    } else if (isVerifiedExplicit) {
+        candidateUserId = currentUserId || null;
+    }
+
+    if (candidateUserId) {
+        payload.license_verified_by = await validateUserIdExists(candidateUserId);
+    } else {
+        payload.license_verified_by = null;
+    }
+
+    if ("license_verified_at" in body && body.license_verified_at) {
+        payload.license_verified_at = nullableString(body.license_verified_at) || new Date().toISOString();
+    } else if (isVerifiedExplicit) {
+        payload.license_verified_at = new Date().toISOString();
+    }
+    return payload;
+}
+
+function hasLicenseFieldIntent(body: Record<string, unknown>) {
+    return DRIVER_LICENSE_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(body, field));
+}
+
+async function driverPayload(body: Record<string, unknown>, currentUserId?: number | null) {
+    let payload: Record<string, unknown> = {
         user_id: body.user_id,
         branch_id: body.branch_id,
         bad_branch_id: body.bad_branch_id || null,
     };
 
-    if (!hasContactFieldIntent(body)) {
-        return payload;
+    if (hasContactFieldIntent(body)) {
+        const contactFieldStatus = await getDriverContactFieldStatus();
+        if (contactFieldStatus === "supported") {
+            payload = {
+                ...payload,
+                ...contactPayload(body),
+            };
+        }
     }
 
-    const contactFieldStatus = await getDriverContactFieldStatus();
-    if (contactFieldStatus === "supported") {
-        return {
+    if (hasLicenseFieldIntent(body)) {
+        payload = {
             ...payload,
-            ...contactPayload(body),
+            ...(await licensePayload(body, currentUserId)),
         };
     }
 
-    if (contactFieldStatus === "unsupported") {
-        throw new DriverContactFieldError("Driver contact fields are not available in this Directus schema or role yet.", 409);
-    }
-
-    throw new DriverContactFieldError("Unable to verify driver contact field support. Please retry.", 503);
+    return payload;
 }
 
 export async function GET(request: NextRequest) {
@@ -298,11 +364,13 @@ export async function GET(request: NextRequest) {
         if (!auth.ok) return auth.response;
 
         const driverContactFieldStatus = await getDriverContactFieldStatus();
-        const driverFields = driverContactFieldStatus === "supported"
-            ? [...DRIVER_BASE_FIELDS, ...DRIVER_CONTACT_FIELDS]
-            : [...DRIVER_BASE_FIELDS];
+        const driverFields = [
+            ...DRIVER_BASE_FIELDS,
+            ...DRIVER_LICENSE_FIELDS,
+            ...(driverContactFieldStatus === "supported" ? DRIVER_CONTACT_FIELDS : []),
+        ];
 
-        const [driversRes, usersRes, branchesRes] = await Promise.all([
+        const [driversRes, usersRes, branchesRes, employeeRecordsRes] = await Promise.all([
             fetch(`${DIRECTUS_BASE}/items/driver?limit=-1&fields=${fieldsParam(driverFields)}`, {
                 cache: "no-store",
                 headers: directusHeaders(),
@@ -315,6 +383,10 @@ export async function GET(request: NextRequest) {
                 cache: "no-store",
                 headers: directusHeaders(),
             }),
+            fetch(`${DIRECTUS_BASE}/items/employee_file_records?limit=-1&fields=id,user_id,list_id,record_name,description,file_ref,created_at`, {
+                cache: "no-store",
+                headers: directusHeaders(),
+            }).catch(() => null),
         ]);
 
         if (!driversRes.ok) {
@@ -333,16 +405,20 @@ export async function GET(request: NextRequest) {
         const driversData = await driversRes.json();
         const usersData = await usersRes.json();
         const branchesData = await branchesRes.json();
+        const employeeRecordsData = employeeRecordsRes && employeeRecordsRes.ok ? await employeeRecordsRes.json() : { data: [] };
 
         const drivers = driversData.data || [];
         const users = usersData.data || [];
         const branches = branchesData.data || [];
+        const employeeRecords = employeeRecordsData.data || [];
 
         // Map drivers with their related data
         interface DriverRaw {
             user_id: string | number;
             branch_id: string | number;
             bad_branch_id?: string | number;
+            license_file_record_id?: string | number | null;
+            license_verified_by?: string | number | null;
             [key: string]: unknown;
         }
 
@@ -352,12 +428,20 @@ export async function GET(request: NextRequest) {
             const badBranch = driver.bad_branch_id
                 ? branches.find((b: { id: string | number }) => b.id === driver.bad_branch_id)
                 : undefined;
+            const licenseFileRecord = driver.license_file_record_id
+                ? employeeRecords.find((r: { id: string | number }) => String(r.id) === String(driver.license_file_record_id))
+                : undefined;
+            const verifiedByUser = driver.license_verified_by
+                ? users.find((u: { user_id: string | number }) => String(u.user_id) === String(driver.license_verified_by))
+                : undefined;
 
             return {
                 ...driver,
                 user,
                 good_branch: goodBranch,
                 bad_branch: badBranch,
+                license_file_record: licenseFileRecord,
+                verified_by_user: verifiedByUser,
             };
         });
 
@@ -367,6 +451,7 @@ export async function GET(request: NextRequest) {
             branches,
             capabilities: {
                 driverContactFields: driverContactFieldStatus === "supported",
+                driverLicenseFields: true,
             },
         });
     } catch (error) {
@@ -384,6 +469,15 @@ export async function POST(request: NextRequest) {
         const auth = await requireDriverManagementAccess(request);
         if (!auth.ok) return auth.response;
 
+        const token = request.cookies.get(COOKIE_NAME)?.value;
+        let authedUserId: number | null = null;
+        if (token) {
+            const payload = decodeJwtPayload(token);
+            if (payload && payload.sub) {
+                authedUserId = parseInt(String(payload.sub), 10) || null;
+            }
+        }
+
         const body = await request.json();
         const { user_id, branch_id, bad_branch_id } = body;
 
@@ -399,7 +493,7 @@ export async function POST(request: NextRequest) {
         const createRes = await fetch(`${DIRECTUS_BASE}/items/driver`, {
             method: "POST",
             headers: directusHeaders(),
-            body: JSON.stringify(await driverPayload(body)),
+            body: JSON.stringify(await driverPayload(body, authedUserId)),
         });
 
         if (!createRes.ok) {
@@ -462,6 +556,15 @@ export async function PATCH(request: NextRequest) {
         const auth = await requireDriverManagementAccess(request);
         if (!auth.ok) return auth.response;
 
+        const token = request.cookies.get(COOKIE_NAME)?.value;
+        let authedUserId: number | null = null;
+        if (token) {
+            const payload = decodeJwtPayload(token);
+            if (payload && payload.sub) {
+                authedUserId = parseInt(String(payload.sub), 10) || null;
+            }
+        }
+
         const body = await request.json();
         const { id } = body;
 
@@ -476,7 +579,7 @@ export async function PATCH(request: NextRequest) {
         const updateRes = await fetch(`${DIRECTUS_BASE}/items/driver/${id}`, {
             method: "PATCH",
             headers: directusHeaders(),
-            body: JSON.stringify(await driverPayload(body)),
+            body: JSON.stringify(await driverPayload(body, authedUserId)),
         });
 
         if (!updateRes.ok) {

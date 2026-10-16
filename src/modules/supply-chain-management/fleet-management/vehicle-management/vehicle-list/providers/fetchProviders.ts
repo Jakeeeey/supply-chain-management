@@ -5,6 +5,11 @@ import type {
   UserApiRow,
   FuelTypeApiRow,
   EngineTypeApiRow,
+  VehicleDocumentApiRow,
+  VehiclePartApiRow,
+  VehicleInstalledPartApiRow,
+  VehicleJobOrderApiRow,
+  BranchApiRow,
 } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/types";
 
 type DirectusListResponse<T> = { data: T[] };
@@ -81,9 +86,7 @@ export async function listDispatchPlansByVehicle(vehicleId: number): Promise<Dis
 }
 
 /**
- * ✅ Upload to Next.js server filesystem under /public/uploads/vehicles
- * Returns a PUBLIC PATH like: /uploads/vehicles/xxx.jpg
- * (This is what we store in vehicles.image)
+ * Upload vehicle photo
  */
 export async function uploadVehicleImage(file: File): Promise<string> {
   const fd = new FormData();
@@ -102,11 +105,183 @@ export async function uploadVehicleImage(file: File): Promise<string> {
   return p;
 }
 
+/**
+ * Upload vehicle registration document (OR, CR, Insurance, etc.)
+ */
+export async function uploadVehicleDocument(
+  file: File,
+  meta: {
+    vehicleId?: number;
+    documentType: string;
+    documentNo?: string;
+    issuedDate?: string;
+    expiryDate?: string;
+    remarks?: string;
+  }
+): Promise<{ file_id: string; file_name: string; document_id: number | null }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  if (meta.vehicleId) fd.append("vehicle_id", String(meta.vehicleId));
+  fd.append("document_type", meta.documentType);
+  if (meta.documentNo) fd.append("document_no", meta.documentNo);
+  if (meta.issuedDate) fd.append("issued_date", meta.issuedDate);
+  if (meta.expiryDate) fd.append("expiry_date", meta.expiryDate);
+  if (meta.remarks) fd.append("remarks", meta.remarks);
+
+  const res = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list/document-upload", {
+    method: "POST",
+    body: fd,
+  });
+
+  if (!res.ok) throw new Error(await readError(res));
+  return await res.json();
+}
+
+/**
+ * List documents for a vehicle
+ */
+export async function listVehicleDocuments(vehicleId: number): Promise<VehicleDocumentApiRow[]> {
+  const res = await fetch(
+    `/api/scm/fleet-management/vehicle-management/vehicle-list/documents?vehicle_id=${encodeURIComponent(
+      String(vehicleId)
+    )}`
+  );
+  if (!res.ok) throw new Error(await readError(res));
+  const json = (await res.json()) as DirectusListResponse<VehicleDocumentApiRow>;
+  return json?.data ?? [];
+}
+
+/**
+ * Update document metadata (or replace file)
+ */
+export async function updateVehicleDocument(
+  docId: number,
+  payload: Record<string, unknown>
+): Promise<VehicleDocumentApiRow> {
+  const res = await fetch(
+    `/api/scm/fleet-management/vehicle-management/vehicle-list/documents/${encodeURIComponent(String(docId))}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+  if (!res.ok) throw new Error(await readError(res));
+  const json = (await res.json()) as DirectusItemResponse<VehicleDocumentApiRow>;
+  return json?.data;
+}
+
+/**
+ * Delete a document
+ */
+export async function deleteVehicleDocument(docId: number): Promise<void> {
+  const res = await fetch(
+    `/api/scm/fleet-management/vehicle-management/vehicle-list/documents/${encodeURIComponent(String(docId))}`,
+    {
+      method: "DELETE",
+    }
+  );
+  if (!res.ok) throw new Error(await readError(res));
+}
+
+/**
+ * List parts catalogue
+ */
+export async function listVehicleParts(): Promise<VehiclePartApiRow[]> {
+  const res = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list/parts");
+  if (!res.ok) throw new Error(await readError(res));
+  const json = (await res.json()) as DirectusListResponse<VehiclePartApiRow>;
+  return json?.data ?? [];
+}
+
+/**
+ * List installed parts for a vehicle
+ */
+export async function listVehicleInstalledParts(vehicleId: number): Promise<VehicleInstalledPartApiRow[]> {
+  const res = await fetch(
+    `/api/scm/fleet-management/vehicle-management/vehicle-list/installed-parts?vehicle_id=${encodeURIComponent(
+      String(vehicleId)
+    )}`
+  );
+  if (!res.ok) throw new Error(await readError(res));
+  const json = (await res.json()) as DirectusListResponse<VehicleInstalledPartApiRow>;
+  return json?.data ?? [];
+}
+
+/**
+ * List branches
+ */
+export async function listBranches(): Promise<BranchApiRow[]> {
+  const res = await fetch("/api/scm/fleet-management/parts-and-inventory/branches", {
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  const json = (await res.json()) as DirectusListResponse<BranchApiRow>;
+  return json?.data ?? [];
+}
+
+/**
+ * List stock for a branch from stock-monitoring
+ */
+export async function listBranchStock(branchId: number): Promise<Array<{
+  id: number;
+  part_id: number | { id: number; part_name?: string; part_code?: string };
+  branch_id: number | { id: number; branch_name?: string };
+  on_hand: number;
+}>> {
+  const res = await fetch(`/api/scm/fleet-management/parts-and-inventory/stock-monitoring?branch_id=${branchId}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  const json = await res.json();
+  return Array.isArray(json?.data) ? json.data : [];
+}
+
+/**
+ * Install / link a part to a vehicle
+ */
+export async function installVehiclePart(payload: {
+  vehicle_id: number;
+  part_id: number;
+  quantity: number;
+  branch_id?: number | null;
+  serial_no?: string;
+  remarks?: string;
+}): Promise<VehicleInstalledPartApiRow> {
+  const res = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list/installed-parts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await readError(res));
+  const json = (await res.json()) as DirectusItemResponse<VehicleInstalledPartApiRow>;
+  return json?.data;
+}
+
+/**
+ * List job orders for a vehicle
+ */
+export async function listVehicleJobOrders(vehicleId: number): Promise<VehicleJobOrderApiRow[]> {
+  const res = await fetch(
+    `/api/scm/fleet-management/vehicle-management/vehicle-list/job-orders?vehicle_id=${encodeURIComponent(
+      String(vehicleId)
+    )}`
+  );
+  if (!res.ok) throw new Error(await readError(res));
+  const json = (await res.json()) as DirectusListResponse<VehicleJobOrderApiRow>;
+  return json?.data ?? [];
+}
+
 const VEHICLE_ALLOWED_KEYS = new Set([
   "vehicle_plate",
   "vehicle_type",
   "status",
   "name",
+  "make",
+  "model",
+  "year_model",
+  "vin_no",
+  "engine_no",
   "purchased_date",
   "current_mileage",
   "fuel_type",
@@ -154,7 +329,7 @@ export async function createVehicle(payload: Record<string, unknown>) {
 
   if (!looksLikeInvalidFields) throw new Error(msg);
 
-  // ✅ retry with only known vehicle columns (prevents losing good fields)
+  // retry with only known vehicle columns
   const sanitized = sanitizeVehicleCreatePayload(payload);
 
   const second = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list", {
@@ -166,4 +341,17 @@ export async function createVehicle(payload: Record<string, unknown>) {
   if (!second.ok) throw new Error(await readError(second));
   const json2 = (await second.json()) as DirectusItemResponse<VehiclesApiRow>;
   return json2?.data;
+}
+
+export async function updateVehicle(id: number, payload: Record<string, unknown>) {
+  const sanitized = sanitizeVehicleCreatePayload(payload);
+  const res = await fetch(`/api/scm/fleet-management/vehicle-management/vehicle-list/${encodeURIComponent(String(id))}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(sanitized),
+  });
+
+  if (!res.ok) throw new Error(await readError(res));
+  const json = (await res.json()) as DirectusItemResponse<VehiclesApiRow>;
+  return json?.data;
 }
