@@ -498,6 +498,7 @@ export function PurchasePlanningModule() {
                             supplierId={pendingSelection?.supplierId || ""}
                             branchIds={activeBranches}
                             mode={viewMode}
+                            targets={targets}
                         />
                     </div>
                 ) : (
