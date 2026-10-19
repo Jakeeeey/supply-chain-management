@@ -1,10 +1,12 @@
-export type DashboardCardType = "vehicles" | "drivers" | "jo_pendings" | "outside";
+export type DashboardCardType = "vehicles" | "drivers" | "jo_pendings" | "outside" | "licenses";
 
 export interface DashboardSummary {
   totalVehicles: number;
   totalDrivers: number;
   joPendings: number;
   vehiclesOutside: number;
+  expiringLicenses: number;
+  totalLicenses?: number;
 }
 
 export interface DashboardVehicleItem {
@@ -53,6 +55,22 @@ export interface DashboardOutsideVehicleItem {
   remarks?: string;
 }
 
+export interface DashboardLicenseItem {
+  id: number;
+  user_id: number;
+  driver_name: string;
+  branch_name?: string;
+  contact?: string;
+  email?: string;
+  license_no: string;
+  license_classification: string;
+  license_restrictions?: string;
+  license_expiry_date: string;
+  days_remaining: number | null;
+  status: "Expired" | "Expiring Soon" | "Valid" | "No Expiry Date" | "Incomplete";
+  is_verified?: boolean;
+}
+
 export interface FleetDashboardResponse {
   summary: DashboardSummary;
   lists: {
@@ -60,5 +78,6 @@ export interface FleetDashboardResponse {
     drivers: DashboardDriverItem[];
     jo_pendings: DashboardJobOrderItem[];
     outside: DashboardOutsideVehicleItem[];
+    licenses: DashboardLicenseItem[];
   };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Truck, Users, Wrench, Navigation, ArrowUpRight } from "lucide-react";
+import { Truck, Users, Wrench, Navigation, ArrowUpRight, IdCard } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { DashboardCardType, DashboardSummary } from "../types";
@@ -30,6 +30,7 @@ export function FleetDashboardCards({
     color: string;
     borderActive: string;
     bgAccent: string;
+    badgeText?: string;
   }> = [
     {
       id: "vehicles",
@@ -52,6 +53,18 @@ export function FleetDashboardCards({
       color: "text-emerald-600 dark:text-emerald-400",
       borderActive: "border-emerald-500 ring-2 ring-emerald-500/20",
       bgAccent: "bg-emerald-50 dark:bg-emerald-950/40",
+    },
+    {
+      id: "licenses",
+      title: "Expiring Licenses",
+      description: "Licenses expiring soon (<= 30d) or expired",
+      source: "Driver / License Records",
+      count: summary?.expiringLicenses ?? 0,
+      icon: IdCard,
+      color: "text-rose-600 dark:text-rose-400",
+      borderActive: "border-rose-500 ring-2 ring-rose-500/20",
+      bgAccent: "bg-rose-50 dark:bg-rose-950/40",
+      badgeText: summary?.totalLicenses ? `of ${summary.totalLicenses} Total` : undefined,
     },
     {
       id: "jo_pendings",
@@ -78,7 +91,7 @@ export function FleetDashboardCards({
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       {cards.map((card) => {
         const Icon = card.icon;
         const isSelected = activeCard === card.id;
@@ -100,9 +113,16 @@ export function FleetDashboardCards({
             <CardContent className="p-5">
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {card.title}
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {card.title}
+                    </p>
+                    {card.badgeText && !loading && (
+                      <span className="text-[10px] font-medium text-muted-foreground/80 bg-muted px-1.5 py-0.2 rounded">
+                        {card.badgeText}
+                      </span>
+                    )}
+                  </div>
                   {loading ? (
                     <Skeleton className="h-8 w-16 my-1" />
                   ) : (

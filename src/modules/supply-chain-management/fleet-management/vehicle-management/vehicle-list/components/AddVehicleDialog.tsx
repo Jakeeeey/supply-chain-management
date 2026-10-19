@@ -2,22 +2,27 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Upload, X, FileText, Trash2 } from "lucide-react";
+import { Plus, Upload, X, FileText, Trash2, Camera, Sparkles, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { createWorker } from "tesseract.js";
 
 import type {
   CreateVehicleForm,
   DocumentUploadItem,
   VehiclesApiRow,
+  VehicleDocumentApiRow,
 } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/types";
 import {
   uploadVehicleImage,
   uploadVehicleDocument,
+  listAllVehicleDocuments,
 } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/providers/fetchProviders";
+import { parseVehicleDocumentText } from "../utils/vehicleDocParser";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
@@ -104,6 +109,21 @@ export function AddVehicleDialog({
     },
   ]);
 
+  // Existing fleet documents for duplicate prevention
+  const [existingDocs, setExistingDocs] = React.useState<VehicleDocumentApiRow[]>([]);
+  // OCR scanning states
+  const [ocrScanningIdx, setOcrScanningIdx] = React.useState<number | null>(null);
+  const [ocrProgress, setOcrProgress] = React.useState<number>(0);
+  const [ocrStatusText, setOcrStatusText] = React.useState<string>("");
+
+  React.useEffect(() => {
+    if (open) {
+      listAllVehicleDocuments()
+        .then((docs) => setExistingDocs(docs))
+        .catch(() => setExistingDocs([]));
+    }
+  }, [open]);
+
   React.useEffect(() => {
     if (!form.imageFile) {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -184,6 +204,105 @@ export function AddVehicleDialog({
     acceptFile(f || null);
   }
 
+  function normalizeDocNo(v?: string | null) {
+    return (v || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  }
+
+  // Check if a document number is duplicated in existing fleet records or another row in pendingDocs
+  function getDocConflict(docNo: string | undefined | null, rowIndex: number): { type: "system" | "form"; details: string } | null {
+    const target = normalizeDocNo(docNo);
+    if (!target) return null;
+
+    // Check other pending rows
+    const otherRowIdx = pendingDocs.findIndex(
+      (d, i) => i !== rowIndex && normalizeDocNo(d.documentNo) === target
+    );
+    if (otherRowIdx !== -1) {
+      return {
+        type: "form",
+        details: `Duplicate document number found in row #${otherRowIdx + 1}.`,
+      };
+    }
+
+    // Check system records
+    const sysMatch = existingDocs.find(
+      (d) => normalizeDocNo(d.document_no) === target
+    );
+    if (sysMatch) {
+      const plate = sysMatch.vehicle_plate || sysMatch.vehicle?.vehicle_plate;
+      const targetDisplay = plate ? `vehicle with plate '${plate}'` : `Vehicle ID #${sysMatch.vehicle_id || "record"}`;
+      return {
+        type: "system",
+        details: `Already registered to ${targetDisplay}.`,
+      };
+    }
+
+    return null;
+  }
+
+  // Scan document image using Tesseract.js
+  async function handleScanDoc(index: number, file: File) {
+    if (!file) return;
+    const isImage = file.type.startsWith("image/");
+    if (!isImage) {
+      toast.info("OCR scanning is optimized for image files (JPG, PNG, WebP).");
+      return;
+    }
+
+    setOcrScanningIdx(index);
+    setOcrProgress(0);
+    setOcrStatusText("Preparing OCR engine...");
+
+    let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
+    try {
+      worker = await createWorker("eng", 1, {
+        logger: (m) => {
+          if (m.status === "recognizing text") {
+            setOcrProgress(Math.round(m.progress * 100));
+            setOcrStatusText(`Reading text... ${Math.round(m.progress * 100)}%`);
+          } else if (m.status) {
+            setOcrStatusText(`${m.status.charAt(0).toUpperCase() + m.status.slice(1)}...`);
+          }
+        },
+      });
+
+      const res = await worker.recognize(file);
+      const text = res.data.text || "";
+      const parsed = parseVehicleDocumentText(text);
+
+      updateDocRow(index, {
+        documentType: (parsed.documentType as "OR" | "CR" | "Insurance" | "Other") || pendingDocs[index]?.documentType || "OR",
+        documentNo: parsed.documentNo || pendingDocs[index]?.documentNo || "",
+        issuedDate: parsed.issuedDate || pendingDocs[index]?.issuedDate || "",
+        expiryDate: parsed.expiryDate || pendingDocs[index]?.expiryDate || "",
+      });
+
+      if (parsed.documentNo) {
+        const conflict = getDocConflict(parsed.documentNo, index);
+        if (conflict) {
+          toast.warning(`Warning: Scanned Document No. '${parsed.documentNo}' is already used. (${conflict.details})`);
+        } else {
+          toast.success("Document scanned! Document number and dates autofilled.");
+        }
+      } else {
+        toast.info("OCR finished. Please verify or enter Document No. manually.");
+      }
+    } catch (ocrErr) {
+      console.error("OCR scan failed:", ocrErr);
+      toast.error("Failed to read document automatically. You can enter details manually.");
+    } finally {
+      if (worker) {
+        try {
+          await worker.terminate();
+        } catch {
+          // ignore
+        }
+      }
+      setOcrScanningIdx(null);
+      setOcrStatusText("");
+    }
+  }
+
   function handleAddDocumentRow() {
     setPendingDocs((prev) => [
       ...prev,
@@ -221,6 +340,20 @@ export function AddVehicleDialog({
             : "Please fill all required fields.",
       });
       return;
+    }
+
+    // Check for any duplicate document numbers in pendingDocs
+    for (let i = 0; i < pendingDocs.length; i++) {
+      const doc = pendingDocs[i];
+      if (doc.documentNo?.trim()) {
+        const conflict = getDocConflict(doc.documentNo, i);
+        if (conflict) {
+          toast.error("Duplicate document detected", {
+            description: `Document No. '${doc.documentNo.trim()}' is not allowed: ${conflict.details}`,
+          });
+          return;
+        }
+      }
     }
 
     let imageId: string | null = null;
@@ -722,6 +855,32 @@ export function AddVehicleDialog({
                       )}
                     </div>
 
+                    {/* Conflict Error Message */}
+                    {(() => {
+                      const conflict = getDocConflict(doc.documentNo, idx);
+                      if (!conflict) return null;
+                      return (
+                        <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive border border-destructive/20">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          <span>{conflict.details}</span>
+                        </div>
+                      );
+                    })()}
+
+                    {/* OCR Progress Indicator for this row */}
+                    {ocrScanningIdx === idx && (
+                      <div className="space-y-1.5 rounded-lg border border-primary/20 bg-primary/5 p-2.5 animate-in fade-in-50">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-primary flex items-center gap-1.5">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            {ocrStatusText || "Scanning document..."}
+                          </span>
+                          <span className="font-mono text-muted-foreground">{ocrProgress}%</span>
+                        </div>
+                        <Progress value={ocrProgress} className="h-1.5" />
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                       <div className="grid gap-1.5">
                         <Label className="text-xs">Document Type</Label>
@@ -744,9 +903,17 @@ export function AddVehicleDialog({
                       </div>
 
                       <div className="grid gap-1.5">
-                        <Label className="text-xs">Document No.</Label>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Document No.</Label>
+                          {Boolean(getDocConflict(doc.documentNo, idx)) && (
+                            <span className="text-[10px] text-destructive font-semibold">Duplicate</span>
+                          )}
+                        </div>
                         <Input
-                          className="h-9"
+                          className={cn(
+                            "h-9",
+                            Boolean(getDocConflict(doc.documentNo, idx)) && "border-destructive focus-visible:ring-destructive/30"
+                          )}
                           value={doc.documentNo || ""}
                           onChange={(e) => updateDocRow(idx, { documentNo: e.target.value })}
                           placeholder="e.g. OR-884920"
@@ -775,7 +942,7 @@ export function AddVehicleDialog({
                     </div>
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 items-end">
-                      <div className="sm:col-span-3 grid gap-1.5">
+                      <div className="sm:col-span-2 grid gap-1.5">
                         <Label className="text-xs">Remarks / Notes</Label>
                         <Input
                           className="h-9"
@@ -793,7 +960,12 @@ export function AddVehicleDialog({
                           className="hidden"
                           onChange={(e) => {
                             const f = e.target.files?.[0];
-                            if (f) updateDocRow(idx, { file: f });
+                            if (f) {
+                              updateDocRow(idx, { file: f });
+                              if (f.type.startsWith("image/")) {
+                                handleScanDoc(idx, f);
+                              }
+                            }
                           }}
                         />
                         <Button
@@ -810,6 +982,32 @@ export function AddVehicleDialog({
                         >
                           <Upload className="h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">{doc.file ? doc.file.name : "Attach File"}</span>
+                        </Button>
+                      </div>
+
+                      <div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={ocrScanningIdx === idx || !doc.file || !doc.file.type.startsWith("image/")}
+                          className="h-9 w-full gap-1.5 text-xs font-semibold"
+                          onClick={() => {
+                            if (doc.file) handleScanDoc(idx, doc.file);
+                          }}
+                          title={!doc.file ? "Attach an image first to scan" : "Extract details with OCR"}
+                        >
+                          {ocrScanningIdx === idx ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Scanning...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-3.5 w-3.5 text-primary" />
+                              Scan / OCR
+                            </>
+                          )}
                         </Button>
                       </div>
                     </div>

@@ -22,6 +22,8 @@ export default function FleetDashboardModule() {
     totalPages,
     totalItems,
     paginatedList,
+    licenseStatusFilter,
+    setLicenseStatusFilter,
     refresh,
   } = useFleetDashboard();
 
@@ -63,6 +65,8 @@ export default function FleetDashboardModule() {
           onRefresh={refresh}
           loading={loading}
           totalCount={totalItems}
+          licenseStatusFilter={licenseStatusFilter}
+          onLicenseStatusFilterChange={setLicenseStatusFilter}
         />
 
         <FleetDashboardTable

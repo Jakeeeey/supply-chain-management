@@ -24,13 +24,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { saveDriver, updateDriver, uploadDriverLicenseFile } from "../providers/fetchProvider";
 import { parseLicenseText } from "../utils/ocrParser";
 import type { DriverWithDetails, User, Branch } from "../types";
-import { Camera, CheckCircle2, Sparkles, UploadCloud } from "lucide-react";
+import { Camera, CheckCircle2, Sparkles, UploadCloud, AlertCircle } from "lucide-react";
+import { createWorker } from "tesseract.js";
 
 interface DriverModalProps {
     isOpen: boolean;
@@ -111,6 +113,8 @@ export function DriverModal({
     const [scannedFile, setScannedFile] = React.useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
     const [ocrRawText, setOcrRawText] = React.useState<string>("");
+    const [ocrProgress, setOcrProgress] = React.useState<number>(0);
+    const [ocrStatusText, setOcrStatusText] = React.useState<string>("");
     const [showRawOcrInput, setShowRawOcrInput] = React.useState(false);
     const [isVerified, setIsVerified] = React.useState<boolean>(false);
 
@@ -208,6 +212,22 @@ export function DriverModal({
         setLicenseForm((prev) => ({ ...prev, [field]: value }));
     };
 
+    // Normalize license string for reliable comparison
+    const normalizeLicense = (lic?: string | null) => {
+        return (lic || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+    };
+
+    // Find conflicting driver if license number is already assigned to someone else
+    const conflictingDriver = React.useMemo(() => {
+        const currentLic = normalizeLicense(licenseForm.license_no);
+        if (!currentLic) return null;
+
+        return drivers.find((d) => {
+            if (editingDriver && d.id === editingDriver.id) return false;
+            return normalizeLicense(d.license_no) === currentLic;
+        }) || null;
+    }, [drivers, licenseForm.license_no, editingDriver]);
+
     // Memoize user options - exclude already assigned users unless editing
     const userOptions = React.useMemo((): { value: string; label: string }[] => {
         const assignedUserIds = new Set(drivers.map((d) => d.user_id));
@@ -220,7 +240,7 @@ export function DriverModal({
             }));
     }, [users, drivers, editingDriver?.user_id]);
 
-    // Handle File Capture / Upload
+    // Handle File Capture / Upload using Tesseract.js
     const handleCaptureLicense = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -229,26 +249,27 @@ export function DriverModal({
         const objectUrl = URL.createObjectURL(file);
         setPreviewUrl(objectUrl);
         setIsOcrProcessing(true);
+        setOcrProgress(0);
+        setOcrStatusText("Initializing OCR engine...");
 
+        let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
         try {
-            // Simulated / Mock OCR scan logic
-            // In a real environment with OCR/Vision API, this sends the buffer or scans on-device
-            await new Promise((res) => setTimeout(res, 900));
+            worker = await createWorker("eng", 1, {
+                logger: (m) => {
+                    if (m.status === "recognizing text") {
+                        setOcrProgress(Math.round(m.progress * 100));
+                        setOcrStatusText(`Reading text... ${Math.round(m.progress * 100)}%`);
+                    } else if (m.status) {
+                        setOcrStatusText(`${m.status.charAt(0).toUpperCase() + m.status.slice(1)}...`);
+                    }
+                },
+            });
 
-            // Extract filename or simulate OCR read
-            const sampleText = `
-                REPUBLIC OF THE PHILIPPINES
-                DEPARTMENT OF TRANSPORTATION
-                LAND TRANSPORTATION OFFICE
-                DRIVER'S LICENSE
-                License No: N01-${Math.floor(10 + Math.random() * 89)}-${Math.floor(100000 + Math.random() * 899999)}
-                Classification: Professional
-                Restrictions: 1, 2
-                Expiration Date: 2028-11-20
-            `;
-            
-            setOcrRawText(sampleText);
-            const parsed = parseLicenseText(sampleText);
+            const ret = await worker.recognize(file);
+            const extractedText = ret.data.text || "";
+
+            setOcrRawText(extractedText);
+            const parsed = parseLicenseText(extractedText);
 
             setLicenseForm((prev) => ({
                 ...prev,
@@ -258,16 +279,35 @@ export function DriverModal({
                 license_expiry_date: parsed.license_expiry_date || prev.license_expiry_date,
             }));
 
-            // Autofill contact info if user selected
+            // Autofill contact info if found and not yet filled
             if (parsed.address && !contactForm.contact_address) {
                 updateContactField("contact_address", parsed.address);
             }
 
-            toast.success("License scanned! Autofilled fields ready for validation.");
-        } catch {
-            toast.error("Failed to read license via OCR. You can enter details manually.");
+            const cleanScannedLic = normalizeLicense(parsed.license_no);
+            const duplicate = cleanScannedLic
+                ? drivers.find((d) => (!editingDriver || d.id !== editingDriver.id) && normalizeLicense(d.license_no) === cleanScannedLic)
+                : null;
+
+            if (duplicate) {
+                const driverName = duplicate.user ? `${duplicate.user.user_fname} ${duplicate.user.user_lname}` : "another driver";
+                toast.warning(`Warning: License ${parsed.license_no} is already assigned to ${driverName}.`);
+            } else {
+                toast.success("License scanned with Tesseract.js! Details autofilled.");
+            }
+        } catch (err: unknown) {
+            console.error("Tesseract OCR error:", err);
+            toast.error("Failed to read license via OCR. You can still enter or edit details manually.");
         } finally {
+            if (worker) {
+                try {
+                    await worker.terminate();
+                } catch {
+                    // ignore termination error
+                }
+            }
             setIsOcrProcessing(false);
+            setOcrStatusText("");
         }
     };
 
@@ -309,6 +349,14 @@ export function DriverModal({
 
         if (!selectedUserId || !selectedGoodBranchId) {
             toast.error("Please select a driver and good branch");
+            return;
+        }
+
+        if (conflictingDriver) {
+            const conflictName = conflictingDriver.user
+                ? `${conflictingDriver.user.user_fname} ${conflictingDriver.user.user_lname}`
+                : "another driver";
+            toast.error(`License No. is already assigned to ${conflictName}. Each driver must have a unique license.`);
             return;
         }
 
@@ -445,6 +493,20 @@ export function DriverModal({
                                 </Button>
                             </div>
 
+                            {/* OCR Progress Bar & Status */}
+                            {isOcrProcessing && (
+                                <div className="space-y-2 p-3 bg-background/90 rounded-lg border border-primary/20 animate-in fade-in-50 duration-200">
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span className="font-semibold text-primary flex items-center gap-1.5">
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            {ocrStatusText || "Processing OCR..."}
+                                        </span>
+                                        <span className="font-mono text-muted-foreground">{ocrProgress}%</span>
+                                    </div>
+                                    <Progress value={ocrProgress} className="h-1.5" />
+                                </div>
+                            )}
+
                             {/* Preview & OCR Read Status */}
                             {previewUrl && (
                                 <div className="flex flex-col sm:flex-row items-center gap-4 p-3 bg-background/80 rounded-lg border border-border">
@@ -501,15 +563,31 @@ export function DriverModal({
                             {/* License Fields Grid */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold uppercase tracking-wider text-foreground/70">
-                                        License Number
-                                    </label>
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-xs font-bold uppercase tracking-wider text-foreground/70">
+                                            License Number
+                                        </label>
+                                        {conflictingDriver && (
+                                            <span className="text-[11px] text-destructive font-medium flex items-center gap-1">
+                                                <AlertCircle className="h-3 w-3" />
+                                                Already assigned
+                                            </span>
+                                        )}
+                                    </div>
                                     <Input
                                         value={licenseForm.license_no}
                                         onChange={(e) => updateLicenseField("license_no", e.target.value)}
                                         placeholder="e.g. N01-23-456789"
-                                        className="h-9 rounded-lg"
+                                        className={cn(
+                                            "h-9 rounded-lg transition-colors",
+                                            conflictingDriver && "border-destructive focus-visible:ring-destructive/30"
+                                        )}
                                     />
+                                    {conflictingDriver && (
+                                        <p className="text-[11px] text-destructive font-medium leading-tight">
+                                            Already assigned to {conflictingDriver.user ? `${conflictingDriver.user.user_fname} ${conflictingDriver.user.user_lname}` : "another driver"}.
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div className="space-y-1.5">
@@ -831,8 +909,8 @@ export function DriverModal({
                     <Button
                         form="driver-form"
                         type="submit"
-                        disabled={loading}
-                        className="rounded-xl font-bold h-11 px-8 shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-[0.98] transition-all bg-primary"
+                        disabled={loading || Boolean(conflictingDriver)}
+                        className="rounded-xl font-bold h-11 px-8 shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-[0.98] transition-all bg-primary disabled:opacity-50"
                     >
                         {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         {editingDriver ? "Update Driver" : "Save Driver"}

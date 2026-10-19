@@ -152,6 +152,16 @@ export async function listVehicleDocuments(vehicleId: number): Promise<VehicleDo
 }
 
 /**
+ * List all active vehicle documents across fleet (for duplicate check)
+ */
+export async function listAllVehicleDocuments(): Promise<VehicleDocumentApiRow[]> {
+  const res = await fetch(`/api/scm/fleet-management/vehicle-management/vehicle-list/documents`);
+  if (!res.ok) return [];
+  const json = (await res.json()) as DirectusListResponse<VehicleDocumentApiRow>;
+  return json?.data ?? [];
+}
+
+/**
  * Update document metadata (or replace file)
  */
 export async function updateVehicleDocument(
