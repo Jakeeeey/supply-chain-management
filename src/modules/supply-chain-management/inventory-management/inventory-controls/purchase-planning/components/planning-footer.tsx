@@ -5,7 +5,7 @@ import {Button} from "@/components/ui/button"
 import {Calculator, TrendingUp, History, Download, FileSpreadsheet} from "lucide-react"
 import {cn} from "@/lib/utils"
 import {PurchaseRequestSuccessModal} from "./purchase-request-success-modal"
-import {PlanningRow} from "../types"
+import {PlanningRow, SimulationTargets} from "../types"
 import * as XLSX from "xlsx"
 
 // jsPDF and autoTable
@@ -17,6 +17,7 @@ interface PlanningFooterProps {
     supplierId: string
     branchIds: string[]
     mode?: "historical" | "forecast"
+    targets?: SimulationTargets
 }
 
 interface JsPDFWithAutoTable extends jsPDF {
@@ -35,6 +36,7 @@ export function PlanningFooter({
                                    supplierId = "",
                                    branchIds = [],
                                    mode = "historical",
+                                   targets,
                                }: PlanningFooterProps) {
     const [showSuccess, setShowSuccess] = useState(false)
     const [isExporting, setIsExporting] = useState(false)
@@ -110,37 +112,59 @@ export function PlanningFooter({
             doc.setTextColor(15, 23, 42)
             doc.text("Purchase Planning Report", 14, 22)
 
+            const resolvedTargets: SimulationTargets = targets || (() => {
+                if (typeof window !== "undefined") {
+                    const saved = localStorage.getItem("vos_planning_targets")
+                    if (saved) {
+                        try { return JSON.parse(saved) } catch {}
+                    }
+                }
+                return { A: 21, B: 15, C: 15 }
+            })()
+
             doc.setFontSize(10)
             doc.setTextColor(100, 116, 139)
             doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 30)
             doc.text(`Supplier ID: ${supplierId || "N/A"}`, 14, 36)
             doc.text(`Logic Mode: ${isForecast ? "Forecast" : "Historical"}`, 14, 42)
+            doc.text(`Simulation Target DTL: Class A: ${resolvedTargets.A ?? 21} Days | Class B: ${resolvedTargets.B ?? 15} Days | Class C: ${resolvedTargets.C ?? 15} Days`, 14, 48)
 
-            const tableColumns = ["SKU", "Product Name", "ABC", "SOH", "MAV", "Suggested", "Order Qty", "Total Value"]
+            const tableColumns = ["SKU", "Product Name", "ABC", "SOH", "MAV", "Suggested", "DTL", "Order Qty", "Total Value"]
             const tableRows = (data as PlanningRow[]).map((row: PlanningRow) => {
                 const price = Number(row.computedPricePerBox || 0)
                 const orderQty = Number(row.orderQty || 0)
                 const rowTotal = price * orderQty
+                const dtl = typeof row.daysToLast === "number"
+                    ? row.daysToLast
+                    : (() => {
+                        const mav = Number(row.mav || 0)
+                        const dau = Number(row.dailyUsage || 0) > 0 ? Number(row.dailyUsage) : (mav / 21)
+                        const proj = typeof row.projStock === "number"
+                            ? row.projStock
+                            : ((Number(row.currentStockBoxes) || 0) + (Number(row.inTransitBoxes) || 0) - (Number(row.expectedSelloutBoxes) || 0))
+                        return dau > 0 ? proj / dau : 0
+                    })()
                 return [
                     row.sku || "N/A",
                     row.productName || "Unknown Product",
                     row.abcClass || "-",
                     Number(row.currentStockBoxes || 0).toFixed(1),
                     Number(row.mav || 0).toFixed(1),
-                    row.suggestedQty || 0,
+                    Number(row.suggestedQty || 0).toFixed(2),
+                    `${dtl > 0 ? dtl.toFixed(1) : "0.0"}d`,
                     orderQty,
                     `P${formatCurrency(rowTotal)}`
                 ]
             })
 
             autoTable(doc, {
-                startY: 50,
+                startY: 54,
                 head: [tableColumns],
                 body: tableRows,
                 theme: 'striped',
                 headStyles: {fillColor: [15, 23, 42], textColor: 255},
                 styles: {fontSize: 8, cellPadding: 3},
-                columnStyles: { 6: {fontStyle: 'bold', textColor: [15, 23, 42]}, 7: {halign: 'right'} }
+                columnStyles: { 7: {fontStyle: 'bold', textColor: [15, 23, 42]}, 8: {halign: 'right'} }
             })
 
             const finalY = (doc as unknown as JsPDFWithAutoTable).lastAutoTable.finalY || 50
