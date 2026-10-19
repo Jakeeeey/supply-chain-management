@@ -14,7 +14,6 @@ export interface ParsedVehicleDocument {
 export function parseVehicleDocumentText(text: string): ParsedVehicleDocument {
   const raw = text || "";
   const clean = raw.replace(/\r\n/g, "\n");
-  const lines = clean.split("\n").map((l) => l.trim()).filter(Boolean);
 
   let documentNo = "";
   let issuedDate = "";

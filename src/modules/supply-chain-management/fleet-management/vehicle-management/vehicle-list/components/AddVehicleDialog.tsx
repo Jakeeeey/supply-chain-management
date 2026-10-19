@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Upload, X, FileText, Trash2, Camera, Sparkles, Loader2, AlertCircle } from "lucide-react";
+import { Plus, Upload, X, FileText, Trash2, Sparkles, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { createWorker } from "tesseract.js";
 
