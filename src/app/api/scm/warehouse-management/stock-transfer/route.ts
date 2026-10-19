@@ -46,9 +46,13 @@ export async function GET(request: NextRequest) {
         const val = await repo.fetchGeneralSetting(key);
         return NextResponse.json({ [key]: val });
       }
-      const salesmanPrintableVal = await repo.fetchGeneralSetting("stock_transfer_picklist_printable_salesman");
+      const [salesmanPrintableVal, attachmentOptionalVal] = await Promise.all([
+        repo.fetchGeneralSetting("stock_transfer_picklist_printable_salesman"),
+        repo.fetchGeneralSetting("stock_transfer_receiving_attachment_optional"),
+      ]);
       return NextResponse.json({
         stock_transfer_picklist_printable_salesman: salesmanPrintableVal?.trim() === "1",
+        stock_transfer_receiving_attachment_optional: attachmentOptionalVal?.trim() === "1",
       });
     }
 
