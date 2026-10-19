@@ -162,11 +162,24 @@ export async function GET(req: Request) {
                     ]
                 });
                 const invoicePromise = safeDealerFetch(
-                    `${dealerBase}/items/sales_invoice?limit=-1&fields=invoice_id,net_amount,salesman_id,invoice_date,transaction_status&filter=${encodeURIComponent(invoiceFilter)}`,
+                    `${dealerBase}/items/sales_invoice?limit=-1&fields=invoice_id,net_amount,salesman_id,customer_code,invoice_date,created_date,transaction_status&filter=${encodeURIComponent(invoiceFilter)}`,
                     dealerToken
                 );
 
-                const [salesmanResResult, invoiceResResult] = await Promise.allSettled([salesmanPromise, invoicePromise]);
+                // Fetch latest invoice per dealer without date filter to get all-time latest created_date
+                const latestInvoiceFilter = JSON.stringify({
+                    transaction_status: { _neq: "Cancelled" }
+                });
+                const latestInvoicePromise = safeDealerFetch(
+                    `${dealerBase}/items/sales_invoice?limit=-1&fields=salesman_id,created_date&sort=-created_date&filter=${encodeURIComponent(latestInvoiceFilter)}`,
+                    dealerToken
+                );
+
+                const [salesmanResResult, invoiceResResult, latestInvoiceResResult] = await Promise.allSettled([
+                    salesmanPromise, 
+                    invoicePromise,
+                    latestInvoicePromise
+                ]);
 
                 if (salesmanResResult.status !== "fulfilled" || invoiceResResult.status !== "fulfilled") {
                     const failureReason = salesmanResResult.status !== "fulfilled" 
@@ -204,20 +217,59 @@ export async function GET(req: Request) {
                 const salesmen: DealerSalesmanItem[] = salesmanJson.data || [];
                 const invoices: DealerSalesInvoiceItem[] = invoiceJson.data || [];
 
-                // Aggregate sales by salesman
-                const statsBySalesman = new Map<number, { totalAmount: number; invoiceCount: number }>();
+                // Aggregate sales and unique customer_code by salesman within the date filter
+                const statsBySalesman = new Map<number, { 
+                    totalAmount: number; 
+                    invoiceCount: number; 
+                    filterLatestCreated: string | null;
+                    uniqueCustomers: Set<string>;
+                }>();
                 invoices.forEach(inv => {
                     if (inv.salesman_id) {
-                        const current = statsBySalesman.get(inv.salesman_id) || { totalAmount: 0, invoiceCount: 0 };
+                        const current = statsBySalesman.get(inv.salesman_id) || { 
+                            totalAmount: 0, 
+                            invoiceCount: 0, 
+                            filterLatestCreated: null,
+                            uniqueCustomers: new Set<string>()
+                        };
                         current.totalAmount += Number(inv.net_amount || 0);
                         current.invoiceCount += 1;
+                        if (inv.customer_code && inv.customer_code.trim()) {
+                            current.uniqueCustomers.add(inv.customer_code.trim());
+                        }
+                        if (inv.created_date) {
+                            if (!current.filterLatestCreated || inv.created_date > current.filterLatestCreated) {
+                                current.filterLatestCreated = inv.created_date;
+                            }
+                        }
                         statsBySalesman.set(inv.salesman_id, current);
                     }
                 });
 
+                // Map all-time latest created_date by salesman
+                const allTimeLatestBySalesman = new Map<number, string>();
+                if (latestInvoiceResResult.status === "fulfilled" && latestInvoiceResResult.value.ok) {
+                    const latestJson = await latestInvoiceResResult.value.json().catch(() => ({ data: [] }));
+                    const allInvoices: { salesman_id?: number | null; created_date?: string | null }[] = latestJson.data || [];
+                    for (const item of allInvoices) {
+                        if (item.salesman_id && item.created_date) {
+                            if (!allTimeLatestBySalesman.has(item.salesman_id)) {
+                                allTimeLatestBySalesman.set(item.salesman_id, item.created_date);
+                            }
+                        }
+                    }
+                }
+
                 // Generate entries for salesmen
                 const entries: Omit<SalesmanRankingEntry, "rank">[] = salesmen.map(sm => {
-                    const stats = statsBySalesman.get(sm.id) || { totalAmount: 0, invoiceCount: 0 };
+                    const stats = statsBySalesman.get(sm.id) || { 
+                        totalAmount: 0, 
+                        invoiceCount: 0, 
+                        filterLatestCreated: null,
+                        uniqueCustomers: new Set<string>()
+                    };
+                    const latestCreated = allTimeLatestBySalesman.get(sm.id) || stats.filterLatestCreated || null;
+                    const customerCount = stats.uniqueCustomers.size;
                     return {
                         salesman_id: sm.id,
                         salesman_code: sm.salesman_code || "N/A",
@@ -226,7 +278,9 @@ export async function GET(req: Request) {
                         dealer_name: dealerName,
                         dealer_code: dealerCode,
                         total_net_amount: stats.totalAmount,
-                        total_invoices: stats.invoiceCount
+                        total_invoices: stats.invoiceCount,
+                        total_customers: customerCount,
+                        latest_created_date: latestCreated
                     };
                 });
 

@@ -266,3 +266,19 @@ export const transmitItemScan = async (payload: {
         return false;
     }
 };
+
+export const fetchDeliveryPickingPrintableDeliveryCopy = async (): Promise<boolean> => {
+    try {
+        const url = `/api/scm/warehouse-management/consolidation/delivery-picking/settings?key=delivery_picking_printable_delivery_copy&_t=${Date.now()}`;
+        const response = await fetch(url, {
+            headers: getHeaders(),
+            cache: "no-store",
+        });
+        if (!response.ok) return false;
+        const data = await response.json();
+        return String(data?.value).trim() === "1";
+    } catch (error) {
+        console.error("Failed to fetch delivery picking setting:", error);
+        return false;
+    }
+};

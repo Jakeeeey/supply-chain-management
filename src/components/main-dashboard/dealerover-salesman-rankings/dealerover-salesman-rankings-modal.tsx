@@ -16,7 +16,10 @@ import {
     Medal,
     RotateCcw,
     ChevronDown,
-    Check
+    Check,
+    Users,
+    CalendarDays,
+    CalendarRange
 } from "lucide-react";
 import { 
     Dialog, 
@@ -71,6 +74,29 @@ const formatDisplayDate = (dateStr: string) => {
         return format(d, "MMM d, yyyy");
     } catch {
         return dateStr;
+    }
+};
+
+/**
+ * Custom date-time formatter without timezone modification (+8 hours).
+ * Directly parses "YYYY-MM-DD HH:mm:ss" or ISO strings to "MMM d, yyyy h:mm a".
+ */
+const formatRawInvoiceDate = (raw: string | null | undefined): string => {
+    if (!raw) return "No sync yet";
+    try {
+        const clean = raw.replace("T", " ").replace("Z", "").split(".")[0];
+        const [dPart, tPart] = clean.split(" ");
+        const [y, m, d] = (dPart || "").split("-").map(Number);
+        const [hh = 0, mm = 0] = (tPart || "").split(":").map(Number);
+        if (!y || !m || !d) return clean;
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const monthName = months[m - 1] || "";
+        const period = hh >= 12 ? "PM" : "AM";
+        const displayHour = hh % 12 || 12;
+        const displayMin = String(mm).padStart(2, "0");
+        return `${monthName} ${d}, ${y} ${displayHour}:${displayMin} ${period}`;
+    } catch {
+        return String(raw);
     }
 };
 
@@ -177,10 +203,28 @@ const LeaderboardTableRow = React.memo(function LeaderboardTableRow({ row }: Lea
                 </div>
             </td>
             <td className="py-2.5 px-4 text-center">
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-white/5 text-[11px] font-bold text-slate-600 dark:text-slate-300 font-mono">
-                    <FileText className="h-3 w-3 text-slate-400" />
-                    {row.total_invoices}
-                </span>
+                <div className="flex flex-col items-center justify-center">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-white/5 text-[11px] font-bold text-slate-600 dark:text-slate-300 font-mono">
+                        <FileText className="h-3 w-3 text-slate-400" />
+                        {row.total_invoices}
+                    </span>
+                    <span 
+                        title={`Total assigned customers: ${row.total_customers ?? 0}`}
+                        className="inline-flex items-center gap-1 mt-1 text-[9.5px] font-bold text-slate-500 dark:text-slate-400 font-mono whitespace-nowrap"
+                    >
+                        <Users className="h-2.5 w-2.5 text-slate-400 dark:text-slate-500 shrink-0" />
+                        {row.total_customers ?? 0} Customers
+                    </span>
+                    {row.latest_created_date && (
+                        <span 
+                            title={`Latest invoice created date: ${formatRawInvoiceDate(row.latest_created_date)}`}
+                            className="inline-flex items-center gap-1 mt-0.5 text-[9px] font-medium text-slate-400 dark:text-slate-500 font-mono whitespace-nowrap"
+                        >
+                            <RefreshCw className="h-2.5 w-2.5 text-slate-400 dark:text-slate-500 shrink-0" />
+                            {formatRawInvoiceDate(row.latest_created_date)}
+                        </span>
+                    )}
+                </div>
             </td>
             <td className="py-2.5 px-4 text-right">
                 <span className={cn(
@@ -209,6 +253,20 @@ function getDefaultDateRange() {
     return { from: fromStr, to: toStr };
 }
 
+function getThisMonthDateRange() {
+    const now = new Date();
+    const fromStr = format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd");
+    const toStr = format(now, "yyyy-MM-dd");
+    return { from: fromStr, to: toStr };
+}
+
+function getLastMonthDateRange() {
+    const now = new Date();
+    const fromStr = format(new Date(now.getFullYear(), now.getMonth() - 1, 1), "yyyy-MM-dd");
+    const toStr = format(new Date(now.getFullYear(), now.getMonth(), 0), "yyyy-MM-dd");
+    return { from: fromStr, to: toStr };
+}
+
 export function DealeroverSalesmanRankingsModal({
     open,
     onOpenChange
@@ -221,29 +279,6 @@ export function DealeroverSalesmanRankingsModal({
     const [fromOpen, setFromOpen] = React.useState(false);
     const [toOpen, setToOpen] = React.useState(false);
     const [dealerFilterOpen, setDealerFilterOpen] = React.useState(false);
-
-    // Auto-adjust date validation
-    const handleFromDateSelect = React.useCallback((d: Date | undefined) => {
-        if (!d) return;
-        const newFromStr = format(d, "yyyy-MM-dd");
-        setFromDate(newFromStr);
-        // Auto-adjust: If selected From date is after current To date, bump To date to match From date
-        if (toDate && newFromStr > toDate) {
-            setToDate(newFromStr);
-        }
-        setFromOpen(false); // Close popover immediately on pick
-    }, [toDate]);
-
-    const handleToDateSelect = React.useCallback((d: Date | undefined) => {
-        if (!d) return;
-        const newToStr = format(d, "yyyy-MM-dd");
-        setToDate(newToStr);
-        // Auto-adjust: If selected To date is before current From date, adjust From date to match To date
-        if (fromDate && newToStr < fromDate) {
-            setFromDate(newToStr);
-        }
-        setToOpen(false); // Close popover immediately on pick
-    }, [fromDate]);
 
     const [loading, setLoading] = React.useState(false);
     const [showPreloader, setShowPreloader] = React.useState(open);
@@ -310,6 +345,35 @@ export function DealeroverSalesmanRankingsModal({
         }
     }, [startPreloader]);
 
+    // Auto-adjust date validation & auto-apply filter immediately
+    const handleFromDateSelect = React.useCallback((d: Date | undefined) => {
+        if (!d) return;
+        const newFromStr = format(d, "yyyy-MM-dd");
+        setFromDate(newFromStr);
+        // Auto-adjust: If selected From date is after current To date, bump To date to match From date
+        let nextToStr = toDate;
+        if (toDate && newFromStr > toDate) {
+            nextToStr = newFromStr;
+            setToDate(newFromStr);
+        }
+        setFromOpen(false); // Close popover immediately on pick
+        fetchRankings(newFromStr, nextToStr);
+    }, [toDate, fetchRankings]);
+
+    const handleToDateSelect = React.useCallback((d: Date | undefined) => {
+        if (!d) return;
+        const newToStr = format(d, "yyyy-MM-dd");
+        setToDate(newToStr);
+        // Auto-adjust: If selected To date is before current From date, adjust From date to match To date
+        let nextFromStr = fromDate;
+        if (fromDate && newToStr < fromDate) {
+            nextFromStr = newToStr;
+            setFromDate(newToStr);
+        }
+        setToOpen(false); // Close popover immediately on pick
+        fetchRankings(nextFromStr, newToStr);
+    }, [fromDate, fetchRankings]);
+
     // Check if applied active data matches default
     const defRange = React.useMemo(() => getDefaultDateRange(), []);
     const isAppliedCustom = React.useMemo(() => {
@@ -317,26 +381,38 @@ export function DealeroverSalesmanRankingsModal({
         return data.from !== defRange.from || data.to !== defRange.to;
     }, [data?.from, data?.to, defRange]);
 
-    // Check if input selections differ from applied data
-    const hasUnappliedDateChanges = React.useMemo(() => {
-        if (!data?.from || !data?.to) return false;
-        return fromDate !== data.from || toDate !== data.to;
-    }, [fromDate, toDate, data?.from, data?.to]);
+    // Reset Filter Button State: Enabled only when current active date filter differs from default 30-day range
+    const canReset = isAppliedCustom;
 
-    // Unified Action: If there are unapplied date changes, Filter. If already showing custom date and no unapplied changes, Reset.
-    const isResetMode = isAppliedCustom && !hasUnappliedDateChanges;
+    const handleResetFilter = React.useCallback(() => {
+        if (!canReset) return;
+        setFromDate(defRange.from);
+        setToDate(defRange.to);
+        fetchRankings(defRange.from, defRange.to);
+    }, [canReset, defRange, fetchRankings]);
 
-    const handleFilterOrReset = React.useCallback(() => {
-        if (isResetMode) {
-            // Reset to default 30 days
-            setFromDate(defRange.from);
-            setToDate(defRange.to);
-            fetchRankings(defRange.from, defRange.to);
-        } else {
-            // Apply current date selection
-            fetchRankings(fromDate, toDate);
-        }
-    }, [isResetMode, defRange, fetchRankings, fromDate, toDate]);
+    // Quick Date Range Helpers
+    const thisMonthRange = React.useMemo(() => getThisMonthDateRange(), []);
+    const lastMonthRange = React.useMemo(() => getLastMonthDateRange(), []);
+
+    const isThisMonthActive = (data?.from === thisMonthRange.from && data?.to === thisMonthRange.to) ||
+        (fromDate === thisMonthRange.from && toDate === thisMonthRange.to);
+    const isLastMonthActive = (data?.from === lastMonthRange.from && data?.to === lastMonthRange.to) ||
+        (fromDate === lastMonthRange.from && toDate === lastMonthRange.to);
+
+    const handleApplyThisMonth = React.useCallback(() => {
+        const range = getThisMonthDateRange();
+        setFromDate(range.from);
+        setToDate(range.to);
+        fetchRankings(range.from, range.to);
+    }, [fetchRankings]);
+
+    const handleApplyLastMonth = React.useCallback(() => {
+        const range = getLastMonthDateRange();
+        setFromDate(range.from);
+        setToDate(range.to);
+        fetchRankings(range.from, range.to);
+    }, [fetchRankings]);
 
     // Refs for podium cards to direct confetti cannons precisely
     const rank1Ref = React.useRef<HTMLDivElement>(null);
@@ -623,7 +699,7 @@ export function DealeroverSalesmanRankingsModal({
                                 <PopoverTrigger asChild>
                                     <button 
                                         type="button"
-                                        className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 hover:border-cyan-500/50 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-xs transition-colors"
+                                        className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 hover:border-cyan-500/50 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-xs transition-colors cursor-pointer"
                                     >
                                         <CalendarIcon className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
                                         <span>{formatDisplayDate(fromDate)}</span>
@@ -647,7 +723,7 @@ export function DealeroverSalesmanRankingsModal({
                                 <PopoverTrigger asChild>
                                     <button 
                                         type="button"
-                                        className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 hover:border-cyan-500/50 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-xs transition-colors"
+                                        className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 hover:border-cyan-500/50 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-xs transition-colors cursor-pointer"
                                     >
                                         <CalendarIcon className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
                                         <span>{formatDisplayDate(toDate)}</span>
@@ -665,27 +741,59 @@ export function DealeroverSalesmanRankingsModal({
                             </Popover>
                         </div>
 
-                        {/* Single Unified Multi-Purpose Button: Filters when changes exist, Resets when custom is applied */}
+                        {/* Quick Date Range Filters: This Month & Last Month (Option 1 Pure Icons) */}
+                        <div className="flex items-center gap-1 bg-white/70 dark:bg-slate-950/70 border border-slate-200/90 dark:border-white/10 p-0.5 rounded-lg shadow-xs">
+                            <button
+                                type="button"
+                                onClick={handleApplyThisMonth}
+                                disabled={loading}
+                                title={`This Month (${format(parseISO(thisMonthRange.from), "MMM d")} - ${format(parseISO(thisMonthRange.to), "MMM d, yyyy")})`}
+                                aria-label="This Month"
+                                className={cn(
+                                    "h-7 w-7 rounded-md transition-all flex items-center justify-center select-none cursor-pointer disabled:cursor-not-allowed",
+                                    isThisMonthActive
+                                        ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/40 shadow-xs"
+                                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-white/5 border border-transparent"
+                                )}
+                            >
+                                <CalendarDays className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleApplyLastMonth}
+                                disabled={loading}
+                                title={`Last Month (${format(parseISO(lastMonthRange.from), "MMM d")} - ${format(parseISO(lastMonthRange.to), "MMM d, yyyy")})`}
+                                aria-label="Last Month"
+                                className={cn(
+                                    "h-7 w-7 rounded-md transition-all flex items-center justify-center select-none cursor-pointer disabled:cursor-not-allowed",
+                                    isLastMonthActive
+                                        ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/40 shadow-xs"
+                                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-white/5 border border-transparent"
+                                )}
+                            >
+                                <CalendarRange className="h-3.5 w-3.5" />
+                            </button>
+                        </div>
+
+                        {/* Dedicated Reset Filter Button: Active only when a custom filter is applied */}
                         <Button
                             size="sm"
-                            onClick={handleFilterOrReset}
-                            disabled={loading}
-                            title={isResetMode ? "Reset to Default (Last 30 Days)" : "Apply Filter"}
+                            onClick={handleResetFilter}
+                            disabled={loading || !canReset}
+                            title={canReset ? "Reset to Default (Last 30 Days)" : "Default Filter Active"}
                             className={cn(
-                                "h-8 rounded-lg font-black text-xs uppercase tracking-wider px-3.5 gap-1.5 transition-all shadow-sm",
-                                isResetMode
+                                "h-8 rounded-lg font-black text-xs uppercase tracking-wider px-3.5 gap-1.5 transition-all shadow-sm cursor-pointer disabled:cursor-not-allowed",
+                                canReset
                                     ? "bg-slate-200 hover:bg-slate-300 text-slate-800 dark:bg-white/10 dark:hover:bg-white/20 dark:text-white"
-                                    : "bg-cyan-500 hover:bg-cyan-400 text-slate-950"
+                                    : "bg-slate-100 text-slate-400 dark:bg-white/5 dark:text-slate-600 opacity-60"
                             )}
                         >
                             {loading ? (
                                 <RefreshCw className="h-3 w-3 animate-spin" />
-                            ) : isResetMode ? (
-                                <RotateCcw className="h-3 w-3 text-slate-600 dark:text-slate-300" />
                             ) : (
-                                <RefreshCw className="h-3 w-3" />
+                                <RotateCcw className="h-3 w-3 text-slate-600 dark:text-slate-300" />
                             )}
-                            {loading ? "Loading..." : isResetMode ? "Reset" : "Filter"}
+                            {loading ? "Loading..." : "Reset"}
                         </Button>
 
                         {/* Dealer Multi-Select Dropdown Filter */}
@@ -695,7 +803,7 @@ export function DealeroverSalesmanRankingsModal({
                                     type="button"
                                     disabled={loading || availableDealers.length === 0}
                                     className={cn(
-                                        "h-8 rounded-lg px-3 flex items-center gap-2 text-xs font-bold border transition-all select-none shadow-xs",
+                                        "h-8 rounded-lg px-3 flex items-center gap-2 text-xs font-bold border transition-all select-none shadow-xs cursor-pointer disabled:cursor-not-allowed",
                                         selectedDealerIds.size === availableDealers.length && availableDealers.length > 0
                                             ? "bg-white dark:bg-slate-950 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-cyan-500/50"
                                             : selectedDealerIds.size > 0
@@ -858,7 +966,7 @@ export function DealeroverSalesmanRankingsModal({
                         {searchQuery && (
                             <button 
                                 onClick={() => setSearchQuery("")}
-                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                             >
                                 <X className="h-3 w-3" />
                             </button>
@@ -915,6 +1023,22 @@ export function DealeroverSalesmanRankingsModal({
                                         <div className="flex flex-col">
                                             <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Total Net Sales</span>
                                             <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{topThree[1].total_invoices} Invoices</span>
+                                            <div 
+                                                title={`Total assigned customers: ${topThree[1].total_customers ?? 0}`}
+                                                className="inline-flex items-center gap-1 mt-0.5 text-[9.5px] font-bold text-slate-500 dark:text-slate-400 font-mono"
+                                            >
+                                                <Users className="h-2.5 w-2.5 shrink-0 text-slate-400 dark:text-slate-500" />
+                                                <span>{topThree[1].total_customers ?? 0} Customers</span>
+                                            </div>
+                                            {topThree[1].latest_created_date && (
+                                                <div 
+                                                    title={`Latest invoice created date: ${formatRawInvoiceDate(topThree[1].latest_created_date)}`}
+                                                    className="inline-flex items-center gap-1 mt-0.5 text-[9px] font-semibold text-slate-400 dark:text-slate-500 font-mono"
+                                                >
+                                                    <RefreshCw className="h-2.5 w-2.5 shrink-0 text-slate-400 dark:text-slate-500" />
+                                                    <span className="truncate">{formatRawInvoiceDate(topThree[1].latest_created_date)}</span>
+                                                </div>
+                                            )}
                                         </div>
                                         <span className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 tracking-tight">
                                             {formatCurrency(topThree[1].total_net_amount)}
@@ -967,6 +1091,22 @@ export function DealeroverSalesmanRankingsModal({
                                         <div className="flex flex-col">
                                              <span className="text-[9px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">Total Net Sales</span>
                                              <span className="text-xs font-bold text-amber-800/80 dark:text-amber-300/80">{topThree[0].total_invoices} Invoices</span>
+                                             <div 
+                                                 title={`Total assigned customers: ${topThree[0].total_customers ?? 0}`}
+                                                 className="inline-flex items-center gap-1 mt-0.5 text-[9.5px] font-bold text-amber-800/80 dark:text-amber-300/80 font-mono"
+                                             >
+                                                 <Users className="h-2.5 w-2.5 shrink-0 text-amber-700 dark:text-amber-400" />
+                                                 <span>{topThree[0].total_customers ?? 0} Customers</span>
+                                             </div>
+                                             {topThree[0].latest_created_date && (
+                                                 <div 
+                                                     title={`Latest invoice created date: ${formatRawInvoiceDate(topThree[0].latest_created_date)}`}
+                                                     className="inline-flex items-center gap-1 mt-0.5 text-[9px] font-semibold text-amber-800/80 dark:text-amber-300/80 font-mono"
+                                                 >
+                                                     <RefreshCw className="h-2.5 w-2.5 shrink-0 text-amber-700 dark:text-amber-400" />
+                                                     <span className="truncate">{formatRawInvoiceDate(topThree[0].latest_created_date)}</span>
+                                                 </div>
+                                             )}
                                         </div>
                                         <span className="text-lg sm:text-xl font-black text-amber-600 dark:text-amber-300 tracking-tight drop-shadow-xs">
                                             {formatCurrency(topThree[0].total_net_amount)}
@@ -1019,6 +1159,22 @@ export function DealeroverSalesmanRankingsModal({
                                         <div className="flex flex-col">
                                             <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Total Net Sales</span>
                                             <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{topThree[2].total_invoices} Invoices</span>
+                                            <div 
+                                                title={`Total assigned customers: ${topThree[2].total_customers ?? 0}`}
+                                                className="inline-flex items-center gap-1 mt-0.5 text-[9.5px] font-bold text-slate-500 dark:text-slate-400 font-mono"
+                                            >
+                                                <Users className="h-2.5 w-2.5 shrink-0 text-slate-400 dark:text-slate-500" />
+                                                <span>{topThree[2].total_customers ?? 0} Customers</span>
+                                            </div>
+                                            {topThree[2].latest_created_date && (
+                                                <div 
+                                                    title={`Latest invoice created date: ${formatRawInvoiceDate(topThree[2].latest_created_date)}`}
+                                                    className="inline-flex items-center gap-1 mt-0.5 text-[9px] font-semibold text-slate-400 dark:text-slate-500 font-mono"
+                                                >
+                                                    <RefreshCw className="h-2.5 w-2.5 shrink-0 text-slate-400 dark:text-slate-500" />
+                                                    <span className="truncate">{formatRawInvoiceDate(topThree[2].latest_created_date)}</span>
+                                                </div>
+                                            )}
                                         </div>
                                         <span className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 tracking-tight">
                                             {formatCurrency(topThree[2].total_net_amount)}
@@ -1197,7 +1353,7 @@ export function DealeroverSalesmanRankingsModal({
 
                     <Button
                         onClick={() => handleModalClose(false)}
-                        className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-200 dark:text-slate-950 font-black uppercase tracking-widest text-[11px] h-8 px-5 rounded-lg transition-all shadow-xs"
+                        className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-200 dark:text-slate-950 font-black uppercase tracking-widest text-[11px] h-8 px-5 rounded-lg transition-all shadow-xs cursor-pointer"
                     >
                         Close
                     </Button>

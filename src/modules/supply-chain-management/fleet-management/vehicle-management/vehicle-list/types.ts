@@ -98,12 +98,21 @@ export type VehiclePartApiRow = {
   updated_at?: string | null;
 };
 
+export type BranchApiRow = {
+  id: number;
+  branch_name: string;
+  branch_code?: string | null;
+  location?: string | null;
+  status?: string | null;
+};
+
 // Installed parts on vehicle
 export type VehicleInstalledPartApiRow = {
   id: number;
   vehicle_id: number;
   part_id: number | VehiclePartApiRow;
   quantity: number;
+  branch_id?: number | BranchApiRow | null;
   serial_no?: string | null;
   installed_at?: string | null;
   job_order_id?: number | null;
