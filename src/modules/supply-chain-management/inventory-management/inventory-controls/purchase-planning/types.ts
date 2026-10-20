@@ -31,6 +31,7 @@ export interface PlanningRow {
     lastCost?: number;
     boxMultiplier?: number;
     inventoryStatus?: string;
+    daysToLast?: number;
     description?: string;
 }
 

@@ -138,4 +138,16 @@ export const stockTransferLifecycleService = {
     
     return res.json();
   },
+
+  /**
+   * Fetches general settings for stock transfers.
+   */
+  async fetchSettings(key?: string): Promise<Record<string, unknown>> {
+    const url = `/api/scm/warehouse-management/stock-transfer?action=settings${key ? `&key=${key}` : ""}`;
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) {
+      return {};
+    }
+    return res.json();
+  },
 };

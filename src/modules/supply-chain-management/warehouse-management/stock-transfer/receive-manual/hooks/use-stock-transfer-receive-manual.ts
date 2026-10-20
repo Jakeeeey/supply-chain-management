@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useStockTransferBase } from '../../shared/hooks/use-stock-transfer-base';
 import { stockTransferLifecycleService } from '../../services/stock-transfer.lifecycle';
 import { toast } from 'sonner';
@@ -17,6 +17,21 @@ export function useStockTransferReceiveManual() {
   const [receivedQtys, setReceivedQtys] = useState<Record<number, number>>({});
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isAttachmentOptional, setIsAttachmentOptional] = useState<boolean>(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    stockTransferLifecycleService.fetchSettings().then(settings => {
+      if (isMounted) {
+        setIsAttachmentOptional(Boolean(settings?.stock_transfer_receiving_attachment_optional));
+      }
+    }).catch(err => {
+      console.error('[useStockTransferReceiveManual] Failed to fetch settings:', err);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const updateReceivedQty = useCallback((id: number, qty: number, maxQty: number) => {
     setReceivedQtys(prev => {
@@ -67,7 +82,7 @@ export function useStockTransferReceiveManual() {
     const group = orderGroups.find((g: OrderGroup) => g.orderNo === orderNo);
     if (!group) return;
 
-    if (selectedFiles.length === 0) {
+    if (!isAttachmentOptional && selectedFiles.length === 0) {
       toast.error('Attachment is required.', {
         description: 'Please upload at least one file to finalize this manual deposit.'
       });
@@ -75,37 +90,43 @@ export function useStockTransferReceiveManual() {
     }
 
     base.setProcessing(true);
-    setIsUploading(true);
+    if (selectedFiles.length > 0) {
+      setIsUploading(true);
+    }
 
     try {
-      // 1. Upload files concurrently
-      const uploadPromises = selectedFiles.map(async (file) => {
-        const formData = new FormData();
-        formData.append('file', file);
+      let directusFileIds: string[] = [];
 
-        const res = await fetch('/api/scm/warehouse-management/stock-transfer/receive-manual/upload', {
-          method: 'POST',
-          body: formData,
+      // 1. Upload files concurrently if any exist
+      if (selectedFiles.length > 0) {
+        const uploadPromises = selectedFiles.map(async (file) => {
+          const formData = new FormData();
+          formData.append('file', file);
+
+          const res = await fetch('/api/scm/warehouse-management/stock-transfer/receive-manual/upload', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to upload "${file.name}".`);
+          }
+
+          const result = await res.json();
+          const directusFileId = result.data?.id;
+
+          if (!directusFileId) {
+            throw new Error(`Upload succeeded for "${file.name}" but no file ID was returned.`);
+          }
+
+          return directusFileId as string;
         });
 
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || `Failed to upload "${file.name}".`);
-        }
+        directusFileIds = await Promise.all(uploadPromises);
+      }
 
-        const result = await res.json();
-        const directusFileId = result.data?.id;
-
-        if (!directusFileId) {
-          throw new Error(`Upload succeeded for "${file.name}" but no file ID was returned.`);
-        }
-
-        return directusFileId as string;
-      });
-
-      const directusFileIds = await Promise.all(uploadPromises);
-
-      // 2. Submit status update using directusFileIds
+      // 2. Submit status update using directusFileIds (if any)
       await stockTransferLifecycleService.submitStatusUpdate({
         items: group.items.map((i: OrderGroupItem) => ({
           id: i.id,
@@ -113,7 +134,7 @@ export function useStockTransferReceiveManual() {
           received_quantity: receivedQtys[i.id] ?? Math.max(0, i.scanned_quantity ?? i.picked_quantity ?? i.allocated_quantity ?? 0)
         })),
         status: 'Received',
-        attachments: directusFileIds
+        attachments: directusFileIds.length > 0 ? directusFileIds : undefined
       });
 
       toast.success(`Order ${orderNo} successfully received manually.`);
@@ -142,6 +163,7 @@ export function useStockTransferReceiveManual() {
     updateReceivedQty,
     selectedFiles,
     isUploading,
+    isAttachmentOptional,
     addSelectedFiles,
     removeSelectedFile,
   };
