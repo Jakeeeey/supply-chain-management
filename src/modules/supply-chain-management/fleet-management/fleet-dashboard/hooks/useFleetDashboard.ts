@@ -15,6 +15,9 @@ export function useFleetDashboard() {
   // Search filter
   const [searchQuery, setSearchQuery] = React.useState<string>("");
 
+  // License status filter for "licenses" view
+  const [licenseStatusFilter, setLicenseStatusFilter] = React.useState<string>("all");
+
   // Pagination state
   const [currentPage, setCurrentPage] = React.useState<number>(1);
   const pageSize = 10;
@@ -37,15 +40,16 @@ export function useFleetDashboard() {
     loadData();
   }, [loadData]);
 
-  // Reset page when card selection or search query changes
+  // Reset page & filters when card selection changes
   React.useEffect(() => {
     setCurrentPage(1);
     setSearchQuery("");
+    setLicenseStatusFilter("all");
   }, [activeCard]);
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, licenseStatusFilter]);
 
   // Filtered rows based on activeCard & searchQuery
   const currentList = React.useMemo(() => {
@@ -98,10 +102,44 @@ export function useFleetDashboard() {
             item.status.toLowerCase().includes(q)
         );
       }
+      case "licenses": {
+        let list = data.lists.licenses || [];
+
+        // Apply dropdown status filter
+        if (licenseStatusFilter !== "all") {
+          list = list.filter((item) => {
+            const st = item.status.toLowerCase();
+            if (licenseStatusFilter === "expiring_soon") {
+              return st === "expiring soon";
+            }
+            if (licenseStatusFilter === "expired") {
+              return st === "expired";
+            }
+            if (licenseStatusFilter === "valid") {
+              return st === "valid";
+            }
+            if (licenseStatusFilter === "incomplete") {
+              return st === "incomplete" || st === "no expiry date";
+            }
+            return true;
+          });
+        }
+
+        if (!q) return list;
+        return list.filter(
+          (item) =>
+            item.driver_name.toLowerCase().includes(q) ||
+            (item.branch_name && item.branch_name.toLowerCase().includes(q)) ||
+            (item.license_no && item.license_no.toLowerCase().includes(q)) ||
+            (item.license_classification && item.license_classification.toLowerCase().includes(q)) ||
+            item.status.toLowerCase().includes(q) ||
+            (item.contact && item.contact.toLowerCase().includes(q))
+        );
+      }
       default:
         return [];
     }
-  }, [data, activeCard, searchQuery]);
+  }, [data, activeCard, searchQuery, licenseStatusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(currentList.length / pageSize));
 
@@ -123,6 +161,8 @@ export function useFleetDashboard() {
     totalPages,
     totalItems: currentList.length,
     paginatedList,
+    licenseStatusFilter,
+    setLicenseStatusFilter,
     refresh: loadData,
   };
 }

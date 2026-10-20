@@ -68,6 +68,12 @@ export type VehiclesApiRow = {
 export type VehicleDocumentApiRow = {
   id: number;
   vehicle_id: number;
+  vehicle_plate?: string | null;
+  vehicle?: {
+    vehicle_id?: number;
+    vehicle_plate?: string | null;
+    name?: string | null;
+  } | null;
   document_type: "OR" | "CR" | "Insurance" | "Other" | string;
   document_no?: string | null;
   issued_date?: string | null;

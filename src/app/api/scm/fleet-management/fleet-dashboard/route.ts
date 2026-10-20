@@ -28,7 +28,12 @@ interface RawDriver {
   branch_id: number;
   license_no?: string;
   license_classification?: string;
+  license_restrictions?: string;
   license_expiry_date?: string;
+  license_verified_by?: number | string | null;
+  license_verified_at?: string | null;
+  is_verified?: boolean | number;
+  license_verified?: boolean | number;
   contact_phone?: string;
   contact_email?: string;
 }
@@ -106,11 +111,26 @@ export async function GET() {
             headers: directusHeaders(),
           }
         ).then((r) => (r.ok ? r.json() : { data: [] })).catch(() => ({ data: [] })),
-
-        fetch(`${DIRECTUS_URL}/items/driver?limit=-1&fields=id,user_id,branch_id,license_no,license_classification,license_expiry_date,contact_phone,contact_email`, {
+        fetch(`${DIRECTUS_URL}/items/driver?limit=-1&fields=id,user_id,branch_id,license_no,license_classification,license_restrictions,license_expiry_date,license_verified_by,license_verified_at,contact_phone,contact_email`, {
           cache: "no-store",
           headers: directusHeaders(),
-        }).then((r) => (r.ok ? r.json() : { data: [] })).catch(() => ({ data: [] })),
+        }).then(async (r) => {
+          if (!r.ok) {
+            // If contact_phone or contact_email or others fail, fallback to base fields
+            const fallbackRes = await fetch(`${DIRECTUS_URL}/items/driver?limit=-1&fields=id,user_id,branch_id,license_no,license_classification,license_restrictions,license_expiry_date,license_verified_by,license_verified_at`, {
+              cache: "no-store",
+              headers: directusHeaders(),
+            });
+            if (fallbackRes.ok) return fallbackRes.json();
+            const fallbackRes2 = await fetch(`${DIRECTUS_URL}/items/driver?limit=-1&fields=*`, {
+              cache: "no-store",
+              headers: directusHeaders(),
+            });
+            if (fallbackRes2.ok) return fallbackRes2.json();
+            return { data: [] };
+          }
+          return r.json();
+        }).catch(() => ({ data: [] })),
 
         fetch(`${DIRECTUS_URL}/items/user?limit=-1&fields=user_id,user_fname,user_lname,user_email,user_contact`, {
           cache: "no-store",
@@ -224,6 +244,9 @@ export async function GET() {
     }
 
     // Format Drivers (using `driver` + `user` table definitions)
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
     const drivers = rawDrivers.map((d) => {
       const uInfo = userMap.get(d.user_id);
       return {
@@ -238,6 +261,63 @@ export async function GET() {
         license_expiry_date: d.license_expiry_date || "",
       };
     });
+
+    // Format License Items with Status & Expiration tracking
+    const licenses = rawDrivers.map((d) => {
+      const uInfo = userMap.get(d.user_id);
+      const expiryStr = (d.license_expiry_date || "").trim();
+      let daysRemaining: number | null = null;
+      let status: "Expired" | "Expiring Soon" | "Valid" | "No Expiry Date" | "Incomplete" = "No Expiry Date";
+
+      if (!d.license_no || !d.license_no.trim()) {
+        status = "Incomplete";
+      } else if (expiryStr) {
+        const expDate = new Date(expiryStr);
+        if (!isNaN(expDate.getTime())) {
+          expDate.setHours(0, 0, 0, 0);
+          const diffTime = expDate.getTime() - now.getTime();
+          daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+          if (daysRemaining < 0) {
+            status = "Expired";
+          } else if (daysRemaining <= 30) {
+            status = "Expiring Soon";
+          } else {
+            status = "Valid";
+          }
+        }
+      }
+
+      const isVerified = Boolean(
+        d.license_verified_by ||
+        d.license_verified_at ||
+        d.is_verified === 1 ||
+        d.is_verified === true ||
+        d.license_verified === 1 ||
+        d.license_verified === true
+      );
+
+      return {
+        id: d.id,
+        user_id: d.user_id,
+        driver_name: uInfo?.name || `Driver #${d.id}`,
+        branch_name: branchMap.get(d.branch_id) || "—",
+        contact: d.contact_phone || uInfo?.contact || "—",
+        email: d.contact_email || uInfo?.email || "—",
+        license_no: d.license_no || "—",
+        license_classification: d.license_classification || "—",
+        license_restrictions: d.license_restrictions || "—",
+        license_expiry_date: expiryStr || "",
+        days_remaining: daysRemaining,
+        status,
+        is_verified: isVerified,
+      };
+    });
+
+    // Count expiring soon or expired licenses
+    const expiringLicensesCount = licenses.filter(
+      (l) => l.status === "Expiring Soon" || l.status === "Expired"
+    ).length;
 
     // Format Job Orders (Pendings / Active)
     const pendingStatuses = ["requested", "pending", "approved", "in progress", "in-progress"];
@@ -299,6 +379,8 @@ export async function GET() {
       totalDrivers: drivers.length,
       joPendings: joPendings.length,
       vehiclesOutside: outsideList.length,
+      expiringLicenses: expiringLicensesCount,
+      totalLicenses: licenses.length,
     };
 
     return json({
@@ -308,6 +390,7 @@ export async function GET() {
         drivers,
         jo_pendings: joPendings,
         outside: outsideList,
+        licenses,
       },
     });
   } catch (error: unknown) {
