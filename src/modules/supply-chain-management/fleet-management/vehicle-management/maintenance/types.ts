@@ -17,10 +17,17 @@ export interface VehicleOption {
 }
 
 export interface UserOption {
-  id: number;
+  id?: number;
+  user_id?: number;
   first_name?: string;
   last_name?: string;
+  user_fname?: string;
+  user_mname?: string;
+  user_lname?: string;
   email?: string;
+  user_email?: string;
+  position?: string;
+  user_position?: string;
   role?: string;
 }
 

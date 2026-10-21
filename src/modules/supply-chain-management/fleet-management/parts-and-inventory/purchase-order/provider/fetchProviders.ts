@@ -1,10 +1,11 @@
-import type { PurchaseRequest, ReorderTriggerItem, CreatePurchaseRequestPayload } from "../types";
+import type { PurchaseRequest, ReorderTriggerItem, CreatePurchaseRequestPayload, Supplier } from "../types";
 import type { Branch } from "../../stock-in/types";
 import type { VehiclePart } from "../../registration/types";
 
 export async function fetchReorderTriggersAndPRs(branchId?: string): Promise<{
   prs: PurchaseRequest[];
   triggers: ReorderTriggerItem[];
+  suppliers: Supplier[];
 }> {
   const q = new URLSearchParams();
   if (branchId && branchId !== "all") q.set("branch_id", branchId);
@@ -22,6 +23,7 @@ export async function fetchReorderTriggersAndPRs(branchId?: string): Promise<{
   return {
     prs: Array.isArray(json?.data) ? json.data : [],
     triggers: Array.isArray(json?.triggers) ? json.triggers : [],
+    suppliers: Array.isArray(json?.suppliers) ? json.suppliers : [],
   };
 }
 

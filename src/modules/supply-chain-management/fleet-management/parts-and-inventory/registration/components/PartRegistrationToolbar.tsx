@@ -5,13 +5,7 @@ import { Plus, Search, RefreshCw, Layers } from "lucide-react";
 import type { VehiclePartClassification } from "../types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableClassificationSelect } from "./SearchableClassificationSelect";
 
 interface PartRegistrationToolbarProps {
   search: string;
@@ -40,6 +34,24 @@ export function PartRegistrationToolbar({
   onRefresh,
   loading,
 }: PartRegistrationToolbarProps) {
+  const classificationOptions = React.useMemo(() => {
+    return [
+      { value: "all", label: "All Classifications" },
+      ...classifications.map((c) => ({
+        value: String(c.id),
+        label: `${c.name} (${c.code})`,
+      })),
+    ];
+  }, [classifications]);
+
+  const statusOptions = React.useMemo(() => {
+    return [
+      { value: "all", label: "All Status" },
+      { value: "active", label: "Active" },
+      { value: "inactive", label: "Inactive" },
+    ];
+  }, []);
+
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-1 flex-wrap items-center gap-2">
@@ -53,30 +65,27 @@ export function PartRegistrationToolbar({
           />
         </div>
 
-        <Select value={classificationFilter} onValueChange={onClassificationFilterChange}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Classification" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Classifications</SelectItem>
-            {classifications.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="w-[190px]">
+          <SearchableClassificationSelect
+            options={classificationOptions}
+            value={classificationFilter}
+            onValueChange={onClassificationFilterChange}
+            placeholder="All Classifications"
+            popoverWidth="w-[260px]"
+            className="h-9"
+          />
+        </div>
 
-        <Select value={statusFilter} onValueChange={onStatusFilterChange}>
-          <SelectTrigger className="w-[130px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="w-[140px]">
+          <SearchableClassificationSelect
+            options={statusOptions}
+            value={statusFilter}
+            onValueChange={onStatusFilterChange}
+            placeholder="All Status"
+            popoverWidth="w-[160px]"
+            className="h-9"
+          />
+        </div>
 
         <Button variant="outline" size="icon" onClick={onRefresh} disabled={loading}>
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />

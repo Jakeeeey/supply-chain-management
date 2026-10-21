@@ -73,6 +73,7 @@ export function PartsTable({ parts, classifications = [], loading, onEdit, onDel
               <TableHead className="w-[110px]">Part Code</TableHead>
               <TableHead>Part Name</TableHead>
               <TableHead>Classification</TableHead>
+              <TableHead>Supplier</TableHead>
               <TableHead>Barcode</TableHead>
               <TableHead>Unit</TableHead>
               <TableHead className="text-right">Unit Cost</TableHead>
@@ -106,6 +107,13 @@ export function PartsTable({ parts, classifications = [], loading, onEdit, onDel
                 part.category ||
                 "General";
 
+              const supplierName =
+                part.supplier?.supplier_name ||
+                (part.supplier?.supplier_shortcut
+                  ? part.supplier.supplier_shortcut
+                  : null) ||
+                "—";
+
               return (
                 <TableRow key={part.id}>
                   <TableCell className="font-mono font-medium text-xs">{part.part_code}</TableCell>
@@ -121,6 +129,11 @@ export function PartsTable({ parts, classifications = [], loading, onEdit, onDel
                     <Badge variant="outline" className="text-xs font-normal">
                       {classificationName}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {supplierName}
+                    </span>
                   </TableCell>
                   <TableCell>
                     <Tooltip>

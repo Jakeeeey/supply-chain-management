@@ -126,9 +126,15 @@ export function IssuePartsDialog({
             <div className="flex justify-between">
               <span className="text-muted-foreground">Vehicle:</span>
               <span>
-                {typeof jobOrder.vehicle_id === "object" && jobOrder.vehicle_id !== null
-                  ? `${jobOrder.vehicle_id.plate_number} (${jobOrder.vehicle_id.make} ${jobOrder.vehicle_id.model})`
-                  : `ID #${jobOrder.vehicle_id}`}
+                {(() => {
+                  if (typeof jobOrder.vehicle_id !== "object" || jobOrder.vehicle_id === null) {
+                    return `ID #${jobOrder.vehicle_id}`;
+                  }
+                  const v = jobOrder.vehicle_id;
+                  const plate = v.vehicle_plate || v.plate_number || v.name || `Vehicle #${v.vehicle_id || v.id}`;
+                  const details = [v.make, v.model].filter(Boolean).join(" ");
+                  return details ? `${plate} (${details})` : plate;
+                })()}
               </span>
             </div>
           </div>

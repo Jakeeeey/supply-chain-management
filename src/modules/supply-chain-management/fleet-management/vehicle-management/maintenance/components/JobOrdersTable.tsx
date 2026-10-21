@@ -17,16 +17,11 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
   MoreHorizontal,
   Eye,
-  CheckCircle2,
-  PackageCheck,
-  Play,
-  CheckCheck,
   Truck,
   UserCheck,
 } from "lucide-react";
@@ -35,20 +30,16 @@ interface JobOrdersTableProps {
   jobOrders: VehicleJobOrder[];
   loading: boolean;
   onViewDetails: (jo: VehicleJobOrder) => void;
-  onOpenApprove: (jo: VehicleJobOrder) => void;
-  onOpenIssueParts: (jo: VehicleJobOrder) => void;
-  onStartMaintenance: (jo: VehicleJobOrder) => void;
-  onOpenComplete: (jo: VehicleJobOrder) => void;
+  onOpenApprove?: (jo: VehicleJobOrder) => void;
+  onOpenIssueParts?: (jo: VehicleJobOrder) => void;
+  onStartMaintenance?: (jo: VehicleJobOrder) => void;
+  onOpenComplete?: (jo: VehicleJobOrder) => void;
 }
 
 export function JobOrdersTable({
   jobOrders,
   loading,
   onViewDetails,
-  onOpenApprove,
-  onOpenIssueParts,
-  onStartMaintenance,
-  onOpenComplete,
 }: JobOrdersTableProps) {
   const getStatusBadge = (status: string) => {
     switch (status?.toLowerCase()) {
@@ -156,14 +147,24 @@ export function JobOrdersTable({
 
                 {/* Mechanic */}
                 <TableCell>
-                  {mechanic ? (
-                    <div className="flex items-center gap-1.5 text-xs text-foreground">
-                      <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
-                      <span>{mechanic.first_name || ""} {mechanic.last_name || ""}</span>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground italic">Unassigned</span>
-                  )}
+                  {(() => {
+                    if (!mechanic) {
+                      return jo.mechanic_id ? (
+                        <span className="text-xs text-foreground font-medium">Mechanic #{String(typeof jo.mechanic_id === "object" ? (jo.mechanic_id.id || jo.mechanic_id.user_id) : jo.mechanic_id)}</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">Unassigned</span>
+                      );
+                    }
+                    const f = mechanic.first_name || mechanic.user_fname || "";
+                    const l = mechanic.last_name || mechanic.user_lname || "";
+                    const full = [f, l].filter(Boolean).join(" ");
+                    return (
+                      <div className="flex items-center gap-1.5 text-xs text-foreground">
+                        <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+                        <span>{full || `Mechanic #${mechanic.id || mechanic.user_id}`}</span>
+                      </div>
+                    );
+                  })()}
                 </TableCell>
 
                 {/* Parts Summary */}
@@ -193,39 +194,7 @@ export function JobOrdersTable({
                         View Details
                       </DropdownMenuItem>
 
-                      <DropdownMenuSeparator />
-
-                      {/* Step: Approve / Assign Mechanic */}
-                      {jo.status === "Requested" && (
-                        <DropdownMenuItem onClick={() => onOpenApprove(jo)}>
-                          <CheckCircle2 className="h-4 w-4 mr-2 text-blue-600" />
-                          Approve / Assign
-                        </DropdownMenuItem>
-                      )}
-
-                      {/* Step: Issue Parts */}
-                      {(jo.status === "Approved" || jo.status === "In Progress") && (
-                        <DropdownMenuItem onClick={() => onOpenIssueParts(jo)}>
-                          <PackageCheck className="h-4 w-4 mr-2 text-amber-600" />
-                          Issue Parts
-                        </DropdownMenuItem>
-                      )}
-
-                      {/* Step: Start Maintenance */}
-                      {jo.status === "Approved" && (
-                        <DropdownMenuItem onClick={() => onStartMaintenance(jo)}>
-                          <Play className="h-4 w-4 mr-2 text-purple-600" />
-                          Start Maintenance
-                        </DropdownMenuItem>
-                      )}
-
-                      {/* Step: Complete JO */}
-                      {jo.status === "In Progress" && (
-                        <DropdownMenuItem onClick={() => onOpenComplete(jo)}>
-                          <CheckCheck className="h-4 w-4 mr-2 text-emerald-600" />
-                          Complete JO
-                        </DropdownMenuItem>
-                      )}
+                      {/* Actions for Requested, Approved, and In Progress are separated into dedicated modules */}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
