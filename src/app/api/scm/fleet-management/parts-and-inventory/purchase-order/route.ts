@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
     const supplierMap = new Map<number, Record<string, unknown>>();
     suppliers.forEach((s: { id: number }) => supplierMap.set(Number(s.id), s));
 
-    let prItems: unknown[] = [];
+    let prItems: Array<Record<string, unknown>> = [];
     if (prRes && prRes.ok) {
       const prData = await prRes.json().catch(() => ({ data: [] }));
       const rawPrs = prData?.data || [];
@@ -154,7 +154,7 @@ export async function GET(req: NextRequest) {
     const activePrStatuses = new Set(["pending", "approved", "ordered"]);
 
     if (Array.isArray(prItems)) {
-      prItems.forEach((pr: Record<string, unknown>) => {
+      prItems.forEach((pr) => {
         const status = String(pr.status || "").toLowerCase().trim();
         if (!activePrStatuses.has(status)) return;
 
