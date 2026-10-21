@@ -89,21 +89,22 @@ export async function GET(req: NextRequest) {
 
     const vpsList = Array.isArray(vpsBody?.data) ? vpsBody.data : [];
     // Map part_id -> supplier
-    const supplierByPartId = new Map<number, any>();
+    const supplierByPartId = new Map<number, Record<string, unknown> | number>();
     for (const vps of vpsList) {
       if (vps.part_id && vps.supplier_id && !supplierByPartId.has(Number(vps.part_id))) {
-        supplierByPartId.set(Number(vps.part_id), vps.supplier_id);
+        supplierByPartId.set(Number(vps.part_id), vps.supplier_id as Record<string, unknown> | number);
       }
     }
 
     // Attach supplier to parts
     const partsData = Array.isArray(partsBody?.data)
-      ? partsBody.data.map((p: any) => {
+      ? (partsBody.data as Array<Record<string, unknown>>).map((p) => {
           const sup = supplierByPartId.get(Number(p.id));
+          const supId = typeof sup === "object" && sup !== null ? (sup as { id?: number }).id : (typeof sup === "number" ? sup : null);
           return {
             ...p,
             supplier: sup || null,
-            supplier_id: sup?.id ?? (typeof sup === "number" ? sup : null),
+            supplier_id: supId ?? null,
           };
         })
       : [];

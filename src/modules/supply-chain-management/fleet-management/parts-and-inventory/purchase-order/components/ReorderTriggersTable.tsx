@@ -33,6 +33,10 @@ export function ReorderTriggersTable({
   onSelectionChange,
   onBulkReorder,
 }: ReorderTriggersTableProps) {
+  const selectedTotalCost = React.useMemo(() => {
+    return selectedItems.reduce((acc, it) => acc + (it.suggested_quantity * it.unit_cost), 0);
+  }, [selectedItems]);
+
   if (loading && items.length === 0) {
     return (
       <div className="rounded-md border p-4 space-y-3">
@@ -81,10 +85,6 @@ export function ReorderTriggersTable({
   const isItemSelected = (item: ReorderTriggerItem) => {
     return selectedItems.some((i) => i.part_id === item.part_id && i.branch_id === item.branch_id);
   };
-
-  const selectedTotalCost = React.useMemo(() => {
-    return selectedItems.reduce((acc, it) => acc + (it.suggested_quantity * it.unit_cost), 0);
-  }, [selectedItems]);
 
   return (
     <div className="space-y-2">

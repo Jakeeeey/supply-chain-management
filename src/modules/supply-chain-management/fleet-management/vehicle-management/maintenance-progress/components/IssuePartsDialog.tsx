@@ -73,7 +73,7 @@ export function IssuePartsDialog({
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleUpdateRow = (index: number, field: keyof PartRow, value: any) => {
+  const handleUpdateRow = (index: number, field: keyof PartRow, value: string | number) => {
     setItems((prev) =>
       prev.map((row, i) => {
         if (i === index) {

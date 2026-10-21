@@ -53,14 +53,26 @@ export async function GET(req: NextRequest) {
       const parts = pRes ? (await pRes.json().catch(() => ({})))?.data || [] : [];
       const stocks = sRes ? (await sRes.json().catch(() => ({})))?.data || [] : [];
 
+      interface RawUserRecord {
+        user_id: number;
+        user_fname?: string;
+        user_mname?: string;
+        user_lname?: string;
+        user_email?: string;
+        user_position?: string;
+        role?: string;
+        isDeleted?: boolean | number | string;
+        is_deleted?: boolean | number | string;
+      }
+
       // Filter out isDeleted = 1 or is_deleted = 1 and normalize to user object format
-      const users = (Array.isArray(rawUsers) ? rawUsers : [])
-        .filter((u: any) => {
+      const users = (Array.isArray(rawUsers) ? (rawUsers as RawUserRecord[]) : [])
+        .filter((u) => {
           const isDel1 = u.isDeleted === 1 || u.isDeleted === true || u.isDeleted === "1";
           const isDel2 = u.is_deleted === 1 || u.is_deleted === true || u.is_deleted === "1";
           return !isDel1 && !isDel2;
         })
-        .map((u: any) => ({
+        .map((u) => ({
           id: u.user_id,
           first_name: u.user_fname || "",
           last_name: u.user_lname || "",
