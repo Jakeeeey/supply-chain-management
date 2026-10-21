@@ -80,7 +80,9 @@ export function CompleteJODialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="completionRemarks">Completion Remarks *</Label>
+            <Label htmlFor="completionRemarks">
+              Completion Remarks <span className="text-destructive font-bold">*</span>
+            </Label>
             <Textarea
               id="completionRemarks"
               placeholder="Summary of repair actions done, test drive results, or maintenance notes..."

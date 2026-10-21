@@ -36,8 +36,8 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const branchId = url.searchParams.get("branch_id");
 
-    // 1. Fetch parts, stock, purchase requests, and purchase request items
-    const [partsRes, stockRes, prRes, prItemsRes] = await Promise.all([
+    // 1. Fetch parts, stock, purchase requests, purchase request items, and suppliers
+    const [partsRes, stockRes, prRes, prItemsRes, suppliersRes] = await Promise.all([
       fetch(`${DIRECTUS_URL}/items/vehicle_parts?limit=-1&fields=*,classification_id.*`, {
         cache: "no-store",
         headers: directusHeaders(),
@@ -51,13 +51,18 @@ export async function GET(req: NextRequest) {
           headers: directusHeaders(),
         }
       ),
-      // Fetch purchase requests
-      fetch(`${DIRECTUS_URL}/items/vehicle_part_purchase_requests?limit=-1&sort=-id&fields=*,branch_id.*`, {
+      // Fetch purchase requests (include supplier_id relation)
+      fetch(`${DIRECTUS_URL}/items/vehicle_part_purchase_requests?limit=-1&sort=-id&fields=*,branch_id.*,supplier_id.*`, {
         cache: "no-store",
         headers: directusHeaders(),
       }).catch(() => null),
       // Fetch purchase request items
       fetch(`${DIRECTUS_URL}/items/vehicle_part_purchase_request_items?limit=-1&fields=*,part_id.*`, {
+        cache: "no-store",
+        headers: directusHeaders(),
+      }).catch(() => null),
+      // Fetch suppliers
+      fetch(`${DIRECTUS_URL}/items/suppliers?limit=-1&fields=id,supplier_name,supplier_shortcut,contact_person,phone_number,email_address&sort=supplier_name`, {
         cache: "no-store",
         headers: directusHeaders(),
       }).catch(() => null),
@@ -72,6 +77,11 @@ export async function GET(req: NextRequest) {
     // Map parts into a quick lookup Map
     const partMap = new Map<number, Record<string, unknown>>();
     parts.forEach((p: { id: number }) => partMap.set(Number(p.id), p));
+
+    const suppliersData = suppliersRes && suppliersRes.ok ? await suppliersRes.json().catch(() => ({ data: [] })) : { data: [] };
+    const suppliers = Array.isArray(suppliersData?.data) ? suppliersData.data : [];
+    const supplierMap = new Map<number, Record<string, unknown>>();
+    suppliers.forEach((s: { id: number }) => supplierMap.set(Number(s.id), s));
 
     let prItems: unknown[] = [];
     if (prRes && prRes.ok) {
@@ -115,17 +125,66 @@ export async function GET(req: NextRequest) {
         const unitCost = Number(partObj?.unit_cost) || 0;
         const estCost = Number(pr.estimated_cost) || (itemQty * unitCost);
 
+        // Resolve supplier
+        let supplierObj: Record<string, unknown> | null = null;
+        let sName = pr.supplier_name as string | null | undefined;
+        if (typeof pr.supplier_id === "object" && pr.supplier_id !== null) {
+          supplierObj = pr.supplier_id as Record<string, unknown>;
+          sName = (supplierObj.supplier_name as string) || sName;
+        } else if (pr.supplier_id) {
+          supplierObj = supplierMap.get(Number(pr.supplier_id)) || null;
+          sName = (supplierObj?.supplier_name as string) || sName;
+        }
+
         return {
           ...pr,
           part_id: partObj || pr.part_id,
           quantity: itemQty,
           estimated_cost: estCost,
+          supplier_id: supplierObj || pr.supplier_id,
+          supplier_name: sName || "—",
           items: linkedItems,
         };
       });
     }
 
     // Calculate low stock / reorder triggers
+    // Collect active PRs (Pending, Approved, Ordered) to prevent duplicate reorders
+    const activePrKeys = new Set<string>();
+    const activePrStatuses = new Set(["pending", "approved", "ordered"]);
+
+    if (Array.isArray(prItems)) {
+      prItems.forEach((pr: Record<string, unknown>) => {
+        const status = String(pr.status || "").toLowerCase().trim();
+        if (!activePrStatuses.has(status)) return;
+
+        const prBranchId = typeof pr.branch_id === "object" && pr.branch_id !== null
+          ? Number((pr.branch_id as Record<string, unknown>).id)
+          : Number(pr.branch_id);
+
+        // Check primary part_id or linked items
+        const primaryPartId = typeof pr.part_id === "object" && pr.part_id !== null
+          ? Number((pr.part_id as Record<string, unknown>).id)
+          : Number(pr.part_id);
+
+        if (primaryPartId && prBranchId) {
+          activePrKeys.add(`${primaryPartId}-${prBranchId}`);
+          activePrKeys.add(`${primaryPartId}`); // Also track part globally if needed
+        }
+
+        const linkedItems = Array.isArray(pr.items) ? (pr.items as Record<string, unknown>[]) : [];
+        linkedItems.forEach((it) => {
+          const itPartId = typeof it.part_id === "object" && it.part_id !== null
+            ? Number((it.part_id as Record<string, unknown>).id)
+            : Number(it.part_id);
+          if (itPartId && prBranchId) {
+            activePrKeys.add(`${itPartId}-${prBranchId}`);
+            activePrKeys.add(`${itPartId}`);
+          }
+        });
+      });
+    }
+
     const triggers: unknown[] = [];
     const processedPartIds = new Set<string>();
 
@@ -137,13 +196,18 @@ export async function GET(req: NextRequest) {
 
       if (!p) return;
 
+      const key = `${partId}-${b.id}`;
+      processedPartIds.add(key);
+
+      // If already has an active PR (Pending / Approved / Ordered), don't trigger reorder to prevent duplicate
+      if (activePrKeys.has(key) || activePrKeys.has(`${partId}`)) {
+        return;
+      }
+
       const onHand = Number(s.on_hand) || 0;
       const reserved = Number(s.reserved) || 0;
       const available = onHand - reserved;
       const reorderPoint = Number(p.reorder_point) || 0;
-
-      const key = `${partId}-${b.id}`;
-      processedPartIds.add(key);
 
       // Trigger condition: Available stock is at or below the reorder point
       if (available <= reorderPoint) {
@@ -183,6 +247,11 @@ export async function GET(req: NextRequest) {
 
       // If not yet in triggers and has no positive stock record
       if (!processedPartIds.has(key)) {
+        // Skip if already in an active PR
+        if (activePrKeys.has(key) || activePrKeys.has(`${partId}`)) {
+          return;
+        }
+
         // Check if there is any stock record for this part
         const hasStock = stockList.some((s: Record<string, unknown>) => {
           const sPartId = typeof s.part_id === "object" && s.part_id !== null ? Number((s.part_id as Record<string, unknown>).id) : Number(s.part_id);
@@ -218,9 +287,11 @@ export async function GET(req: NextRequest) {
     return json({
       data: prItems,
       triggers,
+      suppliers,
       meta: {
         total_count: prItems.length,
         triggers_count: triggers.length,
+        suppliers_count: suppliers.length,
       },
     });
   } catch (e: unknown) {
@@ -234,15 +305,37 @@ export async function POST(req: NextRequest) {
     if (!DIRECTUS_URL) throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured");
 
     const payload = await req.json();
-    const { branch_id, part_id, quantity, estimated_cost, priority, supplier_name, expected_delivery_date, notes } = payload;
+    const { branch_id, part_id, quantity, estimated_cost, priority, supplier_id, supplier_name, expected_delivery_date, notes, items } = payload;
 
     const branchIdNum = Number(branch_id);
-    const partIdNum = Number(part_id);
-    const qty = Number(quantity);
+    const supplierIdNum = supplier_id ? Number(supplier_id) : null;
 
-    if (!branchIdNum || !partIdNum || !qty || qty <= 0) {
-      return json({ error: "Branch, part, and valid positive quantity are required." }, 400);
+    // Normalize items list (either from payload.items or single part_id + quantity)
+    let requestItems: { part_id: number; quantity: number; unit_cost?: number; remarks?: string }[] = [];
+    if (Array.isArray(items) && items.length > 0) {
+      requestItems = items
+        .map((it: { part_id: number | string; quantity: number | string; unit_cost?: number | string; remarks?: string }) => ({
+          part_id: Number(it.part_id),
+          quantity: Number(it.quantity),
+          unit_cost: Number(it.unit_cost || 0),
+          remarks: it.remarks || "",
+        }))
+        .filter((it) => it.part_id > 0 && it.quantity > 0);
+    } else if (part_id && quantity) {
+      const pNum = Number(part_id);
+      const qNum = Number(quantity);
+      if (pNum > 0 && qNum > 0) {
+        requestItems = [{ part_id: pNum, quantity: qNum, unit_cost: Number(estimated_cost) || 0 }];
+      }
     }
+
+    if (!branchIdNum || requestItems.length === 0) {
+      return json({ error: "Branch and at least one valid part with positive quantity are required." }, 400);
+    }
+
+    const firstItem = requestItems[0];
+    const totalQty = requestItems.reduce((acc, it) => acc + it.quantity, 0);
+    const totalEstCost = estimated_cost ? Number(estimated_cost) : requestItems.reduce((acc, it) => acc + (it.quantity * (it.unit_cost || 0)), 0);
 
     const prNo = `PR-${Date.now().toString().slice(-6)}`;
     const currentUserId = getUserIdFromRequest(req);
@@ -251,6 +344,10 @@ export async function POST(req: NextRequest) {
     const prRecord: Record<string, unknown> = {
       pr_no: prNo,
       branch_id: branchIdNum,
+      part_id: firstItem.part_id,
+      quantity: totalQty,
+      estimated_cost: totalEstCost,
+      supplier_id: supplierIdNum || null,
       priority: priority || "Normal",
       supplier_name: supplier_name || "General Supplier",
       expected_delivery_date: expected_delivery_date || null,
@@ -272,35 +369,43 @@ export async function POST(req: NextRequest) {
     const createdPrId = prJson?.data?.id;
 
     if (createdPrId) {
-      // Insert item into vehicle_part_purchase_request_items
-      await fetch(`${DIRECTUS_URL}/items/vehicle_part_purchase_request_items`, {
-        method: "POST",
-        headers: directusHeaders(),
-        body: JSON.stringify({
-          purchase_request_id: createdPrId,
-          part_id: partIdNum,
-          quantity: qty,
-          remarks: notes || `Ordered for ${prNo}`,
-        }),
-      }).catch(() => null);
+      // Insert all items into vehicle_part_purchase_request_items in parallel
+      await Promise.all(
+        requestItems.map((it) =>
+          fetch(`${DIRECTUS_URL}/items/vehicle_part_purchase_request_items`, {
+            method: "POST",
+            headers: directusHeaders(),
+            body: JSON.stringify({
+              purchase_request_id: createdPrId,
+              part_id: it.part_id,
+              quantity: it.quantity,
+              remarks: it.remarks || notes || `Ordered for ${prNo}`,
+            }),
+          }).catch(() => null)
+        )
+      );
     } else {
-      // Fallback: Also record as procurement movement log if PR table isn't dedicated in directus
-      await fetch(`${DIRECTUS_URL}/items/vehicle_part_movements`, {
-        method: "POST",
-        headers: directusHeaders(),
-        body: JSON.stringify({
-          part_id: partIdNum,
-          branch_id: branchIdNum,
-          movement_type: "Purchase Request",
-          quantity: qty,
-          unit_cost: Number(estimated_cost) || 0,
-          reference_no: prNo,
-          remarks: `[PR-${priority}] ${notes || ""}`.trim(),
-        }),
-      }).catch(() => null);
+      // Fallback: Also record as procurement movement logs if PR table isn't dedicated in directus
+      await Promise.all(
+        requestItems.map((it) =>
+          fetch(`${DIRECTUS_URL}/items/vehicle_part_movements`, {
+            method: "POST",
+            headers: directusHeaders(),
+            body: JSON.stringify({
+              part_id: it.part_id,
+              branch_id: branchIdNum,
+              movement_type: "Purchase Request",
+              quantity: it.quantity,
+              unit_cost: it.unit_cost || 0,
+              reference_no: prNo,
+              remarks: `[PR-${priority}] ${it.remarks || notes || ""}`.trim(),
+            }),
+          }).catch(() => null)
+        )
+      );
     }
 
-    return json({ success: true, data: { ...prRecord, id: createdPrId, part_id: partIdNum, quantity: qty } }, 201);
+    return json({ success: true, data: { ...prRecord, id: createdPrId, part_id: firstItem.part_id, quantity: totalQty, items_count: requestItems.length } }, 201);
   } catch (e: unknown) {
     const err = e as Error;
     return json({ error: String(err?.message || err) }, 500);

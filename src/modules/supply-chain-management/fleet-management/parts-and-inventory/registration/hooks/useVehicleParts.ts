@@ -5,12 +5,14 @@ import type {
   UpdateVehiclePartInput,
   VehiclePart,
   VehiclePartClassification,
+  Supplier,
 } from "../types";
 import {
   createClassification,
   createVehiclePart,
   deleteVehiclePart,
   fetchClassifications,
+  fetchSuppliers,
   fetchVehicleParts,
   updateVehiclePart,
 } from "../provider/fetchProviders";
@@ -18,6 +20,7 @@ import {
 export function useVehicleParts() {
   const [parts, setParts] = React.useState<VehiclePart[]>([]);
   const [classifications, setClassifications] = React.useState<VehiclePartClassification[]>([]);
+  const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [saving, setSaving] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -30,16 +33,18 @@ export function useVehicleParts() {
     try {
       setLoading(true);
       setError(null);
-      const [partsData, classData] = await Promise.all([
+      const [partsData, classData, suppliersData] = await Promise.all([
         fetchVehicleParts({
           search,
           classification_id: classificationFilter,
           status: statusFilter,
         }),
         fetchClassifications(),
+        fetchSuppliers().catch(() => []),
       ]);
       setParts(partsData);
       setClassifications(classData);
+      setSuppliers(suppliersData);
     } catch (err: unknown) {
       const e = err as Error;
       setError(e?.message || "Error loading parts and classifications");
@@ -115,6 +120,7 @@ export function useVehicleParts() {
   return {
     parts,
     classifications,
+    suppliers,
     loading,
     saving,
     error,

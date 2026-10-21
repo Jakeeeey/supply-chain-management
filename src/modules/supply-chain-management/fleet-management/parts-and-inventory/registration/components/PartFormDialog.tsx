@@ -6,9 +6,11 @@ import type {
   UpdateVehiclePartInput,
   VehiclePart,
   VehiclePartClassification,
+  Supplier,
 } from "../types";
 import { generateNumericBarcode } from "../utils/barcodeGenerator";
 import { SearchableClassificationSelect } from "./SearchableClassificationSelect";
+import { SearchableSupplierSelect } from "./SearchableSupplierSelect";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +31,7 @@ interface PartFormDialogProps {
   onOpenChange: (open: boolean) => void;
   part: VehiclePart | null;
   classifications: VehiclePartClassification[];
+  suppliers: Supplier[];
   saving: boolean;
   onSave: (data: CreateVehiclePartInput | UpdateVehiclePartInput) => Promise<boolean>;
   onOpenAddClassification: () => void;
@@ -38,6 +41,7 @@ interface FormErrors {
   partCode?: string;
   partName?: string;
   classificationId?: string;
+  supplierId?: string;
   unit?: string;
   unitCost?: string;
   reorderPoint?: string;
@@ -49,6 +53,7 @@ export function PartFormDialog({
   onOpenChange,
   part,
   classifications,
+  suppliers,
   saving,
   onSave,
   onOpenAddClassification,
@@ -58,6 +63,7 @@ export function PartFormDialog({
   const [partCode, setPartCode] = React.useState("");
   const [partName, setPartName] = React.useState("");
   const [classificationId, setClassificationId] = React.useState<string>("");
+  const [supplierId, setSupplierId] = React.useState<string>("");
   const [useCustomBarcode, setUseCustomBarcode] = React.useState(false);
   const [customBarcode, setCustomBarcode] = React.useState("");
   const [unit, setUnit] = React.useState("pc");
@@ -82,6 +88,7 @@ export function PartFormDialog({
         setPartCode(part.part_code || "");
         setPartName(part.part_name || "");
         setClassificationId(part.classification_id ? String(part.classification_id) : "");
+        setSupplierId(part.supplier_id ? String(part.supplier_id) : part.supplier?.id ? String(part.supplier.id) : "");
         if (part.barcode) {
           setUseCustomBarcode(true);
           setCustomBarcode(part.barcode);
@@ -98,6 +105,7 @@ export function PartFormDialog({
         setPartCode("");
         setPartName("");
         setClassificationId("");
+        setSupplierId("");
         setUseCustomBarcode(false);
         setCustomBarcode("");
         setUnit("pc");
@@ -128,6 +136,9 @@ export function PartFormDialog({
     }
     if (!classificationId && classifications.length > 0) {
       newErrors.classificationId = "Please select a classification";
+    }
+    if (!supplierId.trim()) {
+      newErrors.supplierId = "Supplier is required";
     }
     if (!unit.trim()) {
       newErrors.unit = "Unit is required";
@@ -160,6 +171,7 @@ export function PartFormDialog({
       part_code: partCode.trim(),
       part_name: partName.trim(),
       classification_id: classificationId ? Number(classificationId) : null,
+      supplier_id: supplierId ? Number(supplierId) : null,
       category: selectedClassification ? selectedClassification.name : null,
       barcode: useCustomBarcode && customBarcode.trim() ? customBarcode.trim() : null,
       unit: unit.trim(),
@@ -356,6 +368,32 @@ export function PartFormDialog({
                 <Info className="h-3 w-3 inline shrink-0" />
                 All parts in this classification share one barcode unless a unique barcode is set above.
               </p>
+            </div>
+
+            {/* Supplier Selection */}
+            <div className="space-y-1">
+              <Label htmlFor="supplier">
+                Supplier <span className="text-destructive font-bold">*</span>
+              </Label>
+              <SearchableSupplierSelect
+                suppliers={suppliers}
+                value={supplierId}
+                onValueChange={(val) => {
+                  setSupplierId(val);
+                  if (submitted && errors.supplierId) {
+                    setErrors((prev) => ({ ...prev, supplierId: undefined }));
+                  }
+                }}
+                placeholder="Select supplier..."
+                className={
+                  submitted && errors.supplierId
+                    ? "border-destructive focus-visible:ring-destructive"
+                    : ""
+                }
+              />
+              {submitted && errors.supplierId && (
+                <p className="text-xs text-destructive">{errors.supplierId}</p>
+              )}
             </div>
 
             <div className="grid grid-cols-3 gap-3">

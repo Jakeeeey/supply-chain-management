@@ -6,10 +6,26 @@ import type {
   VehiclePartClassification,
   VehiclePartsApiResponse,
   ClassificationsApiResponse,
+  Supplier,
+  SuppliersApiResponse,
 } from "../types";
 
 const BASE_URL = "/api/scm/fleet-management/parts-and-inventory/registration";
 const CLASSIFICATIONS_URL = "/api/scm/fleet-management/parts-and-inventory/registration/classifications";
+
+export async function fetchSuppliers(): Promise<Supplier[]> {
+  const res = await fetch(`${BASE_URL}?action=suppliers`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to fetch suppliers");
+  }
+
+  const result: SuppliersApiResponse = await res.json();
+  return result.data || [];
+}
 
 export async function fetchVehicleParts(filters?: {
   search?: string;

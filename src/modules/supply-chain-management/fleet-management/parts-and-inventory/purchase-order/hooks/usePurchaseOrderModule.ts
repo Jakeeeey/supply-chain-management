@@ -1,5 +1,5 @@
 import * as React from "react";
-import type { PurchaseRequest, ReorderTriggerItem } from "../types";
+import type { PurchaseRequest, ReorderTriggerItem, Supplier } from "../types";
 import type { Branch } from "../../stock-in/types";
 import type { VehiclePart } from "../../registration/types";
 import { fetchReorderTriggersAndPRs, fetchBranches, fetchParts, updatePurchaseRequestStatus } from "../provider/fetchProviders";
@@ -9,6 +9,7 @@ export function usePurchaseOrderModule() {
   const [triggers, setTriggers] = React.useState<ReorderTriggerItem[]>([]);
   const [branches, setBranches] = React.useState<Branch[]>([]);
   const [parts, setParts] = React.useState<VehiclePart[]>([]);
+  const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
 
   const [loading, setLoading] = React.useState(true);
   const [actionLoading, setActionLoading] = React.useState(false);
@@ -31,9 +32,11 @@ export function usePurchaseOrderModule() {
       const res = await fetchReorderTriggersAndPRs(selectedBranch);
       setPrs(res.prs);
       setTriggers(res.triggers);
+      setSuppliers(res.suppliers || []);
     } catch {
       setPrs([]);
       setTriggers([]);
+      setSuppliers([]);
     } finally {
       setLoading(false);
     }
@@ -62,18 +65,40 @@ export function usePurchaseOrderModule() {
     }
   };
 
+  // Active PRs key set (Pending, Approved, Ordered) to prevent duplicate reorders
+  const activePrKeys = React.useMemo(() => {
+    const keys = new Set<string>();
+    const activeStatuses = new Set(["pending", "approved", "ordered"]);
+    prs.forEach((p) => {
+      if (!activeStatuses.has(String(p.status || "").toLowerCase().trim())) return;
+      const bId = typeof p.branch_id === "object" && p.branch_id !== null ? p.branch_id.id : p.branch_id;
+      const pId = typeof p.part_id === "object" && p.part_id !== null ? p.part_id.id : p.part_id;
+      if (pId && bId) keys.add(`${pId}-${bId}`);
+      if (pId) keys.add(`${pId}`);
+    });
+    return keys;
+  }, [prs]);
+
+  // Filter triggers: only include items that don't have active PRs
+  const availableTriggers = React.useMemo(() => {
+    return triggers.filter((t) => {
+      const key = `${t.part_id}-${t.branch_id}`;
+      return !activePrKeys.has(key) && !activePrKeys.has(`${t.part_id}`);
+    });
+  }, [triggers, activePrKeys]);
+
   // Filter triggers by search query
   const filteredTriggers = React.useMemo(() => {
-    if (!search.trim()) return triggers;
+    if (!search.trim()) return availableTriggers;
     const s = search.toLowerCase();
-    return triggers.filter(
+    return availableTriggers.filter(
       (t) =>
         t.part_code.toLowerCase().includes(s) ||
         t.part_name.toLowerCase().includes(s) ||
         t.branch_name.toLowerCase().includes(s) ||
         t.classification_name.toLowerCase().includes(s)
     );
-  }, [triggers, search]);
+  }, [availableTriggers, search]);
 
   // Filter PRs by search query
   const filteredPrs = React.useMemo(() => {
@@ -93,11 +118,11 @@ export function usePurchaseOrderModule() {
 
   // KPI Metrics
   const metrics = React.useMemo(() => {
-    const totalDeficitItems = triggers.length;
+    const totalDeficitItems = availableTriggers.length;
     let criticalCount = 0;
     let estimatedReplenishmentCost = 0;
 
-    triggers.forEach((t) => {
+    availableTriggers.forEach((t) => {
       if (t.on_hand <= 0) criticalCount++;
       estimatedReplenishmentCost += t.suggested_quantity * t.unit_cost;
     });
@@ -108,13 +133,14 @@ export function usePurchaseOrderModule() {
       estimatedReplenishmentCost,
       pendingPrsCount: prs.filter((p) => p.status === "Pending").length,
     };
-  }, [triggers, prs]);
+  }, [availableTriggers, prs]);
 
   return {
     triggers: filteredTriggers,
     prs: filteredPrs,
     branches,
     parts,
+    suppliers,
     loading,
     actionLoading,
     search,

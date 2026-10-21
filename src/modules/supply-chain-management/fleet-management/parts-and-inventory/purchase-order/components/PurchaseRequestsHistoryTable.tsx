@@ -132,7 +132,11 @@ export function PurchaseRequestsHistoryTable({
                 <TableCell className="text-right text-xs font-medium">
                   ₱{Number(item.estimated_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground">{item.supplier_name || "—"}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {typeof item.supplier_id === "object" && item.supplier_id !== null
+                    ? (item.supplier_id as { supplier_name?: string }).supplier_name || item.supplier_name || "—"
+                    : item.supplier_name || "—"}
+                </TableCell>
                 <TableCell className="text-center">
                   <Badge variant="outline" className={`text-[11px] ${statusBadge}`}>
                     {item.status}

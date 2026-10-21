@@ -49,7 +49,7 @@ export function ApproveAssignDialog({
       const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || `User #${u.id}`;
       return {
         value: String(u.id),
-        label: `${name}${u.email ? ` (${u.email})` : ""}`,
+        label: name,
       };
     });
   }, [users]);

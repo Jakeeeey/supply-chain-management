@@ -153,7 +153,9 @@ export function CreateJODialog({
           {/* Vehicle Selection */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="vehicle">Vehicle *</Label>
+              <Label htmlFor="vehicle">
+                Vehicle <span className="text-destructive font-bold">*</span>
+              </Label>
               <SearchableSelect
                 options={vehicleOptions}
                 value={vehicleId}
@@ -178,7 +180,9 @@ export function CreateJODialog({
           {/* Type & Priority */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="joType">JO Type *</Label>
+              <Label htmlFor="joType">
+                JO Type <span className="text-destructive font-bold">*</span>
+              </Label>
               <SearchableSelect
                 options={joTypeOptions}
                 value={joType}
@@ -200,7 +204,9 @@ export function CreateJODialog({
 
           {/* Description */}
           <div className="space-y-1.5">
-            <Label htmlFor="description">Issue / Maintenance Description *</Label>
+            <Label htmlFor="description">
+              Issue / Maintenance Description <span className="text-destructive font-bold">*</span>
+            </Label>
             <Textarea
               id="description"
               placeholder="Describe symptoms, repair requirements, or scheduled maintenance items..."
