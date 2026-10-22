@@ -23,7 +23,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { FileText, MoreHorizontal, CheckCircle2, PackagePlus, XCircle } from "lucide-react";
+import { FileText, MoreHorizontal, CheckCircle2, PackagePlus, XCircle, Eye } from "lucide-react";
+import { ViewPurchaseRequestDialog } from "./ViewPurchaseRequestDialog";
 
 interface PurchaseRequestsHistoryTableProps {
   items: PurchaseRequest[];
@@ -40,6 +41,14 @@ export function PurchaseRequestsHistoryTable({
   actionLoading,
   onStatusUpdate,
 }: PurchaseRequestsHistoryTableProps) {
+  const [selectedPr, setSelectedPr] = React.useState<PurchaseRequest | null>(null);
+  const [openView, setOpenView] = React.useState(false);
+
+  const handleOpenView = (pr: PurchaseRequest) => {
+    setSelectedPr(pr);
+    setOpenView(true);
+  };
+
   if (loading && items.length === 0) {
     return (
       <div className="rounded-md border p-4 space-y-3">
@@ -115,7 +124,16 @@ export function PurchaseRequestsHistoryTable({
 
             return (
               <TableRow key={item.id || item.pr_no}>
-                <TableCell className="font-mono text-xs font-semibold">{item.pr_no}</TableCell>
+                <TableCell>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenView(item)}
+                    className="font-mono text-xs font-semibold text-primary hover:underline text-left"
+                    title="Click to view purchase order details"
+                  >
+                    {item.pr_no}
+                  </button>
+                </TableCell>
                 <TableCell>
                   <div className="text-xs font-mono font-medium">{partCode}</div>
                   <div className="text-xs text-muted-foreground">{partName}</div>
@@ -154,6 +172,13 @@ export function PurchaseRequestsHistoryTable({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-44">
                       <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onClick={() => handleOpenView(item)}
+                        className="cursor-pointer"
+                      >
+                        <Eye className="h-4 w-4 mr-2 text-primary" />
+                        View Details
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
 
                       {item.status === "Pending" && (
@@ -213,6 +238,13 @@ export function PurchaseRequestsHistoryTable({
           })}
         </TableBody>
       </Table>
+
+      <ViewPurchaseRequestDialog
+        open={openView}
+        onOpenChange={setOpenView}
+        purchaseRequest={selectedPr}
+        parts={parts}
+      />
     </div>
   );
 }

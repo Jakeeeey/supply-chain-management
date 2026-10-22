@@ -112,6 +112,13 @@ export function BulkPurchaseRequestDialog({
     }
   }, [open, selectedItems, branches]);
 
+  const branchOptions = React.useMemo(() => {
+    return branches.map((b) => ({
+      value: String(b.id),
+      label: b.branch_name,
+    }));
+  }, [branches]);
+
   const supplierOptions = React.useMemo(() => {
     return suppliers.map((s) => ({
       value: String(s.id),
@@ -258,18 +265,13 @@ export function BulkPurchaseRequestDialog({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Branch *</Label>
-              <Select value={branchId} onValueChange={setBranchId}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="Select Branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  {branches.map((b) => (
-                    <SelectItem key={b.id} value={String(b.id)} className="text-xs">
-                      {b.branch_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={branchOptions}
+                value={branchId}
+                onValueChange={setBranchId}
+                placeholder="Select Branch..."
+                contentWidth="w-[280px]"
+              />
             </div>
 
             <div className="space-y-1.5">

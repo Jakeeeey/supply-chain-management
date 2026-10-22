@@ -45,6 +45,13 @@ export interface PurchaseRequest {
   expected_delivery_date?: string | null;
   status: PurchaseRequestStatus;
   notes?: string | null;
+  items?: Array<{
+    id?: number;
+    part_id: number | VehiclePart;
+    quantity: number;
+    unit_cost?: number;
+    remarks?: string;
+  }>;
   requested_by?: number | string | null;
   requested_at?: string | null;
   decided_by?: number | string | null;
