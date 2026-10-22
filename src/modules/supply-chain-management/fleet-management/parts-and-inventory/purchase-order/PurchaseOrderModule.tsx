@@ -7,6 +7,7 @@ import { PurchaseOrderToolbar } from "./components/PurchaseOrderToolbar";
 import { ReorderTriggersTable } from "./components/ReorderTriggersTable";
 import { PurchaseRequestsHistoryTable } from "./components/PurchaseRequestsHistoryTable";
 import { CreatePurchaseRequestDialog } from "./components/CreatePurchaseRequestDialog";
+import { BulkPurchaseRequestDialog } from "./components/BulkPurchaseRequestDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ReorderTriggerItem } from "./types";
 
@@ -16,6 +17,7 @@ export default function PurchaseOrderModule() {
     prs,
     branches,
     parts,
+    suppliers,
     loading,
     actionLoading,
     search,
@@ -28,7 +30,9 @@ export default function PurchaseOrderModule() {
   } = usePurchaseOrderModule();
 
   const [createModalOpen, setCreateModalOpen] = React.useState(false);
+  const [bulkModalOpen, setBulkModalOpen] = React.useState(false);
   const [selectedTrigger, setSelectedTrigger] = React.useState<ReorderTriggerItem | null>(null);
+  const [selectedTriggers, setSelectedTriggers] = React.useState<ReorderTriggerItem[]>([]);
 
   const handleRequestReorder = (item: ReorderTriggerItem) => {
     setSelectedTrigger(item);
@@ -38,6 +42,16 @@ export default function PurchaseOrderModule() {
   const handleOpenBlankModal = () => {
     setSelectedTrigger(null);
     setCreateModalOpen(true);
+  };
+
+  const handleBulkReorder = () => {
+    if (selectedTriggers.length === 0) return;
+    setBulkModalOpen(true);
+  };
+
+  const handleBulkSuccess = () => {
+    setSelectedTriggers([]);
+    refresh();
   };
 
   return (
@@ -60,6 +74,7 @@ export default function PurchaseOrderModule() {
         loading={loading}
         onRefresh={refresh}
         onOpenCreateModal={handleOpenBlankModal}
+        onOpenBulkModal={() => setBulkModalOpen(true)}
       />
 
       {/* 3. Tabs: Reorder Triggers (Low Stock) vs Purchase Requests */}
@@ -78,6 +93,9 @@ export default function PurchaseOrderModule() {
             items={triggers}
             loading={loading}
             onRequestReorder={handleRequestReorder}
+            selectedItems={selectedTriggers}
+            onSelectionChange={setSelectedTriggers}
+            onBulkReorder={handleBulkReorder}
           />
         </TabsContent>
 
@@ -92,14 +110,26 @@ export default function PurchaseOrderModule() {
         </TabsContent>
       </Tabs>
 
-      {/* 4. Create PR Dialog */}
+      {/* 4. Single Create PR Dialog */}
       <CreatePurchaseRequestDialog
         open={createModalOpen}
         onOpenChange={setCreateModalOpen}
         branches={branches}
         parts={parts}
+        suppliers={suppliers}
         initialTrigger={selectedTrigger}
         onSuccess={refresh}
+      />
+
+      {/* 5. Bulk Create PR Dialog */}
+      <BulkPurchaseRequestDialog
+        open={bulkModalOpen}
+        onOpenChange={setBulkModalOpen}
+        selectedItems={selectedTriggers}
+        branches={branches}
+        parts={parts}
+        suppliers={suppliers}
+        onSuccess={handleBulkSuccess}
       />
     </div>
   );

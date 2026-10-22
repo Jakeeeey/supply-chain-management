@@ -60,6 +60,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check duplicate document number across active vehicle documents
+    const cleanDocNo = String(documentNo || "").trim();
+    if (cleanDocNo) {
+      try {
+        const [checkRes, vehiclesRes] = await Promise.all([
+          fetch(
+            `${DIRECTUS_BASE}/items/vehicle_documents?limit=-1&fields=id,vehicle_id,document_no&filter[is_deleted][_neq]=1`,
+            {
+              cache: "no-store",
+              headers: directusHeaders(),
+            }
+          ),
+          fetch(`${DIRECTUS_BASE}/items/vehicles?limit=-1&fields=vehicle_id,vehicle_plate,name`, {
+            cache: "no-store",
+            headers: directusHeaders(),
+          }).catch(() => null),
+        ]);
+
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          const docs = Array.isArray(checkData.data) ? checkData.data : [];
+          const vehiclesData = vehiclesRes && vehiclesRes.ok ? await vehiclesRes.json().catch(() => ({ data: [] })) : { data: [] };
+          const vehicleList = Array.isArray(vehiclesData.data) ? vehiclesData.data : [];
+
+          const normalizedTarget = cleanDocNo.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+
+          const duplicate = docs.find((d: { id: number; vehicle_id?: number; document_no?: string }) => {
+            const num = (d.document_no || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+            return num.length > 0 && num === normalizedTarget;
+          });
+
+          if (duplicate) {
+            const v = vehicleList.find((item: { vehicle_id: number }) => Number(item.vehicle_id) === Number(duplicate.vehicle_id));
+            const plateDisplay = v?.vehicle_plate ? `vehicle with plate '${v.vehicle_plate}'` : `vehicle #${duplicate.vehicle_id || "record"}`;
+            return NextResponse.json(
+              { error: `Document number '${cleanDocNo}' is already registered to ${plateDisplay}.` },
+              { status: 409 }
+            );
+          }
+        }
+      } catch (checkErr) {
+        console.warn("[Document Upload] Duplicate check warning:", checkErr);
+      }
+    }
+
     // 1. Upload file to Directus /files
     const directusForm = new FormData();
     directusForm.append("file", file);

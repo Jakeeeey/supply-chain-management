@@ -25,13 +25,15 @@ import type {
   DashboardDriverItem,
   DashboardJobOrderItem,
   DashboardOutsideVehicleItem,
+  DashboardLicenseItem,
 } from "../types";
 
 type DashboardRowItem =
   | DashboardVehicleItem
   | DashboardDriverItem
   | DashboardJobOrderItem
-  | DashboardOutsideVehicleItem;
+  | DashboardOutsideVehicleItem
+  | DashboardLicenseItem;
 
 interface FleetDashboardTableProps {
   activeCard: DashboardCardType;
@@ -40,6 +42,48 @@ interface FleetDashboardTableProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+}
+
+function LicenseStatusBadge({ status, days }: { status: string; days: number | null }) {
+  if (status === "Expired") {
+    return (
+      <Badge variant="destructive" className="gap-1.5 font-medium shadow-xs">
+        <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+        Expired ({Math.abs(days ?? 0)}d ago)
+      </Badge>
+    );
+  }
+  if (status === "Expiring Soon") {
+    return (
+      <Badge
+        variant="outline"
+        className="gap-1.5 border-amber-500/50 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 font-medium"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+        Expiring in {days}d
+      </Badge>
+    );
+  }
+  if (status === "Valid") {
+    return (
+      <Badge
+        variant="default"
+        className="gap-1.5 bg-emerald-600/90 hover:bg-emerald-600 text-white font-medium shadow-xs"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-200" />
+        Valid {days !== null ? `(${days}d left)` : ""}
+      </Badge>
+    );
+  }
+  return (
+    <Badge
+      variant="outline"
+      className="gap-1.5 border-slate-300 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400 font-normal"
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+      {status}
+    </Badge>
+  );
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -127,6 +171,18 @@ export function FleetDashboardTable({
                 <TableHead>Dispatch Time</TableHead>
                 <TableHead>Est. Arrival</TableHead>
                 <TableHead className="w-[130px]">Trip Status</TableHead>
+              </TableRow>
+            )}
+
+            {activeCard === "licenses" && (
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-[190px]">Driver Name</TableHead>
+                <TableHead>Branch</TableHead>
+                <TableHead className="w-[140px]">License No.</TableHead>
+                <TableHead>Classification</TableHead>
+                <TableHead>Restrictions</TableHead>
+                <TableHead className="w-[130px]">Expiry Date</TableHead>
+                <TableHead className="w-[150px]">License Status</TableHead>
               </TableRow>
             )}
           </TableHeader>
@@ -236,6 +292,32 @@ export function FleetDashboardTable({
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={out.status} />
+                      </TableCell>
+                    </TableRow>
+                  );
+                }
+
+                if (activeCard === "licenses") {
+                  const lic = row as DashboardLicenseItem;
+                  return (
+                    <TableRow key={lic.id} className="hover:bg-muted/50 transition-colors">
+                      <TableCell className="font-semibold text-foreground">
+                        <div>{lic.driver_name}</div>
+                        {lic.contact && lic.contact !== "—" && (
+                          <div className="text-[11px] text-muted-foreground">{lic.contact}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{lic.branch_name}</TableCell>
+                      <TableCell className="font-mono text-xs font-medium">
+                        {lic.license_no}
+                      </TableCell>
+                      <TableCell>{lic.license_classification}</TableCell>
+                      <TableCell className="text-muted-foreground">{lic.license_restrictions || "—"}</TableCell>
+                      <TableCell className="text-xs">
+                        {lic.license_expiry_date ? new Date(lic.license_expiry_date).toLocaleDateString() : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <LicenseStatusBadge status={lic.status} days={lic.days_remaining} />
                       </TableCell>
                     </TableRow>
                   );

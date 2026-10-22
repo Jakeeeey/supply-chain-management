@@ -25,6 +25,7 @@ export interface SearchableClassificationSelectProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  popoverWidth?: string;
 }
 
 export function SearchableClassificationSelect({
@@ -34,6 +35,7 @@ export function SearchableClassificationSelect({
   placeholder = "Select classification...",
   disabled = false,
   className,
+  popoverWidth = "w-[320px]",
 }: SearchableClassificationSelectProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -61,7 +63,7 @@ export function SearchableClassificationSelect({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[320px] p-0 shadow-lg rounded-md border bg-popover text-popover-foreground pointer-events-auto"
+        className={cn("p-0 shadow-lg rounded-md border bg-popover text-popover-foreground pointer-events-auto", popoverWidth)}
         align="start"
         sideOffset={4}
       >

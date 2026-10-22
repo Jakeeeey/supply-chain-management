@@ -275,6 +275,37 @@ function hasContactFieldIntent(body: Record<string, unknown>) {
     return DRIVER_CONTACT_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(body, field));
 }
 
+async function checkDuplicateLicense(licenseNo: string | null | undefined, excludeDriverId?: number | null): Promise<boolean> {
+    if (!licenseNo || typeof licenseNo !== "string") return false;
+    const clean = licenseNo.trim();
+    if (!clean) return false;
+
+    try {
+        const res = await fetch(`${DIRECTUS_BASE}/items/driver?fields=id,license_no&limit=-1`, {
+            cache: "no-store",
+            headers: directusHeaders(),
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            const drivers = Array.isArray(data.data) ? data.data : [];
+            const normalizedTarget = clean.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+
+            return drivers.some((d: { id: number; license_no?: string | null }) => {
+                if (excludeDriverId && Number(d.id) === Number(excludeDriverId)) {
+                    return false;
+                }
+                const dLic = (d.license_no || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+                return dLic.length > 0 && dLic === normalizedTarget;
+            });
+        }
+    } catch (err) {
+        console.warn("Failed to check duplicate license in Directus:", err);
+    }
+
+    return false;
+}
+
 async function validateUserIdExists(userId: number | null | undefined): Promise<number | null> {
     if (!userId || isNaN(userId)) return null;
     try {
@@ -489,6 +520,16 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        if (body.license_no && typeof body.license_no === "string" && body.license_no.trim()) {
+            const isDuplicate = await checkDuplicateLicense(body.license_no);
+            if (isDuplicate) {
+                return NextResponse.json(
+                    { error: `License number '${body.license_no.trim()}' is already registered to another driver.` },
+                    { status: 409 }
+                );
+            }
+        }
+
         // Create new driver record
         const createRes = await fetch(`${DIRECTUS_BASE}/items/driver`, {
             method: "POST",
@@ -573,6 +614,16 @@ export async function PATCH(request: NextRequest) {
                 { error: "id is required" },
                 { status: 400 }
             );
+        }
+
+        if (body.license_no && typeof body.license_no === "string" && body.license_no.trim()) {
+            const isDuplicate = await checkDuplicateLicense(body.license_no, Number(id));
+            if (isDuplicate) {
+                return NextResponse.json(
+                    { error: `License number '${body.license_no.trim()}' is already registered to another driver.` },
+                    { status: 409 }
+                );
+            }
         }
 
         // Update driver

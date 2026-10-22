@@ -23,6 +23,15 @@ export interface ReorderTriggerItem {
   suggested_quantity: number;
 }
 
+export interface Supplier {
+  id: number;
+  supplier_name: string;
+  supplier_shortcut?: string | null;
+  contact_person?: string | null;
+  phone_number?: string | null;
+  email_address?: string | null;
+}
+
 export interface PurchaseRequest {
   id: number;
   pr_no: string;
@@ -31,10 +40,18 @@ export interface PurchaseRequest {
   quantity: number;
   estimated_cost: number;
   priority: PurchaseRequestPriority;
+  supplier_id?: number | Supplier | null;
   supplier_name?: string | null;
   expected_delivery_date?: string | null;
   status: PurchaseRequestStatus;
   notes?: string | null;
+  items?: Array<{
+    id?: number;
+    part_id: number | VehiclePart;
+    quantity: number;
+    unit_cost?: number;
+    remarks?: string;
+  }>;
   requested_by?: number | string | null;
   requested_at?: string | null;
   decided_by?: number | string | null;
@@ -44,13 +61,23 @@ export interface PurchaseRequest {
 
 export interface CreatePurchaseRequestPayload {
   branch_id: number;
-  part_id: number;
-  quantity: number;
-  estimated_cost: number;
+  part_id?: number;
+  quantity?: number;
+  estimated_cost?: number;
   priority: PurchaseRequestPriority;
+  supplier_id?: number;
   supplier_name?: string;
   expected_delivery_date?: string;
   notes?: string;
+  // Multiple items support
+  items?: BulkPurchaseRequestItem[];
+}
+
+export interface BulkPurchaseRequestItem {
+  part_id: number;
+  quantity: number;
+  unit_cost?: number;
+  remarks?: string;
 }
 
 export interface PurchaseOrdersApiResponse {

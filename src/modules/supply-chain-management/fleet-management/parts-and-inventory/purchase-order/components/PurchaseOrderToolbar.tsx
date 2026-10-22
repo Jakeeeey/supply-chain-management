@@ -16,6 +16,7 @@ interface PurchaseOrderToolbarProps {
   loading: boolean;
   onRefresh: () => void;
   onOpenCreateModal: () => void;
+  onOpenBulkModal?: () => void;
 }
 
 export function PurchaseOrderToolbar({
@@ -27,6 +28,7 @@ export function PurchaseOrderToolbar({
   loading,
   onRefresh,
   onOpenCreateModal,
+  onOpenBulkModal,
 }: PurchaseOrderToolbarProps) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -55,7 +57,7 @@ export function PurchaseOrderToolbar({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 self-end sm:self-auto">
+      <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
         <Button
           variant="outline"
           size="sm"
@@ -67,13 +69,25 @@ export function PurchaseOrderToolbar({
           Refresh
         </Button>
 
+        {onOpenBulkModal && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenBulkModal}
+            className="h-9 text-xs gap-1.5 border-primary/40 text-primary hover:bg-primary/10 font-medium"
+          >
+            <PlusCircle className="h-4 w-4" />
+            Bulk / Multi-Part PO
+          </Button>
+        )}
+
         <Button
           size="sm"
           onClick={onOpenCreateModal}
           className="h-9 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground"
         >
           <PlusCircle className="h-4 w-4" />
-          Create Purchase Request
+          Single PO
         </Button>
       </div>
     </div>

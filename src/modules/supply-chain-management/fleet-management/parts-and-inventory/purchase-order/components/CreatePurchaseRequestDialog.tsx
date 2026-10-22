@@ -22,17 +22,22 @@ import {
 } from "@/components/ui/select";
 import type { Branch } from "../../stock-in/types";
 import type { VehiclePart } from "../../registration/types";
-import type { ReorderTriggerItem, PurchaseRequestPriority } from "../types";
+import type { ReorderTriggerItem, PurchaseRequestPriority, Supplier } from "../types";
 import { createPurchaseRequest } from "../provider/fetchProviders";
 import { SearchableSelect } from "./SearchableSelect";
-import { AlertCircle, Loader2, ShoppingCart } from "lucide-react";
+import { AlertCircle, Calendar as CalendarIcon, Loader2, ShoppingCart, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format, parseISO } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface CreatePurchaseRequestDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   branches: Branch[];
   parts: VehiclePart[];
+  suppliers?: Supplier[];
   initialTrigger?: ReorderTriggerItem | null;
   onSuccess: () => void;
 }
@@ -42,6 +47,7 @@ export function CreatePurchaseRequestDialog({
   onOpenChange,
   branches,
   parts,
+  suppliers = [],
   initialTrigger,
   onSuccess,
 }: CreatePurchaseRequestDialogProps) {
@@ -49,7 +55,7 @@ export function CreatePurchaseRequestDialog({
   const [partId, setPartId] = React.useState<string>("");
   const [quantity, setQuantity] = React.useState<string>("10");
   const [priority, setPriority] = React.useState<PurchaseRequestPriority>("Normal");
-  const [supplierName, setSupplierName] = React.useState<string>("");
+  const [supplierId, setSupplierId] = React.useState<string>("");
   const [expectedDate, setExpectedDate] = React.useState<string>("");
   const [notes, setNotes] = React.useState<string>("");
 
@@ -76,7 +82,7 @@ export function CreatePurchaseRequestDialog({
         setPartId((prev) => (prev ? prev : parts[0] ? String(parts[0].id) : ""));
         setQuantity("10");
         setPriority("Normal");
-        setSupplierName("");
+        setSupplierId("");
         setExpectedDate("");
         setNotes("");
       }
@@ -90,6 +96,20 @@ export function CreatePurchaseRequestDialog({
 
   const unitCost = selectedPart ? Number(selectedPart.unit_cost || 0) : 0;
   const estimatedCost = (Number(quantity) || 0) * unitCost;
+
+  // Selected supplier object & searchable options
+  const supplierOptions = React.useMemo(() => {
+    return suppliers.map((s) => ({
+      value: String(s.id),
+      label: s.supplier_shortcut
+        ? `${s.supplier_name} (${s.supplier_shortcut})`
+        : s.supplier_name,
+    }));
+  }, [suppliers]);
+
+  const selectedSupplier = React.useMemo(() => {
+    return suppliers.find((s) => String(s.id) === supplierId);
+  }, [suppliers, supplierId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,6 +130,10 @@ export function CreatePurchaseRequestDialog({
       errors.quantity = "Please enter a valid quantity greater than 0.";
     }
 
+    if (!supplierId) {
+      errors.supplier_id = "Please select a supplier.";
+    }
+
     setFieldErrors(errors);
 
     if (Object.keys(errors).length > 0) {
@@ -125,7 +149,8 @@ export function CreatePurchaseRequestDialog({
         quantity: qty,
         estimated_cost: estimatedCost,
         priority,
-        supplier_name: supplierName.trim() || undefined,
+        supplier_id: Number(supplierId),
+        supplier_name: selectedSupplier ? selectedSupplier.supplier_name : undefined,
         expected_delivery_date: expectedDate || undefined,
         notes: notes.trim() || undefined,
       });
@@ -273,25 +298,78 @@ export function CreatePurchaseRequestDialog({
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Preferred Supplier (Optional)</Label>
-              <Input
-                placeholder="e.g. Acme Auto Parts Supply"
-                value={supplierName}
-                onChange={(e) => setSupplierName(e.target.value)}
-                className="h-9 text-xs"
+              <Label className="text-xs font-semibold">
+                Supplier <span className="text-destructive font-bold">*</span>
+              </Label>
+              <SearchableSelect
+                options={supplierOptions}
+                value={supplierId}
+                onValueChange={(val) => {
+                  setSupplierId(val);
+                  if (submitted && fieldErrors.supplier_id) {
+                    setFieldErrors((prev) => ({ ...prev, supplier_id: "" }));
+                  }
+                }}
+                placeholder="Select a supplier..."
+                contentWidth="w-[300px] sm:w-[350px]"
+                className={submitted && fieldErrors.supplier_id ? "border-destructive text-destructive" : ""}
               />
+              {submitted && fieldErrors.supplier_id && (
+                <p className="text-[11px] text-destructive">{fieldErrors.supplier_id}</p>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Target Delivery Date (Optional)</Label>
-              <Input
-                type="date"
-                value={expectedDate}
-                onChange={(e) => setExpectedDate(e.target.value)}
-                className="h-9 text-xs"
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      "w-full h-9 justify-start text-left font-normal text-xs px-3",
+                      !expectedDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-3.5 w-3.5 opacity-70" />
+                    {expectedDate ? (
+                      <span className="flex-1 truncate">
+                        {format(parseISO(expectedDate), "PPP")}
+                      </span>
+                    ) : (
+                      <span className="flex-1 truncate">Pick target delivery date</span>
+                    )}
+                    {expectedDate && (
+                      <span
+                        role="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpectedDate("");
+                        }}
+                        className="ml-auto rounded-full p-0.5 hover:bg-muted"
+                      >
+                        <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                      </span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 shadow-lg border" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={expectedDate ? parseISO(expectedDate) : undefined}
+                    onSelect={(date) => {
+                      if (date) {
+                        setExpectedDate(format(date, "yyyy-MM-dd"));
+                      } else {
+                        setExpectedDate("");
+                      }
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">

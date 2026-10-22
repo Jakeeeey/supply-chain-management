@@ -31,10 +31,13 @@ export async function GET(req: NextRequest) {
           cache: "no-store",
           headers: directusHeaders(),
         }).catch(() => null),
-        fetch(`${DIRECTUS_URL}/users?limit=-1&fields=id,first_name,last_name,email,role`, {
-          cache: "no-store",
-          headers: directusHeaders(),
-        }).catch(() => null),
+        fetch(
+          `${DIRECTUS_URL}/items/user?limit=-1&fields=user_id,user_fname,user_mname,user_lname,user_email,user_position,role,isDeleted,is_deleted`,
+          {
+            cache: "no-store",
+            headers: directusHeaders(),
+          }
+        ).catch(() => null),
         fetch(`${DIRECTUS_URL}/items/vehicle_parts?filter[is_active][_eq]=true&limit=-1&fields=id,part_code,part_name,category,unit,unit_cost,barcode`, {
           cache: "no-store",
           headers: directusHeaders(),
@@ -46,9 +49,37 @@ export async function GET(req: NextRequest) {
       ]);
 
       const vehicles = vRes ? (await vRes.json().catch(() => ({})))?.data || [] : [];
-      const users = uRes ? (await uRes.json().catch(() => ({})))?.data || [] : [];
+      const rawUsers = uRes ? (await uRes.json().catch(() => ({})))?.data || [] : [];
       const parts = pRes ? (await pRes.json().catch(() => ({})))?.data || [] : [];
       const stocks = sRes ? (await sRes.json().catch(() => ({})))?.data || [] : [];
+
+      interface RawUserRecord {
+        user_id: number;
+        user_fname?: string;
+        user_mname?: string;
+        user_lname?: string;
+        user_email?: string;
+        user_position?: string;
+        role?: string;
+        isDeleted?: boolean | number | string;
+        is_deleted?: boolean | number | string;
+      }
+
+      // Filter out isDeleted = 1 or is_deleted = 1 and normalize to user object format
+      const users = (Array.isArray(rawUsers) ? (rawUsers as RawUserRecord[]) : [])
+        .filter((u) => {
+          const isDel1 = u.isDeleted === 1 || u.isDeleted === true || u.isDeleted === "1";
+          const isDel2 = u.is_deleted === 1 || u.is_deleted === true || u.is_deleted === "1";
+          return !isDel1 && !isDel2;
+        })
+        .map((u) => ({
+          id: u.user_id,
+          first_name: u.user_fname || "",
+          last_name: u.user_lname || "",
+          email: u.user_email || "",
+          position: u.user_position || "",
+          role: u.role || "",
+        }));
 
       // Map stock to parts
       const partsWithStock = parts.map((part: { id: number }) => {

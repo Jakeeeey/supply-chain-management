@@ -103,14 +103,25 @@ export function JODetailsDialog({
                   <User className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-muted-foreground">Mechanic:</span>
                   <span className="font-medium text-foreground">
-                    {mechanic ? `${mechanic.first_name || ""} ${mechanic.last_name || ""}` : "Not assigned"}
+                    {(() => {
+                      if (!mechanic) return "Not assigned";
+                      const f = mechanic.first_name || mechanic.user_fname || "";
+                      const l = mechanic.last_name || mechanic.user_lname || "";
+                      return [f, l].filter(Boolean).join(" ") || "Assigned";
+                    })()}
                   </span>
                 </div>
                 {requestedBy && (
                   <div className="flex items-center gap-2">
                     <User className="h-3.5 w-3.5 text-muted-foreground" />
                     <span className="text-muted-foreground">Requested By:</span>
-                    <span>{requestedBy.first_name} {requestedBy.last_name}</span>
+                    <span>
+                      {(() => {
+                        const f = requestedBy.first_name || requestedBy.user_fname || "";
+                        const l = requestedBy.last_name || requestedBy.user_lname || "";
+                        return [f, l].filter(Boolean).join(" ") || "System User";
+                      })()}
+                    </span>
                   </div>
                 )}
               </div>

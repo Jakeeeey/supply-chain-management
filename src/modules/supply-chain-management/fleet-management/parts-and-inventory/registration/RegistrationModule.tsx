@@ -15,6 +15,7 @@ export default function RegistrationModule() {
   const {
     parts,
     classifications,
+    suppliers,
     loading,
     saving,
     error,
@@ -116,6 +117,7 @@ export default function RegistrationModule() {
         onOpenChange={setFormOpen}
         part={selectedPart}
         classifications={classifications}
+        suppliers={suppliers}
         saving={saving}
         onSave={handleSave}
         onOpenAddClassification={() => setAddClassificationOpen(true)}
