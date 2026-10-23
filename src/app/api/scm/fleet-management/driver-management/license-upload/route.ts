@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 const DIRECTUS_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
 const DIRECTUS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN || "";
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
-const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"]);
+const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf", "text/plain"]);
 
 function directusHeaders(extra: Record<string, string> = {}) {
     const h: Record<string, string> = { ...extra };
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
         const mime = String(file.type || "").toLowerCase();
         if (!ALLOWED_TYPES.has(mime)) {
             return NextResponse.json(
-                { error: "Invalid file type. Allowed: JPG, PNG, WEBP, HEIC, PDF." },
+                { error: "Invalid file type. Allowed: JPG, PNG, WEBP, HEIC, PDF, TXT." },
                 { status: 400 }
             );
         }
@@ -76,20 +76,42 @@ export async function POST(req: NextRequest) {
 
         if (targetUserId) {
             try {
-                // Check if employee_file_record_list has a driver license category or fallback to 1
-                let listId = 1;
+                // Find driver license category from employee_file_record_list (table uses `name`)
+                let listId: number | null = null;
                 try {
                     const listCheckRes = await fetch(
-                        `${DIRECTUS_BASE}/items/employee_file_record_list?limit=1&filter[title][_icontains]=License`,
+                        `${DIRECTUS_BASE}/items/employee_file_record_list?limit=1&filter[name][_icontains]=License&fields=id,name`,
                         { headers: directusHeaders(), cache: "no-store" }
                     );
                     if (listCheckRes.ok) {
                         const listJson = await listCheckRes.json();
-                        if (listJson.data && listJson.data.length > 0 && listJson.data[0].id) {
-                            listId = listJson.data[0].id;
+                        if (Array.isArray(listJson.data) && listJson.data.length > 0 && listJson.data[0].id) {
+                            listId = Number(listJson.data[0].id);
                         }
                     }
-                } catch {
+                } catch (e) {
+                    console.warn("[Driver License Upload] Failed to search license list item:", e);
+                }
+
+                // Fallback: If no category with "License", grab the first available list ID
+                if (!listId) {
+                    try {
+                        const fallbackListRes = await fetch(
+                            `${DIRECTUS_BASE}/items/employee_file_record_list?limit=1&fields=id`,
+                            { headers: directusHeaders(), cache: "no-store" }
+                        );
+                        if (fallbackListRes.ok) {
+                            const fallbackJson = await fallbackListRes.json();
+                            if (Array.isArray(fallbackJson.data) && fallbackJson.data.length > 0 && fallbackJson.data[0].id) {
+                                listId = Number(fallbackJson.data[0].id);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn("[Driver License Upload] Failed to fetch fallback list item:", e);
+                    }
+                }
+
+                if (!listId) {
                     listId = 1;
                 }
 
