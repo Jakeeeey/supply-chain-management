@@ -208,7 +208,10 @@ export async function GET(req: NextRequest) {
       areasByCluster.get(cid)!.push(area);
     }
 
-    const budgetsByCluster = new Map<number, any[]>();
+    const budgetsByCluster = new Map<
+      number,
+      Array<CoaBudget & { account_title: string; gl_code: string }>
+    >();
     for (const b of (allBudgets.data ?? []) as CoaBudget[]) {
       const cid = b.cluster_id;
       if (!budgetsByCluster.has(cid)) budgetsByCluster.set(cid, []);

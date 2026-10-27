@@ -90,40 +90,46 @@ export function ClusterDialog({
     listCoaOptions().then(setCoaList);
   }, []);
 
-  // Reset form when dialog opens
-  useEffect(() => {
-    if (open) {
+  const handleOpenChange = (newOpen: boolean) => {
+    if (newOpen) {
       setCurrentStep(1);
-      if (selectedCluster) {
-        form.reset({
-          cluster_name: selectedCluster.cluster_name,
-          minimum_amount: selectedCluster.minimum_amount,
-          areas:
-            selectedCluster.areas.length > 0
-              ? selectedCluster.areas.map((a) => ({
-                  id: a.id,
-                  province: a.province || "",
-                  city: a.city || "",
-                  baranggay: a.baranggay || "",
-                }))
-              : [{ province: "", city: "", baranggay: "" }],
-          coa_budgets:
-            selectedCluster.coa_budgets && selectedCluster.coa_budgets.length > 0
-              ? selectedCluster.coa_budgets.map((b) => ({
-                  id: b.id,
-                  coa_id: b.coa_id,
-                  budget: b.budget,
-                }))
-              : [],
-        });
-      } else {
-        form.reset({
-          cluster_name: "",
-          minimum_amount: 0,
-          areas: [{ province: "", city: "", baranggay: "" }],
-          coa_budgets: [],
-        });
-      }
+    }
+    onOpenChange(newOpen);
+  };
+
+  // Reset form when dialog opens or selectedCluster changes
+  useEffect(() => {
+    if (!open) return;
+
+    if (selectedCluster) {
+      form.reset({
+        cluster_name: selectedCluster.cluster_name,
+        minimum_amount: selectedCluster.minimum_amount,
+        areas:
+          selectedCluster.areas.length > 0
+            ? selectedCluster.areas.map((a) => ({
+                id: a.id,
+                province: a.province || "",
+                city: a.city || "",
+                baranggay: a.baranggay || "",
+              }))
+            : [{ province: "", city: "", baranggay: "" }],
+        coa_budgets:
+          selectedCluster.coa_budgets && selectedCluster.coa_budgets.length > 0
+            ? selectedCluster.coa_budgets.map((b) => ({
+                id: b.id,
+                coa_id: b.coa_id,
+                budget: b.budget,
+              }))
+            : [],
+      });
+    } else {
+      form.reset({
+        cluster_name: "",
+        minimum_amount: 0,
+        areas: [{ province: "", city: "", baranggay: "" }],
+        coa_budgets: [],
+      });
     }
   }, [open, selectedCluster, form]);
 
@@ -169,7 +175,7 @@ export function ClusterDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[780px] max-h-[88vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>

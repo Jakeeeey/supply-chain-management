@@ -27,6 +27,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ClusterFormValues, COAOption } from "../types";
 import { CoaSelectModal } from "./CoaSelectModal";
 
@@ -50,12 +60,16 @@ export function CoaBudgetStep({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [itemToDelete, setItemToDelete] = useState<{ fieldId: string; title: string; glCode: string } | null>(null);
 
-  const watchedBudgets =
-    useWatch({
-      control: form.control,
-      name: "coa_budgets",
-    }) || [];
+  const rawBudgets = useWatch({
+    control: form.control,
+    name: "coa_budgets",
+  });
+
+  const watchedBudgets = useMemo(() => {
+    return rawBudgets || [];
+  }, [rawBudgets]);
 
   const coaMap = useMemo(() => {
     const map = new Map<number, COAOption>();
@@ -129,12 +143,17 @@ export function CoaBudgetStep({
     setPage(Math.ceil(newTotal / PAGE_SIZE));
   };
 
-  const handleRemoveItem = (fieldId: string) => {
-    // Find the live current index in fields array to prevent index shifting bugs during search
-    const liveIndex = fields.findIndex((f) => f.id === fieldId);
+  const handlePromptDelete = (item: { fieldId: string; title: string; glCode: string }) => {
+    setItemToDelete(item);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!itemToDelete) return;
+    const liveIndex = fields.findIndex((f) => f.id === itemToDelete.fieldId);
     if (liveIndex !== -1) {
       remove(liveIndex);
     }
+    setItemToDelete(null);
   };
 
   return (
@@ -250,7 +269,11 @@ export function CoaBudgetStep({
                                   min="0"
                                   placeholder="0.00"
                                   className="h-8 text-right font-medium tabular-nums text-xs"
-                                  value={field.value === 0 ? "" : (field.value ?? "")}
+                                  value={
+                                    (field.value as number | undefined) === 0
+                                      ? ""
+                                      : ((field.value as number | undefined) ?? "")
+                                  }
                                   onChange={(e) => {
                                     const val = e.target.value === "" ? 0 : e.target.valueAsNumber;
                                     field.onChange(isNaN(val) ? 0 : val);
@@ -271,7 +294,13 @@ export function CoaBudgetStep({
                           variant="ghost"
                           size="sm"
                           className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => handleRemoveItem(item.fieldId)}
+                          onClick={() =>
+                            handlePromptDelete({
+                              fieldId: item.fieldId,
+                              title: item.title,
+                              glCode: item.glCode,
+                            })
+                          }
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -343,6 +372,39 @@ export function CoaBudgetStep({
         alreadySelectedCoaIds={alreadySelectedCoaIds}
         onAddSelected={handleAddBatch}
       />
+
+      {/* Delete Confirmation Alert Dialog */}
+      <AlertDialog
+        open={!!itemToDelete}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setItemToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Account</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove{" "}
+              <strong className="text-foreground">
+                {itemToDelete?.glCode && itemToDelete.glCode !== "-"
+                  ? `${itemToDelete.glCode} - `
+                  : ""}
+                {itemToDelete?.title}
+              </strong>{" "}
+              from this cluster? Any entered budget will be discarded.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={handleConfirmDelete}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
