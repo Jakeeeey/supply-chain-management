@@ -104,6 +104,12 @@ export function CoaBudgetStep({
   // Pagination calculation
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
+
+  // Auto-correct page if current page exceeds total pages due to deletions
+  if (page > totalPages) {
+    setPage(totalPages);
+  }
+
   const paginatedItems = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
     return filteredItems.slice(start, start + PAGE_SIZE);
@@ -121,6 +127,14 @@ export function CoaBudgetStep({
     // Jump to the last page so user can immediately see added items
     const newTotal = fields.length + selectedCoas.length;
     setPage(Math.ceil(newTotal / PAGE_SIZE));
+  };
+
+  const handleRemoveItem = (fieldId: string) => {
+    // Find the live current index in fields array to prevent index shifting bugs during search
+    const liveIndex = fields.findIndex((f) => f.id === fieldId);
+    if (liveIndex !== -1) {
+      remove(liveIndex);
+    }
   };
 
   return (
@@ -236,9 +250,10 @@ export function CoaBudgetStep({
                                   min="0"
                                   placeholder="0.00"
                                   className="h-8 text-right font-medium tabular-nums text-xs"
-                                  value={(field.value as number) ?? 0}
+                                  value={field.value === 0 ? "" : (field.value ?? "")}
                                   onChange={(e) => {
-                                    field.onChange(e.target.valueAsNumber || 0);
+                                    const val = e.target.value === "" ? 0 : e.target.valueAsNumber;
+                                    field.onChange(isNaN(val) ? 0 : val);
                                     form.clearErrors(
                                       `coa_budgets.${item.originalIndex}.budget`
                                     );
@@ -256,7 +271,7 @@ export function CoaBudgetStep({
                           variant="ghost"
                           size="sm"
                           className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => remove(item.originalIndex)}
+                          onClick={() => handleRemoveItem(item.fieldId)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
