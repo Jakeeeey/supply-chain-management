@@ -209,6 +209,17 @@ export default function PurchaseOrderReviewPanel(props: {
     const [pageSize, setPageSize] = React.useState(10);
     const [companyData, setCompanyData] = React.useState<CompanyData | null>(null);
 
+    const isDagupanCompany = React.useMemo(() => {
+        const cAny = companyData as (CompanyData & { company_code?: string }) | null;
+        const code = String(cAny?.company_code ?? "");
+        const name = String(companyData?.company_name ?? "");
+        return (
+            code.trim().toUpperCase() === "MEN2-DAGUPAN" ||
+            code.toLowerCase().includes("dagupan") ||
+            name.toLowerCase().includes("dagupan")
+        );
+    }, [companyData]);
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const poAny: any = React.useMemo(() => unwrap(props.po), [props.po]);
 
@@ -473,6 +484,23 @@ export default function PurchaseOrderReviewPanel(props: {
                                                 {branchLabel}
                                             </span>
                                         </div>
+                                        {isDagupanCompany ? (
+                                            <div className="flex justify-between gap-3">
+                                                <span className="text-muted-foreground">Expected Received Date</span>
+                                                <span className="font-medium text-foreground">
+                                                    {(() => {
+                                                        const raw = poAny?.expected_received_date;
+                                                        if (!raw || raw === "N/A" || raw === "null") return "N/A";
+                                                        const d = new Date(raw);
+                                                        if (isNaN(d.getTime())) return String(raw);
+                                                        const mm = String(d.getMonth() + 1).padStart(2, "0");
+                                                        const dd = String(d.getDate()).padStart(2, "0");
+                                                        const yyyy = d.getFullYear();
+                                                        return `${mm}/${dd}/${yyyy}`;
+                                                    })()}
+                                                </span>
+                                            </div>
+                                        ) : null}
                                     </div>
                                 </div>
 

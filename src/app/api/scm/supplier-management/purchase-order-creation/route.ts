@@ -553,6 +553,7 @@ export async function POST(req: NextRequest) {
 
             reference: input?.reference ?? null,
             remark: input?.remark ?? null,
+            expected_received_date: input?.expected_received_date ? isoDateOnlyFrom(input.expected_received_date) : null,
 
             branch_id: input?.branch_id ?? input?.branchId ?? 
                        (Array.isArray(input?.allocations) ? (input.allocations[0]?.branchId ?? input.allocations[0]?.branch_id ?? input.allocations[0]?.id) : null) ?? 
