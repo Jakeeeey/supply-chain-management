@@ -39,6 +39,7 @@ export type PendingApprovalPO = {
 
     is_invoice?: boolean | number;
     isInvoice?: boolean | number;
+    expected_received_date?: string | null;
 };
 
 export type PurchaseOrderItem = {
@@ -94,6 +95,7 @@ export type PurchaseOrderDetail = {
     branch_summary?: string;
 
     lead_time_payment?: unknown;
+    expected_received_date?: string | null;
     payment_type?: unknown;
     payment_status?: unknown;
     receipt_required?: unknown;

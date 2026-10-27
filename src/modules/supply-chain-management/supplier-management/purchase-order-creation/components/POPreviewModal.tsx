@@ -46,6 +46,7 @@ interface POPreviewModalProps {
         ewt: number;
         total: number;
         preparerName?: string;
+        expectedReceivedDate?: string | null;
     };
 }
 
@@ -134,6 +135,21 @@ export function POPreviewModal({
                                     <span className="text-[10px] uppercase text-muted-foreground">Order Date:</span>
                                     <span className="text-xs font-black text-foreground">{data.poDate}</span>
                                 </div>
+                                {data.expectedReceivedDate ? (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] uppercase text-muted-foreground">Expected Received Date:</span>
+                                        <span className="text-xs font-black text-foreground">
+                                            {(() => {
+                                                const d = new Date(data.expectedReceivedDate);
+                                                if (isNaN(d.getTime())) return data.expectedReceivedDate;
+                                                const mm = String(d.getMonth() + 1).padStart(2, "0");
+                                                const dd = String(d.getDate()).padStart(2, "0");
+                                                const yyyy = d.getFullYear();
+                                                return `${mm}/${dd}/${yyyy}`;
+                                            })()}
+                                        </span>
+                                    </div>
+                                ) : null}
                             </div>
                         </div>
 

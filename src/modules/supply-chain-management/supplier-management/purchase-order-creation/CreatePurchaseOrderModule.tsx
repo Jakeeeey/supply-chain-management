@@ -491,7 +491,18 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
     const [allocations, setAllocations] = React.useState<BranchAllocation[]>([]);
 
     const [allProducts, setAllProducts] = React.useState<Product[]>([]);
-    const [companyCode, setCompanyCode] = React.useState<string>("");
+    const [companyInfo, setCompanyInfo] = React.useState<{ company_code?: string; company_name?: string } | null>(null);
+    const [expectedReceivedDate, setExpectedReceivedDate] = React.useState<string | null>(null);
+
+    const isDagupanCompany = React.useMemo(() => {
+        const code = String(companyInfo?.company_code ?? "");
+        const name = String(companyInfo?.company_name ?? "");
+        return (
+            code.trim().toUpperCase() === "MEN2-DAGUPAN" ||
+            code.toLowerCase().includes("dagupan") ||
+            name.toLowerCase().includes("dagupan")
+        );
+    }, [companyInfo]);
 
     const [pickerOpen, setPickerOpen] = React.useState(false);
     const [pickerBranchId, setPickerBranchId] = React.useState<string>("");
@@ -563,8 +574,8 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                     console.warn("Payment terms failed:", results[3].reason);
                 }
 
-                if (results[4].status === "fulfilled" && results[4].value?.company_code) {
-                    setCompanyCode(String(results[4].value.company_code));
+                if (results[4].status === "fulfilled" && results[4].value) {
+                    setCompanyInfo(results[4].value);
                 }
             } catch (e: unknown) {
                 if (!alive) return;
@@ -635,7 +646,8 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                 // Company-specific UOM handling:
                 // MEN2-Marikina: show all available UOMs
                 // MEN2-DAGUPAN (and default): group by base product and pick highest UOM
-                if (companyCode?.trim().toUpperCase() === "MEN2-MARIKINA") {
+                const cCode = companyInfo?.company_code || "";
+                if (cCode?.trim().toUpperCase() === "MEN2-MARIKINA") {
                     setAllProducts(mappedProducts);
                 } else {
                     const productGroups = new Map<string, Product>();
@@ -660,7 +672,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
         return () => {
             alive = false;
         };
-    }, [selectedSupplier?.id, defaultNoDiscountId, companyCode]);
+    }, [selectedSupplier?.id, defaultNoDiscountId, companyInfo]);
 
     // Sync allocations with selectedBranchIds
     React.useEffect(() => {
@@ -885,6 +897,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                 supplier_name: Number(selectedSupplier.id),
                 is_invoice: isInvoice,
                 payment_type: selectedPaymentTermId,
+                expected_received_date: isDagupanCompany && expectedReceivedDate ? expectedReceivedDate : null,
 
                 date: dateOnly,
                 date_encoded: nowISO,
@@ -942,7 +955,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
         } finally {
             setIsSaving(false);
         }
-    }, [selectedSupplier, allItemsFlat, poNumber, poDate, poDateISO, allocations, financials, isInvoice, encoderId, selectedPaymentTermId]);
+    }, [selectedSupplier, allItemsFlat, poNumber, poDate, poDateISO, allocations, financials, isInvoice, encoderId, selectedPaymentTermId, expectedReceivedDate, isDagupanCompany]);
 
     const pickerBranchLabel = React.useMemo(() => {
         const b = allocations.find((x) => x.branchId === pickerBranchId);
@@ -1136,6 +1149,10 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                 paymentTerms={paymentTerms}
                 selectedPaymentTermId={selectedPaymentTermId}
                 setSelectedPaymentTermId={setSelectedPaymentTermId}
+                expectedReceivedDate={expectedReceivedDate}
+                setExpectedReceivedDate={setExpectedReceivedDate}
+                minExpectedDate={poDateISO ? poDateISO.slice(0, 10) : undefined}
+                isDagupanCompany={isDagupanCompany}
                 isLocked={isLocked}
                 onReset={() => window.location.reload()}
                 preparerName={preparerName}

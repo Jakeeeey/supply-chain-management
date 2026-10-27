@@ -891,6 +891,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         discountType: headerDiscTypeName,
 
         payment_type: header?.payment_type ?? null,
+        expected_received_date: (header?.expected_received_date as string) ?? null,
         
         is_invoice: (toNum(header?.vat_amount) > 0) || (toNum(header?.withholding_tax_amount) > 0),
 

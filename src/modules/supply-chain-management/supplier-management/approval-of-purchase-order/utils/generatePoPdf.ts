@@ -94,6 +94,16 @@ export async function generatePurchaseOrderPdf(
         if (isNaN(d.getTime())) return rawDate;
         return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
     })();
+    const rawExpectedDate = safeStr(po.expected_received_date ?? po.expectedReceivedDate, "");
+    const expectedDate = (() => {
+        if (!rawExpectedDate || rawExpectedDate === "N/A" || rawExpectedDate === "null") return "";
+        const d = new Date(rawExpectedDate);
+        if (isNaN(d.getTime())) return rawExpectedDate;
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        const yyyy = d.getFullYear();
+        return `${mm}/${dd}/${yyyy}`;
+    })();
     const preparerName = safeStr(po.preparer_name ?? po.preparerName ?? "—");
 
     // --- FIND BEST MATCH TEMPLATE (Robust fallback to match pdf-test) ---
@@ -135,7 +145,7 @@ export async function generatePurchaseOrderPdf(
             return [brand, name, uom, String(qty), formatMoney(price), formatMoney(gross), formatMoney(discountAmount), formatMoney(net)];
         });
 
-        // 2. Render PO Details (PO Number, Date, Supplier, Branch)
+        // 2. Render PO Details (PO Number, Date, Supplier, Branch, Expected Received Date)
         const detailsY = startY + 5;
         doc.setFontSize(8);
         doc.setFont("helvetica", "bold");
@@ -151,7 +161,7 @@ export async function generatePurchaseOrderPdf(
         doc.setFont("helvetica", "normal");
         doc.text(branchLabel, 25, detailsY + 5);
 
-        // Right Column: PO# & Date (Aligned to Right Margin)
+        // Right Column: PO# & Dates (Aligned to Right Margin)
         const rightMarginX = pageWidth - 10;
         doc.setFont("helvetica", "bold");
         doc.text("PO Number:", rightMarginX - 70, detailsY);
@@ -163,9 +173,17 @@ export async function generatePurchaseOrderPdf(
         doc.setFont("helvetica", "normal");
         doc.text(date, rightMarginX, detailsY + 5, { align: "right" });
 
+        // Expected Received Date (Row 3 in Right Column)
+        if (expectedDate) {
+            doc.setFont("helvetica", "bold");
+            doc.text("Expected Received Date:", rightMarginX - 70, detailsY + 10);
+            doc.setFont("helvetica", "normal");
+            doc.text(expectedDate, rightMarginX, detailsY + 10, { align: "right" });
+        }
+
         // 3. Render Main Table
         autoTable(doc, {
-            startY: detailsY + 12,
+            startY: detailsY + (expectedDate ? 16 : 12),
             margin: { top: (config?.bodyStart ?? 35) + 5, left: 10, right: 10 },
             head: [["Brand", "Item", "UOM", "Qty", "Price", "Gross", "Disc", "Net"]],
             body: tableBody,

@@ -24,7 +24,7 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-import { Info, CheckCircle2, AlertTriangle, Package, Building2, TrendingUp, Tags, CreditCard } from "lucide-react";
+import { Info, CheckCircle2, AlertTriangle, Package, Building2, TrendingUp, Tags, CreditCard, Calendar } from "lucide-react";
 import { POPreviewModal } from "./POPreviewModal";
 
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -57,6 +57,10 @@ export function PurchaseOrderSummary(props: {
     paymentTerms: PaymentTerm[];
     selectedPaymentTermId: number | null;
     setSelectedPaymentTermId: (id: number | null) => void;
+    expectedReceivedDate?: string | null;
+    setExpectedReceivedDate?: (date: string | null) => void;
+    minExpectedDate?: string;
+    isDagupanCompany?: boolean;
     isLocked?: boolean;
     onReset?: () => void;
     preparerName?: string;
@@ -411,6 +415,44 @@ export function PurchaseOrderSummary(props: {
                             </div>
                         </div>
 
+                        {/* ✅ Expected Received Date (Dagupan Only) */}
+                        {props.isDagupanCompany ? (
+                            <div className="space-y-3">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                                    <Calendar className="w-3 h-3" />
+                                    Expected Received Date
+                                </p>
+                                <div className="rounded-lg border border-border bg-card text-card-foreground p-5 shadow-sm space-y-3">
+                                    <div className="flex flex-col space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                                                Select Date (Optional)
+                                            </span>
+                                            {props.expectedReceivedDate && !props.isLocked ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => props.setExpectedReceivedDate?.(null)}
+                                                    className="text-[10px] font-semibold text-muted-foreground hover:text-foreground underline"
+                                                >
+                                                    Clear
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                        <input
+                                            type="date"
+                                            value={props.expectedReceivedDate || ""}
+                                            min={props.minExpectedDate || undefined}
+                                            disabled={props.isLocked}
+                                            onChange={(e) => props.setExpectedReceivedDate?.(e.target.value || null)}
+                                            className={cn(
+                                                "w-full h-10 px-3 rounded-xl border border-border bg-muted/20 text-xs font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+                                            )}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null}
+
                         {/* ✅ Allocated Branches */}
                         <div className="space-y-3">
                             <div className="flex items-center justify-between gap-3">
@@ -674,6 +716,7 @@ export function PurchaseOrderSummary(props: {
                 data={{
                     poNumber: props.poNumber,
                     poDate: props.poDate,
+                    expectedReceivedDate: props.expectedReceivedDate,
                     supplierName: props.supplier?.name || "N/A",
                     preparerName: props.preparerName || "—",
                     items: props.allItemsFlat.map(x => {
