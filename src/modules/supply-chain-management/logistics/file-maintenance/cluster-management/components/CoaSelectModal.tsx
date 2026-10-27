@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Search, Check } from "lucide-react";
+import { Search, Check, CheckSquare, Square, X } from "lucide-react";
 
 import {
   Dialog,
@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { COAOption } from "../types";
 
 interface CoaSelectModalProps {
@@ -70,13 +71,22 @@ export function CoaSelectModal({
     });
   };
 
-  const handleSelectAllFiltered = () => {
-    if (selectedIds.size >= filteredAccounts.length && filteredAccounts.length > 0) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredAccounts.map((c) => c.coa_id)));
-    }
+  const handleSelectAll = () => {
+    const allFilteredIds = filteredAccounts.map((c) => c.coa_id);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      allFilteredIds.forEach((id) => next.add(id));
+      return next;
+    });
   };
+
+  const handleUnselectAll = () => {
+    setSelectedIds(new Set());
+  };
+
+  const isAllFilteredSelected =
+    filteredAccounts.length > 0 &&
+    filteredAccounts.every((c) => selectedIds.has(c.coa_id));
 
   const handleConfirm = () => {
     const toAdd = coaList.filter((c) => selectedIds.has(c.coa_id));
@@ -88,7 +98,7 @@ export function CoaSelectModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px] max-h-[80vh] flex flex-col overflow-hidden">
+      <DialogContent className="sm:max-w-[720px] md:max-w-[750px] w-[95vw] max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Select Chart of Accounts</DialogTitle>
           <DialogDescription>
@@ -96,34 +106,85 @@ export function CoaSelectModal({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Search Bar */}
-        <div className="relative mt-2">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by GL Code or Account Title..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-9"
-          />
+        {/* Search Bar & Quick Action Bar */}
+        <div className="space-y-2.5 mt-1">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by GL Code or Account Title..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-9 text-sm"
+            />
+            {search && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setSearch("")}
+                className="absolute right-1 top-1 h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+
+          {/* Quick Select / Unselect Action Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1 py-1.5 bg-muted/40 rounded-md border text-xs">
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2.5 bg-background"
+                disabled={filteredAccounts.length === 0 || isAllFilteredSelected}
+                onClick={handleSelectAll}
+              >
+                <CheckSquare className="mr-1 h-3.5 w-3.5 text-primary" />
+                Select All {filteredAccounts.length > 0 ? `(${filteredAccounts.length})` : ""}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2.5 bg-background"
+                disabled={selectedIds.size === 0}
+                onClick={handleUnselectAll}
+              >
+                <Square className="mr-1 h-3.5 w-3.5 text-muted-foreground" />
+                Unselect All
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Selected:</span>
+              <Badge variant={selectedIds.size > 0 ? "default" : "secondary"} className="text-xs font-medium">
+                {selectedIds.size} of {unselectedAccounts.length}
+              </Badge>
+            </div>
+          </div>
         </div>
 
         {/* Accounts List Table */}
         <div className="flex-1 min-h-0 overflow-y-auto border rounded-md mt-2">
           <Table>
-            <TableHeader className="sticky top-0 bg-background z-10">
+            <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
               <TableRow>
-                <TableHead className="w-[45px]">
+                <TableHead className="w-[50px] text-center">
                   <Checkbox
-                    checked={
-                      filteredAccounts.length > 0 &&
-                      selectedIds.size >= filteredAccounts.length
-                    }
-                    onCheckedChange={handleSelectAllFiltered}
+                    checked={isAllFilteredSelected}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        handleSelectAll();
+                      } else {
+                        handleUnselectAll();
+                      }
+                    }}
                     aria-label="Select all"
                   />
                 </TableHead>
-                <TableHead className="w-[120px]">GL Code</TableHead>
-                <TableHead>Account Title</TableHead>
+                <TableHead className="w-[140px] whitespace-nowrap">GL Code</TableHead>
+                <TableHead className="min-w-[260px]">Account Title</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -131,7 +192,7 @@ export function CoaSelectModal({
                 <TableRow>
                   <TableCell
                     colSpan={3}
-                    className="h-32 text-center text-muted-foreground"
+                    className="h-32 text-center text-muted-foreground text-sm"
                   >
                     {unselectedAccounts.length === 0
                       ? "All available accounts have already been added."
@@ -144,10 +205,13 @@ export function CoaSelectModal({
                   return (
                     <TableRow
                       key={account.coa_id}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
                       onClick={() => handleToggleSelect(account.coa_id)}
                     >
-                      <TableCell onClick={(e) => e.stopPropagation()}>
+                      <TableCell
+                        className="text-center w-[50px]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <Checkbox
                           checked={isChecked}
                           onCheckedChange={() =>
@@ -155,10 +219,10 @@ export function CoaSelectModal({
                           }
                         />
                       </TableCell>
-                      <TableCell className="font-mono text-xs">
+                      <TableCell className="font-mono text-xs whitespace-nowrap text-muted-foreground font-medium">
                         {account.gl_code || "-"}
                       </TableCell>
-                      <TableCell className="font-medium text-sm">
+                      <TableCell className="font-medium text-sm leading-snug">
                         {account.account_title}
                       </TableCell>
                     </TableRow>
@@ -170,9 +234,9 @@ export function CoaSelectModal({
         </div>
 
         {/* Footer */}
-        <DialogFooter className="flex items-center justify-between border-t pt-3">
+        <DialogFooter className="flex flex-row items-center justify-between border-t pt-3 mt-1">
           <div className="text-xs text-muted-foreground">
-            {selectedIds.size} account(s) selected
+            {selectedIds.size} account(s) ready to add
           </div>
           <div className="flex items-center gap-2">
             <Button
