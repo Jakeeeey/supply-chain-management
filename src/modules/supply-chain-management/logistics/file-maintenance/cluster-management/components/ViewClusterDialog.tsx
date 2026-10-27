@@ -101,6 +101,43 @@ export function ViewClusterDialog({
               </p>
             )}
           </div>
+
+          <Separator />
+
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold">Chart of Account Budgets</h4>
+            {cluster.coa_budgets && cluster.coa_budgets.length > 0 ? (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>GL Code</TableHead>
+                      <TableHead>Account Title</TableHead>
+                      <TableHead className="text-right">Budget (PHP)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cluster.coa_budgets.map((b, idx) => (
+                      <TableRow key={b.id ?? idx}>
+                        <TableCell className="font-mono text-xs">{b.gl_code || "-"}</TableCell>
+                        <TableCell className="font-medium">{b.account_title || `COA #${b.coa_id}`}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">
+                          {Number(b.budget).toLocaleString("en-PH", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">
+                No account budgets allocated.
+              </p>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
