@@ -1,7 +1,15 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { useWatch, UseFormReturn } from "react-hook-form";
-import { Plus, Trash2, Wallet } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Wallet,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +17,18 @@ import {
   FormControl,
   FormField,
   FormItem,
-  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { AreaCombobox as Combobox } from "./AreaCombobox";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { ClusterFormValues, COAOption } from "../types";
-import { cn } from "@/lib/utils";
+import { CoaSelectModal } from "./CoaSelectModal";
 
 interface CoaBudgetStepProps {
   form: UseFormReturn<ClusterFormValues>;
@@ -24,11 +38,7 @@ interface CoaBudgetStepProps {
   remove: (index: number) => void;
 }
 
-const selectBase = "h-9 bg-background border-input transition-all";
-const selectFocus =
-  "outline-none focus:outline-none " +
-  "focus:ring-2 focus:ring-ring focus:ring-offset-0 " +
-  "focus:border-ring";
+const PAGE_SIZE = 6;
 
 export function CoaBudgetStep({
   form,
@@ -37,161 +47,287 @@ export function CoaBudgetStep({
   append,
   remove,
 }: CoaBudgetStepProps) {
-  const watchedBudgets = useWatch({
-    control: form.control,
-    name: "coa_budgets",
-  }) || [];
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+
+  const watchedBudgets =
+    useWatch({
+      control: form.control,
+      name: "coa_budgets",
+    }) || [];
+
+  const coaMap = useMemo(() => {
+    const map = new Map<number, COAOption>();
+    for (const c of coaList) {
+      map.set(c.coa_id, c);
+    }
+    return map;
+  }, [coaList]);
+
+  // Set of already selected COA IDs
+  const alreadySelectedCoaIds = useMemo(() => {
+    return new Set(
+      watchedBudgets
+        .map((b) => Number(b?.coa_id))
+        .filter((id) => !isNaN(id) && id > 0)
+    );
+  }, [watchedBudgets]);
+
+  // Items mapped with original field index for form binding
+  const itemsWithIndex = useMemo(() => {
+    return fields.map((field, index) => {
+      const budgetItem = watchedBudgets[index];
+      const coaId = Number(budgetItem?.coa_id);
+      const coa = coaMap.get(coaId);
+      return {
+        fieldId: field.id,
+        originalIndex: index,
+        coaId,
+        glCode: coa?.gl_code || "-",
+        title: coa?.account_title || `Account #${coaId}`,
+      };
+    });
+  }, [fields, watchedBudgets, coaMap]);
+
+  // Filter items by search
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return itemsWithIndex;
+    return itemsWithIndex.filter(
+      (item) =>
+        item.title.toLowerCase().includes(q) ||
+        item.glCode.toLowerCase().includes(q)
+    );
+  }, [itemsWithIndex, search]);
+
+  // Pagination calculation
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredItems.slice(start, start + PAGE_SIZE);
+  }, [filteredItems, currentPage]);
 
   const totalAllocated = watchedBudgets.reduce(
     (sum, item) => sum + (Number(item?.budget) || 0),
     0
   );
 
+  const handleAddBatch = (selectedCoas: COAOption[]) => {
+    selectedCoas.forEach((coa) => {
+      append({ coa_id: coa.coa_id, budget: 0 });
+    });
+    // Jump to the last page so user can immediately see added items
+    const newTotal = fields.length + selectedCoas.length;
+    setPage(Math.ceil(newTotal / PAGE_SIZE));
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between pb-2 border-b">
+      {/* Header with Title and Add Account Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b">
         <div>
           <h4 className="text-sm font-semibold flex items-center gap-1.5">
             <Wallet className="h-4 w-4 text-primary" />
             Chart of Accounts & Budget Allocation
           </h4>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Assign budgets to specific Chart of Accounts for this cluster.
+            Select accounts and specify their allocated budget amount.
           </p>
         </div>
         <Button
           type="button"
-          variant="outline"
           size="sm"
-          onClick={() => append({ coa_id: 0, budget: 0 })}
+          onClick={() => setIsModalOpen(true)}
+          className="shrink-0"
         >
-          <Plus className="mr-1 h-3.5 w-3.5" /> Add Account
+          <Plus className="mr-1.5 h-3.5 w-3.5" /> Select Accounts
         </Button>
       </div>
 
       {fields.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground space-y-2">
-          <p className="text-sm">No accounts added yet.</p>
-          <p className="text-xs">
-            Click &quot;Add Account&quot; to assign a budget to a Chart of Account.
-          </p>
+        <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground space-y-3">
+          <Wallet className="h-8 w-8 mx-auto text-muted-foreground/60" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-foreground">
+              No accounts selected yet
+            </p>
+            <p className="text-xs">
+              Click &quot;Select Accounts&quot; above to batch select Chart of
+              Accounts and allocate their budgets.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsModalOpen(true)}
+          >
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> Select Accounts
+          </Button>
         </div>
       ) : (
         <div className="space-y-3">
-          {fields.map((field, index) => {
-            const currentSelectedCoaId = watchedBudgets[index]?.coa_id;
-            // Prevent selecting already selected accounts in other rows
-            const otherSelectedCoaIds = new Set(
-              watchedBudgets
-                .map((b, i) => (i !== index ? Number(b?.coa_id) : null))
-                .filter(Boolean)
-            );
+          {/* Table Search Toolbar */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Filter added accounts..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                className="pl-9 h-8 text-xs"
+              />
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Total Accounts:{" "}
+              <span className="font-medium text-foreground">
+                {fields.length}
+              </span>
+            </div>
+          </div>
 
-            const availableOptions = coaList.filter(
-              (c) =>
-                !otherSelectedCoaIds.has(c.coa_id) ||
-                c.coa_id === currentSelectedCoaId
-            );
+          {/* Accounts Budget Table */}
+          <div className="rounded-md border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[120px]">GL Code</TableHead>
+                  <TableHead>Account Title</TableHead>
+                  <TableHead className="w-[190px] text-right">
+                    Budget (PHP) <span className="text-red-500">*</span>
+                  </TableHead>
+                  <TableHead className="w-[50px] text-center"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={4}
+                      className="h-24 text-center text-muted-foreground text-xs"
+                    >
+                      No accounts match your search.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedItems.map((item) => (
+                    <TableRow key={item.fieldId}>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {item.glCode}
+                      </TableCell>
+                      <TableCell className="font-medium text-sm">
+                        {item.title}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <FormField<ClusterFormValues>
+                          control={form.control}
+                          name={`coa_budgets.${item.originalIndex}.budget`}
+                          render={({ field }) => (
+                            <FormItem className="space-y-0 inline-block w-full">
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  placeholder="0.00"
+                                  className="h-8 text-right font-medium tabular-nums text-xs"
+                                  value={(field.value as number) ?? 0}
+                                  onChange={(e) => {
+                                    field.onChange(e.target.valueAsNumber || 0);
+                                    form.clearErrors(
+                                      `coa_budgets.${item.originalIndex}.budget`
+                                    );
+                                  }}
+                                />
+                              </FormControl>
+                              <FormMessage className="text-[11px]" />
+                            </FormItem>
+                          )}
+                        />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => remove(item.originalIndex)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
 
-            return (
-              <div
-                key={field.id}
-                className="rounded-lg border p-3 bg-card space-y-3"
-              >
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    Account #{index + 1}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => remove(index)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* COA Selection */}
-                  <FormField<ClusterFormValues>
-                    control={form.control}
-                    name={`coa_budgets.${index}.coa_id`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">
-                          Chart of Account <span className="text-red-500">*</span>
-                        </FormLabel>
-                        <FormControl>
-                          <Combobox
-                            options={availableOptions.map((c) => ({
-                              value: String(c.coa_id),
-                              label: `${c.gl_code ? `${c.gl_code} - ` : ""}${c.account_title}`,
-                            }))}
-                            value={field.value ? String(field.value) : ""}
-                            onValueChange={(val) => {
-                              field.onChange(val ? Number(val) : 0);
-                              form.clearErrors(`coa_budgets.${index}.coa_id`);
-                            }}
-                            placeholder="Select Chart of Account"
-                            className={cn(selectBase, selectFocus)}
-                            error={!!form.formState.errors.coa_budgets?.[index]?.coa_id}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Budget Input */}
-                  <FormField<ClusterFormValues>
-                    control={form.control}
-                    name={`coa_budgets.${index}.budget`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">
-                          Budget Amount (PHP) <span className="text-red-500">*</span>
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="any"
-                            min="0"
-                            placeholder="0.00"
-                            {...field}
-                            value={(field.value as number) ?? 0}
-                            onChange={(e) => {
-                              field.onChange(e.target.valueAsNumber || 0);
-                              form.clearErrors(`coa_budgets.${index}.budget`);
-                            }}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+              <span>
+                Showing {(currentPage - 1) * PAGE_SIZE + 1} to{" "}
+                {Math.min(currentPage * PAGE_SIZE, filteredItems.length)} of{" "}
+                {filteredItems.length} accounts
+              </span>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2"
+                  disabled={currentPage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                <span className="font-medium text-foreground px-1">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
               </div>
-            );
-          })}
+            </div>
+          )}
+
+          {/* Total Summary Banner */}
+          <div className="rounded-lg bg-muted/60 p-3 flex items-center justify-between text-sm">
+            <span className="text-muted-foreground font-medium">
+              Total Allocated Budget:
+            </span>
+            <span className="font-semibold tabular-nums text-foreground text-base">
+              PHP{" "}
+              {totalAllocated.toLocaleString("en-PH", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>
+          </div>
         </div>
       )}
 
-      {fields.length > 0 && (
-        <div className="rounded-lg bg-muted/50 p-3 flex items-center justify-between text-sm">
-          <span className="text-muted-foreground font-medium">
-            Total Allocated Budget:
-          </span>
-          <span className="font-semibold tabular-nums text-foreground">
-            PHP{" "}
-            {totalAllocated.toLocaleString("en-PH", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}
-          </span>
-        </div>
-      )}
+      {/* Multi-select Picker Dialog */}
+      <CoaSelectModal
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        coaList={coaList}
+        alreadySelectedCoaIds={alreadySelectedCoaIds}
+        onAddSelected={handleAddBatch}
+      />
     </div>
   );
 }

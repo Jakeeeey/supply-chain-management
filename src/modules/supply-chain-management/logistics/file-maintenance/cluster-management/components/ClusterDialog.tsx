@@ -161,7 +161,7 @@ export function ClusterDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[650px] max-h-[88vh] flex flex-col overflow-hidden">
+      <DialogContent className="sm:max-w-[780px] max-h-[88vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             {isEdit ? "Edit Cluster" : "Create Cluster"}
