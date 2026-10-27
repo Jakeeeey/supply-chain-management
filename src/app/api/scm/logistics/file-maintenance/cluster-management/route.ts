@@ -132,11 +132,30 @@ export async function GET(req: NextRequest) {
   const clusterId = url.searchParams.get("cluster_id");
 
   try {
-    // ── COA Options: list active/all chart of accounts ────────────────
+    // ── COA Options: filtered by account_types ──────────────────────
     if (type === "coa_options") {
-      const coaRes = await directusFetch(
-        `${DIRECTUS_URL}${COA_ENDPOINT}?fields=coa_id,account_title,gl_code&limit=-1`
+      // 1. Fetch IDs of the target account types
+      const accountTypesRes = await directusFetch(
+        `${DIRECTUS_URL}/items/account_types?filter[account_name][_in]=GENERAL AND ADMINISTRATIVE EXPENSES,FINANCE COST&fields=id,account_name&limit=-1`
       ).catch(() => ({ data: [] }));
+
+      const targetTypeIds = ((accountTypesRes.data ?? []) as { id: number; account_name: string }[])
+        .map((t) => t.id)
+        .filter(Boolean);
+
+      // If matching account types were found, filter by account_type IN (...)
+      // Also fallback to relational filter if direct IDs query returned empty
+      let filterParam = "";
+      if (targetTypeIds.length > 0) {
+        filterParam = `&filter[account_type][_in]=${targetTypeIds.join(",")}`;
+      } else {
+        filterParam = `&filter[account_type][account_name][_in]=${encodeURIComponent("GENERAL AND ADMINISTRATIVE EXPENSES")},${encodeURIComponent("FINANCE COST")}`;
+      }
+
+      const coaRes = await directusFetch(
+        `${DIRECTUS_URL}${COA_ENDPOINT}?fields=coa_id,account_title,gl_code,account_type${filterParam}&limit=-1`
+      ).catch(() => ({ data: [] }));
+
       return json({ data: coaRes.data ?? [] });
     }
 
