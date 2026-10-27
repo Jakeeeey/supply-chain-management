@@ -12,12 +12,29 @@ export interface AreaItem {
   baranggay: string | null;
 }
 
-/** Cluster with its nested areas — used for table rows & dialog editing */
+/** COA Budget allocation for a cluster */
+export interface ClusterCoaBudgetItem {
+  id?: number;
+  cluster_id?: number;
+  coa_id: number;
+  budget: number;
+  account_title?: string;
+  gl_code?: string;
+}
+
+export interface COAOption {
+  coa_id: number;
+  account_title: string;
+  gl_code: string;
+}
+
+/** Cluster with its nested areas & coa budgets — used for table rows & dialog editing */
 export interface ClusterWithAreas {
   id: number;
   cluster_name: string;
   minimum_amount: number;
   areas: AreaItem[];
+  coa_budgets?: ClusterCoaBudgetItem[];
 }
 
 // =============================================================================
@@ -31,6 +48,12 @@ const areaSchema = z.object({
   baranggay: z.string().optional().default(""),
 });
 
+export const clusterCoaBudgetSchema = z.object({
+  id: z.number().optional(),
+  coa_id: z.coerce.number().min(1, "Please select an account"),
+  budget: z.coerce.number().min(0, "Budget must be 0 or greater"),
+});
+
 export const clusterSchema = z
   .object({
     cluster_name: z.string().min(1, "Cluster name is required"),
@@ -38,6 +61,7 @@ export const clusterSchema = z
       .number()
       .gt(0, "Minimum amount must be greater than 0"),
     areas: z.array(areaSchema).min(1, "At least one area is required"),
+    coa_budgets: z.array(clusterCoaBudgetSchema).optional().default([]),
   })
   .superRefine((data, ctx) => {
     const norm = (s?: string | null): string =>
@@ -90,6 +114,22 @@ export const clusterSchema = z
           break;
         }
       }
+    }
+
+    // Check duplicate COA selections in coa_budgets
+    const budgets = data.coa_budgets || [];
+    const coaSeen = new Set<number>();
+    for (let i = 0; i < budgets.length; i++) {
+      const coaId = budgets[i].coa_id;
+      if (!coaId) continue;
+      if (coaSeen.has(coaId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "This Chart of Account is already added.",
+          path: ["coa_budgets", i, "coa_id"],
+        });
+      }
+      coaSeen.add(coaId);
     }
   });
 

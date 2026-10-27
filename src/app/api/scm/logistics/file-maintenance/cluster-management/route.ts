@@ -6,6 +6,8 @@ const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const ACCESS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
 const CLUSTER_ENDPOINT = "/items/cluster";
 const AREA_ENDPOINT = "/items/area_per_cluster";
+const COA_BUDGET_ENDPOINT = "/items/cluster_coa_budget";
+const COA_ENDPOINT = "/items/chart_of_accounts";
 
 interface Area {
   id: number;
@@ -13,6 +15,19 @@ interface Area {
   province: string | null;
   city: string | null;
   baranggay: string | null;
+}
+
+interface CoaBudget {
+  id: number;
+  cluster_id: number;
+  coa_id: number;
+  budget: number;
+}
+
+interface CoaItem {
+  coa_id: number;
+  account_title: string;
+  gl_code: string;
 }
 
 interface Cluster {
@@ -105,7 +120,7 @@ async function checkAreaOverlap(
 }
 
 // =============================================================================
-// GET — List all clusters (with areas) or fetch a single cluster by id
+// GET — List all clusters (with areas & coa budgets), single cluster, or COA options
 // =============================================================================
 
 export async function GET(req: NextRequest) {
@@ -117,27 +132,74 @@ export async function GET(req: NextRequest) {
   const clusterId = url.searchParams.get("cluster_id");
 
   try {
-    // ── Detail: single cluster with its areas ──────────────────────────
+    // ── COA Options: filtered by account_types ──────────────────────
+    if (type === "coa_options") {
+      // 1. Fetch IDs of the target account types
+      const accountTypesRes = await directusFetch(
+        `${DIRECTUS_URL}/items/account_types?filter[account_name][_in]=GENERAL AND ADMINISTRATIVE EXPENSES,FINANCE COST&fields=id,account_name&limit=-1`
+      ).catch(() => ({ data: [] }));
+
+      const targetTypeIds = ((accountTypesRes.data ?? []) as { id: number; account_name: string }[])
+        .map((t) => t.id)
+        .filter(Boolean);
+
+      // If matching account types were found, filter by account_type IN (...)
+      // Also fallback to relational filter if direct IDs query returned empty
+      let filterParam = "";
+      if (targetTypeIds.length > 0) {
+        filterParam = `&filter[account_type][_in]=${targetTypeIds.join(",")}`;
+      } else {
+        filterParam = `&filter[account_type][account_name][_in]=${encodeURIComponent("GENERAL AND ADMINISTRATIVE EXPENSES")},${encodeURIComponent("FINANCE COST")}`;
+      }
+
+      const coaRes = await directusFetch(
+        `${DIRECTUS_URL}${COA_ENDPOINT}?fields=coa_id,account_title,gl_code,account_type${filterParam}&limit=-1`
+      ).catch(() => ({ data: [] }));
+
+      return json({ data: coaRes.data ?? [] });
+    }
+
+    // ── Detail: single cluster with its areas & coa budgets ───────────
     if (type === "detail" && clusterId) {
-      const cluster = await directusFetch(
-        `${DIRECTUS_URL}${CLUSTER_ENDPOINT}/${clusterId}`,
-      );
-      const areas = await directusFetch(
-        `${DIRECTUS_URL}${AREA_ENDPOINT}?filter[cluster_id][_eq]=${clusterId}&sort=id&limit=-1`,
-      );
+      const [cluster, areas, budgets, coas] = await Promise.all([
+        directusFetch(`${DIRECTUS_URL}${CLUSTER_ENDPOINT}/${clusterId}`),
+        directusFetch(`${DIRECTUS_URL}${AREA_ENDPOINT}?filter[cluster_id][_eq]=${clusterId}&sort=id&limit=-1`),
+        directusFetch(`${DIRECTUS_URL}${COA_BUDGET_ENDPOINT}?filter[cluster_id][_eq]=${clusterId}&sort=id&limit=-1`).catch(() => ({ data: [] })),
+        directusFetch(`${DIRECTUS_URL}${COA_ENDPOINT}?fields=coa_id,account_title,gl_code&limit=-1`).catch(() => ({ data: [] })),
+      ]);
+
+      const coaMap = new Map<number, CoaItem>();
+      for (const c of (coas.data ?? []) as CoaItem[]) {
+        coaMap.set(c.coa_id, c);
+      }
+
+      const enrichedBudgets = ((budgets.data ?? []) as CoaBudget[]).map((b) => ({
+        ...b,
+        account_title: coaMap.get(b.coa_id)?.account_title || "",
+        gl_code: coaMap.get(b.coa_id)?.gl_code || "",
+      }));
 
       return json({
-        data: { ...cluster.data, areas: areas.data ?? [] },
+        data: {
+          ...cluster.data,
+          areas: areas.data ?? [],
+          coa_budgets: enrichedBudgets,
+        },
       });
     }
 
-    // ── List: all clusters joined with their areas ─────────────────────
-    const clusters = await directusFetch(
-      `${DIRECTUS_URL}${CLUSTER_ENDPOINT}?sort=-id&limit=-1`,
-    );
-    const allAreas = await directusFetch(
-      `${DIRECTUS_URL}${AREA_ENDPOINT}?sort=id&limit=-1`,
-    );
+    // ── List: all clusters joined with their areas & budgets ──────────
+    const [clusters, allAreas, allBudgets, coas] = await Promise.all([
+      directusFetch(`${DIRECTUS_URL}${CLUSTER_ENDPOINT}?sort=-id&limit=-1`),
+      directusFetch(`${DIRECTUS_URL}${AREA_ENDPOINT}?sort=id&limit=-1`),
+      directusFetch(`${DIRECTUS_URL}${COA_BUDGET_ENDPOINT}?sort=id&limit=-1`).catch(() => ({ data: [] })),
+      directusFetch(`${DIRECTUS_URL}${COA_ENDPOINT}?fields=coa_id,account_title,gl_code&limit=-1`).catch(() => ({ data: [] })),
+    ]);
+
+    const coaMap = new Map<number, CoaItem>();
+    for (const c of (coas.data ?? []) as CoaItem[]) {
+      coaMap.set(c.coa_id, c);
+    }
 
     const areasByCluster = new Map<number, Area[]>();
     for (const area of (allAreas.data ?? []) as Area[]) {
@@ -146,9 +208,24 @@ export async function GET(req: NextRequest) {
       areasByCluster.get(cid)!.push(area);
     }
 
+    const budgetsByCluster = new Map<
+      number,
+      Array<CoaBudget & { account_title: string; gl_code: string }>
+    >();
+    for (const b of (allBudgets.data ?? []) as CoaBudget[]) {
+      const cid = b.cluster_id;
+      if (!budgetsByCluster.has(cid)) budgetsByCluster.set(cid, []);
+      budgetsByCluster.get(cid)!.push({
+        ...b,
+        account_title: coaMap.get(b.coa_id)?.account_title || "",
+        gl_code: coaMap.get(b.coa_id)?.gl_code || "",
+      });
+    }
+
     const combined = ((clusters.data ?? []) as Cluster[]).map((c: Cluster) => ({
       ...c,
       areas: areasByCluster.get(c.id) ?? [],
+      coa_budgets: budgetsByCluster.get(c.id) ?? [],
     }));
 
     return json({ data: combined });
@@ -159,7 +236,7 @@ export async function GET(req: NextRequest) {
 }
 
 // =============================================================================
-// POST — Create a new cluster with areas
+// POST — Create a new cluster with areas and coa_budgets
 // =============================================================================
 
 export async function POST(req: NextRequest) {
@@ -168,7 +245,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { cluster_name, minimum_amount, areas } = body;
+    const { cluster_name, minimum_amount, areas, coa_budgets } = body;
 
     // Verify company subscription limit for cluster
     const companyRes = await directusFetch(
@@ -209,7 +286,6 @@ export async function POST(req: NextRequest) {
     const existingCheck = await directusFetch(
       `${DIRECTUS_URL}${CLUSTER_ENDPOINT}?filter[cluster_name][_icontains]=${encodeURIComponent(cluster_name)}&limit=1`
     );
-    // Directus `_icontains` might match substrings, so we verify strictly in JS
     const isDuplicate = (existingCheck.data as Cluster[] | undefined)?.some(
       (c: Cluster) => c.cluster_name?.toLowerCase().trim() === cluster_name.toLowerCase().trim()
     );
@@ -239,13 +315,11 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      // 2. Create each area linked to this cluster
-      const createdAreas = [];
-      for (const area of areas ?? []) {
-        if (!area.province) continue;
-        const areaRes = await directusFetch(
-          `${DIRECTUS_URL}${AREA_ENDPOINT}`,
-          {
+      // 2. Create areas linked to this cluster concurrently
+      const validAreas = (areas ?? []).filter((a: { province?: string }) => !!a.province);
+      const createdAreas = await Promise.all(
+        validAreas.map((area: { province?: string; city?: string; baranggay?: string }) =>
+          directusFetch(`${DIRECTUS_URL}${AREA_ENDPOINT}`, {
             method: "POST",
             body: JSON.stringify({
               cluster_id: newClusterId,
@@ -253,22 +327,34 @@ export async function POST(req: NextRequest) {
               city: area.city?.trim() || null,
               baranggay: area.baranggay?.trim() || null,
             }),
-          },
-        );
-        createdAreas.push(areaRes.data);
-      }
+          }).then((res) => res.data)
+        )
+      );
+
+      // 3. Create COA budgets linked to this cluster concurrently
+      const validBudgets = (coa_budgets ?? []).filter((b: { coa_id?: number }) => Number(b.coa_id) > 0);
+      const createdBudgets = await Promise.all(
+        validBudgets.map((b: { coa_id: number; budget?: number }) =>
+          directusFetch(`${DIRECTUS_URL}${COA_BUDGET_ENDPOINT}`, {
+            method: "POST",
+            body: JSON.stringify({
+              cluster_id: newClusterId,
+              coa_id: Number(b.coa_id),
+              budget: Number(b.budget) || 0,
+            }),
+          }).then((res) => res.data)
+        )
+      );
 
       return json({
-        data: { ...cluster.data, areas: createdAreas },
+        data: { ...cluster.data, areas: createdAreas, coa_budgets: createdBudgets },
       });
-    } catch (areaErr: unknown) {
-      // ROLLBACK: If areas fail to create, delete the cluster so we don't have a partial "ghost" record.
+    } catch (createErr: unknown) {
+      // ROLLBACK: If areas or budgets fail, delete the cluster
       await directusFetch(`${DIRECTUS_URL}${CLUSTER_ENDPOINT}/${newClusterId}`, {
         method: "DELETE",
-      }).catch(() => {
-        /* ignore rollback failure, primary error is more important */
-      });
-      throw areaErr;
+      }).catch(() => {});
+      throw createErr;
     }
   } catch (err: unknown) {
     const errorData = err as { data?: { errors?: { message?: string }[]; error?: string }; status?: number; message?: string };
@@ -278,7 +364,7 @@ export async function POST(req: NextRequest) {
 }
 
 // =============================================================================
-// PATCH — Update cluster details and upsert areas
+// PATCH — Update cluster details, areas, and coa_budgets
 // =============================================================================
 
 export async function PATCH(req: NextRequest) {
@@ -291,13 +377,12 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { cluster_name, minimum_amount, areas } = body;
+    const { cluster_name, minimum_amount, areas, coa_budgets } = body;
 
     // 0. Strict duplication check (case-insensitive)
     const existingCheck = await directusFetch(
       `${DIRECTUS_URL}${CLUSTER_ENDPOINT}?filter[cluster_name][_icontains]=${encodeURIComponent(cluster_name)}&limit=-1`
     );
-    // Ensure we don't block saving if the matched cluster is the exact one we are currently editing
     const isDuplicate = (existingCheck.data as Cluster[] | undefined)?.some(
       (c: Cluster) => 
         c.id !== parseInt(id) && 
@@ -322,27 +407,24 @@ export async function PATCH(req: NextRequest) {
       return json({ error: overlapError }, 409);
     }
 
-    // 2. Delete ALL existing areas for this cluster first
-    //    (avoids unique-constraint collisions during upsert when
-    //     multiple rows share the same city but different barangays)
+    // 2. Delete existing areas for this cluster concurrently
     const existingAreasRes = await directusFetch(
       `${DIRECTUS_URL}${AREA_ENDPOINT}?filter[cluster_id][_eq]=${id}&limit=-1`
     );
     const existingAreaIds = ((existingAreasRes.data ?? []) as Area[]).map((a: Area) => a.id);
+    await Promise.all(
+      existingAreaIds.map((deleteId) =>
+        directusFetch(`${DIRECTUS_URL}${AREA_ENDPOINT}/${deleteId}`, {
+          method: "DELETE",
+        })
+      )
+    );
 
-    for (const deleteId of existingAreaIds) {
-      await directusFetch(`${DIRECTUS_URL}${AREA_ENDPOINT}/${deleteId}`, {
-        method: "DELETE",
-      });
-    }
-
-    // 3. Re-create all areas from the incoming form data
-    const createdAreas = [];
-    for (const area of areas ?? []) {
-      if (!area.province) continue;
-      const areaRes = await directusFetch(
-        `${DIRECTUS_URL}${AREA_ENDPOINT}`,
-        {
+    // 3. Re-create all areas concurrently
+    const validAreas = (areas ?? []).filter((a: { province?: string }) => !!a.province);
+    const createdAreas = await Promise.all(
+      validAreas.map((area: { province?: string; city?: string; baranggay?: string }) =>
+        directusFetch(`${DIRECTUS_URL}${AREA_ENDPOINT}`, {
           method: "POST",
           body: JSON.stringify({
             cluster_id: parseInt(id),
@@ -350,13 +432,41 @@ export async function PATCH(req: NextRequest) {
             city: area.city?.trim() || null,
             baranggay: area.baranggay?.trim() || null,
           }),
-        },
-      );
-      createdAreas.push(areaRes.data);
-    }
+        }).then((res) => res.data)
+      )
+    );
+
+    // 4. Delete existing COA budgets for this cluster concurrently
+    const existingBudgetsRes = await directusFetch(
+      `${DIRECTUS_URL}${COA_BUDGET_ENDPOINT}?filter[cluster_id][_eq]=${id}&limit=-1`
+    ).catch(() => ({ data: [] }));
+    const existingBudgetIds = ((existingBudgetsRes.data ?? []) as CoaBudget[]).map((b: CoaBudget) => b.id);
+
+    await Promise.all(
+      existingBudgetIds.map((bId) =>
+        directusFetch(`${DIRECTUS_URL}${COA_BUDGET_ENDPOINT}/${bId}`, {
+          method: "DELETE",
+        }).catch(() => {})
+      )
+    );
+
+    // 5. Re-create all COA budgets concurrently
+    const validBudgets = (coa_budgets ?? []).filter((b: { coa_id?: number }) => Number(b.coa_id) > 0);
+    const createdBudgets = await Promise.all(
+      validBudgets.map((b: { coa_id: number; budget?: number }) =>
+        directusFetch(`${DIRECTUS_URL}${COA_BUDGET_ENDPOINT}`, {
+          method: "POST",
+          body: JSON.stringify({
+            cluster_id: parseInt(id),
+            coa_id: Number(b.coa_id),
+            budget: Number(b.budget) || 0,
+          }),
+        }).then((res) => res.data)
+      )
+    );
 
     return json({
-      data: { ...cluster.data, areas: createdAreas },
+      data: { ...cluster.data, areas: createdAreas, coa_budgets: createdBudgets },
     });
   } catch (err: unknown) {
     const errorData = err as { data?: { errors?: { message?: string }[]; error?: string }; status?: number; message?: string };
