@@ -5,7 +5,7 @@ import {format, parseISO} from "date-fns";
 import {
     Box, Truck, Search, Printer,
     CheckCircle, Barcode, Tag, Building2,
-    Clock, Layers, Play, ShieldCheck, Loader2
+    Clock, Layers, Play, ShieldCheck, Loader2, ChevronDown
 } from "lucide-react";
 import {Sheet, SheetContent, SheetHeader, SheetTitle} from "@/components/ui/sheet";
 import {Tabs, TabsContent, TabsList, TabsTrigger} from "@/components/ui/tabs";
@@ -14,11 +14,19 @@ import {Progress} from "@/components/ui/progress";
 import {ScrollArea} from "@/components/ui/scroll-area";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import {ConsolidatorDto, ConsolidatorDetailsDto, ConsolidatorDispatchesDto} from "../types";
 import {getStatusBadge} from "./ConsolidatorTable";
 import {StartPickingDialog} from "./StartPickingDialog";
-import { generatePickerPDF } from "./PickerManifestPrint";
+import { generatePickerPDF, PaperSize } from "./PickerManifestPrint";
 import { fetchDeliveryPickingPrintableDeliveryCopy } from "../providers/fetchProvider";
 
 interface ConsolidatorDetailSheetProps {
@@ -73,7 +81,7 @@ export function ConsolidatorDetailSheet({consolidator, isOpen, onClose, onStatus
     const totalOrdered = consolidator.details?.reduce((acc, curr) => acc + curr.orderedQuantity, 0) || 0;
     const batchProgress = totalOrdered > 0 ? (totalPicked / totalOrdered) * 100 : 0;
 
-    const fetchAndPrintManifest = async () => {
+    const fetchAndPrintManifest = async (paperSize: PaperSize = "a4") => {
         setIsPrinting(true);
         try {
             const [manifestRes, includeDeliveryCopy] = await Promise.all([
@@ -83,7 +91,7 @@ export function ConsolidatorDetailSheet({consolidator, isOpen, onClose, onStatus
 
             if (manifestRes.ok) {
                 const data = await manifestRes.json();
-                generatePickerPDF(data, consolidator.consolidatorNo, consolidator.totalSalesOrderAmount, includeDeliveryCopy);
+                generatePickerPDF(data, consolidator.consolidatorNo, consolidator.totalSalesOrderAmount, includeDeliveryCopy, paperSize);
             }
         } catch (err) {
             console.error("VOS: PDF Generation Failed", err);
@@ -92,7 +100,7 @@ export function ConsolidatorDetailSheet({consolidator, isOpen, onClose, onStatus
         }
     };
 
-    const handleConfirmPicking = async (checkerId: number) => {
+    const handleConfirmPicking = async (checkerId: number, paperSize: PaperSize) => {
         return new Promise<void>(async (resolve, reject) => {
             setIsSyncing(true);
             try {
@@ -111,7 +119,7 @@ export function ConsolidatorDetailSheet({consolidator, isOpen, onClose, onStatus
 
                 const data = await manifestRes.json();
 
-                generatePickerPDF(data, consolidator.consolidatorNo, consolidator.totalSalesOrderAmount, includeDeliveryCopy);
+                generatePickerPDF(data, consolidator.consolidatorNo, consolidator.totalSalesOrderAmount, includeDeliveryCopy, paperSize);
 
                 setIsStartPickingOpen(false);
                 onStatusUpdate?.();
@@ -204,10 +212,39 @@ export function ConsolidatorDetailSheet({consolidator, isOpen, onClose, onStatus
                     </div>
 
                     <div className="p-6 border-t border-border/50 bg-card/50 flex items-center gap-3 shrink-0 z-30">
-                        <Button variant="outline" className="flex-1 font-black uppercase text-[10px] tracking-widest h-12 rounded-xl" onClick={fetchAndPrintManifest} disabled={isPrinting || consolidator.status === "Pending"}>
-                            {isPrinting ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <Printer className="h-4 w-4 mr-2"/>}
-                            {isPrinting ? "Generating..." : "Print Summary"}
-                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    className="flex-1 font-black uppercase text-[10px] tracking-widest h-12 rounded-xl"
+                                    disabled={isPrinting || consolidator.status === "Pending"}
+                                >
+                                    {isPrinting ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <Printer className="h-4 w-4 mr-2"/>}
+                                    {isPrinting ? "Generating..." : "Print Summary"}
+                                    <ChevronDown className="h-3 w-3 ml-1 opacity-60" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-48 bg-card/98 backdrop-blur-xl border-border/40 rounded-xl p-1.5 shadow-xl">
+                                <DropdownMenuLabel className="text-[9px] font-black uppercase tracking-widest text-muted-foreground px-2 py-1">
+                                    Paper Format
+                                </DropdownMenuLabel>
+                                <DropdownMenuSeparator className="bg-border/30" />
+                                <DropdownMenuItem
+                                    onClick={() => fetchAndPrintManifest("a4")}
+                                    className="cursor-pointer py-2 px-2.5 rounded-lg font-bold text-xs flex flex-col items-start gap-0.5"
+                                >
+                                    <span className="uppercase text-[11px]">A4 Standard</span>
+                                    <span className="text-[9px] text-muted-foreground font-normal">210 × 297 mm</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() => fetchAndPrintManifest("legal")}
+                                    className="cursor-pointer py-2 px-2.5 rounded-lg font-bold text-xs flex flex-col items-start gap-0.5"
+                                >
+                                    <span className="uppercase text-[11px]">US Legal</span>
+                                    <span className="text-[9px] text-muted-foreground font-normal">8.5 × 14 in (216 × 356 mm)</span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
 
                         {consolidator.status === "Pending" ? (
                             <Button onClick={() => setIsStartPickingOpen(true)} disabled={isSyncing} className="flex-1 font-black uppercase text-[10px] tracking-widest h-12 rounded-xl bg-primary">
