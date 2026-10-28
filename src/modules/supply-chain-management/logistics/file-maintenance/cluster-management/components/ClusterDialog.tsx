@@ -93,7 +93,6 @@ export function ClusterDialog({
   // Reset form when dialog opens
   useEffect(() => {
     if (open) {
-      setCurrentStep(1);
       if (selectedCluster) {
         form.reset({
           cluster_name: selectedCluster.cluster_name,
@@ -126,6 +125,13 @@ export function ClusterDialog({
       }
     }
   }, [open, selectedCluster, form]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setCurrentStep(1);
+    }
+    onOpenChange(nextOpen);
+  };
 
   const handleNextStep = async () => {
     // Validate Step 1 fields before proceeding
@@ -160,7 +166,7 @@ export function ClusterDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[650px] max-h-[88vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>

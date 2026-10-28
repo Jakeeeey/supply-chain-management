@@ -220,6 +220,7 @@ function mapRunningInventoryRow(row: RunningInventoryApiRow): RunningInventoryRo
         movement_after: row.movementAfter,
         running_inventory: row.runningInventory,
         supplier_shortcut: row.supplierShortcut,
+        has_movement: row.hasMovement ?? false,
     };
 }
 
@@ -503,6 +504,7 @@ export type RunningInventoryFilterInput = {
     supplierShortcut?: string;
     productCategory?: string;
     cutOffDate?: string;
+    startingDate?: string;
 };
 
 /**
@@ -539,6 +541,10 @@ export async function fetchRunningInventoryFiltered(input: RunningInventoryFilte
     if (input.cutOffDate && input.cutOffDate.trim()) {
         // Normalize to UTC before sending to the API
         params.cutOffDate = toUtcIsoString(input.cutOffDate.trim());
+    }
+
+    if (input.startingDate && input.startingDate.trim()) {
+        params.startingDate = toUtcIsoString(input.startingDate.trim());
     }
 
     const rows = await apiGet<RunningInventoryApiRow[]>(
@@ -907,6 +913,7 @@ export function resolveRunningInventoryFilterParams(input: {
     suppliers: SupplierRow[];
     lookup: ProductLookupBundle;
     cutOffDate?: string | null;
+    startingDate?: string | null;
 }): RunningInventoryFilterInput {
     const branch = input.branches.find((row) => row.id === input.branchId);
     if (!branch?.branch_name?.trim()) {
@@ -933,6 +940,7 @@ export function resolveRunningInventoryFilterParams(input: {
             : {}),
         ...(isAllCategory ? {} : { productCategory: category.category_name.trim() }),
         ...(input.cutOffDate ? { cutOffDate: input.cutOffDate } : {}),
+        ...(input.startingDate ? { startingDate: input.startingDate } : {}),
     };
 }
 function extractTrailingNumber(value: string): number | null {

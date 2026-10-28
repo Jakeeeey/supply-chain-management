@@ -24,6 +24,11 @@ interface CoaBudget {
   budget: number;
 }
 
+interface CoaBudgetWithAccount extends CoaBudget {
+  account_title: string;
+  gl_code: string;
+}
+
 interface CoaItem {
   coa_id: number;
   account_title: string;
@@ -189,7 +194,7 @@ export async function GET(req: NextRequest) {
       areasByCluster.get(cid)!.push(area);
     }
 
-    const budgetsByCluster = new Map<number, any[]>();
+    const budgetsByCluster = new Map<number, CoaBudgetWithAccount[]>();
     for (const b of (allBudgets.data ?? []) as CoaBudget[]) {
       const cid = b.cluster_id;
       if (!budgetsByCluster.has(cid)) budgetsByCluster.set(cid, []);

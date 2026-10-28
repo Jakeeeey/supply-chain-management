@@ -114,6 +114,7 @@ export type PhysicalInventoryHeaderRow = {
 
     // optional future-ready field
     isPending?: number;
+    is_scm?: number | null;
 };
 
 export type PhysicalInventoryDetailRow = {
@@ -154,6 +155,7 @@ export type PhysicalInventoryHeaderUpsertPayload = {
     committed_at?: string | null;
     cancelled_at?: string | null;
     total_amount?: number | null;
+    is_scm?: number;
 
     // optional future-ready field
     isPending?: number;
@@ -189,6 +191,7 @@ export type RunningInventoryApiRow = {
     movementAfter: number | null;
     runningInventory: number | null;
     supplierShortcut: string | null;
+    hasMovement?: boolean;
 };
 
 export type RunningInventoryRow = {
@@ -209,6 +212,7 @@ export type RunningInventoryRow = {
     movement_after: number | null;
     running_inventory: number | null;
     supplier_shortcut: string | null;
+    has_movement?: boolean;
 };
 
 export type PhysicalInventoryFiltersType = {

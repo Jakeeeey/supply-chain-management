@@ -154,12 +154,14 @@ function buildRunningInventoryCacheKey(input: {
     supplierShortcut?: string;
     productCategory?: string;
     cutOffDate?: string;
+    startingDate?: string;
 }): string {
     return [
         input.branchName.trim().toLowerCase(),
         (input.supplierShortcut ?? "__any__").trim().toLowerCase(),
         (input.productCategory ?? "__all__").trim().toLowerCase(),
         (input.cutOffDate ?? "__no_cutoff__").trim().toLowerCase(),
+        (input.startingDate ?? "__no_starting__").trim().toLowerCase(),
     ].join("::");
 }
 
@@ -917,6 +919,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             isComitted: header.isComitted,
             isCancelled: header.isCancelled,
             total_amount: totalAmount,
+            is_scm: 1,
         };
 
         if (header.id > 0) {
@@ -976,18 +979,15 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 suppliers,
                 lookup: lookupBundle,
                 cutOffDate: savedHeader.cutOff_date,
+                startingDate: savedHeader.starting_date,
             });
 
             const runningInventoryCacheKey = buildRunningInventoryCacheKey(
                 runningInventoryFilterParams,
             );
 
-            const cachedRunningInventoryRows =
-                filteredRunningInventoryCacheRef.current[runningInventoryCacheKey];
-
             const nextRunningInventoryRows =
-                cachedRunningInventoryRows ??
-                (await fetchRunningInventoryFiltered(runningInventoryFilterParams));
+                await fetchRunningInventoryFiltered(runningInventoryFilterParams);
 
             filteredRunningInventoryCacheRef.current[runningInventoryCacheKey] =
                 nextRunningInventoryRows;
@@ -1005,22 +1005,26 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 return;
             }
 
-            // Aggregate running inventory by product ID across all suppliers
+            // Aggregate running inventory and movement tracking by product ID across all suppliers
             const runningInventoryByProductId = new Map<number, number>();
+            const movementByProductId = new Map<number, boolean>();
             for (const row of nextRunningInventoryRows) {
                 const current = runningInventoryByProductId.get(row.product_id) ?? 0;
                 runningInventoryByProductId.set(row.product_id, current + (row.running_inventory ?? 0));
+                if (row.has_movement) {
+                    movementByProductId.set(row.product_id, true);
+                }
             }
 
-            // Identify product families with stock
-            const familiesWithStock = new Set<number>();
+            // Identify product families with movement in the selected date range
+            const familiesWithMovement = new Set<number>();
 
             for (const variant of eligibleVariants) {
                 const familyKey = variant.parent_id ?? variant.product_id;
-                const stock = runningInventoryByProductId.get(variant.product_id) ?? 0;
+                const hasMovement = movementByProductId.get(variant.product_id) === true;
 
-                if (stock !== 0) {
-                    familiesWithStock.add(familyKey);
+                if (hasMovement) {
+                    familiesWithMovement.add(familyKey);
                 }
             }
 
@@ -1029,18 +1033,18 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
 
             for (const variant of eligibleVariants) {
                 const familyKey = variant.parent_id ?? variant.product_id;
-                if (!familiesWithStock.has(familyKey)) continue;
+                if (!familiesWithMovement.has(familyKey)) continue;
 
                 const stock = runningInventoryByProductId.get(variant.product_id) ?? 0;
                 const systemCount = convertBaseQtyToDisplayQty(stock, variant.unit_count);
                 systemCountAllocations.set(variant.product_id, systemCount);
             }
 
-            // Load entire families if at least one member has stock
+            // Load entire families if at least one member has movement in the date range
             const detailPayloads = eligibleVariants
                 .filter((variant) => {
                     const familyKey = variant.parent_id ?? variant.product_id;
-                    return familiesWithStock.has(familyKey);
+                    return familiesWithMovement.has(familyKey);
                 })
                 .map((variant) => {
                     const systemCount = systemCountAllocations.get(variant.product_id) ?? 0;

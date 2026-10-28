@@ -30,6 +30,15 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
         const branchName = incomingUrl.searchParams.get("branchName")?.trim() ?? "";
         const cutOffDateStr = incomingUrl.searchParams.get("cutOffDate")?.trim() ?? "";
+        const startingDateStr = incomingUrl.searchParams.get("startingDate")?.trim() ?? "";
+
+        let startingTime = 0;
+        if (startingDateStr) {
+            startingTime = new Date(startingDateStr).getTime();
+            if (isNaN(startingTime)) {
+                startingTime = 0;
+            }
+        }
         
         let cutOffTime = Number.MAX_SAFE_INTEGER;
         if (cutOffDateStr) {
@@ -183,43 +192,32 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
             movementsByFamily.get(fKey)!.push(row);
         }
 
-        const inventoryMap = new Map<string, { productId: number; branchId: number; runningInventory: number }>();
+        const inventoryMap = new Map<string, { productId: number; branchId: number; runningInventory: number; hasMovement: boolean }>();
 
         for (const familyMovements of movementsByFamily.values()) {
-            const validMovements = familyMovements.filter(row => {
-                if (!row.ts) return true;
-                const rawStr = String(row.ts).trim();
-
-                // Spring Boot returns timestamps as PH local time (UTC+8) with NO timezone suffix.
-                // Node.js parses bare datetime strings as UTC, making them appear 8 hours too late.
-                // We detect this: if there's no 'Z', no '+' offset, and no timezone info, treat as PH local (UTC+8).
-                let rowTime: number;
-                if (typeof row.ts === 'number') {
-                    // Already a Unix ms timestamp — use directly
-                    rowTime = row.ts;
-                } else if (rawStr.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(rawStr)) {
-                    // Has timezone info — parse directly
-                    rowTime = new Date(rawStr).getTime();
-                } else {
-                    // No timezone info → assume PH local time (UTC+8) → add 8 hours to get true UTC
-                    rowTime = new Date(rawStr).getTime() + (8 * 60 * 60 * 1000);
-                }
-
-                if (isNaN(rowTime)) return true;
-                return rowTime <= cutOffTime;
-            });
-
-            if (validMovements.length === 0) continue;
-
-            // Helper: parse PH local timestamp (no TZ) to true UTC ms
+            // Helper: parse PH local timestamp to UTC ms
             const toUtcMs = (ts: string | number | undefined): number => {
                 if (!ts) return 0;
                 if (typeof ts === 'number') return ts;
                 const s = String(ts).trim();
-                const raw = new Date(s).getTime();
-                if (s.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(s)) return raw;
-                return raw + (8 * 60 * 60 * 1000); // PH UTC+8 → UTC
+                if (s.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(s)) {
+                    return new Date(s).getTime();
+                }
+                // Bare local datetime from Spring Boot (e.g. "2026-10-26 10:36:00" in UTC+8).
+                // Subtract 8 hours to get UTC ms so it accurately matches client UTC ISO strings.
+                const isoLocal = s.includes('T') ? s : s.replace(' ', 'T');
+                const bareTime = new Date(`${isoLocal}Z`).getTime();
+                return isNaN(bareTime) ? (new Date(s).getTime()) : (bareTime - 8 * 60 * 60 * 1000);
             };
+
+            const validMovements = familyMovements.filter(row => {
+                if (!row.ts) return true;
+                const rowTime = toUtcMs(row.ts);
+                if (isNaN(rowTime) || rowTime === 0) return true;
+                return rowTime <= cutOffTime;
+            });
+
+            if (validMovements.length === 0) continue;
 
             validMovements.sort((a, b) => toUtcMs(a.ts) - toUtcMs(b.ts));
 
@@ -228,6 +226,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
             // 4. Calculate the running inventory FOR EACH INDIVIDUAL PRODUCT within the family
             const runningInventoryByProduct = new Map<number, number>();
             const branchIdByProduct = new Map<number, number>();
+            const hasMovementByProduct = new Map<number, boolean>();
 
             for (const row of validMovements) {
                 const pid = Number(row.productId || row.product_id);
@@ -250,6 +249,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
                 runningInventoryByProduct.set(pid, (runningInventoryByProduct.get(pid) || 0) + change);
                 branchIdByProduct.set(pid, Number(row.branchId || row.branch_id || branchIdByProduct.get(pid) || 0));
+
+                const rowUtcTime = toUtcMs(row.ts);
+                // Strict check: Movement must have in_base != 0 or out_base != 0
+                const hasBaseMovement = (Number(row.inBase) || 0) !== 0 || (Number(row.outBase) || 0) !== 0;
+                if (rowUtcTime >= startingTime && rowUtcTime <= cutOffTime && hasBaseMovement) {
+                    hasMovementByProduct.set(pid, true);
+                }
             }
 
             // Merge back into inventoryMap
@@ -257,7 +263,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
                 inventoryMap.set(String(pid), {
                     productId: pid,
                     branchId: branchIdByProduct.get(pid) || 0,
-                    runningInventory
+                    runningInventory,
+                    hasMovement: hasMovementByProduct.get(pid) === true,
                 });
             }
         }
@@ -279,7 +286,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
             lastCount: null,
             movementAfter: null,
             runningInventory: item.runningInventory,
-            supplierShortcut: null
+            supplierShortcut: null,
+            hasMovement: item.hasMovement,
         }));
 
         return NextResponse.json(results, {
