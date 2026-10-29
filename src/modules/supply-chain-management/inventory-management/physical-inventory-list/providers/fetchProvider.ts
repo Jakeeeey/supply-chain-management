@@ -72,6 +72,8 @@ export async function fetchPhysicalInventoryListRows(): Promise<{
                 remarks: header.remarks,
                 isComitted: normalizedIsComitted,
                 isCancelled: normalizedIsCancelled,
+                is_scm: normalizeFlagValue(header.is_scm),
+                is_offset: normalizeFlagValue(header.is_offset),
                 total_amount: header.total_amount,
                 supplier_id: header.supplier_id,
                 category_id: header.category_id,

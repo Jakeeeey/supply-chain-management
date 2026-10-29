@@ -103,6 +103,7 @@ export default function PhysicalInventoryOffsettingWorkspaceClient({ currentUser
                                     selectedHeaderId={selectedHeaderId}
                                     onOpenRecord={handleOpenRecord}
                                     hideCreateButton={true}
+                                    offsetOnly={true}
                                 />
                             </div>
                         </motion.div>

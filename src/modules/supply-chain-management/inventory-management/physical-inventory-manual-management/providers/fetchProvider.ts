@@ -1,5 +1,6 @@
 //src/modules/supply-chain-management/physical-inventory-management/providers/fetchProvider.ts
 import type {
+    PhysicalInventoryAttachmentRow,
     BranchRow,
     CategoryRow,
     DirectusItemResponse,
@@ -982,4 +983,72 @@ export async function fetchNextPhysicalInventoryNumber(): Promise<string> {
     // The first record in numericRows is our true "latest" numeric ID
     const latest = numericRows[0] || rows[0] || null;
     return buildNextPhNoFromLatest(latest?.ph_no);
+}
+
+export async function fetchPhysicalInventoryAttachments(
+    physicalInventoryId: number
+): Promise<PhysicalInventoryAttachmentRow[]> {
+    try {
+        const res = await apiGet<DirectusItemsResponse<PhysicalInventoryAttachmentRow>>(
+            `${API_BASE}/directus/physical_inventory_attachments`,
+            {
+                filter: JSON.stringify({
+                    physical_inventory_id: { _eq: physicalInventoryId },
+                }),
+                sort: "-created_at",
+                fields: "id,physical_inventory_id,directus_file_id,created_by.user_id,created_by.user_fname,created_by.user_lname,created_at",
+            }
+        );
+        return res.data || [];
+    } catch (err) {
+        console.error("fetchPhysicalInventoryAttachments error:", err);
+        return [];
+    }
+}
+
+export async function uploadCountSheetFile(
+    file: File
+): Promise<{ id: string; filename_download?: string } | null> {
+    const formData = new FormData();
+    formData.append("folder_name", "physical_inventory_attachments");
+    formData.append("file", file);
+
+    const response = await fetch(`${API_BASE}/upload`, {
+        method: "POST",
+        body: formData,
+    });
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(`Upload failed with status ${response.status}: ${text}`);
+    }
+
+    const json = await response.json();
+    return json.data || null;
+}
+
+export async function createPhysicalInventoryAttachment(payload: {
+    physical_inventory_id: number;
+    directus_file_id: string;
+    created_by: number;
+}): Promise<PhysicalInventoryAttachmentRow> {
+    const res = await apiPost<typeof payload, DirectusItemResponse<PhysicalInventoryAttachmentRow>>(
+        `${API_BASE}/directus/physical_inventory_attachments`,
+        payload
+    );
+    return res.data;
+}
+
+export async function deletePhysicalInventoryAttachment(
+    attachmentId: number
+): Promise<void> {
+    const url = new URL(`${API_BASE}/directus/physical_inventory_attachments/${attachmentId}`, window.location.origin);
+    const response = await fetch(url.toString(), {
+        method: "DELETE",
+    });
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(`Failed to delete attachment: ${text}`);
+    }
 }

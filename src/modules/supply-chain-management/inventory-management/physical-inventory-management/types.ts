@@ -101,6 +101,8 @@ export type PhysicalInventoryHeaderRow = {
     committed_at: string | null;
     cancelled_at: string | null;
     total_amount: number | null;
+    is_scm?: number | null | { type: string; data: number[] };
+    is_offset?: number | null | { type: string; data: number[] };
     supplier_id: number | null;
     category_id: number | null;
     encoder_id:
@@ -128,6 +130,7 @@ export type PhysicalInventoryDetailRow = {
     difference_cost: number | null;
     amount: number | null;
     offset_match: number | null;
+    offset_remarks?: string | null;
 };
 
 export type PhysicalInventoryDetailRFIDRow = {
@@ -154,6 +157,7 @@ export type PhysicalInventoryHeaderUpsertPayload = {
     committed_at?: string | null;
     cancelled_at?: string | null;
     total_amount?: number | null;
+    is_offset?: number;
 
     // optional future-ready field
     isPending?: number;
@@ -169,6 +173,7 @@ export type PhysicalInventoryDetailUpsertPayload = {
     difference_cost: number | null;
     amount: number | null;
     offset_match: number | null;
+    offset_remarks?: string | null;
 };
 
 export type RunningInventoryApiRow = {

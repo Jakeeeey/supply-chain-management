@@ -53,6 +53,8 @@ export type BulkPhysicalInventoryDetailUpdateItem = {
     variance?: number | null;
     difference_cost?: number | null;
     amount?: number | null;
+    offset_match?: number | null;
+    offset_remarks?: string | null;
 };
 
 async function parseJsonSafe<T>(response: Response): Promise<T> {
@@ -553,7 +555,7 @@ export async function fetchRunningInventoryFiltered(input: RunningInventoryFilte
 export async function fetchPhysicalInventoryList(): Promise<PhysicalInventoryHeaderRow[]> {
     return directusGetItems<PhysicalInventoryHeaderRow>(TABLES.physical_inventory, {
         fields:
-            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,total_amount,supplier_id,category_id,encoder_id.user_id,encoder_id.user_fname,encoder_id.user_lname",
+            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,is_scm,is_offset,total_amount,supplier_id,category_id,encoder_id.user_id,encoder_id.user_fname,encoder_id.user_lname",
         sort: "-id",
         limit: "-1",
     });
@@ -564,7 +566,7 @@ export async function fetchPhysicalInventoryById(
 ): Promise<PhysicalInventoryHeaderRow> {
     return directusGetItem<PhysicalInventoryHeaderRow>(TABLES.physical_inventory, id, {
         fields:
-            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,total_amount,supplier_id,category_id,encoder_id.user_id,encoder_id.user_fname,encoder_id.user_lname",
+            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,is_scm,is_offset,total_amount,supplier_id,category_id,encoder_id.user_id,encoder_id.user_fname,encoder_id.user_lname",
     });
 }
 
@@ -576,7 +578,7 @@ export async function fetchPhysicalInventoryDetails(
             ph_id: { _eq: phId },
         }),
         fields:
-            "id,ph_id,date_encoded,product_id,unit_price,system_count,physical_count,variance,difference_cost,amount,offset_match",
+            "id,ph_id,date_encoded,product_id,unit_price,system_count,physical_count,variance,difference_cost,amount,offset_match,offset_remarks",
         sort: "id",
         limit: "-1",
     });

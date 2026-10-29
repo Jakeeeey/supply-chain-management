@@ -10,12 +10,14 @@ import type {
     PhysicalInventoryOffsettingReportMeta,
 } from "./types";
 import {
-    commitPhysicalInventoryFromOffsetting,
     loadPhysicalInventoryOffsettingSnapshot,
 } from "./providers/fetchProvider";
 import {
-    canEditPhysicalInventory,
-    derivePhysicalInventoryStatus,
+    updatePhysicalInventoryDetailsBulk,
+    updatePhysicalInventoryHeader,
+} from "../physical-inventory-management";
+import {
+    normalizeFlagValue,
 } from "../physical-inventory-management/utils/compute";
 import { printPhysicalInventoryOffsettingReport } from "./utils/printPhysicalInventoryOffsettingReport";
 
@@ -74,9 +76,9 @@ export function PhysicalInventoryOffsettingModule({
                                                       currentUser,
                                                   }: Props) {
     const [isLoading, setIsLoading] = React.useState(true);
-    const [isCommitting, setIsCommitting] = React.useState(false);
+    const [isSaving, setIsSaving] = React.useState(false);
     const [isCreatingGroup, setIsCreatingGroup] = React.useState(false);
-    const [openCommitDialog, setOpenCommitDialog] = React.useState(false);
+    const [openSaveDialog, setOpenSaveDialog] = React.useState(false);
 
     const [header, setHeader] = React.useState<PhysicalInventoryHeaderRow | null>(null);
     const [varianceRows, setVarianceRows] = React.useState<OffsettingSelectableRow[]>([]);
@@ -269,31 +271,79 @@ export function PhysicalInventoryOffsettingModule({
         reportMeta,
         currentUser?.name,
     ]);
-
-    const handleCommit = React.useCallback(async () => {
+    const handleConfirmSave = React.useCallback(async () => {
         if (!header?.id) {
             toast.error("Physical Inventory header is missing.");
             return;
         }
 
         try {
-            setIsCommitting(true);
+            setIsSaving(true);
 
-            const committedHeader = await commitPhysicalInventoryFromOffsetting(header.id);
+            // 1. Validate that all items in the groups have valid detail records
+            for (const group of offsetGroups) {
+                for (const row of [...group.short_rows, ...group.over_rows]) {
+                    const validId = row.detail_id;
+                    if (!validId || !Number.isFinite(validId) || validId <= 0) {
+                        toast.error(
+                            `Product "${row.product_label}" is missing a valid detail record. Please refresh the page.`
+                        );
+                        return;
+                    }
+                }
+            }
 
-            setHeader(committedHeader);
-            setOpenCommitDialog(false);
-            onCommitted?.(committedHeader);
+            // 2. Group-based detail updates for offset_match
+            const updates: Array<{ id: number; offset_match: number | null; offset_remarks?: string | null }> = [];
+            offsetGroups.forEach((group, index) => {
+                const groupMatchNumber = index + 1;
+                const remarks = group.remarks?.trim() || null;
 
-            toast.success("Physical Inventory committed successfully.");
+                group.short_rows.forEach((row) => {
+                    if (row.detail_id) {
+                        updates.push({ id: row.detail_id, offset_match: groupMatchNumber, offset_remarks: remarks });
+                    }
+                });
+                group.over_rows.forEach((row) => {
+                    if (row.detail_id) {
+                        updates.push({ id: row.detail_id, offset_match: groupMatchNumber, offset_remarks: remarks });
+                    }
+                });
+            });
+
+            if (updates.length > 0) {
+                await updatePhysicalInventoryDetailsBulk(updates);
+            }
+
+            // 3. Update header is_offset = 1
+            const updatedHeader = await updatePhysicalInventoryHeader(header.id, {
+                is_offset: 1,
+            });
+
+            setHeader(updatedHeader);
+            setOpenSaveDialog(false);
+            onCommitted?.(updatedHeader);
+
+            toast.success("Offsetting saved successfully.");
+
+            // Full page reload and clean URL so the finished PI is removed from the list and work area is cleared
+            setTimeout(() => {
+                window.location.href = "/scm/inventory-management/physical-inventory/offsetting";
+            }, 800);
         } catch (error) {
             const message =
-                error instanceof Error ? error.message : "Failed to commit Physical Inventory.";
+                error instanceof Error ? error.message : "Failed to save offsetting.";
             toast.error(message);
         } finally {
-            setIsCommitting(false);
+            setIsSaving(false);
         }
-    }, [header?.id, onCommitted]);
+    }, [header?.id, offsetGroups, onCommitted]);
+
+        const handleUpdateRemarks = React.useCallback((groupId: string, remarks: string) => {
+        setOffsetGroups((prev) =>
+            prev.map((group) => (group.id === groupId ? { ...group, remarks } : group))
+        );
+    }, []);
 
     const handleEditOffsetGroup = React.useCallback(
         (groupId: string) => {
@@ -320,29 +370,18 @@ export function PhysicalInventoryOffsettingModule({
         toast.info("Offset group removed.");
     }, []);
 
-    const isPending = React.useMemo(() => {
+    const isOffsettable = React.useMemo(() => {
         if (!header) return false;
-        return canEditPhysicalInventory({
-            isCancelled: header.isCancelled,
-            isComitted: header.isComitted,
-        });
-    }, [header]);
-
-    const statusText = React.useMemo(() => {
-        if (!header) return "";
-        return derivePhysicalInventoryStatus({
-            isCancelled: header.isCancelled,
-            isComitted: header.isComitted,
-        });
+        return normalizeFlagValue(header.isCancelled) !== 1 && normalizeFlagValue(header.is_offset) !== 1;
     }, [header]);
 
     const canCreateGroup =
         selectedShortRows.length > 0 &&
         selectedOverRows.length > 0 &&
         !isCreatingGroup &&
-        isPending;
+        isOffsettable;
 
-    const canCommit = Boolean(header?.id) && !isLoading && !isCommitting && isPending;
+    const canSave = Boolean(header?.id) && !isLoading && !isSaving && isOffsettable && offsetGroups.length > 0;
 
     if (isLoading || !header) {
         return (
@@ -395,7 +434,7 @@ export function PhysicalInventoryOffsettingModule({
                             onClick={() => {
                                 void loadSnapshot();
                             }}
-                            disabled={isLoading || isCommitting}
+                            disabled={isLoading || isSaving}
                         >
                             <RefreshCcw className="mr-2 h-3.5 w-3.5" />
                             Refresh
@@ -406,20 +445,10 @@ export function PhysicalInventoryOffsettingModule({
                             size="sm"
                             className="cursor-pointer"
                             onClick={handlePrintReport}
-                            disabled={isLoading || isCommitting}
+                            disabled={isLoading || isSaving}
                         >
                             <Printer className="mr-2 h-3.5 w-3.5" />
                             Print Report
-                        </Button>
-
-                        <Button
-                            size="sm"
-                            className="cursor-pointer"
-                            onClick={() => setOpenCommitDialog(true)}
-                            disabled={!canCommit}
-                        >
-                            <CheckCircle2 className="mr-2 h-3.5 w-3.5" />
-                            {statusText === "Pending" ? "Commit PI" : statusText}
                         </Button>
                     </div>
                 </div>
@@ -485,7 +514,7 @@ export function PhysicalInventoryOffsettingModule({
                     rows={openShortRows}
                     selectedIds={selectedShortIds}
                     onToggleRow={handleToggleShortRow}
-                    disabled={isCreatingGroup || isCommitting || !isPending}
+                    disabled={isCreatingGroup || isSaving || !isOffsettable}
                 />
 
                 <OffsettingSelectionTable
@@ -494,7 +523,7 @@ export function PhysicalInventoryOffsettingModule({
                     rows={openOverRows}
                     selectedIds={selectedOverIds}
                     onToggleRow={handleToggleOverRow}
-                    disabled={isCreatingGroup || isCommitting || !isPending}
+                    disabled={isCreatingGroup || isSaving || !isOffsettable}
                 />
             </div>
 
@@ -533,6 +562,7 @@ export function PhysicalInventoryOffsettingModule({
                         <div className="flex shrink-0 flex-wrap gap-2">
                             <Button
                                 size="sm"
+                                variant="outline"
                                 className="cursor-pointer"
                                 onClick={() => {
                                     void handleCreateOffsetGroup();
@@ -551,6 +581,24 @@ export function PhysicalInventoryOffsettingModule({
                                     </>
                                 )}
                             </Button>
+                            <Button
+                                size="sm"
+                                className="cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90"
+                                onClick={() => setOpenSaveDialog(true)}
+                                disabled={!canSave}
+                            >
+                                {isSaving ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                        Saving...
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle2 className="mr-2 h-3.5 w-3.5" />
+                                        Save
+                                    </>
+                                )}
+                            </Button>
                         </div>
                     </div>
                 </CardContent>
@@ -564,52 +612,52 @@ export function PhysicalInventoryOffsettingModule({
                     groups={offsetGroups}
                     onEditGroup={handleEditOffsetGroup}
                     onDeleteGroup={handleDeleteOffsetGroup}
-                    isPending={isPending}
-                    disabled={isCommitting}
+                    onUpdateRemarks={handleUpdateRemarks}
+                    isPending={isOffsettable}
+                    disabled={isSaving}
                 />
             </div>
 
-            <AlertDialog open={openCommitDialog} onOpenChange={setOpenCommitDialog}>
+            <AlertDialog open={openSaveDialog} onOpenChange={setOpenSaveDialog}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Commit Physical Inventory?</AlertDialogTitle>
+                        <AlertDialogTitle>Save Offsetting Groups?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will finalize the Physical Inventory and make it read-only.
-                            Unmatched SHORT and OVER rows may still remain, and that is allowed.
+                            Are you sure you want to save and finalize these offset groups? This will mark the Physical Inventory offsetting as completed and record the matched items.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
 
                     <div className="rounded-xl border bg-muted/20 p-3 text-sm">
                         <div className="flex items-center gap-2 font-medium">
                             <ClipboardList className="h-4 w-4" />
-                            Commit Summary
+                            Offset Summary
                         </div>
                         <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
-                            <p>Open SHORT total: ₱ {fmtMoney(unmatchedShortTotal)}</p>
-                            <p>Open OVER total: ₱ {fmtMoney(unmatchedOverTotal)}</p>
                             <p>Offset groups: {offsetGroups.length}</p>
+                            <p>Open SHORT remaining: ₱ {fmtMoney(unmatchedShortTotal)}</p>
+                            <p>Open OVER remaining: ₱ {fmtMoney(unmatchedOverTotal)}</p>
                         </div>
                     </div>
 
                     <AlertDialogFooter>
-                        <AlertDialogCancel className="cursor-pointer" disabled={isCommitting}>
-                            Back
+                        <AlertDialogCancel className="cursor-pointer" disabled={isSaving}>
+                            Cancel
                         </AlertDialogCancel>
                         <AlertDialogAction
                             className="cursor-pointer"
                             onClick={(event) => {
                                 event.preventDefault();
-                                void handleCommit();
+                                void handleConfirmSave();
                             }}
-                            disabled={isCommitting}
+                            disabled={isSaving}
                         >
-                            {isCommitting ? (
+                            {isSaving ? (
                                 <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Committing...
+                                    Saving...
                                 </>
                             ) : (
-                                "Commit PI"
+                                "Confirm Save"
                             )}
                         </AlertDialogAction>
                     </AlertDialogFooter>

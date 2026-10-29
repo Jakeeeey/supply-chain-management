@@ -233,6 +233,16 @@ function renderOffsetGroups(groups: PhysicalInventoryOffsetGroup[]): string {
                     <td class="text-right">${moneyCell(group.over_total, "offset")}</td>
                     <td class="text-right">${moneyCell(group.difference, "offset")}</td>
                 </tr>
+                ${group.remarks?.trim() ? `
+                    <tr class="offset-remarks-row">
+                        <td colspan="6">
+                            <div class="offset-remarks-container">
+                                <span class="offset-remarks-label">Group Remarks:</span>
+                                <span class="offset-remarks-text">${escapeHtml(group.remarks.trim())}</span>
+                            </div>
+                        </td>
+                    </tr>
+                ` : ""}
             `;
         })
         .join("");
@@ -566,6 +576,39 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
 
         .offset-col {
             width: 13%;
+        }
+
+        .offset-remarks-row td {
+            background: #f8fafc;
+            padding: 6px 12px;
+            border-top: 1px dashed #cbd5e1;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .offset-remarks-container {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            font-size: 10px;
+            line-height: 1.4;
+        }
+
+        .offset-remarks-label {
+            font-weight: 700;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-size: 9px;
+            white-space: nowrap;
+            shrink: 0;
+            margin-top: 1px;
+        }
+
+        .offset-remarks-text {
+            color: #1e293b;
+            word-break: break-word;
+            white-space: pre-wrap;
+            flex: 1;
         }
 
         .offset-rows-cell {

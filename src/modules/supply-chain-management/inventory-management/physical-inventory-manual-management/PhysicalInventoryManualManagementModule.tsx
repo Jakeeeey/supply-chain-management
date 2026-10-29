@@ -26,6 +26,7 @@ import {
     buildGroupedPhysicalInventoryRows,
     buildVariantsFromSavedDetails,
     cancelPhysicalInventory,
+    commitPhysicalInventory,
     canEditPhysicalInventory,
     computeAmount,
     computeDifferenceCost,
@@ -39,6 +40,7 @@ import {
     fetchNextPhysicalInventoryNumber,
     fetchPhysicalInventoryById,
     fetchPhysicalInventoryDetails,
+    fetchPhysicalInventoryAttachments,
     fetchPriceTypes,
     fetchProductLookupBundle,
     fetchRunningInventoryFiltered,
@@ -49,6 +51,7 @@ import {
     updatePhysicalInventoryDetailsBulk,
     updatePhysicalInventoryHeader,
     validateLoadProductsFilters,
+    normalizeFlagValue,
     type BulkPhysicalInventoryDetailUpdateItem,
 } from "./index";
 
@@ -64,21 +67,22 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-    ArrowRightCircle,
     Ban,
+    CheckCircle2,
     Boxes,
     ClipboardList,
     Loader2,
     Plus,
     Printer,
+    UploadCloud,
     RefreshCcw,
     Search,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 import {
     PhysicalInventoryAddProductDialog,
+    PhysicalInventoryUploadCountSheetDialog,
     PhysicalInventoryFilters as PhysicalInventoryFiltersCard,
     PhysicalInventoryHeader,
     PhysicalInventoryTable,
@@ -203,16 +207,19 @@ function groupedRowHasUncounted(row: GroupedPhysicalInventoryRow): boolean {
 
 export function PhysicalInventoryManualManagementModule(props: Props) {
     const { initialHeaderId = null, onRecordChange, currentUser } = props;
-    const router = useRouter();
 
     const [isBootLoading, setIsBootLoading] = React.useState(true);
     const [isLoadingProducts, setIsLoadingProducts] = React.useState(false);
     const [isCancelling, setIsCancelling] = React.useState(false);
     const [openCancelDialog, setOpenCancelDialog] = React.useState(false);
+    const [isCommitting, setIsCommitting] = React.useState(false);
+    const [openCommitDialog, setOpenCommitDialog] = React.useState(false);
     const [isHydratingRecord, setIsHydratingRecord] = React.useState(false);
     const [isRebuildingGroups, setIsRebuildingGroups] = React.useState(false);
     const [isSavingDetailBatch, setIsSavingDetailBatch] = React.useState(false);
     const [openAddProductDialog, setOpenAddProductDialog] = React.useState(false);
+    const [openUploadDialog, setOpenUploadDialog] = React.useState(false);
+    const [isCheckingAttachments, setIsCheckingAttachments] = React.useState(false);
     const [isScrolled, setIsScrolled] = React.useState(false);
 
     React.useEffect(() => {
@@ -1292,6 +1299,64 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
         }
     }, [filters, header, rebuildGroupedRows, refreshRunningInventoryReadModel]);
 
+
+    const handleCommitButtonClick = React.useCallback(async () => {
+        if (!header?.id) {
+            toast.error("This PI must exist before commit.");
+            return;
+        }
+
+        try {
+            setIsCheckingAttachments(true);
+            const attachments = await fetchPhysicalInventoryAttachments(header.id);
+            if (!attachments || attachments.length === 0) {
+                toast.error("Please upload a count sheet before committing this Physical Inventory.");
+                return;
+            }
+            setOpenCommitDialog(true);
+        } catch (error) {
+            console.error("Failed to check attachments before commit:", error);
+            toast.error("Please upload a count sheet before committing this Physical Inventory.");
+        } finally {
+            setIsCheckingAttachments(false);
+        }
+    }, [header?.id]);
+
+    const handleCommit = React.useCallback(async () => {
+        if (!header?.id) {
+            toast.error("This PI must exist before commit.");
+            return;
+        }
+
+        if (!canEdit) {
+            toast.error("This PI can no longer be edited.");
+            return;
+        }
+
+        try {
+            setIsCommitting(true);
+
+            const updatedHeader = await commitPhysicalInventory(header.id);
+
+            setHeader(updatedHeader);
+            onRecordChange?.(updatedHeader);
+
+            rebuildGroupedRows({
+                nextDetails: detailRows,
+                nextHeader: updatedHeader,
+                nextFilters: filters,
+            });
+
+            setOpenCommitDialog(false);
+            toast.success("Physical Inventory committed successfully.");
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Failed to commit PI.";
+            toast.error(message);
+        } finally {
+            setIsCommitting(false);
+        }
+    }, [canEdit, detailRows, filters, header?.id, onRecordChange, rebuildGroupedRows]);
+
     const handleCancel = React.useCallback(async () => {
         if (!header?.id) {
             toast.error("This PI must exist before cancel.");
@@ -1372,16 +1437,16 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
 
                         <Button
                             variant="outline"
-                            className="cursor-pointer border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/40"
-                            onClick={() =>
-                                router.push(
-                                    `/scm/inventory-management/physical-inventory/offsetting?id=${header.id}`,
-                                )
-                            }
-                            disabled={!header.id}
+                            className="cursor-pointer border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                            onClick={handleCommitButtonClick}
+                            disabled={!header?.id || !hasLoadedDetails || !canEdit || isCommitting || isCheckingAttachments}
                         >
-                            <ArrowRightCircle className="mr-2 h-4 w-4" />
-                            Go to Offsetting
+                            {isCheckingAttachments ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <CheckCircle2 className="mr-2 h-4 w-4" />
+                            )}
+                            Commit PI
                         </Button>
 
                         <Button
@@ -1430,6 +1495,17 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                         >
                             <Printer className="mr-2 h-4 w-4" />
                             Print Audit Sheet
+                        </Button>
+
+                        <Button
+                            variant="outline"
+                            className="cursor-pointer border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-900/60 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-900/40"
+                            onClick={() => setOpenUploadDialog(true)}
+                            disabled={!header?.id}
+                            title={!header?.id ? "Save PI session first before uploading count sheets." : "Upload Count Sheet"}
+                        >
+                            <UploadCloud className="mr-2 h-4 w-4" />
+                            Upload Count Sheet
                         </Button>
                     </div>
                 </div>
@@ -1800,6 +1876,43 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             />
 
 
+            <AlertDialog open={openCommitDialog} onOpenChange={setOpenCommitDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Commit Physical Inventory?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will finalize the physical count, update stock balances, and lock the record as read-only.
+                            This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel
+                            className="cursor-pointer"
+                            disabled={isCommitting}
+                        >
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                            onClick={(event) => {
+                                event.preventDefault();
+                                void handleCommit();
+                            }}
+                            disabled={isCommitting}
+                        >
+                            {isCommitting ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Committing...
+                                </>
+                            ) : (
+                                "Commit PI"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             <AlertDialog open={openCancelDialog} onOpenChange={setOpenCancelDialog}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -1843,6 +1956,16 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 eligibleVariants={eligibleVariants}
                 existingProductIds={new Set(detailRows.map((d) => d.product_id))}
                 onAdd={handleAddProduct}
+            />
+
+            <PhysicalInventoryUploadCountSheetDialog
+                isOpen={openUploadDialog}
+                onOpenChange={setOpenUploadDialog}
+                physicalInventoryId={header?.id || null}
+                phNo={header?.ph_no}
+                canEdit={canEdit}
+                isCommitted={normalizeFlagValue(header?.isComitted) === 1}
+                currentUserId={currentUser?.id}
             />
 
             {groupedRows.length > 0 && (

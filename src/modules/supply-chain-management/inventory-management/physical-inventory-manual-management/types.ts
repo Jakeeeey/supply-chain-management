@@ -334,3 +334,23 @@ export type DirectusItemsResponse<T> = {
 export type DirectusItemResponse<T> = {
     data: T;
 };
+export type PhysicalInventoryAttachmentRow = {
+    id: number;
+    physical_inventory_id: number;
+    directus_file_id: string;
+    created_by:
+        | number
+        | {
+            user_id: number;
+            user_fname: string | null;
+            user_lname: string | null;
+        }
+        | null;
+    created_at: string;
+    file_details?: {
+        id: string;
+        filename_download: string;
+        filesize: number;
+        type: string;
+    } | null;
+};
