@@ -329,26 +329,6 @@ export async function POST(req: NextRequest) {
         )
       );
 
-      // 3. Create COA budgets linked to this cluster
-      const createdBudgets = [];
-      for (const b of coa_budgets ?? []) {
-        if (!b.coa_id) continue;
-        const bRes = await directusFetch(
-          `${DIRECTUS_URL}${COA_BUDGET_ENDPOINT}`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              cluster_id: newClusterId,
-              coa_id: Number(b.coa_id),
-              budget: Number(b.budget) || 0,
-            }),
-          }
-        ).catch((err) => {
-          console.error("Failed creating cluster_coa_budget item", err);
-          return null;
-        });
-        if (bRes?.data) createdBudgets.push(bRes.data);
-      }
 
       return json({
         data: { ...cluster.data, areas: createdAreas, coa_budgets: createdBudgets },
@@ -469,38 +449,6 @@ export async function PATCH(req: NextRequest) {
       )
     );
 
-    // 4. Delete existing COA budgets for this cluster
-    const existingBudgetsRes = await directusFetch(
-      `${DIRECTUS_URL}${COA_BUDGET_ENDPOINT}?filter[cluster_id][_eq]=${id}&limit=-1`
-    ).catch(() => ({ data: [] }));
-    const existingBudgetIds = ((existingBudgetsRes.data ?? []) as CoaBudget[]).map((b: CoaBudget) => b.id);
-
-    for (const bId of existingBudgetIds) {
-      await directusFetch(`${DIRECTUS_URL}${COA_BUDGET_ENDPOINT}/${bId}`, {
-        method: "DELETE",
-      }).catch(() => {});
-    }
-
-    // 5. Re-create all COA budgets
-    const createdBudgets = [];
-    for (const b of coa_budgets ?? []) {
-      if (!b.coa_id) continue;
-      const bRes = await directusFetch(
-        `${DIRECTUS_URL}${COA_BUDGET_ENDPOINT}`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            cluster_id: parseInt(id),
-            coa_id: Number(b.coa_id),
-            budget: Number(b.budget) || 0,
-          }),
-        }
-      ).catch((err) => {
-        console.error("Failed creating cluster_coa_budget item on patch", err);
-        return null;
-      });
-      if (bRes?.data) createdBudgets.push(bRes.data);
-    }
 
     return json({
       data: { ...cluster.data, areas: createdAreas, coa_budgets: createdBudgets },

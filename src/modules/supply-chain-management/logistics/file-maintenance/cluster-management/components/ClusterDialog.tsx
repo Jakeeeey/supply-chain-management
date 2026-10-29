@@ -90,12 +90,6 @@ export function ClusterDialog({
     listCoaOptions().then(setCoaList);
   }, []);
 
-  const handleOpenChange = (newOpen: boolean) => {
-    if (newOpen) {
-      setCurrentStep(1);
-    }
-    onOpenChange(newOpen);
-  };
 
   // Reset form when dialog opens or selectedCluster changes
   useEffect(() => {
@@ -134,9 +128,7 @@ export function ClusterDialog({
   }, [open, selectedCluster, form]);
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      setCurrentStep(1);
-    }
+    setCurrentStep(1);
     onOpenChange(nextOpen);
   };
 
