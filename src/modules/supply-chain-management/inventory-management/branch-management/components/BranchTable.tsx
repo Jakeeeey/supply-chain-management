@@ -162,6 +162,11 @@ export function BranchTable({
                                     </TableCell>
                                     <TableCell className="text-right pr-6">
                                         <div className="flex justify-end gap-2">
+                                            {(branch.isMain === 1 || branch.isMain === true) && (
+                                                <Badge variant="default" className="text-[9px] uppercase font-black tracking-tighter bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/20 border-none">
+                                                    Main
+                                                </Badge>
+                                            )}
                                             {branch.isMoving ? (
                                                 <Badge variant="outline" className="text-[9px] uppercase font-black tracking-tighter bg-amber-500/10 text-amber-500 border-amber-500/20">
                                                     Moving

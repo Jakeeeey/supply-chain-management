@@ -38,12 +38,14 @@ interface AutoTablePageData {
 }
 
 type CopyType = 'office' | 'delivery';
+export type PaperSize = 'a4' | 'legal';
 
 export const generatePickerPDF = async (
     groupedManifest: Record<string, PickerItem[]>,
     batchNo: string,
     totalSalesOrderAmount?: number,
-    includeDeliveryCopy: boolean = false
+    includeDeliveryCopy: boolean = false,
+    paperSize: PaperSize = 'a4'
 ) => {
 
     // ✅ Dynamically import libraries and use strict type casting
@@ -53,7 +55,10 @@ export const generatePickerPDF = async (
     const autoTableModule = await import("jspdf-autotable");
     const autoTable = (autoTableModule.default || autoTableModule) as unknown as typeof import("jspdf-autotable").default;
 
-    const doc = new JsPDFClass();
+    const doc = new JsPDFClass({
+        format: paperSize,
+        orientation: 'portrait'
+    });
 
     const renderSingleSheet = (
         pickerName: string,
@@ -118,40 +123,40 @@ export const generatePickerPDF = async (
             doc.text(badgeText, 14 + batchNoWidth + 4, baseTopY);
         }
 
-        doc.setFontSize(7).setFont("helvetica", "normal").setTextColor(80, 80, 80);
+        doc.setFontSize(8.5).setFont("helvetica", "normal").setTextColor(80, 80, 80);
         doc.text(new Date().toLocaleDateString(), 198, baseTopY, { align: 'right' });
 
-        doc.setFontSize(8).setFont("helvetica", "bold").setTextColor(0, 0, 0);
-        doc.text(`Picker:`, 14, baseTopY + 4);
+        doc.setFontSize(9).setFont("helvetica", "bold").setTextColor(0, 0, 0);
+        doc.text(`Picker:`, 14, baseTopY + 4.5);
         doc.setFont("helvetica", "normal");
-        doc.text(`${pickerName.toUpperCase()}`, 25, baseTopY + 4);
+        doc.text(`${pickerName.toUpperCase()}`, 27, baseTopY + 4.5);
 
         // Render PDPs in Header
         doc.setFont("helvetica", "bold").setTextColor(80, 80, 80);
-        doc.text(`PDPs:`, 14, baseTopY + 8);
+        doc.text(`PDPs:`, 14, baseTopY + 9);
         doc.setFont("helvetica", "normal");
         const splitPdps = doc.splitTextToSize(pdpListString || "N/A", 160);
-        doc.text(splitPdps, 23, baseTopY + 8);
+        doc.text(splitPdps, 25, baseTopY + 9);
 
-        let nextY = baseTopY + 8 + (splitPdps.length * 3.5);
+        let nextY = baseTopY + 9 + (splitPdps.length * 4);
 
         // Render Drivers in Header
         doc.setFont("helvetica", "bold").setTextColor(80, 80, 80);
         doc.text(`Drivers:`, 14, nextY);
         doc.setFont("helvetica", "normal");
         const splitDrivers = doc.splitTextToSize(driverListString || "UNASSIGNED", 160);
-        doc.text(splitDrivers, 25, nextY);
+        doc.text(splitDrivers, 27, nextY);
 
-        nextY += (splitDrivers.length * 3.5);
+        nextY += (splitDrivers.length * 4);
 
         // Render UOM Totals in Header
         doc.setFont("helvetica", "bold").setTextColor(0, 0, 0);
         doc.text(`Totals:`, 14, nextY);
         doc.setFont("helvetica", "bold").setTextColor(10, 10, 10);
         const splitSummary = doc.splitTextToSize(summaryString || "N/A", 160);
-        doc.text(splitSummary, 25, nextY);
+        doc.text(splitSummary, 27, nextY);
 
-        nextY += (splitSummary.length * 3.5);
+        nextY += (splitSummary.length * 4);
 
         // Render Total Sales Order Amount in Header
         if (totalSalesOrderAmount !== undefined) {
@@ -159,11 +164,11 @@ export const generatePickerPDF = async (
             doc.text(`Consolidation Total:`, 14, nextY);
             doc.setFont("helvetica", "normal");
             const formattedTotal = `PHP ${totalSalesOrderAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            doc.text(formattedTotal, 45, nextY);
-            nextY += 4;
+            doc.text(formattedTotal, 48, nextY);
+            nextY += 4.5;
         }
 
-        const tableStartY = nextY + 2;
+        const tableStartY = nextY + 2.5;
 
         // --- 3. FLAT DATA PROCESSING WITH SPACE OPTIMIZATIONS ---
         const tableRows: TableCell[][] = [];
@@ -211,34 +216,34 @@ export const generatePickerPDF = async (
             head: [["", "CATEGORY", "BRAND", "DESCRIPTION", "UNIT", "QTY", "TOTAL AMOUNT"]],
             body: tableRows,
             theme: "plain",
-            headStyles: { textColor: [0, 0, 0], fontStyle: "bold", fontSize: 6.5, cellPadding: 0.6, lineWidth: { bottom: 0.2 }, lineColor: [0, 0, 0] },
+            headStyles: { textColor: [0, 0, 0], fontStyle: "bold", fontSize: 8, cellPadding: 1.2, lineWidth: { bottom: 0.2 }, lineColor: [0, 0, 0] },
             styles: {
-                fontSize: 6.5,
-                cellPadding: 0.6,
+                fontSize: 8,
+                cellPadding: 1.2,
                 textColor: [0, 0, 0],
                 lineColor: [220, 220, 220],
                 lineWidth: { bottom: 0.1 },
                 overflow: 'linebreak'
             },
             columnStyles: {
-                0: { cellWidth: 6 },
-                1: { cellWidth: 20 },
-                2: { cellWidth: 20 },
+                0: { cellWidth: 7 },
+                1: { cellWidth: 22 },
+                2: { cellWidth: 22 },
                 3: { cellWidth: 'auto' },
-                4: { cellWidth: 12, halign: 'center' },
-                5: { cellWidth: 10, halign: 'center', fontStyle: 'bold' },
-                6: { cellWidth: 25, halign: 'right', fontStyle: 'bold' }
+                4: { cellWidth: 14, halign: 'center' },
+                5: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },
+                6: { cellWidth: 28, halign: 'right', fontStyle: 'bold' }
             },
             didDrawCell: (data: AutoTableCellData) => {
                 if (data.column.index === 0 && data.cell.section === 'body' && data.cell.raw === "") {
-                    const size = 3;
+                    const size = 3.6;
                     const x = data.cell.x + (data.cell.width / 2) - (size / 2);
                     const y = data.cell.y + (data.cell.height / 2) - (size / 2);
-                    doc.setLineWidth(0.1).setDrawColor(0).rect(x, y, size, size);
+                    doc.setLineWidth(0.15).setDrawColor(0).rect(x, y, size, size);
                 }
             },
             didDrawPage: (data: AutoTablePageData) => {
-                doc.setFontSize(7).setTextColor(161, 161, 170);
+                doc.setFontSize(7.5).setTextColor(161, 161, 170);
                 const copyFooter = includeDeliveryCopy
                     ? ` | ${copyType === 'delivery' ? 'DELIVERY COPY' : 'OFFICE COPY'}`
                     : '';
@@ -249,8 +254,9 @@ export const generatePickerPDF = async (
         // --- 5. TIGHT FOOTER SIGNATURES ---
         const extendedDoc = doc as import("jspdf").jsPDF & { lastAutoTable: { finalY: number } };
         let finalY = extendedDoc.lastAutoTable.finalY + 8;
+        const pageHeight = doc.internal.pageSize.height;
 
-        if (finalY > 275) {
+        if (finalY > (pageHeight - 22)) {
             doc.addPage();
             finalY = 20;
         }
@@ -258,11 +264,11 @@ export const generatePickerPDF = async (
         doc.setDrawColor(0, 0, 0);
         doc.setLineWidth(0.2);
         doc.line(14, finalY + 5, 70, finalY + 5);
-        doc.setFontSize(6).setTextColor(50, 50, 50).text("PICKER CONFIRMATION", 14, finalY + 8);
-        doc.setFontSize(8).setFont("helvetica", "bold").setTextColor(0, 0, 0).text(pickerName, 14, finalY + 3.5);
+        doc.setFontSize(7.5).setTextColor(50, 50, 50).text("PICKER CONFIRMATION", 14, finalY + 8.5);
+        doc.setFontSize(8.5).setFont("helvetica", "bold").setTextColor(0, 0, 0).text(pickerName, 14, finalY + 3.5);
 
         doc.line(130, finalY + 5, 186, finalY + 5);
-        doc.setFontSize(6).setTextColor(50, 50, 50).text("VERIFICATION OFFICER", 130, finalY + 8);
+        doc.setFontSize(7.5).setTextColor(50, 50, 50).text("VERIFICATION OFFICER", 130, finalY + 8.5);
 
         return finalY + 12;
     };
@@ -298,7 +304,8 @@ export const generatePickerPDF = async (
         // Render Delivery Copy if enabled
         if (includeDeliveryCopy) {
             // Check if Delivery Copy can fit in the lower half of the page
-            if (officeEndHeight <= 135) {
+            const halfPageThreshold = (doc.internal.pageSize.height / 2) - 13.5;
+            if (officeEndHeight <= halfPageThreshold) {
                 const cutY = officeEndHeight + 5;
                 drawCutLine(cutY);
                 renderSingleSheet(pickerName, items, 'delivery', cutY + 8);
