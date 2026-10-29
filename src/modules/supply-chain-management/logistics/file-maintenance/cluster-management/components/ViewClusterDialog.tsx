@@ -143,45 +143,63 @@ export function ViewClusterDialog({
                 No areas defined for this cluster.
               </div>
             )}
-          </div>
+          </TabsContent>
 
-          <Separator />
-
-          <div className="space-y-3">
-            <h4 className="text-sm font-semibold">Chart of Account Budgets</h4>
+          {/* Tab 2: Budgets */}
+          <TabsContent value="budgets" className="flex-1 min-h-0 overflow-y-auto mt-3 space-y-3">
             {cluster.coa_budgets && cluster.coa_budgets.length > 0 ? (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>GL Code</TableHead>
-                      <TableHead>Account Title</TableHead>
-                      <TableHead className="text-right">Budget (PHP)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {cluster.coa_budgets.map((b, idx) => (
-                      <TableRow key={b.id ?? idx}>
-                        <TableCell className="font-mono text-xs">{b.gl_code || "-"}</TableCell>
-                        <TableCell className="font-medium">{b.account_title || `COA #${b.coa_id}`}</TableCell>
-                        <TableCell className="text-right font-medium tabular-nums">
-                          {Number(b.budget).toLocaleString("en-PH", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </TableCell>
+              <>
+                <div className="rounded-md border overflow-hidden">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
+                      <TableRow>
+                        <TableHead className="w-[140px]">GL Code</TableHead>
+                        <TableHead>Account Title</TableHead>
+                        <TableHead className="w-[180px] text-right">Budget (PHP)</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {cluster.coa_budgets.map((b, idx) => (
+                        <TableRow key={b.id ?? idx}>
+                          <TableCell className="font-mono text-xs text-muted-foreground font-medium">
+                            {b.gl_code || "-"}
+                          </TableCell>
+                          <TableCell className="font-medium text-sm">
+                            {b.account_title || `COA #${b.coa_id}`}
+                          </TableCell>
+                          <TableCell className="text-right font-medium tabular-nums text-sm">
+                            {Number(b.budget).toLocaleString("en-PH", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Total Summary Banner in Budgets Tab */}
+                <div className="rounded-lg bg-muted/60 p-3 flex items-center justify-between text-sm border">
+                  <span className="text-muted-foreground font-medium">
+                    Total Allocated Budget:
+                  </span>
+                  <span className="font-semibold tabular-nums text-foreground text-base">
+                    PHP{" "}
+                    {totalAllocatedBudget.toLocaleString("en-PH", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+              </>
             ) : (
-              <p className="text-sm text-muted-foreground italic">
-                No account budgets allocated.
-              </p>
+              <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground text-sm">
+                No Chart of Account budgets allocated for this cluster.
+              </div>
             )}
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
