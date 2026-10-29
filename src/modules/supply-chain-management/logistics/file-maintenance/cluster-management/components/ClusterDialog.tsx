@@ -90,7 +90,14 @@ export function ClusterDialog({
     listCoaOptions().then(setCoaList);
   }, []);
 
-  // Reset form when dialog opens
+  const handleOpenChange = (newOpen: boolean) => {
+    if (newOpen) {
+      setCurrentStep(1);
+    }
+    onOpenChange(newOpen);
+  };
+
+  // Reset form when dialog opens or selectedCluster changes
   useEffect(() => {
     if (open) {
       if (selectedCluster) {
@@ -161,7 +168,16 @@ export function ClusterDialog({
     }
   };
 
-  const onInvalid = () => {
+  const onInvalid = (errors: Record<string, unknown>) => {
+    // If errors are exclusively in Step 1, navigate user to Step 1
+    const hasStep1Errors = !!(errors.cluster_name || errors.minimum_amount || errors.areas);
+    const hasStep2Errors = !!errors.coa_budgets;
+
+    if (hasStep1Errors && !hasStep2Errors) {
+      setCurrentStep(1);
+    } else if (hasStep2Errors && !hasStep1Errors) {
+      setCurrentStep(2);
+    }
     toast.error("Please fix the highlighted fields before saving.", { duration: 4000 });
   };
 

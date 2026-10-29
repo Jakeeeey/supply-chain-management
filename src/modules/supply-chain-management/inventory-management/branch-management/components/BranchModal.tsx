@@ -58,6 +58,7 @@ const formSchema = z.object({
     postal_code: z.string().min(1, "Zip Code is required"),
     isMoving: z.boolean(),
     isActive: z.boolean(),
+    isMain: z.boolean(),
 });
 
 interface BranchModalProps {
@@ -137,6 +138,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch, 
             postal_code: "",
             isMoving: false,
             isActive: true,
+            isMain: false,
         },
     });
 
@@ -178,6 +180,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch, 
                     postal_code: editingBranch.postal_code || "",
                     isMoving: editingBranch.isMoving === 1 || editingBranch.isMoving === true,
                     isActive: editingBranch.isActive === 1 || editingBranch.isActive === true,
+                    isMain: editingBranch.isMain === 1 || editingBranch.isMain === true,
                 });
 
                 if (provinces.length > 0) {
@@ -196,6 +199,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch, 
                     postal_code: "",
                     isMoving: false,
                     isActive: true,
+                    isMain: false,
                 });
             }
         }
@@ -683,6 +687,25 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch, 
                                             </FormControl>
                                             <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80 cursor-pointer">
                                                 is Active?
+                                            </FormLabel>
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <FormField
+                                    control={form.control}
+                                    name="isMain"
+                                    render={({ field }) => (
+                                        <FormItem className="flex flex-row items-center space-x-2.5 space-y-0">
+                                            <FormControl>
+                                                <Checkbox
+                                                    checked={field.value}
+                                                    onCheckedChange={field.onChange}
+                                                    className="data-[state=checked]:bg-primary"
+                                                />
+                                            </FormControl>
+                                            <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80 cursor-pointer">
+                                                is Main?
                                             </FormLabel>
                                         </FormItem>
                                     )}

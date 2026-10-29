@@ -14,6 +14,7 @@ export interface Branch {
     isReturn: number | boolean;
     isBadStock: number | boolean;
     isActive: number | boolean;
+    isMain?: number | boolean;
 }
 
 export interface User {
