@@ -67,6 +67,7 @@ export interface SalesInvoice {
   invoice_date: string;
   total_amount: number;
   payment_status: string;
+  isReplaced?: boolean | number;
 }
 
 // UI Models
