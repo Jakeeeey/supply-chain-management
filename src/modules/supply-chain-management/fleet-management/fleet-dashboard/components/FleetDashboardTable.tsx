@@ -95,6 +95,13 @@ function StatusBadge({ status }: { status: string }) {
       </Badge>
     );
   }
+  if (s.includes("maintenance")) {
+    return (
+      <Badge variant="outline" className="border-amber-500/50 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 font-normal">
+        {status}
+      </Badge>
+    );
+  }
   if (s.includes("active") || s.includes("completed") || s.includes("approved")) {
     return (
       <Badge variant="default" className="bg-emerald-600/90 hover:bg-emerald-600 text-white font-normal">
@@ -149,6 +156,7 @@ export function FleetDashboardTable({
                 <TableHead>Contact Phone</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead className="w-[140px]">License No.</TableHead>
+                <TableHead className="w-[120px]">Status</TableHead>
               </TableRow>
             )}
 
@@ -234,6 +242,9 @@ export function FleetDashboardTable({
                       <TableCell className="text-muted-foreground">{d.contact || "—"}</TableCell>
                       <TableCell className="text-muted-foreground">{d.email || "—"}</TableCell>
                       <TableCell className="font-mono text-xs">{d.license_no}</TableCell>
+                      <TableCell>
+                        <StatusBadge status={d.status || "Available"} />
+                      </TableCell>
                     </TableRow>
                   );
                 }
