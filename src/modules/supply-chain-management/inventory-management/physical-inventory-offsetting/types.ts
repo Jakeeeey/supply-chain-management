@@ -22,6 +22,7 @@ export type PhysicalInventoryOffsetGroup = {
     short_total: number;
     over_total: number;
     difference: number;
+    remarks?: string;
 };
 
 export type PhysicalInventoryOffsettingReportMeta = {

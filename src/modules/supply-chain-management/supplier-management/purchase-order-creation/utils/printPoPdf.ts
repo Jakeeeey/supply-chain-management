@@ -26,6 +26,7 @@ export interface POCreationPrintData {
     ewt: number;
     total: number;
     isInvoice?: boolean;
+    expectedReceivedDate?: string | null;
 }
 
 export async function printPOCreationPdf(data: POCreationPrintData) {
@@ -48,6 +49,7 @@ export async function printPOCreationPdf(data: POCreationPrintData) {
         const mappedPo = {
             poNumber: data.poNumber,
             date: data.poDate,
+            expected_received_date: data.expectedReceivedDate,
             preparerName: data.preparerName,
             items: data.items.map(item => ({
                 name: item.name,

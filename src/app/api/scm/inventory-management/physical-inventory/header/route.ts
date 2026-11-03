@@ -1,4 +1,4 @@
-//src/app/api/scm/physical-inventory/header/route.ts
+//src/app/api/scm/inventory-management/physical-inventory/header/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -100,6 +100,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             total_amount: Number.isFinite(Number(body.total_amount))
                 ? Number(body.total_amount)
                 : 0,
+            is_scm: 1,
         };
 
         const upstream = new URL("/items/physical_inventory", DIRECTUS_BASE_URL);

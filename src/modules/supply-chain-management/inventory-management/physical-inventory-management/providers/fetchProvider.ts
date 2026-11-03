@@ -53,6 +53,8 @@ export type BulkPhysicalInventoryDetailUpdateItem = {
     variance?: number | null;
     difference_cost?: number | null;
     amount?: number | null;
+    offset_match?: number | null;
+    offset_remarks?: string | null;
 };
 
 async function parseJsonSafe<T>(response: Response): Promise<T> {
@@ -239,25 +241,25 @@ export function getSupplierScopedCategoriesFromLookup(
     supplierId: number,
     lookup: ProductLookupBundle,
 ): CategoryRow[] {
+    const sId = Number(supplierId);
     const allowedProductIds = new Set(
         lookup.product_per_supplier
-            .filter((row) => row.supplier_id === supplierId)
-            .map((row) => row.product_id),
+            .filter((row) => Number(row.supplier_id) === sId)
+            .map((row) => Number(row.product_id)),
     );
 
     const categoryIds = new Set(
         lookup.products
             .filter(
                 (product) =>
-                    product.isActive === 1 &&
-                    allowedProductIds.has(product.product_id) &&
+                    allowedProductIds.has(Number(product.product_id)) &&
                     product.product_category !== null,
             )
-            .map((product) => product.product_category as number),
+            .map((product) => Number(product.product_category)),
     );
 
     const realScopedCategories = lookup.categories.filter((category) =>
-        categoryIds.has(category.category_id),
+        categoryIds.has(Number(category.category_id)),
     );
 
     const allCategory = lookup.categories.find((category) =>
@@ -268,7 +270,7 @@ export function getSupplierScopedCategoriesFromLookup(
         ? [
             allCategory,
             ...realScopedCategories.filter(
-                (row) => row.category_id !== allCategory.category_id,
+                (row) => Number(row.category_id) !== Number(allCategory.category_id),
             ),
         ]
         : realScopedCategories;
@@ -391,90 +393,93 @@ export function buildEligibleVariants(input: {
     lookup: ProductLookupBundle;
 }): EligibleVariantRow[] {
     const { supplierId, categoryId, priceTypeId, lookup } = input;
+    const sId = Number(supplierId);
+    const cId = Number(categoryId);
+    const pId = Number(priceTypeId);
 
     const selectedCategory = lookup.categories.find(
-        (row) => row.category_id === categoryId,
+        (row: CategoryRow) => Number(row.category_id) === cId,
     );
     const isAllCategory = isAllCategoryName(selectedCategory?.category_name);
 
     const directlyEligibleBySupplier = new Set(
         lookup.product_per_supplier
-            .filter((row) => row.supplier_id === supplierId)
-            .map((row) => row.product_id),
+            .filter((row: ProductPerSupplierRow) => Number(row.supplier_id) === sId)
+            .map((row: ProductPerSupplierRow) => Number(row.product_id)),
     );
 
     // If any member of a family is mapped to the supplier, the whole family is considered eligible
     const eligibleFamilyKeys = new Set<number>();
     for (const productId of directlyEligibleBySupplier) {
-        const product = lookup.products.find((p) => p.product_id === productId);
+        const product = lookup.products.find((p: ProductRow) => Number(p.product_id) === productId);
         if (product) {
             eligibleFamilyKeys.add(
-                (product.parent_id && product.parent_id > 0)
+                Number(product.parent_id && product.parent_id > 0
                     ? product.parent_id
-                    : product.product_id
+                    : product.product_id)
             );
         }
     }
 
     const priceMap = new Map<number, ProductPerPriceTypeRow>();
     for (const row of lookup.product_per_price_type) {
-        if (row.price_type_id === priceTypeId) {
-            priceMap.set(row.product_id, row);
+        if (Number(row.price_type_id) === pId) {
+            priceMap.set(Number(row.product_id), row);
         }
     }
 
     const categoryMap = new Map<number, CategoryRow>();
     for (const row of lookup.categories) {
-        categoryMap.set(row.category_id, row);
+        categoryMap.set(Number(row.category_id), row);
     }
 
     const unitMap = new Map<number, UnitRow>();
     for (const row of lookup.units) {
-        unitMap.set(row.unit_id, row);
+        unitMap.set(Number(row.unit_id), row);
     }
 
     return lookup.products
-        .filter((product) => product.isActive === 1)
-        .filter((product) => {
-            const familyKey = (product.parent_id && product.parent_id > 0)
+        .filter((product: ProductRow) => {
+            const familyKey = Number(product.parent_id && product.parent_id > 0
                 ? product.parent_id
-                : product.product_id;
+                : product.product_id);
             return eligibleFamilyKeys.has(familyKey);
         })
-        .filter((product) => {
+        .filter((product: ProductRow) => {
             if (isAllCategory) return true;
-            return product.product_category === categoryId;
+            return Number(product.product_category) === cId;
         })
-        .filter((product) => priceMap.has(product.product_id))
-        .map((product) => {
-            const priceRow = priceMap.get(product.product_id) ?? null;
+        .map((product: ProductRow) => {
+            const productIdNum = Number(product.product_id);
+            const priceRow = priceMap.get(productIdNum) ?? null;
             const category =
                 product.product_category !== null
-                    ? categoryMap.get(product.product_category) ?? null
+                    ? categoryMap.get(Number(product.product_category)) ?? null
                     : null;
             const unit =
                 product.unit_of_measurement !== null
-                    ? unitMap.get(product.unit_of_measurement) ?? null
+                    ? unitMap.get(Number(product.unit_of_measurement)) ?? null
                     : null;
 
             return {
-                product_id: product.product_id,
-                parent_id: product.parent_id,
+                product_id: productIdNum,
+                parent_id: product.parent_id ? Number(product.parent_id) : null,
                 product_code: product.product_code,
                 product_name: product.product_name,
                 barcode: product.barcode,
-                category_id: product.product_category,
+                category_id: product.product_category ? Number(product.product_category) : null,
                 category_name: category?.category_name ?? null,
-                unit_id: product.unit_of_measurement,
+                unit_id: product.unit_of_measurement ? Number(product.unit_of_measurement) : null,
                 unit_name: unit?.unit_name ?? null,
                 unit_shortcut: unit?.unit_shortcut ?? null,
-                unit_order: unit?.order ?? null,
+                unit_order: unit?.order ? Number(unit.order) : null,
                 unit_count: normalizeUnitCount(product.unit_of_measurement_count),
                 unit_price: priceRow?.price ?? null,
-                cost_per_unit: product.cost_per_unit,
+                cost_per_unit: product.cost_per_unit ? Number(product.cost_per_unit) : null,
+                brand_name: null,
             };
         })
-        .sort((a, b) => {
+        .sort((a: EligibleVariantRow, b: EligibleVariantRow) => {
             const nameDiff = a.product_name.localeCompare(b.product_name);
             if (nameDiff !== 0) return nameDiff;
             return a.product_id - b.product_id;
@@ -496,18 +501,47 @@ export async function fetchRunningInventoryByBranch(
     return Array.isArray(rows) ? rows.map(mapRunningInventoryRow) : [];
 }
 
-export async function fetchRunningInventoryFiltered(input: {
+export type RunningInventoryFilterInput = {
     branchName: string;
-    supplierShortcut: string;
+    supplierShortcut?: string;
     productCategory?: string;
-}): Promise<RunningInventoryRow[]> {
+    cutOffDate?: string;
+};
+
+/**
+ * Converts a datetime string to a proper UTC ISO string for server-side comparison.
+ *
+ * IMPORTANT: This runs in the BROWSER (client-side), not on the server.
+ * The browser already interprets bare datetime strings (e.g. "2026-05-16T05:06:00"
+ * with no timezone suffix) as LOCAL time (UTC+8 for PH users).
+ * So new Date("2026-05-16T05:06:00").getTime() already gives the correct UTC ms.
+ * We MUST NOT manually subtract 8 hours — that would double-convert and make the
+ * cutoff 8 hours too early, allowing after-cutoff transactions to slip through.
+ */
+function toUtcIsoString(localDateStr: string): string {
+    const trimmed = localDateStr.trim();
+    const d = new Date(trimmed);
+    if (isNaN(d.getTime())) return trimmed; // fallback: return as-is if unparseable
+    // .toISOString() always produces a UTC 'Z' string from the internal UTC ms value
+    return d.toISOString();
+}
+
+export async function fetchRunningInventoryFiltered(input: RunningInventoryFilterInput): Promise<RunningInventoryRow[]> {
     const params: Record<string, string> = {
         branchName: input.branchName,
-        supplierShortcut: input.supplierShortcut,
     };
+
+    if (input.supplierShortcut && input.supplierShortcut.trim()) {
+        params.supplierShortcut = input.supplierShortcut.trim();
+    }
 
     if (input.productCategory && input.productCategory.trim()) {
         params.productCategory = input.productCategory.trim();
+    }
+
+    if (input.cutOffDate && input.cutOffDate.trim()) {
+        // Normalize to UTC before sending to the API
+        params.cutOffDate = toUtcIsoString(input.cutOffDate.trim());
     }
 
     const rows = await apiGet<RunningInventoryApiRow[]>(
@@ -521,7 +555,7 @@ export async function fetchRunningInventoryFiltered(input: {
 export async function fetchPhysicalInventoryList(): Promise<PhysicalInventoryHeaderRow[]> {
     return directusGetItems<PhysicalInventoryHeaderRow>(TABLES.physical_inventory, {
         fields:
-            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,total_amount,supplier_id,category_id,encoder_id.user_id,encoder_id.user_fname,encoder_id.user_lname",
+            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,is_scm,is_offset,total_amount,supplier_id,category_id,encoder_id.user_id,encoder_id.user_fname,encoder_id.user_lname",
         sort: "-id",
         limit: "-1",
     });
@@ -532,7 +566,7 @@ export async function fetchPhysicalInventoryById(
 ): Promise<PhysicalInventoryHeaderRow> {
     return directusGetItem<PhysicalInventoryHeaderRow>(TABLES.physical_inventory, id, {
         fields:
-            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,total_amount,supplier_id,category_id,encoder_id.user_id,encoder_id.user_fname,encoder_id.user_lname",
+            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,is_scm,is_offset,total_amount,supplier_id,category_id,encoder_id.user_id,encoder_id.user_fname,encoder_id.user_lname",
     });
 }
 
@@ -544,7 +578,7 @@ export async function fetchPhysicalInventoryDetails(
             ph_id: { _eq: phId },
         }),
         fields:
-            "id,ph_id,date_encoded,product_id,unit_price,system_count,physical_count,variance,difference_cost,amount,offset_match",
+            "id,ph_id,date_encoded,product_id,unit_price,system_count,physical_count,variance,difference_cost,amount,offset_match,offset_remarks",
         sort: "id",
         limit: "-1",
     });
@@ -796,10 +830,10 @@ export function buildVariantsFromSavedDetails(input: {
 
     const detailMap = new Map<number, PhysicalInventoryDetailRow>();
     for (const detail of details) {
-        detailMap.set(detail.product_id, detail);
+        detailMap.set(Number(detail.product_id), detail);
     }
 
-    const productIds = new Set(details.map((row) => row.product_id));
+    const productIds = new Set(details.map((row) => Number(row.product_id)));
 
     const categoryMap = new Map<number, CategoryRow>();
     for (const row of lookup.categories) {
@@ -819,34 +853,36 @@ export function buildVariantsFromSavedDetails(input: {
     }
 
     return lookup.products
-        .filter((product) => productIds.has(product.product_id))
+        .filter((product) => productIds.has(Number(product.product_id)))
         .map((product) => {
-            const detail = detailMap.get(product.product_id);
+            const productIdNum = Number(product.product_id);
+            const detail = detailMap.get(productIdNum);
             const category =
                 product.product_category !== null
-                    ? categoryMap.get(product.product_category) ?? null
+                    ? categoryMap.get(Number(product.product_category)) ?? null
                     : null;
             const unit =
                 product.unit_of_measurement !== null
-                    ? unitMap.get(product.unit_of_measurement) ?? null
+                    ? unitMap.get(Number(product.unit_of_measurement)) ?? null
                     : null;
-            const priceRow = priceMap.get(product.product_id) ?? null;
+            const priceRow = priceMap.get(productIdNum) ?? null;
 
             return {
-                product_id: product.product_id,
-                parent_id: product.parent_id,
+                product_id: productIdNum,
+                parent_id: product.parent_id ? Number(product.parent_id) : null,
                 product_code: product.product_code,
                 product_name: product.product_name,
                 barcode: product.barcode,
-                category_id: product.product_category,
+                category_id: product.product_category ? Number(product.product_category) : null,
                 category_name: category?.category_name ?? null,
-                unit_id: product.unit_of_measurement,
+                unit_id: product.unit_of_measurement ? Number(product.unit_of_measurement) : null,
                 unit_name: unit?.unit_name ?? null,
                 unit_shortcut: unit?.unit_shortcut ?? null,
-                unit_order: unit?.order ?? null,
+                unit_order: unit?.order ? Number(unit.order) : null,
                 unit_count: normalizeUnitCount(product.unit_of_measurement_count),
                 unit_price: detail?.unit_price ?? priceRow?.price ?? null,
                 cost_per_unit: product.cost_per_unit,
+                brand_name: null,
             };
         })
         .sort((a, b) => {
@@ -942,25 +978,21 @@ export async function prepareLoadProductsData(input: {
 
 export function resolveRunningInventoryFilterParams(input: {
     branchId: number;
-    supplierId: number;
+    supplierId?: number | null;
     categoryId: number;
     branches: BranchRow[];
     suppliers: SupplierRow[];
     lookup: ProductLookupBundle;
-}): {
-    branchName: string;
-    supplierShortcut: string;
-    productCategory?: string;
-} {
+    cutOffDate?: string | null;
+}): RunningInventoryFilterInput {
     const branch = input.branches.find((row) => row.id === input.branchId);
     if (!branch?.branch_name?.trim()) {
         throw new Error("Unable to resolve branch name for running inventory filter.");
     }
 
-    const supplier = input.suppliers.find((row) => row.id === input.supplierId);
-    if (!supplier?.supplier_shortcut?.trim()) {
-        throw new Error("Unable to resolve supplier shortcut for running inventory filter.");
-    }
+    const supplier = input.supplierId 
+        ? input.suppliers.find((row) => row.id === input.supplierId)
+        : null;
 
     const category = input.lookup.categories.find(
         (row) => row.category_id === input.categoryId,
@@ -973,8 +1005,9 @@ export function resolveRunningInventoryFilterParams(input: {
 
     return {
         branchName: branch.branch_name.trim(),
-        supplierShortcut: supplier.supplier_shortcut.trim(),
+        ...(supplier?.supplier_shortcut?.trim() ? { supplierShortcut: supplier.supplier_shortcut.trim() } : {}),
         ...(isAllCategory ? {} : { productCategory: category.category_name.trim() }),
+        ...(input.cutOffDate?.trim() ? { cutOffDate: input.cutOffDate.trim() } : {}),
     };
 }
 function extractTrailingNumber(value: string): number | null {

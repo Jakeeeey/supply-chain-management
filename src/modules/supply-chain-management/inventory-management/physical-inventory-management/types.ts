@@ -101,6 +101,8 @@ export type PhysicalInventoryHeaderRow = {
     committed_at: string | null;
     cancelled_at: string | null;
     total_amount: number | null;
+    is_scm?: number | null | { type: string; data: number[] };
+    is_offset?: number | null | { type: string; data: number[] };
     supplier_id: number | null;
     category_id: number | null;
     encoder_id:
@@ -128,6 +130,7 @@ export type PhysicalInventoryDetailRow = {
     difference_cost: number | null;
     amount: number | null;
     offset_match: number | null;
+    offset_remarks?: string | null;
 };
 
 export type PhysicalInventoryDetailRFIDRow = {
@@ -154,6 +157,7 @@ export type PhysicalInventoryHeaderUpsertPayload = {
     committed_at?: string | null;
     cancelled_at?: string | null;
     total_amount?: number | null;
+    is_offset?: number;
 
     // optional future-ready field
     isPending?: number;
@@ -169,6 +173,7 @@ export type PhysicalInventoryDetailUpsertPayload = {
     difference_cost: number | null;
     amount: number | null;
     offset_match: number | null;
+    offset_remarks?: string | null;
 };
 
 export type RunningInventoryApiRow = {
@@ -242,6 +247,7 @@ export type EligibleVariantRow = {
 
     unit_price: number | null;
     cost_per_unit: number | null;
+    brand_name: string | null;
 };
 
 export type GroupedPhysicalInventoryChildRow = {
@@ -277,6 +283,7 @@ export type GroupedPhysicalInventoryChildRow = {
 
     requires_rfid: boolean;
     rfid_count: number;
+    brand_name: string | null;
 };
 
 export type GroupedPhysicalInventoryRow = {
@@ -286,6 +293,7 @@ export type GroupedPhysicalInventoryRow = {
     base_product_code: string | null;
     base_barcode: string | null;
     category_name: string | null;
+    brand_name: string | null;
 
     total_system_count_base: number;
     total_physical_count_base: number;

@@ -13,6 +13,8 @@ type BulkDetailUpdateItem = {
     variance?: number | null;
     difference_cost?: number | null;
     amount?: number | null;
+    offset_match?: number | null;
+    offset_remarks?: string | null;
 };
 
 type DirectusItemResponse<T> = {
@@ -31,6 +33,7 @@ type PhysicalInventoryDetailRow = {
     difference_cost: number | null;
     amount: number | null;
     offset_match: number | null;
+    offset_remarks?: string | null;
 };
 
 function directusHeaders(): HeadersInit {
@@ -80,6 +83,12 @@ function normalizeUpdateItem(value: unknown): BulkDetailUpdateItem | null {
     if ("amount" in raw) {
         normalized.amount = normalizeNullableNumber(raw.amount);
     }
+    if ("offset_match" in raw) {
+        normalized.offset_match = normalizeNullableNumber(raw.offset_match);
+    }
+    if ("offset_remarks" in raw) {
+        normalized.offset_remarks = typeof raw.offset_remarks === "string" ? raw.offset_remarks.trim() || null : null;
+    }
 
     return normalized;
 }
@@ -92,7 +101,7 @@ async function patchDetailRow(
         DIRECTUS_BASE_URL,
     );
 
-    const payload: Record<string, number | null> = {};
+    const payload: Record<string, number | string | null> = {};
 
     if ("physical_count" in item) {
         payload.physical_count = item.physical_count ?? 0;
@@ -105,6 +114,12 @@ async function patchDetailRow(
     }
     if ("amount" in item) {
         payload.amount = item.amount ?? 0;
+    }
+    if ("offset_match" in item) {
+        payload.offset_match = item.offset_match ?? null;
+    }
+    if ("offset_remarks" in item) {
+        payload.offset_remarks = item.offset_remarks ?? null;
     }
 
     const response = await fetch(upstream.toString(), {

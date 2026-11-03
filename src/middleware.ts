@@ -40,6 +40,68 @@ interface UserPermissionsCache {
 const USER_PERMISSIONS_CACHE = new Map<string, UserPermissionsCache>();
 const MAX_CACHE_SIZE = 500;
 
+// Edge Memory Cache — Backend Token Verification (Change 1: cross-company token rejection)
+const VERIFIED_TOKENS = new Map<string, number>() // token -> confirmed-until (ms)
+const TOKEN_VERIFY_TTL = 5 * 60 * 1000             // 5 minutes
+const MAX_VERIFIED_TOKENS = 2000
+
+type TokenVerdict = "valid" | "rejected" | "unreachable"
+
+/**
+ * Asks this instance's own backend whether it accepts the token.
+ * 401/403 = not issued by this backend (or no longer valid).
+ * 404    = the user does not exist here.
+ */
+async function verifyTokenWithBackend(token: string): Promise<TokenVerdict> {
+    const now = Date.now()
+    const until = VERIFIED_TOKENS.get(token)
+    if (until && until > now) return "valid"
+
+    const springBase = process.env.SPRING_API_BASE_URL
+    if (!springBase) return "unreachable"
+
+    try {
+        const res = await fetch(`${springBase.replace(/\/$/, "")}/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+            signal: AbortSignal.timeout(5000),
+        })
+
+        if (res.ok) {
+            if (VERIFIED_TOKENS.size >= MAX_VERIFIED_TOKENS) VERIFIED_TOKENS.clear()
+            VERIFIED_TOKENS.set(token, now + TOKEN_VERIFY_TTL)
+            return "valid"
+        }
+
+        if (res.status === 401 || res.status === 403 || res.status === 404) {
+            VERIFIED_TOKENS.delete(token)
+            return "rejected"
+        }
+
+        return "unreachable" // 429, 5xx, etc.
+    } catch {
+        return "unreachable" // network error, timeout
+    }
+}
+
+/**
+ * Clears all session state and redirects to /login.
+ * Used when the backend rejects the token (cross-company or invalidated).
+ */
+function redirectToLoginAndClear(req: NextRequest, pathname: string, token?: string) {
+    const loginUrl = req.nextUrl.clone()
+    loginUrl.pathname = "/login"
+    loginUrl.search = ""
+    loginUrl.searchParams.set("next", pathname)
+    const res = NextResponse.redirect(loginUrl)
+    res.cookies.delete(COOKIE_NAME)
+    res.cookies.delete(REFRESH_COOKIE_NAME)
+    if (token) {
+        VERIFIED_TOKENS.delete(token)
+        USER_PERMISSIONS_CACHE.delete(token)
+    }
+    return res
+}
 
 function normalizeLockedModuleMode(value?: string | null) {
     const mode = value?.trim().toLowerCase()
@@ -300,6 +362,7 @@ export async function middleware(req: NextRequest) {
             const token = req.cookies.get(COOKIE_NAME)?.value;
             if (token) {
                 USER_PERMISSIONS_CACHE.delete(token);
+                VERIFIED_TOKENS.delete(token);
             }
         }
 
@@ -465,6 +528,22 @@ export async function middleware(req: NextRequest) {
         redirectResponse.cookies.delete(COOKIE_NAME)
         return redirectResponse
     }
+
+    // --- Confirm the token was issued by THIS instance's backend ---
+    const verdict = await verifyTokenWithBackend(token)
+
+    if (verdict === "rejected") {
+        console.warn("[Middleware] Token not accepted by this instance's backend. Clearing session.")
+        return redirectToLoginAndClear(req, pathname, token)
+    }
+
+    if (verdict === "unreachable") {
+        const url = req.nextUrl.clone()
+        url.pathname = "/error/service-down"
+        url.searchParams.set("service", "Spring Boot (Session Check)")
+        return NextResponse.redirect(url)
+    }
+
     const payload = decodeJwtPayload(token);
 
     // Map path to subsystem ID and specific module slug (e.g. /hrm -> hrm)

@@ -6,3 +6,4 @@ export * from "./PhysicalInventoryRFIDDialog";
 export * from "./PhysicalInventoryGlobalRFIDScannerDialog";
 export * from "./PhysicalInventoryStatusBadge";
 export * from "./PhysicalInventoryList";
+export * from "./PhysicalInventoryAddProductDialog";

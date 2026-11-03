@@ -24,6 +24,7 @@ type BuildGroupedRowsParams = {
     runningInventoryRows?: RunningInventoryRow[];
     ph_id?: number | null;
     rfidCountByDetailId?: Record<number, number>;
+    ignoreRfid?: boolean;
 };
 
 function familyKeyOf(row: { parent_id: number | null; product_id: number }): number {
@@ -47,7 +48,13 @@ function buildRunningInventoryMap(
     const map = new Map<string, RunningInventoryRow>();
 
     for (const row of rows) {
-        map.set(`${row.branch_id}-${row.product_id}`, row);
+        const key = `${row.branch_id}-${row.product_id}`;
+        const existing = map.get(key);
+        if (existing) {
+            existing.running_inventory = (existing.running_inventory ?? 0) + (row.running_inventory ?? 0);
+        } else {
+            map.set(key, { ...row });
+        }
     }
 
     return map;
@@ -75,6 +82,7 @@ export function buildGroupedPhysicalInventoryRows(
         runningInventoryRows = [],
         ph_id = null,
         rfidCountByDetailId = {},
+        ignoreRfid = false,
     } = params;
 
     const detailMap = buildDetailMap(details);
@@ -120,7 +128,7 @@ export function buildGroupedPhysicalInventoryRows(
                     ? coalesceNumber(rfidCountByDetailId[detailId], 0)
                     : 0;
 
-            const isRfidRow = requiresRfid();
+            const isRfidRow = !ignoreRfid && requiresRfid();
             const physicalCount = isRfidRow
                 ? rfidCount
                 : coalesceNumber(detail?.physical_count, 0);
@@ -129,6 +137,8 @@ export function buildGroupedPhysicalInventoryRows(
             const varianceBase = computeVarianceBase(variance, unitCount);
             const differenceCost = computeDifferenceCost(variance, variant.unit_price);
             const amount = computeAmount(physicalCount, variant.unit_price);
+
+            const brandName = variant.brand_name ?? matchedRunning?.product_brand ?? null;
 
             return {
                 family_key: familyKey,
@@ -149,6 +159,7 @@ export function buildGroupedPhysicalInventoryRows(
                 unit_count: unitCount,
 
                 unit_price: variant.unit_price,
+                cost_per_unit: variant.cost_per_unit,
 
                 detail_id: detailId,
                 ph_id: detail?.ph_id ?? ph_id,
@@ -162,6 +173,7 @@ export function buildGroupedPhysicalInventoryRows(
 
                 requires_rfid: isRfidRow,
                 rfid_count: rfidCount,
+                brand_name: brandName,
             };
         });
 
@@ -172,6 +184,7 @@ export function buildGroupedPhysicalInventoryRows(
             base_product_code: baseVariant.product_code,
             base_barcode: baseVariant.barcode,
             category_name: baseVariant.category_name,
+            brand_name: childRows[0]?.brand_name ?? null,
 
             total_system_count_base: childRows.reduce(
                 (acc, row) => acc + row.system_count * row.unit_count,

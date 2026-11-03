@@ -7,9 +7,11 @@ import { toast } from "sonner";
 import type {
     BranchRow,
     CategoryRow,
+    EligibleVariantRow,
     GroupedPhysicalInventoryChildRow,
     GroupedPhysicalInventoryRow,
     PhysicalInventoryDetailRow,
+    PhysicalInventoryDetailUpsertPayload,
     PhysicalInventoryFiltersType,
     PhysicalInventoryHeaderRow,
     PhysicalInventoryHeaderUpsertPayload,
@@ -24,6 +26,7 @@ import {
     buildGroupedPhysicalInventoryRows,
     buildVariantsFromSavedDetails,
     cancelPhysicalInventory,
+    commitPhysicalInventory,
     canEditPhysicalInventory,
     computeAmount,
     computeDifferenceCost,
@@ -37,6 +40,7 @@ import {
     fetchNextPhysicalInventoryNumber,
     fetchPhysicalInventoryById,
     fetchPhysicalInventoryDetails,
+    fetchPhysicalInventoryAttachments,
     fetchPriceTypes,
     fetchProductLookupBundle,
     fetchRunningInventoryFiltered,
@@ -47,6 +51,7 @@ import {
     updatePhysicalInventoryDetailsBulk,
     updatePhysicalInventoryHeader,
     validateLoadProductsFilters,
+    normalizeFlagValue,
     type BulkPhysicalInventoryDetailUpdateItem,
 } from "./index";
 
@@ -62,20 +67,27 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-    ArrowRightCircle,
     Ban,
+    CheckCircle2,
     Boxes,
     ClipboardList,
     Loader2,
+    Plus,
+    Printer,
+    UploadCloud,
     RefreshCcw,
+    Search,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 import {
+    PhysicalInventoryAddProductDialog,
+    PhysicalInventoryUploadCountSheetDialog,
     PhysicalInventoryFilters as PhysicalInventoryFiltersCard,
     PhysicalInventoryHeader,
     PhysicalInventoryTable,
 } from "./components";
+import { printAuditSheet } from "../physical-inventory-management/utils/printAuditSheet";
 
 type Props = {
     initialHeaderId?: number | null;
@@ -143,13 +155,17 @@ function kpiCardTone(value: number): string {
 
 function buildRunningInventoryCacheKey(input: {
     branchName: string;
-    supplierShortcut: string;
+    supplierShortcut?: string;
     productCategory?: string;
+    cutOffDate?: string;
+    startingDate?: string;
 }): string {
     return [
         input.branchName.trim().toLowerCase(),
-        input.supplierShortcut.trim().toLowerCase(),
+        (input.supplierShortcut ?? "__any__").trim().toLowerCase(),
         (input.productCategory ?? "__all__").trim().toLowerCase(),
+        (input.cutOffDate ?? "__no_cutoff__").trim().toLowerCase(),
+        (input.startingDate ?? "__no_starting__").trim().toLowerCase(),
     ].join("::");
 }
 
@@ -191,15 +207,46 @@ function groupedRowHasUncounted(row: GroupedPhysicalInventoryRow): boolean {
 
 export function PhysicalInventoryManualManagementModule(props: Props) {
     const { initialHeaderId = null, onRecordChange, currentUser } = props;
-    const router = useRouter();
 
     const [isBootLoading, setIsBootLoading] = React.useState(true);
     const [isLoadingProducts, setIsLoadingProducts] = React.useState(false);
     const [isCancelling, setIsCancelling] = React.useState(false);
     const [openCancelDialog, setOpenCancelDialog] = React.useState(false);
+    const [isCommitting, setIsCommitting] = React.useState(false);
+    const [openCommitDialog, setOpenCommitDialog] = React.useState(false);
     const [isHydratingRecord, setIsHydratingRecord] = React.useState(false);
     const [isRebuildingGroups, setIsRebuildingGroups] = React.useState(false);
     const [isSavingDetailBatch, setIsSavingDetailBatch] = React.useState(false);
+    const [openAddProductDialog, setOpenAddProductDialog] = React.useState(false);
+    const [openUploadDialog, setOpenUploadDialog] = React.useState(false);
+    const [isCheckingAttachments, setIsCheckingAttachments] = React.useState(false);
+    const [isScrolled, setIsScrolled] = React.useState(false);
+
+    React.useEffect(() => {
+        let ticking = false;
+
+        const handleScroll = () => {
+            if (!ticking) {
+                window.requestAnimationFrame(() => {
+                    const sentinel = document.getElementById("pi-manual-product-finder-sentinel");
+                    if (sentinel) {
+                        const rect = sentinel.getBoundingClientRect();
+                        const shouldBeScrolled = rect.bottom < 0;
+
+                        setIsScrolled(prev => {
+                            if (prev !== shouldBeScrolled) return shouldBeScrolled;
+                            return prev;
+                        });
+                    }
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        };
+
+        document.addEventListener("scroll", handleScroll, { capture: true, passive: true });
+        return () => document.removeEventListener("scroll", handleScroll, true);
+    }, []);
 
     const [branches, setBranches] = React.useState<BranchRow[]>([]);
     const [suppliers, setSuppliers] = React.useState<SupplierRow[]>([]);
@@ -357,7 +404,20 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
         });
     }, [activeQuickCategory, activeQuickFilter, groupedRows, productSearch]);
 
+    const eligibleVariants = React.useMemo(() => {
+        const sId = Number(filters.supplier_id);
+        const cId = Number(filters.category_id);
+        const pId = Number(filters.price_type_id);
 
+        if (!lookupBundle || !sId || !cId || !pId) return [];
+
+        return buildEligibleVariants({
+            supplierId: sId,
+            categoryId: cId,
+            priceTypeId: pId,
+            lookup: lookupBundle,
+        });
+    }, [filters.supplier_id, filters.category_id, filters.price_type_id, lookupBundle]);
 
     const rebuildGroupedRows = React.useCallback(
         (input?: RebuildInput) => {
@@ -368,18 +428,17 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             const activeRunningInventoryRows =
                 input?.nextRunningInventoryRows ?? runningInventoryRows;
 
-            if (
-                !activeLookup ||
-                !activeFilters.branch_id ||
-                !activeFilters.supplier_id ||
-                !activeFilters.category_id ||
-                !activeFilters.price_type_id
-            ) {
+            if (!activeLookup || !activeFilters.branch_id) {
                 setGroupedRows([]);
                 return;
             }
 
-            if (activeDetails.length === 0) {
+            if (
+                activeDetails.length === 0 &&
+                (!activeFilters.supplier_id ||
+                    !activeFilters.category_id ||
+                    !activeFilters.price_type_id)
+            ) {
                 setGroupedRows([]);
                 return;
             }
@@ -399,6 +458,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                     details: activeDetails,
                     runningInventoryRows: activeRunningInventoryRows,
                     ph_id: activeHeader?.id ?? null,
+                    ignoreRfid: true,
                 });
 
                 setGroupedRows(nextGrouped);
@@ -411,7 +471,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
 
     const refreshRunningInventoryReadModel = React.useCallback(
         async (
-            nextFilters: PhysicalInventoryFiltersType,
+            nextFilters: PhysicalInventoryFiltersType & { cutOffDate?: string | null },
             nextLookup?: ProductLookupBundle | null,
         ): Promise<RunningInventoryRow[]> => {
             const activeLookup = nextLookup ?? lookupBundle;
@@ -435,6 +495,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 branches,
                 suppliers,
                 lookup: activeLookup,
+                cutOffDate: nextFilters.cutOffDate,
             });
 
             const cacheKey = buildRunningInventoryCacheKey(params);
@@ -452,6 +513,27 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
         },
         [branches, lookupBundle, suppliers],
     );
+
+    const reloadDetails = React.useCallback(async (id: number) => {
+        const [nextDetails] = await Promise.all([
+            fetchPhysicalInventoryDetails(id),
+            updatePhysicalInventoryHeader(id, { total_amount: 0 }),
+        ]);
+
+        const finalHeader = await updatePhysicalInventoryHeader(id, {
+            total_amount: sumHeaderTotalAmount(nextDetails)
+        });
+
+        setDetailRows(nextDetails);
+        setHeader(finalHeader);
+        onRecordChange?.(finalHeader);
+
+        rebuildGroupedRows({
+            nextDetails,
+            nextHeader: finalHeader,
+            nextFilters: filters,
+        });
+    }, [filters, onRecordChange, rebuildGroupedRows]);
 
     const flushDirtyDetails = React.useCallback(async () => {
         if (!header?.id) return;
@@ -546,10 +628,10 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                     if (cancelled) return;
 
                     const nextFilters: PhysicalInventoryFiltersType = {
-                        branch_id: existingHeader.branch_id,
-                        supplier_id: existingHeader.supplier_id,
-                        category_id: existingHeader.category_id,
-                        price_type_id: existingHeader.price_type,
+                        branch_id: existingHeader.branch_id ? Number(existingHeader.branch_id) : null,
+                        supplier_id: existingHeader.supplier_id ? Number(existingHeader.supplier_id) : null,
+                        category_id: existingHeader.category_id ? Number(existingHeader.category_id) : null,
+                        price_type_id: existingHeader.price_type ? Number(existingHeader.price_type) : null,
                     };
 
                     setHeader(existingHeader);
@@ -586,6 +668,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                             branches: nextBranches,
                             suppliers: nextSuppliers,
                             lookup: nextLookup,
+                            cutOffDate: existingHeader.cutOff_date,
                         });
 
                         const cacheKey = buildRunningInventoryCacheKey(params);
@@ -604,13 +687,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
 
                     setRunningInventoryRows(nextRunningRows);
 
-                    if (
-                        nextFilters.branch_id &&
-                        nextFilters.supplier_id &&
-                        nextFilters.category_id &&
-                        nextFilters.price_type_id &&
-                        existingDetails.length > 0
-                    ) {
+                    if (nextFilters.branch_id && existingDetails.length > 0) {
                         const variants = buildVariantsFromSavedDetails({
                             details: existingDetails,
                             priceTypeId: nextFilters.price_type_id,
@@ -623,6 +700,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                             details: existingDetails,
                             runningInventoryRows: nextRunningRows,
                             ph_id: existingHeader.id ?? null,
+                            ignoreRfid: true,
                         });
 
                         setGroupedRows(nextGrouped);
@@ -736,8 +814,10 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             !filters.category_id ||
             !filters.price_type_id
         ) {
-            setRunningInventoryRows([]);
-            setGroupedRows([]);
+            if (!hasLoadedDetails) {
+                setRunningInventoryRows([]);
+                setGroupedRows([]);
+            }
             return;
         }
 
@@ -746,6 +826,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             supplier_id: filters.supplier_id,
             category_id: filters.category_id,
             price_type_id: filters.price_type_id,
+            cutOffDate: header?.cutOff_date,
         });
     }, [
         filters.branch_id,
@@ -755,6 +836,8 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
         isBootLoading,
         lookupBundle,
         refreshRunningInventoryReadModel,
+        header?.cutOff_date,
+        hasLoadedDetails,
     ]);
 
     React.useEffect(() => {
@@ -766,7 +849,9 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             !filters.category_id ||
             !filters.price_type_id
         ) {
-            setGroupedRows([]);
+            if (!hasLoadedDetails) {
+                setGroupedRows([]);
+            }
             return;
         }
 
@@ -780,6 +865,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
         isBootLoading,
         lookupBundle,
         runningInventoryRows,
+        hasLoadedDetails,
     ]);
 
     React.useEffect(() => {
@@ -840,6 +926,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             isComitted: header.isComitted,
             isCancelled: header.isCancelled,
             total_amount: totalAmount,
+            is_scm: 1,
         };
 
         if (header.id > 0) {
@@ -863,36 +950,6 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
         totalAmount,
     ]);
 
-    const handleResetFilters = React.useCallback(() => {
-        if (!canEdit) return;
-
-        setFilters({
-            branch_id: null,
-            supplier_id: null,
-            category_id: null,
-            price_type_id: null,
-        });
-        setCategories([]);
-        setDetailRows([]);
-        setGroupedRows([]);
-        setRunningInventoryRows([]);
-        setProductSearch("");
-        setActiveQuickFilter("ALL");
-        setActiveQuickCategory("ALL");
-        dirtyDetailIdsRef.current.clear();
-        setHeader((prev) => {
-            if (!prev) return prev;
-            return {
-                ...prev,
-                branch_id: null,
-                supplier_id: null,
-                category_id: null,
-                price_type: null,
-                starting_date: null,
-                total_amount: 0,
-            };
-        });
-    }, [canEdit]);
 
     const handleLoadProducts = React.useCallback(async () => {
         const validation = validateLoadProductsFilters(filters);
@@ -923,23 +980,21 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
 
             const runningInventoryFilterParams = resolveRunningInventoryFilterParams({
                 branchId: filters.branch_id as number,
-                supplierId: filters.supplier_id as number,
+                supplierId: null, // Always get branch-wide stock to ensure accurate system counts
                 categoryId: filters.category_id as number,
                 branches,
                 suppliers,
                 lookup: lookupBundle,
+                cutOffDate: savedHeader.cutOff_date,
+                startingDate: savedHeader.starting_date,
             });
 
             const runningInventoryCacheKey = buildRunningInventoryCacheKey(
                 runningInventoryFilterParams,
             );
 
-            const cachedRunningInventoryRows =
-                filteredRunningInventoryCacheRef.current[runningInventoryCacheKey];
-
             const nextRunningInventoryRows =
-                cachedRunningInventoryRows ??
-                (await fetchRunningInventoryFiltered(runningInventoryFilterParams));
+                await fetchRunningInventoryFiltered(runningInventoryFilterParams);
 
             filteredRunningInventoryCacheRef.current[runningInventoryCacheKey] =
                 nextRunningInventoryRows;
@@ -957,38 +1012,67 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 return;
             }
 
-            const runningInventoryByProductId = new Map<number, RunningInventoryRow>();
+            // Aggregate running inventory and movement tracking by product ID across all suppliers
+            const runningInventoryByProductId = new Map<number, number>();
+            const movementByProductId = new Map<number, boolean>();
             for (const row of nextRunningInventoryRows) {
-                if (!runningInventoryByProductId.has(row.product_id)) {
-                    runningInventoryByProductId.set(row.product_id, row);
+                const current = runningInventoryByProductId.get(row.product_id) ?? 0;
+                runningInventoryByProductId.set(row.product_id, current + (row.running_inventory ?? 0));
+                if (row.has_movement) {
+                    movementByProductId.set(row.product_id, true);
                 }
             }
 
-            const detailPayloads = eligibleVariants.map((variant) => {
-                const matchedRunning = runningInventoryByProductId.get(variant.product_id);
+            // Identify product families with movement in the selected date range
+            const familiesWithMovement = new Set<number>();
 
-                const systemCount = convertBaseQtyToDisplayQty(
-                    matchedRunning?.running_inventory,
-                    variant.unit_count,
-                );
+            for (const variant of eligibleVariants) {
+                const familyKey = variant.parent_id ?? variant.product_id;
+                const hasMovement = movementByProductId.get(variant.product_id) === true;
 
-                const physicalCount = 0;
-                const variance = computeVariance(physicalCount, systemCount);
-                const differenceCost = computeDifferenceCost(variance, variant.unit_price);
-                const amount = computeAmount(physicalCount, variant.unit_price);
+                if (hasMovement) {
+                    familiesWithMovement.add(familyKey);
+                }
+            }
 
-                return {
-                    ph_id: savedHeader.id,
-                    product_id: variant.product_id,
-                    unit_price: variant.unit_price,
-                    system_count: systemCount,
-                    physical_count: physicalCount,
-                    variance,
-                    difference_cost: differenceCost,
-                    amount,
-                    offset_match: 0,
-                };
-            });
+            // Compute allocations directly based on specific variant's stock
+            const systemCountAllocations = new Map<number, number>();
+
+            for (const variant of eligibleVariants) {
+                const familyKey = variant.parent_id ?? variant.product_id;
+                if (!familiesWithMovement.has(familyKey)) continue;
+
+                const stock = runningInventoryByProductId.get(variant.product_id) ?? 0;
+                const systemCount = convertBaseQtyToDisplayQty(stock, variant.unit_count);
+                systemCountAllocations.set(variant.product_id, systemCount);
+            }
+
+            // Load entire families if at least one member has movement in the date range
+            const detailPayloads = eligibleVariants
+                .filter((variant) => {
+                    const familyKey = variant.parent_id ?? variant.product_id;
+                    return familiesWithMovement.has(familyKey);
+                })
+                .map((variant) => {
+                    const systemCount = systemCountAllocations.get(variant.product_id) ?? 0;
+
+                    const initialPhysicalCount = 0;
+                    const variance = computeVariance(initialPhysicalCount, systemCount);
+                    const differenceCost = computeDifferenceCost(variance, variant.unit_price);
+                    const amount = computeAmount(initialPhysicalCount, variant.unit_price);
+
+                    return {
+                        ph_id: savedHeader.id,
+                        product_id: variant.product_id,
+                        unit_price: variant.unit_price,
+                        system_count: systemCount,
+                        physical_count: initialPhysicalCount,
+                        variance,
+                        difference_cost: differenceCost,
+                        amount,
+                        offset_match: 0,
+                    };
+                });
 
             await createPhysicalInventoryDetailsBulk(detailPayloads);
 
@@ -1028,6 +1112,79 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
         rebuildGroupedRows,
         suppliers,
     ]);
+
+    const handleAddProduct = React.useCallback(
+        async (variant: EligibleVariantRow) => {
+            if (!header?.id || !canEdit) return;
+
+            try {
+                // Determine family key (Parent ID or root product ID)
+                const familyKey = variant.parent_id ?? variant.product_id;
+
+                // Find all siblings in the same family from eligibleVariants
+                const familySiblings = eligibleVariants.filter((v) => {
+                    const vFamilyKey = v.parent_id ?? v.product_id;
+                    return vFamilyKey === familyKey;
+                });
+
+                // Identify which siblings are already loaded
+                const existingProductIds = new Set(detailRows.map((d) => d.product_id));
+                const siblingsToLoad = familySiblings.filter((v) => !existingProductIds.has(v.product_id));
+
+                if (siblingsToLoad.length === 0) {
+                    toast.info("All variants for this family are already added.");
+                    return;
+                }
+
+                // Fetch running inventory for specific products
+                const systemCountAllocations = new Map<number, number>();
+                
+                for (const sibling of familySiblings) {
+                    const siblingStock = runningInventoryRows
+                        .filter((r) => r.branch_id === header.branch_id && r.product_id === sibling.product_id)
+                        .reduce((acc, r) => acc + (r.running_inventory ?? 0), 0);
+                        
+                    const systemCount = convertBaseQtyToDisplayQty(siblingStock, sibling.unit_count);
+                    systemCountAllocations.set(sibling.product_id, systemCount);
+                }
+
+                const payloads: PhysicalInventoryDetailUpsertPayload[] = siblingsToLoad.map((sibling) => {
+                    const systemCount = systemCountAllocations.get(sibling.product_id) ?? 0;
+
+                    const initialPhysicalCount = 0;
+                    const variance = computeVariance(initialPhysicalCount, systemCount);
+                    const differenceCost = computeDifferenceCost(variance, sibling.unit_price);
+                    const amount = computeAmount(initialPhysicalCount, sibling.unit_price);
+
+                    return {
+                        ph_id: header.id,
+                        product_id: sibling.product_id,
+                        unit_price: sibling.unit_price,
+                        system_count: systemCount,
+                        physical_count: initialPhysicalCount,
+                        variance,
+                        difference_cost: differenceCost,
+                        amount,
+                        offset_match: 0,
+                    };
+                });
+
+                await createPhysicalInventoryDetailsBulk(payloads);
+                await reloadDetails(header.id);
+
+                if (payloads.length > 1) {
+                    toast.success(`Added ${payloads.length} variants for family "${variant.product_name}".`);
+                } else {
+                    toast.success(`Product "${variant.product_name}" added.`);
+                }
+            } catch (error) {
+                const message =
+                    error instanceof Error ? error.message : "Failed to add product family.";
+                toast.error(message);
+            }
+        },
+        [canEdit, detailRows, eligibleVariants, header, reloadDetails, runningInventoryRows]
+    );
 
     const handlePhysicalCountChange = React.useCallback(
         (row: GroupedPhysicalInventoryChildRow, value: string) => {
@@ -1121,7 +1278,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             const [nextDetails, nextRunningInventoryRows] =
                 await Promise.all([
                     fetchPhysicalInventoryDetails(header.id),
-                    refreshRunningInventoryReadModel(filters),
+                    refreshRunningInventoryReadModel({ ...filters, cutOffDate: header.cutOff_date }),
                 ]);
 
             setDetailRows(nextDetails);
@@ -1141,6 +1298,64 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             toast.error(message);
         }
     }, [filters, header, rebuildGroupedRows, refreshRunningInventoryReadModel]);
+
+
+    const handleCommitButtonClick = React.useCallback(async () => {
+        if (!header?.id) {
+            toast.error("This PI must exist before commit.");
+            return;
+        }
+
+        try {
+            setIsCheckingAttachments(true);
+            const attachments = await fetchPhysicalInventoryAttachments(header.id);
+            if (!attachments || attachments.length === 0) {
+                toast.error("Please upload a count sheet before committing this Physical Inventory.");
+                return;
+            }
+            setOpenCommitDialog(true);
+        } catch (error) {
+            console.error("Failed to check attachments before commit:", error);
+            toast.error("Please upload a count sheet before committing this Physical Inventory.");
+        } finally {
+            setIsCheckingAttachments(false);
+        }
+    }, [header?.id]);
+
+    const handleCommit = React.useCallback(async () => {
+        if (!header?.id) {
+            toast.error("This PI must exist before commit.");
+            return;
+        }
+
+        if (!canEdit) {
+            toast.error("This PI can no longer be edited.");
+            return;
+        }
+
+        try {
+            setIsCommitting(true);
+
+            const updatedHeader = await commitPhysicalInventory(header.id);
+
+            setHeader(updatedHeader);
+            onRecordChange?.(updatedHeader);
+
+            rebuildGroupedRows({
+                nextDetails: detailRows,
+                nextHeader: updatedHeader,
+                nextFilters: filters,
+            });
+
+            setOpenCommitDialog(false);
+            toast.success("Physical Inventory committed successfully.");
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Failed to commit PI.";
+            toast.error(message);
+        } finally {
+            setIsCommitting(false);
+        }
+    }, [canEdit, detailRows, filters, header?.id, onRecordChange, rebuildGroupedRows]);
 
     const handleCancel = React.useCallback(async () => {
         if (!header?.id) {
@@ -1222,16 +1437,16 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
 
                         <Button
                             variant="outline"
-                            className="cursor-pointer border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/40"
-                            onClick={() =>
-                                router.push(
-                                    `/scm/inventory-management/physical-inventory/offsetting?id=${header.id}`,
-                                )
-                            }
-                            disabled={!header.id}
+                            className="cursor-pointer border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                            onClick={handleCommitButtonClick}
+                            disabled={!header?.id || !hasLoadedDetails || !canEdit || isCommitting || isCheckingAttachments}
                         >
-                            <ArrowRightCircle className="mr-2 h-4 w-4" />
-                            Go to Offsetting
+                            {isCheckingAttachments ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <CheckCircle2 className="mr-2 h-4 w-4" />
+                            )}
+                            Commit PI
                         </Button>
 
                         <Button
@@ -1259,6 +1474,39 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                             <Ban className="mr-2 h-4 w-4" />
                             Cancel
                         </Button>
+
+                        <Button
+                            variant="outline"
+                            className="cursor-pointer border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-900/60 dark:bg-indigo-950/30 dark:text-indigo-300 dark:hover:bg-indigo-900/40"
+                            onClick={() => {
+                                const bName = branches.find((b) => b.id == (filters.branch_id ?? header.branch_id))?.branch_name ?? "";
+                                const sName = suppliers.find((s) => s.id == (filters.supplier_id ?? header.supplier_id))?.supplier_name ?? "";
+                                const pName = priceTypes.find((pt) => pt.price_type_id == (filters.price_type_id ?? header.price_type))?.price_type_name ?? "";
+
+                                printAuditSheet({
+                                    header,
+                                    groupedRows,
+                                    branchName: bName,
+                                    supplierName: sName,
+                                    priceTypeName: pName,
+                                });
+                            }}
+                            disabled={!hasLoadedDetails}
+                        >
+                            <Printer className="mr-2 h-4 w-4" />
+                            Print Audit Sheet
+                        </Button>
+
+                        <Button
+                            variant="outline"
+                            className="cursor-pointer border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-900/60 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-900/40"
+                            onClick={() => setOpenUploadDialog(true)}
+                            disabled={!header?.id}
+                            title={!header?.id ? "Save PI session first before uploading count sheets." : "Upload Count Sheet"}
+                        >
+                            <UploadCloud className="mr-2 h-4 w-4" />
+                            Upload Count Sheet
+                        </Button>
                     </div>
                 </div>
             </div>
@@ -1267,6 +1515,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 header={header}
                 status={status}
                 canEdit={canEdit}
+                hasLoadedDetails={hasLoadedDetails}
                 totalAmount={totalAmount}
                 onChangePhNo={(value) =>
                     setHeader((prev) => (prev ? { ...prev, ph_no: value } : prev))
@@ -1352,7 +1601,6 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                         };
                     });
                 }}
-                onReset={handleResetFilters}
                 onLoadProducts={handleLoadProducts}
             />
 
@@ -1483,7 +1731,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 </>
             ) : null}
 
-            <div className="rounded-2xl border bg-background px-4 py-4 shadow-sm">
+            <div id="pi-manual-product-finder-sentinel" className="rounded-2xl border bg-background px-4 py-4 shadow-sm">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                     <div className="space-y-1">
                         <h3 className="text-sm font-semibold tracking-tight">Product Finder</h3>
@@ -1492,13 +1740,25 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                         </p>
                     </div>
 
-                    <div className="w-full xl:max-w-sm">
-                        <input
-                            value={productSearch}
-                            onChange={(event) => setProductSearch(event.target.value)}
-                            placeholder="Search product code, name, barcode, UOM..."
-                            className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                        />
+                    <div className="flex w-full items-center gap-2 xl:max-w-xl">
+                        <div className="relative w-full">
+                            <input
+                                value={productSearch}
+                                onChange={(event) => setProductSearch(event.target.value)}
+                                placeholder="Search product code, name, barcode, UOM..."
+                                className="flex h-10 w-full rounded-md border bg-background pl-3 pr-10 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                            <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        </div>
+                        <Button
+                            variant="outline"
+                            className="cursor-pointer shrink-0"
+                            onClick={() => setOpenAddProductDialog(true)}
+                            disabled={!canEdit || !header?.id}
+                        >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Add Product
+                        </Button>
                     </div>
                 </div>
 
@@ -1616,6 +1876,43 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             />
 
 
+            <AlertDialog open={openCommitDialog} onOpenChange={setOpenCommitDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Commit Physical Inventory?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will finalize the physical count, update stock balances, and lock the record as read-only.
+                            This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel
+                            className="cursor-pointer"
+                            disabled={isCommitting}
+                        >
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                            onClick={(event) => {
+                                event.preventDefault();
+                                void handleCommit();
+                            }}
+                            disabled={isCommitting}
+                        >
+                            {isCommitting ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Committing...
+                                </>
+                            ) : (
+                                "Commit PI"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             <AlertDialog open={openCancelDialog} onOpenChange={setOpenCancelDialog}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -1652,6 +1949,53 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <PhysicalInventoryAddProductDialog
+                open={openAddProductDialog}
+                onOpenChange={setOpenAddProductDialog}
+                eligibleVariants={eligibleVariants}
+                existingProductIds={new Set(detailRows.map((d) => d.product_id))}
+                onAdd={handleAddProduct}
+            />
+
+            <PhysicalInventoryUploadCountSheetDialog
+                isOpen={openUploadDialog}
+                onOpenChange={setOpenUploadDialog}
+                physicalInventoryId={header?.id || null}
+                phNo={header?.ph_no}
+                canEdit={canEdit}
+                isCommitted={normalizeFlagValue(header?.isComitted) === 1}
+                currentUserId={currentUser?.id}
+            />
+
+            {groupedRows.length > 0 && (
+                <div
+                    className={cn(
+                        "fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] w-full max-w-xl px-4 pointer-events-none transition-all duration-500 ease-in-out",
+                        isScrolled ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-20 scale-90"
+                    )}
+                >
+                    <div className="flex items-center gap-3 bg-background/95 backdrop-blur-xl border border-primary/20 shadow-[0_-10px_50px_rgba(0,0,0,0.25)] rounded-full p-2 ring-1 ring-black/5 pointer-events-auto">
+                        <div className="relative flex-1 bg-muted/40 rounded-full border border-transparent focus-within:border-primary/20 focus-within:bg-background transition-all">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/60" />
+                            <input
+                                value={productSearch}
+                                onChange={(e) => setProductSearch(e.target.value)}
+                                placeholder="Search loaded products..."
+                                className="h-12 w-full bg-transparent border-none focus:ring-0 text-sm pl-12 pr-4 placeholder:text-muted-foreground/50"
+                            />
+                        </div>
+                        <Button
+                            className="rounded-full h-12 w-12 p-0 bg-primary text-primary-foreground shadow-lg shadow-primary/40 hover:scale-105 active:scale-95 transition-all shrink-0"
+                            onClick={() => setOpenAddProductDialog(true)}
+                            disabled={!canEdit}
+                            title="Add Product Manually"
+                        >
+                            <Plus className="h-6 w-6" />
+                        </Button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

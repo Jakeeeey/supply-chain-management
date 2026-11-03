@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { fetchAllUsers } from "../providers/fetchProvider";
+import { PaperSize } from "./PickerManifestPrint";
 import { toast } from "sonner"; // 🚀 Sonner import
 
 interface WarehouseUser {
@@ -18,13 +19,14 @@ interface WarehouseUser {
 interface StartPickingDialogProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (checkerId: number) => Promise<void>;
+    onConfirm: (checkerId: number, paperSize: PaperSize) => Promise<void>;
     batchNo: string;
 }
 
 export function StartPickingDialog({ isOpen, onClose, onConfirm, batchNo }: StartPickingDialogProps) {
     const [checkers, setCheckers] = useState<WarehouseUser[]>([]);
     const [selectedChecker, setSelectedChecker] = useState("");
+    const [selectedPaperSize, setSelectedPaperSize] = useState<PaperSize>("a4");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
     const [fetchError, setFetchError] = useState(false);
@@ -33,6 +35,7 @@ export function StartPickingDialog({ isOpen, onClose, onConfirm, batchNo }: Star
         if (isOpen) {
             setIsLoadingUsers(true);
             setFetchError(false);
+            setSelectedPaperSize("a4");
 
             // 🚀 Fetching specifically for Warehouse Department (ID: 5)
             fetchAllUsers(5)
@@ -59,7 +62,7 @@ export function StartPickingDialog({ isOpen, onClose, onConfirm, batchNo }: Star
         if (!selectedChecker) return;
         setIsSubmitting(true);
         try {
-            await onConfirm(Number(selectedChecker));
+            await onConfirm(Number(selectedChecker), selectedPaperSize);
 
             // 🚀 Sonner SUCCESS TOAST
             toast.success("SYSTEM PROTOCOL ENGAGED", {
@@ -146,6 +149,31 @@ export function StartPickingDialog({ isOpen, onClose, onConfirm, batchNo }: Star
                                 </SelectContent>
                             </Select>
                         )}
+                    </div>
+
+                    <div className="space-y-3">
+                        <label className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground ml-1 opacity-70">
+                            Manifest Paper Size
+                        </label>
+                        <Select onValueChange={(val) => setSelectedPaperSize(val as PaperSize)} value={selectedPaperSize} disabled={isSubmitting}>
+                            <SelectTrigger className="h-14 bg-background/40 border-border/40 font-bold rounded-2xl ring-offset-background focus:ring-primary/20 transition-all text-sm px-5">
+                                <SelectValue placeholder="Select Paper Size" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-card/98 backdrop-blur-2xl border-border/40 rounded-2xl shadow-2xl">
+                                <SelectItem value="a4" className="font-bold py-3 px-4 cursor-pointer">
+                                    <div className="flex flex-col text-left">
+                                        <span className="uppercase text-sm">A4 Standard</span>
+                                        <span className="text-[9px] text-muted-foreground uppercase opacity-70">210 × 297 mm</span>
+                                    </div>
+                                </SelectItem>
+                                <SelectItem value="legal" className="font-bold py-3 px-4 cursor-pointer">
+                                    <div className="flex flex-col text-left">
+                                        <span className="uppercase text-sm">US Legal</span>
+                                        <span className="text-[9px] text-muted-foreground uppercase opacity-70">8.5 × 14 in (216 × 356 mm)</span>
+                                    </div>
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <div className="relative group overflow-hidden bg-primary/[0.03] p-6 rounded-[2rem] border border-primary/10 space-y-4">

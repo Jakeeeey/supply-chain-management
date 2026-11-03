@@ -1,5 +1,6 @@
 //src/modules/supply-chain-management/physical-inventory-management/providers/fetchProvider.ts
 import type {
+    PhysicalInventoryAttachmentRow,
     BranchRow,
     CategoryRow,
     DirectusItemResponse,
@@ -220,6 +221,7 @@ function mapRunningInventoryRow(row: RunningInventoryApiRow): RunningInventoryRo
         movement_after: row.movementAfter,
         running_inventory: row.runningInventory,
         supplier_shortcut: row.supplierShortcut,
+        has_movement: row.hasMovement ?? false,
     };
 }
 
@@ -249,7 +251,6 @@ export function getSupplierScopedCategoriesFromLookup(
         lookup.products
             .filter(
                 (product) =>
-                    product.isActive === 1 &&
                     allowedProductIds.has(product.product_id) &&
                     product.product_category !== null,
             )
@@ -338,7 +339,7 @@ export async function fetchUnits(): Promise<UnitRow[]> {
 export async function fetchProducts(): Promise<ProductRow[]> {
     return directusGetItems<ProductRow>(TABLES.products, {
         fields:
-            "product_id,parent_id,product_code,product_name,barcode,product_category,product_brand,unit_of_measurement,unit_of_measurement_count,isActive",
+            "product_id,parent_id,product_code,product_name,barcode,product_category,product_brand,unit_of_measurement,unit_of_measurement_count,isActive,cost_per_unit",
         sort: "product_name",
         limit: "-1",
     });
@@ -391,68 +392,90 @@ export function buildEligibleVariants(input: {
     lookup: ProductLookupBundle;
 }): EligibleVariantRow[] {
     const { supplierId, categoryId, priceTypeId, lookup } = input;
+    const sId = Number(supplierId);
+    const cId = Number(categoryId);
+    const pId = Number(priceTypeId);
 
     const selectedCategory = lookup.categories.find(
-        (row) => row.category_id === categoryId,
+        (row) => Number(row.category_id) === cId,
     );
     const isAllCategory = isAllCategoryName(selectedCategory?.category_name);
 
-    const productIdsBySupplier = new Set(
+    const directlyEligibleBySupplier = new Set(
         lookup.product_per_supplier
-            .filter((row) => row.supplier_id === supplierId)
-            .map((row) => row.product_id),
+            .filter((row) => Number(row.supplier_id) === sId)
+            .map((row) => Number(row.product_id)),
     );
+
+    // If any member of a family is mapped to the supplier, the whole family is considered eligible
+    const eligibleFamilyKeys = new Set<number>();
+    for (const productId of directlyEligibleBySupplier) {
+        const product = lookup.products.find((p) => Number(p.product_id) === productId);
+        if (product) {
+            eligibleFamilyKeys.add(
+                Number(product.parent_id && product.parent_id > 0
+                    ? product.parent_id
+                    : product.product_id)
+            );
+        }
+    }
 
     const priceMap = new Map<number, ProductPerPriceTypeRow>();
     for (const row of lookup.product_per_price_type) {
-        if (row.price_type_id === priceTypeId) {
-            priceMap.set(row.product_id, row);
+        if (Number(row.price_type_id) === pId) {
+            priceMap.set(Number(row.product_id), row);
         }
     }
 
     const categoryMap = new Map<number, CategoryRow>();
     for (const row of lookup.categories) {
-        categoryMap.set(row.category_id, row);
+        categoryMap.set(Number(row.category_id), row);
     }
 
     const unitMap = new Map<number, UnitRow>();
     for (const row of lookup.units) {
-        unitMap.set(row.unit_id, row);
+        unitMap.set(Number(row.unit_id), row);
     }
 
     return lookup.products
-        .filter((product) => product.isActive === 1)
-        .filter((product) => productIdsBySupplier.has(product.product_id))
+        .filter((product) => {
+            const familyKey = Number(product.parent_id && product.parent_id > 0
+                ? product.parent_id
+                : product.product_id);
+            return eligibleFamilyKeys.has(familyKey);
+        })
         .filter((product) => {
             if (isAllCategory) return true;
-            return product.product_category === categoryId;
+            return Number(product.product_category) === cId;
         })
-        .filter((product) => priceMap.has(product.product_id))
         .map((product) => {
-            const priceRow = priceMap.get(product.product_id) ?? null;
+            const productIdNum = Number(product.product_id);
+            const priceRow = priceMap.get(productIdNum) ?? null;
             const category =
                 product.product_category !== null
-                    ? categoryMap.get(product.product_category) ?? null
+                    ? categoryMap.get(Number(product.product_category)) ?? null
                     : null;
             const unit =
                 product.unit_of_measurement !== null
-                    ? unitMap.get(product.unit_of_measurement) ?? null
+                    ? unitMap.get(Number(product.unit_of_measurement)) ?? null
                     : null;
 
             return {
-                product_id: product.product_id,
-                parent_id: product.parent_id,
+                product_id: productIdNum,
+                parent_id: product.parent_id ? Number(product.parent_id) : null,
                 product_code: product.product_code,
                 product_name: product.product_name,
                 barcode: product.barcode,
-                category_id: product.product_category,
+                category_id: product.product_category ? Number(product.product_category) : null,
                 category_name: category?.category_name ?? null,
-                unit_id: product.unit_of_measurement,
+                unit_id: product.unit_of_measurement ? Number(product.unit_of_measurement) : null,
                 unit_name: unit?.unit_name ?? null,
                 unit_shortcut: unit?.unit_shortcut ?? null,
-                unit_order: unit?.order ?? null,
+                unit_order: unit?.order ? Number(unit.order) : null,
                 unit_count: normalizeUnitCount(product.unit_of_measurement_count),
                 unit_price: priceRow?.price ?? null,
+                cost_per_unit: product.cost_per_unit ? Number(product.cost_per_unit) : null,
+                brand_name: null,
             };
         })
         .sort((a, b) => {
@@ -477,18 +500,52 @@ export async function fetchRunningInventoryByBranch(
     return Array.isArray(rows) ? rows.map(mapRunningInventoryRow) : [];
 }
 
-export async function fetchRunningInventoryFiltered(input: {
+export type RunningInventoryFilterInput = {
     branchName: string;
-    supplierShortcut: string;
+    supplierShortcut?: string;
     productCategory?: string;
-}): Promise<RunningInventoryRow[]> {
+    cutOffDate?: string;
+    startingDate?: string;
+};
+
+/**
+ * Converts a datetime string to a proper UTC ISO string for server-side comparison.
+ *
+ * IMPORTANT: This runs in the BROWSER (client-side), not on the server.
+ * The browser already interprets bare datetime strings (e.g. "2026-05-16T05:06:00"
+ * with no timezone suffix) as LOCAL time (UTC+8 for PH users).
+ * So new Date("2026-05-16T05:06:00").getTime() already gives the correct UTC ms.
+ * We MUST NOT manually subtract 8 hours — that would double-convert and make the
+ * cutoff 8 hours too early, allowing after-cutoff transactions to slip through.
+ */
+function toUtcIsoString(localDateStr: string): string {
+    const trimmed = localDateStr.trim();
+    const d = new Date(trimmed);
+    if (isNaN(d.getTime())) return trimmed; // fallback: return as-is if unparseable
+    // .toISOString() always produces a UTC 'Z' string from the internal UTC ms value
+    return d.toISOString();
+}
+
+export async function fetchRunningInventoryFiltered(input: RunningInventoryFilterInput): Promise<RunningInventoryRow[]> {
     const params: Record<string, string> = {
         branchName: input.branchName,
-        supplierShortcut: input.supplierShortcut,
     };
+
+    if (input.supplierShortcut && input.supplierShortcut.trim()) {
+        params.supplierShortcut = input.supplierShortcut.trim();
+    }
 
     if (input.productCategory && input.productCategory.trim()) {
         params.productCategory = input.productCategory.trim();
+    }
+
+    if (input.cutOffDate && input.cutOffDate.trim()) {
+        // Normalize to UTC before sending to the API
+        params.cutOffDate = toUtcIsoString(input.cutOffDate.trim());
+    }
+
+    if (input.startingDate && input.startingDate.trim()) {
+        params.startingDate = toUtcIsoString(input.startingDate.trim());
     }
 
     const rows = await apiGet<RunningInventoryApiRow[]>(
@@ -703,10 +760,10 @@ export function buildVariantsFromSavedDetails(input: {
 
     const detailMap = new Map<number, PhysicalInventoryDetailRow>();
     for (const detail of details) {
-        detailMap.set(detail.product_id, detail);
+        detailMap.set(Number(detail.product_id), detail);
     }
 
-    const productIds = new Set(details.map((row) => row.product_id));
+    const productIds = new Set(details.map((row) => Number(row.product_id)));
 
     const categoryMap = new Map<number, CategoryRow>();
     for (const row of lookup.categories) {
@@ -726,33 +783,36 @@ export function buildVariantsFromSavedDetails(input: {
     }
 
     return lookup.products
-        .filter((product) => productIds.has(product.product_id))
+        .filter((product) => productIds.has(Number(product.product_id)))
         .map((product) => {
-            const detail = detailMap.get(product.product_id);
+            const productIdNum = Number(product.product_id);
+            const detail = detailMap.get(productIdNum);
             const category =
                 product.product_category !== null
-                    ? categoryMap.get(product.product_category) ?? null
+                    ? categoryMap.get(Number(product.product_category)) ?? null
                     : null;
             const unit =
                 product.unit_of_measurement !== null
-                    ? unitMap.get(product.unit_of_measurement) ?? null
+                    ? unitMap.get(Number(product.unit_of_measurement)) ?? null
                     : null;
-            const priceRow = priceMap.get(product.product_id) ?? null;
+            const priceRow = priceMap.get(productIdNum) ?? null;
 
             return {
-                product_id: product.product_id,
-                parent_id: product.parent_id,
+                product_id: productIdNum,
+                parent_id: product.parent_id ? Number(product.parent_id) : null,
                 product_code: product.product_code,
                 product_name: product.product_name,
                 barcode: product.barcode,
-                category_id: product.product_category,
+                category_id: product.product_category ? Number(product.product_category) : null,
                 category_name: category?.category_name ?? null,
-                unit_id: product.unit_of_measurement,
+                unit_id: product.unit_of_measurement ? Number(product.unit_of_measurement) : null,
                 unit_name: unit?.unit_name ?? null,
                 unit_shortcut: unit?.unit_shortcut ?? null,
-                unit_order: unit?.order ?? null,
+                unit_order: unit?.order ? Number(unit.order) : null,
                 unit_count: normalizeUnitCount(product.unit_of_measurement_count),
                 unit_price: detail?.unit_price ?? priceRow?.price ?? null,
+                cost_per_unit: product.cost_per_unit ? Number(product.cost_per_unit) : null,
+                brand_name: null,
             };
         })
         .sort((a, b) => {
@@ -848,25 +908,22 @@ export async function prepareLoadProductsData(input: {
 
 export function resolveRunningInventoryFilterParams(input: {
     branchId: number;
-    supplierId: number;
+    supplierId?: number | null;
     categoryId: number;
     branches: BranchRow[];
     suppliers: SupplierRow[];
     lookup: ProductLookupBundle;
-}): {
-    branchName: string;
-    supplierShortcut: string;
-    productCategory?: string;
-} {
+    cutOffDate?: string | null;
+    startingDate?: string | null;
+}): RunningInventoryFilterInput {
     const branch = input.branches.find((row) => row.id === input.branchId);
     if (!branch?.branch_name?.trim()) {
         throw new Error("Unable to resolve branch name for running inventory filter.");
     }
 
-    const supplier = input.suppliers.find((row) => row.id === input.supplierId);
-    if (!supplier?.supplier_shortcut?.trim()) {
-        throw new Error("Unable to resolve supplier shortcut for running inventory filter.");
-    }
+    const supplier = input.supplierId
+        ? input.suppliers.find((row) => row.id === input.supplierId)
+        : null;
 
     const category = input.lookup.categories.find(
         (row) => row.category_id === input.categoryId,
@@ -879,8 +936,12 @@ export function resolveRunningInventoryFilterParams(input: {
 
     return {
         branchName: branch.branch_name.trim(),
-        supplierShortcut: supplier.supplier_shortcut.trim(),
+        ...(supplier?.supplier_shortcut?.trim()
+            ? { supplierShortcut: supplier.supplier_shortcut.trim() }
+            : {}),
         ...(isAllCategory ? {} : { productCategory: category.category_name.trim() }),
+        ...(input.cutOffDate ? { cutOffDate: input.cutOffDate } : {}),
+        ...(input.startingDate ? { startingDate: input.startingDate } : {}),
     };
 }
 function extractTrailingNumber(value: string): number | null {
@@ -922,4 +983,72 @@ export async function fetchNextPhysicalInventoryNumber(): Promise<string> {
     // The first record in numericRows is our true "latest" numeric ID
     const latest = numericRows[0] || rows[0] || null;
     return buildNextPhNoFromLatest(latest?.ph_no);
+}
+
+export async function fetchPhysicalInventoryAttachments(
+    physicalInventoryId: number
+): Promise<PhysicalInventoryAttachmentRow[]> {
+    try {
+        const res = await apiGet<DirectusItemsResponse<PhysicalInventoryAttachmentRow>>(
+            `${API_BASE}/directus/physical_inventory_attachments`,
+            {
+                filter: JSON.stringify({
+                    physical_inventory_id: { _eq: physicalInventoryId },
+                }),
+                sort: "-created_at",
+                fields: "id,physical_inventory_id,directus_file_id,created_by.user_id,created_by.user_fname,created_by.user_lname,created_at",
+            }
+        );
+        return res.data || [];
+    } catch (err) {
+        console.error("fetchPhysicalInventoryAttachments error:", err);
+        return [];
+    }
+}
+
+export async function uploadCountSheetFile(
+    file: File
+): Promise<{ id: string; filename_download?: string } | null> {
+    const formData = new FormData();
+    formData.append("folder_name", "physical_inventory_attachments");
+    formData.append("file", file);
+
+    const response = await fetch(`${API_BASE}/upload`, {
+        method: "POST",
+        body: formData,
+    });
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(`Upload failed with status ${response.status}: ${text}`);
+    }
+
+    const json = await response.json();
+    return json.data || null;
+}
+
+export async function createPhysicalInventoryAttachment(payload: {
+    physical_inventory_id: number;
+    directus_file_id: string;
+    created_by: number;
+}): Promise<PhysicalInventoryAttachmentRow> {
+    const res = await apiPost<typeof payload, DirectusItemResponse<PhysicalInventoryAttachmentRow>>(
+        `${API_BASE}/directus/physical_inventory_attachments`,
+        payload
+    );
+    return res.data;
+}
+
+export async function deletePhysicalInventoryAttachment(
+    attachmentId: number
+): Promise<void> {
+    const url = new URL(`${API_BASE}/directus/physical_inventory_attachments/${attachmentId}`, window.location.origin);
+    const response = await fetch(url.toString(), {
+        method: "DELETE",
+    });
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(`Failed to delete attachment: ${text}`);
+    }
 }

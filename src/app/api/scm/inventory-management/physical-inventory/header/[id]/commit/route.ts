@@ -1,4 +1,4 @@
-// src/app/api/scm/physical-inventory/header/[id]/commit/route.ts
+// src/app/api/arf/inventory-management/physical-inventory/header/[id]/commit/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
 const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -196,12 +196,18 @@ export async function POST(_req: NextRequest, context: RouteContext) {
 
         const total_amount = sumHeaderTotalAmount(details);
 
+        const getPhTimeISOString = () => {
+            const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }));
+            const pad = (n: number) => n.toString().padStart(2, "0");
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        };
+
         const updated = await directusPatch<PhysicalInventoryHeaderRow>(
             `/items/${TABLE_PH}/${headerId}`,
             {
                 isComitted: 1,
                 isCancelled: 0,
-                committed_at: new Date().toISOString(),
+                committed_at: getPhTimeISOString(),
                 total_amount,
             },
         );

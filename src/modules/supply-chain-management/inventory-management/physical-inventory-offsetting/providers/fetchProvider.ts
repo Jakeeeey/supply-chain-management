@@ -32,13 +32,7 @@ import type {
 } from "../types";
 
 function toSelectionAmount(row: GroupedPhysicalInventoryChildRow): number {
-    const diffCost = Math.abs(row.difference_cost ?? 0);
-    if (diffCost > 0) return diffCost;
-
-    const amount = Math.abs(row.amount ?? 0);
-    if (amount > 0) return amount;
-
-    return Math.abs(row.variance_base ?? row.variance ?? 0);
+    return Math.abs(row.difference_cost ?? 0);
 }
 
 function toProductLabel(row: GroupedPhysicalInventoryChildRow): string {
@@ -192,6 +186,7 @@ export async function loadPhysicalInventoryOffsettingSnapshot(
         runningInventoryRows,
         ph_id: header.id,
         rfidCountByDetailId,
+        ignoreRfid: true,
     });
 
     const flattenedRows = groupedRows.flatMap((group) => group.rows);

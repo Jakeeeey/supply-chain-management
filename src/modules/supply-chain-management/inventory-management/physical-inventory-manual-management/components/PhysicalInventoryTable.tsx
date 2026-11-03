@@ -187,7 +187,7 @@ export function PhysicalInventoryTable(props: Props) {
                         </div>
 
                         <ScrollArea className="w-full">
-                            <div className="min-w-[1100px]">
+                            <div className="min-w-[1200px]">
                                 <Table>
                                     <TableHeader>
                                         <TableRow className="bg-background">
@@ -197,6 +197,7 @@ export function PhysicalInventoryTable(props: Props) {
                                             <TableHead className="text-right">Physical Count</TableHead>
                                             <TableHead className="text-right">Variance</TableHead>
                                             <TableHead className="text-right">Variance Base</TableHead>
+                                            <TableHead className="text-right">Cost</TableHead>
                                             <TableHead className="text-right">Unit Price</TableHead>
                                             <TableHead className="text-right">Amount</TableHead>
                                             <TableHead className="text-right">Difference Cost</TableHead>
@@ -247,6 +248,10 @@ export function PhysicalInventoryTable(props: Props) {
                                                         className={`text-right font-medium tabular-nums ${varianceBaseClass}`}
                                                     >
                                                         {fmtQty(row.variance_base)}
+                                                    </TableCell>
+
+                                                    <TableCell className="text-right tabular-nums">
+                                                        ₱ {fmtMoney(row.cost_per_unit ?? 0)}
                                                     </TableCell>
 
                                                     <TableCell className="text-right tabular-nums">

@@ -1,4 +1,4 @@
-//src/app/api/scm/physical-inventory/directus/[...slug]/route.ts
+//src/app/api/arf/inventory-management/physical-inventory/directus/[...slug]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";

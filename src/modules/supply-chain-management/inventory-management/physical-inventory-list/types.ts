@@ -15,6 +15,8 @@ export type PhysicalInventoryListRow = {
     remarks: string | null;
     isComitted: number;
     isCancelled: number;
+    is_scm: number;
+    is_offset: number;
     total_amount: number | null;
     supplier_id: number | null;
     category_id: number | null;
