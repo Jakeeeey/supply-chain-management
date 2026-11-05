@@ -190,7 +190,7 @@ export function PhysicalInventoryListModule(props: Props) {
 
             const matchesOffsetOnly =
                 !offsetOnly ||
-                (row.is_scm === 1 && row.isComitted === 1 && row.is_offset === 0);
+                (row.is_scm === 1 && row.isComitted === 1);
 
             return (
                 matchesSearch &&

@@ -71,14 +71,16 @@ import {
     CheckCircle2,
     Boxes,
     ClipboardList,
+    Eye,
+    EyeOff,
     Loader2,
     Plus,
     Printer,
     UploadCloud,
     RefreshCcw,
     Search,
+    X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 import {
     PhysicalInventoryAddProductDialog,
@@ -220,33 +222,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
     const [openAddProductDialog, setOpenAddProductDialog] = React.useState(false);
     const [openUploadDialog, setOpenUploadDialog] = React.useState(false);
     const [isCheckingAttachments, setIsCheckingAttachments] = React.useState(false);
-    const [isScrolled, setIsScrolled] = React.useState(false);
-
-    React.useEffect(() => {
-        let ticking = false;
-
-        const handleScroll = () => {
-            if (!ticking) {
-                window.requestAnimationFrame(() => {
-                    const sentinel = document.getElementById("pi-manual-product-finder-sentinel");
-                    if (sentinel) {
-                        const rect = sentinel.getBoundingClientRect();
-                        const shouldBeScrolled = rect.bottom < 0;
-
-                        setIsScrolled(prev => {
-                            if (prev !== shouldBeScrolled) return shouldBeScrolled;
-                            return prev;
-                        });
-                    }
-                    ticking = false;
-                });
-                ticking = true;
-            }
-        };
-
-        document.addEventListener("scroll", handleScroll, { capture: true, passive: true });
-        return () => document.removeEventListener("scroll", handleScroll, true);
-    }, []);
+    const [isToolbarExpanded, setIsToolbarExpanded] = React.useState(false);
 
     const [branches, setBranches] = React.useState<BranchRow[]>([]);
     const [suppliers, setSuppliers] = React.useState<SupplierRow[]>([]);
@@ -286,7 +262,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 if (prev.date_encoded && prev.encoder_id) return prev;
                 return {
                     ...prev,
-                    date_encoded: new Date().toISOString(),
+                    date_encoded: nowInputValue(),
                     encoder_id: {
                         user_id: currentUser.id,
                         user_fname: currentUser.name,
@@ -1336,6 +1312,8 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
         try {
             setIsCommitting(true);
 
+            await flushDirtyDetails();
+
             const updatedHeader = await commitPhysicalInventory(header.id);
 
             setHeader(updatedHeader);
@@ -1350,12 +1328,39 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             setOpenCommitDialog(false);
             toast.success("Physical Inventory committed successfully.");
         } catch (error) {
-            const message = error instanceof Error ? error.message : "Failed to commit PI.";
-            toast.error(message);
+            setOpenCommitDialog(false);
+
+            try {
+                const latestHeader = await fetchPhysicalInventoryById(header.id);
+                setHeader(latestHeader);
+                onRecordChange?.(latestHeader);
+
+                rebuildGroupedRows({
+                    nextDetails: detailRows,
+                    nextHeader: latestHeader,
+                    nextFilters: filters,
+                });
+
+                if (normalizeFlagValue(latestHeader.isComitted) === 1) {
+                    toast.success("Physical Inventory committed successfully.");
+                    return;
+                }
+            } catch {
+                // Ignore secondary verification error and show primary error message below
+            }
+
+            const rawMessage = error instanceof Error ? error.message : "Failed to commit PI.";
+            const friendlyMessage =
+                rawMessage.toLowerCase().includes("fetch failed") ||
+                rawMessage.toLowerCase().includes("unable to reach database")
+                    ? "Unable to commit Physical Inventory due to a server connection issue. The record remains in Pending status—please try again."
+                    : rawMessage;
+
+            toast.error(friendlyMessage);
         } finally {
             setIsCommitting(false);
         }
-    }, [canEdit, detailRows, filters, header?.id, onRecordChange, rebuildGroupedRows]);
+    }, [canEdit, detailRows, filters, flushDirtyDetails, header?.id, onRecordChange, rebuildGroupedRows]);
 
     const handleCancel = React.useCallback(async () => {
         if (!header?.id) {
@@ -1385,6 +1390,27 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             setOpenCancelDialog(false);
             toast.success("Physical Inventory cancelled successfully.");
         } catch (error) {
+            setOpenCancelDialog(false);
+
+            try {
+                const latestHeader = await fetchPhysicalInventoryById(header.id);
+                setHeader(latestHeader);
+                onRecordChange?.(latestHeader);
+
+                rebuildGroupedRows({
+                    nextDetails: detailRows,
+                    nextHeader: latestHeader,
+                    nextFilters: filters,
+                });
+
+                if (normalizeFlagValue(latestHeader.isCancelled) === 1) {
+                    toast.success("Physical Inventory cancelled successfully.");
+                    return;
+                }
+            } catch {
+                // Ignore secondary verification error
+            }
+
             const message = error instanceof Error ? error.message : "Failed to cancel PI.";
             toast.error(message);
         } finally {
@@ -1969,32 +1995,66 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             />
 
             {groupedRows.length > 0 && (
-                <div
-                    className={cn(
-                        "fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] w-full max-w-xl px-4 pointer-events-none transition-all duration-500 ease-in-out",
-                        isScrolled ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-20 scale-90"
-                    )}
-                >
-                    <div className="flex items-center gap-3 bg-background/95 backdrop-blur-xl border border-primary/20 shadow-[0_-10px_50px_rgba(0,0,0,0.25)] rounded-full p-2 ring-1 ring-black/5 pointer-events-auto">
-                        <div className="relative flex-1 bg-muted/40 rounded-full border border-transparent focus-within:border-primary/20 focus-within:bg-background transition-all">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/60" />
-                            <input
-                                value={productSearch}
-                                onChange={(e) => setProductSearch(e.target.value)}
-                                placeholder="Search loaded products..."
-                                className="h-12 w-full bg-transparent border-none focus:ring-0 text-sm pl-12 pr-4 placeholder:text-muted-foreground/50"
-                            />
+                <>
+                    {/* Floating Eye Toggle (Bottom-Right) */}
+                    {!isToolbarExpanded && (
+                        <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 items-end transition-all duration-300 pointer-events-none">
+                            <Button
+                                className="rounded-full h-12 w-12 p-0 bg-primary/30 hover:bg-primary/60 text-primary-foreground shadow-lg shadow-primary/40 hover:scale-105 active:scale-95 transition-all shrink-0 pointer-events-auto"
+                                onClick={() => setIsToolbarExpanded(true)}
+                                title="Show search bar"
+                            >
+                                <Eye className="h-5 w-5" />
+                            </Button>
                         </div>
-                        <Button
-                            className="rounded-full h-12 w-12 p-0 bg-primary text-primary-foreground shadow-lg shadow-primary/40 hover:scale-105 active:scale-95 transition-all shrink-0"
-                            onClick={() => setOpenAddProductDialog(true)}
-                            disabled={!canEdit}
-                            title="Add Product Manually"
-                        >
-                            <Plus className="h-6 w-6" />
-                        </Button>
-                    </div>
-                </div>
+                    )}
+
+                    {/* Floating Search Bar (Bottom-Center Expanded) */}
+                    {isToolbarExpanded && (
+                        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-xl px-4 z-[9999] transition-all duration-300 pointer-events-none">
+                            <div className="flex items-center gap-3 bg-background/95 backdrop-blur-xl border border-primary/20 shadow-[0_-10px_50px_rgba(0,0,0,0.25)] rounded-full p-2 ring-1 ring-black/5 pointer-events-auto">
+                                <div className="relative flex-1 bg-muted/40 rounded-full border border-transparent focus-within:bg-background transition-all">
+                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/60" />
+                                    <input
+                                        value={productSearch}
+                                        onChange={(e) => setProductSearch(e.target.value)}
+                                        placeholder="Search loaded products..."
+                                        className="h-12 w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none text-sm pl-12 pr-10 placeholder:text-muted-foreground/50"
+                                    />
+                                    {Boolean(productSearch) && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+                                            onClick={() => setProductSearch("")}
+                                            title="Clear search"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="rounded-full h-12 w-12 shrink-0 text-muted-foreground hover:text-foreground"
+                                    onClick={() => setIsToolbarExpanded(false)}
+                                    title="Hide search bar"
+                                >
+                                    <EyeOff className="h-5 w-5" />
+                                </Button>
+                                <Button
+                                    className="rounded-full h-12 w-12 p-0 bg-primary text-primary-foreground shadow-lg shadow-primary/40 hover:scale-105 active:scale-95 transition-all shrink-0"
+                                    onClick={() => setOpenAddProductDialog(true)}
+                                    disabled={!canEdit}
+                                    title="Add Product Manually"
+                                >
+                                    <Plus className="h-6 w-6" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );
