@@ -18,6 +18,8 @@ export interface DashboardVehicleItem {
   model?: string;
   fuel_type?: string;
   capacity?: string | number;
+  branch_id?: number | string;
+  branch_name?: string;
 }
 
 export interface DashboardDriverItem {
@@ -28,6 +30,7 @@ export interface DashboardDriverItem {
   contact?: string;
   branch_name?: string;
   license_no?: string;
+  status?: string;
 }
 
 export interface DashboardJobOrderItem {

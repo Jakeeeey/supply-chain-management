@@ -24,6 +24,11 @@ interface CoaBudget {
   budget: number;
 }
 
+interface CoaBudgetWithAccount extends CoaBudget {
+  account_title: string;
+  gl_code: string;
+}
+
 interface CoaItem {
   coa_id: number;
   account_title: string;
@@ -132,30 +137,11 @@ export async function GET(req: NextRequest) {
   const clusterId = url.searchParams.get("cluster_id");
 
   try {
-    // ── COA Options: filtered by account_types ──────────────────────
+    // ── COA Options: list active/all chart of accounts ────────────────
     if (type === "coa_options") {
-      // 1. Fetch IDs of the target account types
-      const accountTypesRes = await directusFetch(
-        `${DIRECTUS_URL}/items/account_types?filter[account_name][_in]=GENERAL AND ADMINISTRATIVE EXPENSES,FINANCE COST&fields=id,account_name&limit=-1`
-      ).catch(() => ({ data: [] }));
-
-      const targetTypeIds = ((accountTypesRes.data ?? []) as { id: number; account_name: string }[])
-        .map((t) => t.id)
-        .filter(Boolean);
-
-      // If matching account types were found, filter by account_type IN (...)
-      // Also fallback to relational filter if direct IDs query returned empty
-      let filterParam = "";
-      if (targetTypeIds.length > 0) {
-        filterParam = `&filter[account_type][_in]=${targetTypeIds.join(",")}`;
-      } else {
-        filterParam = `&filter[account_type][account_name][_in]=${encodeURIComponent("GENERAL AND ADMINISTRATIVE EXPENSES")},${encodeURIComponent("FINANCE COST")}`;
-      }
-
       const coaRes = await directusFetch(
-        `${DIRECTUS_URL}${COA_ENDPOINT}?fields=coa_id,account_title,gl_code,account_type${filterParam}&limit=-1`
+        `${DIRECTUS_URL}${COA_ENDPOINT}?fields=coa_id,account_title,gl_code&limit=-1`
       ).catch(() => ({ data: [] }));
-
       return json({ data: coaRes.data ?? [] });
     }
 
@@ -208,10 +194,7 @@ export async function GET(req: NextRequest) {
       areasByCluster.get(cid)!.push(area);
     }
 
-    const budgetsByCluster = new Map<
-      number,
-      Array<CoaBudget & { account_title: string; gl_code: string }>
-    >();
+    const budgetsByCluster = new Map<number, CoaBudgetWithAccount[]>();
     for (const b of (allBudgets.data ?? []) as CoaBudget[]) {
       const cid = b.cluster_id;
       if (!budgetsByCluster.has(cid)) budgetsByCluster.set(cid, []);
@@ -346,6 +329,7 @@ export async function POST(req: NextRequest) {
         )
       );
 
+
       return json({
         data: { ...cluster.data, areas: createdAreas, coa_budgets: createdBudgets },
       });
@@ -407,7 +391,7 @@ export async function PATCH(req: NextRequest) {
       return json({ error: overlapError }, 409);
     }
 
-    // 2. Delete existing areas for this cluster concurrently
+    // 2. Delete ALL existing areas for this cluster first
     const existingAreasRes = await directusFetch(
       `${DIRECTUS_URL}${AREA_ENDPOINT}?filter[cluster_id][_eq]=${id}&limit=-1`
     );
@@ -464,6 +448,7 @@ export async function PATCH(req: NextRequest) {
         }).then((res) => res.data)
       )
     );
+
 
     return json({
       data: { ...cluster.data, areas: createdAreas, coa_budgets: createdBudgets },
