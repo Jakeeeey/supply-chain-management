@@ -81,7 +81,12 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
             Promise.all([
                 fetchInvoiceDetails(reconciliation.invoiceId),
                 reconciliation.status === 'Fulfilled with Returns' 
-                    ? import('../providers/fetchProviders').then(m => m.fetchSalesReturnsByInvoice(invoiceNo))
+                    ? import('../providers/fetchProviders')
+                        .then(m => m.fetchSalesReturnsByInvoice(invoiceNo))
+                        .catch(err => {
+                            console.warn("Could not fetch existing returns:", err);
+                            return [];
+                        })
                     : Promise.resolve([])
             ])
                 .then(([data, returns]) => {
