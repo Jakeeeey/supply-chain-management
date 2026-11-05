@@ -5,6 +5,7 @@ export const runtime = "nodejs";
 
 const UPSTREAM =
   process.env.UPSTREAM_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL;
+const DIRECTUS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN || "";
 
 function withCors(res: NextResponse, req: NextRequest) {
   const origin = req.headers.get("origin") || "*";
@@ -28,7 +29,7 @@ function pickForwardHeaders(req: NextRequest) {
   const ct = req.headers.get("content-type");
   if (ct) headers.set("content-type", ct);
 
-  const auth = req.headers.get("authorization");
+  const auth = req.headers.get("authorization") || (DIRECTUS_TOKEN ? `Bearer ${DIRECTUS_TOKEN}` : null);
   if (auth) headers.set("authorization", auth);
 
   const cookie = req.headers.get("cookie");
