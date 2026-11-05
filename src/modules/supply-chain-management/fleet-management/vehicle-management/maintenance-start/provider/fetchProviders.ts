@@ -6,8 +6,9 @@ import type {
 
 const BASE_URL = "/api/scm/fleet-management/vehicle-management/maintenance-start";
 
-export async function fetchStartOptions(): Promise<{ parts: VehiclePartOption[] }> {
-  const res = await fetch(`${BASE_URL}?mode=options`, { cache: "no-store" });
+export async function fetchStartOptions(branchId?: number | string): Promise<{ parts: VehiclePartOption[] }> {
+  const query = branchId ? `?mode=options&branch_id=${encodeURIComponent(branchId)}` : `?mode=options`;
+  const res = await fetch(`${BASE_URL}${query}`, { cache: "no-store" });
   if (!res.ok) {
     throw new Error("Failed to load options");
   }

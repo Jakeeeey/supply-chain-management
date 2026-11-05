@@ -2,6 +2,13 @@ export type JOType = "Repair" | "Preventive Maintenance" | "Inspection";
 export type JOPriority = "Low" | "Normal" | "High" | "Urgent";
 export type JOStatus = "Requested" | "Approved" | "Rejected" | "In Progress" | "Completed" | "Cancelled";
 
+export interface BranchOption {
+  id: number;
+  branch_name: string;
+  branch_code?: string;
+  location?: string;
+}
+
 export interface VehicleOption {
   vehicle_id: number;
   id?: number;
@@ -14,6 +21,7 @@ export interface VehicleOption {
   current_mileage?: number;
   odometer?: number;
   status?: string;
+  branch_id?: number | BranchOption;
 }
 
 export interface UserOption {
@@ -61,7 +69,7 @@ export interface VehicleJobOrder {
   id: number;
   jo_no: string;
   vehicle_id: number | VehicleOption;
-  branch_id?: number;
+  branch_id?: number | BranchOption;
   jo_type: JOType;
   priority: JOPriority;
   description: string;
