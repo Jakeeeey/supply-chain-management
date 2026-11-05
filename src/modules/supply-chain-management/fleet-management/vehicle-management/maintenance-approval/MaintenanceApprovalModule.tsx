@@ -14,11 +14,16 @@ export default function MaintenanceApprovalModule() {
     actionLoading,
     jobOrders,
     rawJobOrders,
+    totalCount,
     users,
     searchQuery,
     setSearchQuery,
     typeFilter,
     setTypeFilter,
+    currentPage,
+    setCurrentPage,
+    pageSize,
+    setPageSize,
     refresh,
     approveAssign,
   } = useMaintenanceApproval();
@@ -60,6 +65,11 @@ export default function MaintenanceApprovalModule() {
         loading={loading}
         onViewDetails={handleViewDetailsModal}
         onOpenApprove={handleOpenApproveModal}
+        currentPage={currentPage}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
       />
 
       {/* Dialogs */}
