@@ -234,6 +234,8 @@ export async function GET() {
         fuel_type: fuelName,
         vehicle_type: typeName,
         capacity: v.maximum_weight ? `${v.maximum_weight} kg` : v.max_liters ? `${v.max_liters} L` : "—",
+        branch_id: v.branch_id ?? undefined,
+        branch_name: v.branch_id ? branchMap.get(v.branch_id) || "—" : "—",
       };
     });
 
@@ -243,12 +245,25 @@ export async function GET() {
       vehiclePlateMap.set(String(v.id), v.plate_number);
     }
 
+    // Outside / On Trip active drivers set - Only "For Inbound"
+    const outsideStatuses = ["for inbound"];
+    const onTripDriverUserIds = new Set<number>();
+    for (const dp of rawDispatchPlans) {
+      const s = String(dp.status || "").toLowerCase().trim();
+      if (outsideStatuses.includes(s) && dp.driver_id) {
+        onTripDriverUserIds.add(Number(dp.driver_id));
+      }
+    }
+
     // Format Drivers (using `driver` + `user` table definitions)
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
     const drivers = rawDrivers.map((d) => {
       const uInfo = userMap.get(d.user_id);
+      const isOnTrip = onTripDriverUserIds.has(Number(d.user_id));
+      const driverStatus = isOnTrip ? "On Trip" : "Available";
+
       return {
         id: d.id,
         user_id: d.user_id,
@@ -259,6 +274,7 @@ export async function GET() {
         license_no: d.license_no || "—",
         license_classification: d.license_classification || "—",
         license_expiry_date: d.license_expiry_date || "",
+        status: driverStatus,
       };
     });
 
@@ -350,8 +366,7 @@ export async function GET() {
         };
       });
 
-    // Format Outside Vehicles (Dispatched / On Trip / For Inbound)
-    const outsideStatuses = ["for inbound", "on trip", "dispatched", "in transit", "for dispatch"];
+    // Format Outside Vehicles - Only "For Inbound"
     const outsideList = rawDispatchPlans
       .filter((dp) => {
         const s = String(dp.status || "").toLowerCase().trim();
