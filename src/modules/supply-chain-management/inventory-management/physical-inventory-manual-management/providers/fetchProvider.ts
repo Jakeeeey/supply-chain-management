@@ -65,6 +65,32 @@ async function parseJsonSafe<T>(response: Response): Promise<T> {
     return JSON.parse(text) as T;
 }
 
+function extractApiErrorMessage(text: string, fallback: string): string {
+    if (!text) return fallback;
+    try {
+        const parsed: unknown = JSON.parse(text);
+        if (parsed && typeof parsed === "object") {
+            const obj = parsed as {
+                error?: unknown;
+                message?: unknown;
+                errors?: Array<{ message?: unknown }>;
+            };
+            if (typeof obj.error === "string" && obj.error.trim()) {
+                return obj.error.trim();
+            }
+            if (typeof obj.message === "string" && obj.message.trim()) {
+                return obj.message.trim();
+            }
+            if (Array.isArray(obj.errors) && typeof obj.errors[0]?.message === "string") {
+                return obj.errors[0].message.trim();
+            }
+        }
+    } catch {
+        // Not JSON, fall back to raw text
+    }
+    return text.trim() || fallback;
+}
+
 async function apiGet<T>(path: string, params?: Record<string, string>): Promise<T> {
     const url = new URL(path, window.location.origin);
 
@@ -81,7 +107,7 @@ async function apiGet<T>(path: string, params?: Record<string, string>): Promise
 
     if (!response.ok) {
         const text = await response.text().catch(() => "");
-        throw new Error(`GET ${path} failed with ${response.status}. ${text}`);
+        throw new Error(extractApiErrorMessage(text, `GET ${path} failed with ${response.status}.`));
     }
 
     return parseJsonSafe<T>(response);
@@ -101,7 +127,7 @@ async function apiPost<TPayload, TResult>(path: string, payload: TPayload): Prom
 
     if (!response.ok) {
         const text = await response.text().catch(() => "");
-        throw new Error(`POST ${path} failed with ${response.status}. ${text}`);
+        throw new Error(extractApiErrorMessage(text, `POST ${path} failed with ${response.status}.`));
     }
 
     return parseJsonSafe<TResult>(response);
@@ -121,7 +147,7 @@ async function apiPatch<TPayload, TResult>(path: string, payload: TPayload): Pro
 
     if (!response.ok) {
         const text = await response.text().catch(() => "");
-        throw new Error(`PATCH ${path} failed with ${response.status}. ${text}`);
+        throw new Error(extractApiErrorMessage(text, `PATCH ${path} failed with ${response.status}.`));
     }
 
     return parseJsonSafe<TResult>(response);
@@ -137,7 +163,7 @@ async function apiDelete(path: string): Promise<void> {
 
     if (!response.ok) {
         const text = await response.text().catch(() => "");
-        throw new Error(`DELETE ${path} failed with ${response.status}. ${text}`);
+        throw new Error(extractApiErrorMessage(text, `DELETE ${path} failed with ${response.status}.`));
     }
 }
 

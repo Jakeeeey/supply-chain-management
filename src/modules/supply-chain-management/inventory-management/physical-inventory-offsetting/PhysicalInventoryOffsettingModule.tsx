@@ -37,6 +37,7 @@ import {
     ArrowLeft,
     CheckCircle2,
     ClipboardList,
+    FileText,
     GitCompareArrows,
     Loader2,
     Plus,
@@ -44,6 +45,7 @@ import {
     RefreshCcw,
 } from "lucide-react";
 
+import { PhysicalInventoryUploadCountSheetDialog } from "../physical-inventory-manual-management/components";
 import { OffsettingGroupsTable } from "./components/OffsettingGroupsTable";
 import { OffsettingSelectionTable } from "./components/OffsettingSelectionTable";
 
@@ -79,6 +81,7 @@ export function PhysicalInventoryOffsettingModule({
     const [isSaving, setIsSaving] = React.useState(false);
     const [isCreatingGroup, setIsCreatingGroup] = React.useState(false);
     const [openSaveDialog, setOpenSaveDialog] = React.useState(false);
+    const [openCountSheetDialog, setOpenCountSheetDialog] = React.useState(false);
 
     const [header, setHeader] = React.useState<PhysicalInventoryHeaderRow | null>(null);
     const [varianceRows, setVarianceRows] = React.useState<OffsettingSelectableRow[]>([]);
@@ -156,6 +159,7 @@ export function PhysicalInventoryOffsettingModule({
 
             setHeader(snapshot.header);
             setVarianceRows(snapshot.rows);
+            setOffsetGroups(snapshot.initialGroups);
             setReportMeta(snapshot.reportMeta);
             setSelectedShortIds([]);
             setSelectedOverIds([]);
@@ -325,11 +329,6 @@ export function PhysicalInventoryOffsettingModule({
             onCommitted?.(updatedHeader);
 
             toast.success("Offsetting saved successfully.");
-
-            // Full page reload and clean URL so the finished PI is removed from the list and work area is cleared
-            setTimeout(() => {
-                window.location.href = "/scm/inventory-management/physical-inventory/offsetting";
-            }, 800);
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : "Failed to save offsetting.";
@@ -449,6 +448,17 @@ export function PhysicalInventoryOffsettingModule({
                         >
                             <Printer className="mr-2 h-3.5 w-3.5" />
                             Print Report
+                        </Button>
+
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="cursor-pointer border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-900/60 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-900/40"
+                            onClick={() => setOpenCountSheetDialog(true)}
+                            disabled={isLoading || isSaving || !header?.id}
+                        >
+                            <FileText className="mr-2 h-3.5 w-3.5" />
+                            View Count Sheet
                         </Button>
                     </div>
                 </div>
@@ -663,6 +673,16 @@ export function PhysicalInventoryOffsettingModule({
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <PhysicalInventoryUploadCountSheetDialog
+                isOpen={openCountSheetDialog}
+                onOpenChange={setOpenCountSheetDialog}
+                physicalInventoryId={header?.id || null}
+                phNo={header?.ph_no}
+                canEdit={false}
+                isCommitted={true}
+                currentUserId={currentUser?.id}
+            />
         </div>
     );
 }

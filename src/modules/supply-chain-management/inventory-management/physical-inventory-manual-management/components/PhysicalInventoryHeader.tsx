@@ -50,15 +50,31 @@ function formatMoney(value: number): string {
 
 function formatDisplayDate(value: string | null | undefined): string {
     if (!value) return "Not saved yet";
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return value;
-    return parsed.toLocaleString("en-PH", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
+    const clean = value.trim().replace("Z", "").split(".")[0];
+    const [datePart, timePart] = clean.split(/[T ]/);
+    if (!datePart) return value;
+
+    const [year, monthStr, dayStr] = datePart.split("-");
+    if (!year || !monthStr || !dayStr) return value;
+
+    const month = monthStr.padStart(2, "0");
+    const day = dayStr.padStart(2, "0");
+
+    if (!timePart) {
+        return `${month}/${day}/${year}`;
+    }
+
+    const [hourStr, minStr] = timePart.split(":");
+    const hourNum = parseInt(hourStr, 10);
+    if (Number.isNaN(hourNum) || !minStr) {
+        return `${month}/${day}/${year}`;
+    }
+
+    const ampm = hourNum >= 12 ? "PM" : "AM";
+    const hour12 = String(hourNum % 12 || 12).padStart(2, "0");
+    const minute = minStr.padStart(2, "0");
+
+    return `${month}/${day}/${year}, ${hour12}:${minute} ${ampm}`;
 }
 
 function stockTypeTone(stockType: string | null | undefined): string {

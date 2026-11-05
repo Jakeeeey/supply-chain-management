@@ -172,7 +172,13 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
             );
         }
 
-        const updatedRows = await Promise.all(updates.map((item) => patchDetailRow(item)));
+        const updatedRows: PhysicalInventoryDetailRow[] = [];
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+            const chunk = updates.slice(i, i + BATCH_SIZE);
+            const chunkResults = await Promise.all(chunk.map((item) => patchDetailRow(item)));
+            updatedRows.push(...chunkResults);
+        }
 
         return NextResponse.json({ data: updatedRows });
     } catch (error) {
