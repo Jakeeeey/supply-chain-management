@@ -64,10 +64,11 @@ export function AreaCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-full justify-between font-normal h-9 border-input bg-background", className, !selectedLabel && "text-muted-foreground", error && "border-destructive ring-1 ring-destructive")}
+          title={selectedLabel}
+          className={cn("w-full min-w-0 justify-between font-normal h-9 border-input bg-background", className, !selectedLabel && "text-muted-foreground", error && "border-destructive ring-1 ring-destructive")}
           disabled={disabled}
         >
-          <span className="truncate">
+          <span className="min-w-0 flex-1 truncate text-left">
             {selectedLabel || placeholder}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
