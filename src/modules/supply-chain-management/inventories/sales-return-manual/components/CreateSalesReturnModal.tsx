@@ -433,7 +433,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   
   // --- 5c. PRE-FILL FROM CLEARANCE ---
   useEffect(() => {
-    if (isOpen && fromClearance === "true" && customers.length > 0) {
+    if (isOpen && fromClearance === "true" && customers.length > 0 && salesmen.length > 0) {
       const storedData = localStorage.getItem('scm_dispatch_return_data');
       if (storedData) {
         try {
@@ -455,8 +455,9 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
           // 1.5 Find and set Salesman (Strictly by ID or Code to prevent matching wrong salesman with same name)
           const foundSalesman = salesmen.find(s =>
-            (data.salesmanId && (s.id === data.salesmanId || String(s.id) === String(data.salesmanId))) ||
-            (data.salesmanCode && s.code === data.salesmanCode)
+            data.salesmanId
+              ? (String(s.id) === String(data.salesmanId) || Number(s.id) === Number(data.salesmanId))
+              : (data.salesmanCode && s.code === data.salesmanCode)
           );
           if (foundSalesman) {
             handleSelectSalesman(foundSalesman);
