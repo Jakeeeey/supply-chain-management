@@ -22,6 +22,7 @@ type Props = {
     header: PhysicalInventoryHeaderRow | null;
     status: PhysicalInventoryStatus;
     canEdit: boolean;
+    hasLoadedDetails?: boolean;
     totalAmount: number;
     onChangePhNo: (value: string) => void;
     onChangeStockType: (value: "GOOD" | "BAD") => void;
@@ -49,15 +50,31 @@ function formatMoney(value: number): string {
 
 function formatDisplayDate(value: string | null | undefined): string {
     if (!value) return "Not saved yet";
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return value;
-    return parsed.toLocaleString("en-PH", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
+    const clean = value.trim().replace("Z", "").split(".")[0];
+    const [datePart, timePart] = clean.split(/[T ]/);
+    if (!datePart) return value;
+
+    const [year, monthStr, dayStr] = datePart.split("-");
+    if (!year || !monthStr || !dayStr) return value;
+
+    const month = monthStr.padStart(2, "0");
+    const day = dayStr.padStart(2, "0");
+
+    if (!timePart) {
+        return `${month}/${day}/${year}`;
+    }
+
+    const [hourStr, minStr] = timePart.split(":");
+    const hourNum = parseInt(hourStr, 10);
+    if (Number.isNaN(hourNum) || !minStr) {
+        return `${month}/${day}/${year}`;
+    }
+
+    const ampm = hourNum >= 12 ? "PM" : "AM";
+    const hour12 = String(hourNum % 12 || 12).padStart(2, "0");
+    const minute = minStr.padStart(2, "0");
+
+    return `${month}/${day}/${year}, ${hour12}:${minute} ${ampm}`;
 }
 
 function stockTypeTone(stockType: string | null | undefined): string {
@@ -72,6 +89,7 @@ export function PhysicalInventoryHeader(props: Props) {
         header,
         status,
         canEdit,
+        hasLoadedDetails,
         totalAmount,
         onChangePhNo,
         onChangeStockType,
@@ -166,7 +184,7 @@ export function PhysicalInventoryHeader(props: Props) {
                             type="datetime-local"
                             value={toInputDateTimeLocal(header?.starting_date)}
                             onChange={(e) => onChangeStartingDate(e.target.value)}
-                            disabled={!canEdit}
+                            disabled={!canEdit || hasLoadedDetails}
                         />
                     </div>
 
@@ -177,7 +195,7 @@ export function PhysicalInventoryHeader(props: Props) {
                             type="datetime-local"
                             value={toInputDateTimeLocal(header?.cutOff_date)}
                             onChange={(e) => onChangeCutoffDate(e.target.value)}
-                            disabled={!canEdit}
+                            disabled={!canEdit || hasLoadedDetails}
                         />
                     </div>
 
@@ -188,7 +206,7 @@ export function PhysicalInventoryHeader(props: Props) {
                             onValueChange={(value) =>
                                 onChangeStockType(value as "GOOD" | "BAD")
                             }
-                            disabled={!canEdit}
+                            disabled={!canEdit || hasLoadedDetails}
                         >
                             <SelectTrigger className="cursor-pointer">
                                 <SelectValue placeholder="Select stock type" />

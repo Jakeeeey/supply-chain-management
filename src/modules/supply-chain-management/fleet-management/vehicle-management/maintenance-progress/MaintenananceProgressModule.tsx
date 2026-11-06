@@ -15,12 +15,18 @@ export default function MaintenanceProgressModule() {
     actionLoading,
     jobOrders,
     rawJobOrders,
+    totalCount,
     parts,
     searchQuery,
     setSearchQuery,
     typeFilter,
     setTypeFilter,
+    currentPage,
+    setCurrentPage,
+    pageSize,
+    setPageSize,
     refresh,
+    loadPartsForBranch,
     issueParts,
     completeJO,
   } = useMaintenanceProgress();
@@ -30,8 +36,15 @@ export default function MaintenanceProgressModule() {
   const [openDetails, setOpenDetails] = React.useState(false);
   const [selectedJO, setSelectedJO] = React.useState<VehicleJobOrder | null>(null);
 
-  const handleOpenIssueParts = (jo: VehicleJobOrder) => {
+  const handleOpenIssueParts = async (jo: VehicleJobOrder) => {
     setSelectedJO(jo);
+    const branchId =
+      typeof jo.branch_id === "object" && jo.branch_id !== null
+        ? jo.branch_id.id
+        : jo.branch_id;
+    if (branchId) {
+      await loadPartsForBranch(branchId);
+    }
     setOpenIssueParts(true);
   };
 
@@ -66,6 +79,11 @@ export default function MaintenanceProgressModule() {
       <MaintenanceProgressTable
         jobOrders={jobOrders}
         loading={loading}
+        totalCount={totalCount}
+        currentPage={currentPage}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
         onViewDetails={handleViewDetails}
         onOpenIssueParts={handleOpenIssueParts}
         onOpenComplete={handleOpenComplete}

@@ -38,7 +38,9 @@ import { cn } from "@/lib/utils";
 import type { ReorderTriggerItem, PurchaseRequestPriority, Supplier } from "../types";
 import type { Branch } from "../../stock-in/types";
 import type { VehiclePart } from "../../registration/types";
+import type { PartStock } from "../../stock-monitoring/types";
 import { createPurchaseRequest } from "../provider/fetchProviders";
+import { fetchStockRecords } from "../../stock-monitoring/provider/fetchProviders";
 
 interface BulkPurchaseRequestDialogProps {
   open: boolean;
@@ -79,6 +81,42 @@ export function BulkPurchaseRequestDialog({
 
   const [submitting, setSubmitting] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string>("");
+  const [stockRecords, setStockRecords] = React.useState<PartStock[]>([]);
+
+  // Load real-time stock records when dialog is opened
+  React.useEffect(() => {
+    if (open) {
+      fetchStockRecords()
+        .then((records) => setStockRecords(records))
+        .catch(() => setStockRecords([]));
+    }
+  }, [open]);
+
+  // Lookup map: `${partId}-${branchId}` -> on_hand
+  const stockMap = React.useMemo(() => {
+    const map = new Map<string, number>();
+    stockRecords.forEach((s) => {
+      const pId = typeof s.part_id === "object" && s.part_id !== null ? Number(s.part_id.id) : Number(s.part_id);
+      const bId = typeof s.branch_id === "object" && s.branch_id !== null ? Number(s.branch_id.id) : Number(s.branch_id);
+      if (pId && bId) {
+        map.set(`${pId}-${bId}`, Number(s.on_hand) || 0);
+      }
+    });
+    return map;
+  }, [stockRecords]);
+
+  // Helper function to resolve on_hand for a given part and branch
+  const getOnHand = React.useCallback(
+    (pId: number, bId: string, fallback?: number) => {
+      if (!bId) return fallback ?? 0;
+      const key = `${pId}-${bId}`;
+      if (stockMap.has(key)) {
+        return stockMap.get(key) || 0;
+      }
+      return fallback ?? 0;
+    },
+    [stockMap]
+  );
 
   React.useEffect(() => {
     if (open) {
@@ -87,6 +125,15 @@ export function BulkPurchaseRequestDialog({
       setExpectedDate("");
       setNotes("");
 
+      // Default branch from first item, or first available branch
+      let defaultBranch = "";
+      if (selectedItems.length > 0) {
+        defaultBranch = String(selectedItems[0].branch_id);
+      } else if (branches.length > 0) {
+        defaultBranch = String(branches[0].id);
+      }
+      setBranchId(defaultBranch);
+
       // Initialize items from selection
       const initItems: EditableBulkItem[] = selectedItems.map((t) => ({
         part_id: t.part_id,
@@ -94,23 +141,31 @@ export function BulkPurchaseRequestDialog({
         part_name: t.part_name,
         unit: t.unit || "pc",
         unit_cost: Number(t.unit_cost) || 0,
-        on_hand: t.on_hand,
+        on_hand: t.branch_id && defaultBranch && String(t.branch_id) === defaultBranch ? t.on_hand : 0,
         quantity: Math.max(1, t.suggested_quantity || 10),
       }));
       setItems(initItems);
-
-      // Default branch from first item, or first available branch
-      if (selectedItems.length > 0) {
-        setBranchId(String(selectedItems[0].branch_id));
-      } else if (branches.length > 0) {
-        setBranchId(String(branches[0].id));
-      }
 
       // If any critical, default to Critical/Urgent
       const hasCritical = selectedItems.some((i) => i.on_hand <= 0);
       setPriority(hasCritical ? "Critical" : "Normal");
     }
   }, [open, selectedItems, branches]);
+
+  // When branchId or stockMap updates, sync on_hand for all items
+  React.useEffect(() => {
+    if (!branchId) return;
+    setItems((prev) =>
+      prev.map((it) => {
+        const key = `${it.part_id}-${branchId}`;
+        const currentOnHand = stockMap.has(key) ? (stockMap.get(key) || 0) : 0;
+        return {
+          ...it,
+          on_hand: currentOnHand,
+        };
+      })
+    );
+  }, [branchId, stockMap]);
 
   const branchOptions = React.useMemo(() => {
     return branches.map((b) => ({
@@ -148,15 +203,18 @@ export function BulkPurchaseRequestDialog({
     const p = parts.find((pt) => String(pt.id) === selectedPartToAdd);
     if (!p) return;
 
+    const pId = Number(p.id);
+    const onHand = getOnHand(pId, branchId, 0);
+
     setItems((prev) => [
       ...prev,
       {
-        part_id: Number(p.id),
+        part_id: pId,
         part_code: p.part_code,
         part_name: p.part_name,
         unit: p.unit || "pc",
         unit_cost: Number(p.unit_cost) || 0,
-        on_hand: 0,
+        on_hand: onHand,
         quantity: Math.max(1, Number(p.reorder_point || 10)),
       },
     ]);

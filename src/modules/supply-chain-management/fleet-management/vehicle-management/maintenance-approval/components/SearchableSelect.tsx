@@ -64,7 +64,13 @@ export function SearchableSelect({
           <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className={cn("w-[300px] p-0 shadow-lg border", className)} align="start">
+      <PopoverContent
+        className={cn(
+          "w-[--radix-popover-trigger-width] min-w-[280px] p-0 shadow-lg border z-50 bg-popover text-popover-foreground",
+          className
+        )}
+        align="start"
+      >
         <Command
           filter={(itemValue, search) => {
             if (itemValue.toLowerCase().includes(search.toLowerCase())) return 1;
@@ -72,7 +78,10 @@ export function SearchableSelect({
           }}
         >
           <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} className="h-8 text-xs" />
-          <CommandList className="max-h-[220px] overflow-y-auto">
+          <CommandList
+            className="max-h-60 overflow-y-auto p-1"
+            onWheel={(e) => e.stopPropagation()}
+          >
             <CommandEmpty className="py-4 text-center text-xs text-muted-foreground">
               No results found.
             </CommandEmpty>
@@ -85,11 +94,11 @@ export function SearchableSelect({
                     onValueChange(opt.value);
                     setOpen(false);
                   }}
-                  className="text-xs cursor-pointer"
+                  className="text-xs cursor-pointer py-1.5 px-2"
                 >
                   <Check
                     className={cn(
-                      "mr-2 h-3.5 w-3.5 text-primary",
+                      "mr-2 h-3.5 w-3.5 text-primary shrink-0",
                       value === opt.value ? "opacity-100" : "opacity-0"
                     )}
                   />

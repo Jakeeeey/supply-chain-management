@@ -138,7 +138,19 @@ export async function GET(request: Request) {
         ]);
 
         const users = usersRes?.data || [];
-        const salesInvoices = salesInvoicesRes?.data || [];
+        const rawSalesInvoices = salesInvoicesRes?.data || [];
+        // Filter out replaced invoices (handles bit(1) Buffer { type: 'Buffer', data: [1] }, 1, true, '1')
+        const isReplacedVal = (val: unknown): boolean => {
+            if (!val) return false;
+            if (typeof val === 'object' && val !== null && 'data' in val && Array.isArray((val as { data: unknown[] }).data)) {
+                return (val as { data: number[] }).data[0] === 1;
+            }
+            if (typeof Buffer !== 'undefined' && Buffer.isBuffer(val)) {
+                return val[0] === 1;
+            }
+            return val === 1 || val === true || val === '1';
+        };
+        const salesInvoices = rawSalesInvoices.filter((si: { isReplaced?: unknown }) => !isReplacedVal(si.isReplaced));
 
         // 4. Fetch Vehicle Types and Branches
         const vehicleTypeIds = [...new Set(vehicles.map((v: { vehicle_type: number }) => v.vehicle_type).filter(Boolean))];
@@ -226,7 +238,11 @@ export async function GET(request: Request) {
                 .reduce((sum: number, b: { amount: string | number }) => sum + (Number(b.amount) || 0), 0);
 
             const planInvoices = invoices
-                .filter((inv: { post_dispatch_plan_id: number }) => inv.post_dispatch_plan_id === plan.id)
+                .filter((inv: { post_dispatch_plan_id: number; invoice_id: number }) => {
+                    if (inv.post_dispatch_plan_id !== plan.id) return false;
+                    // Exclude invoices that are replaced or do not exist in filtered salesInvoices
+                    return salesInvoices.some((s: { invoice_id: number }) => s.invoice_id === inv.invoice_id);
+                })
                 .map((inv: { id: number; invoice_id: number; status: string; remarks: string }) => {
                     const salesInv = salesInvoices.find((s: { invoice_id: number; customer_code: string; order_id: string; invoice_no: string; invoice_date: string; total_amount: string | number }) => s.invoice_id === inv.invoice_id);
                     const custCodeRaw = salesInv?.customer_code || "";

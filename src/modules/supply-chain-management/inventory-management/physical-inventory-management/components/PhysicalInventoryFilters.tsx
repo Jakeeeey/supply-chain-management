@@ -304,7 +304,7 @@ export function PhysicalInventoryFilters(props: Props) {
                         emptyText="No branch found."
                         value={filters.branch_id}
                         options={branchOptions}
-                        disabled={!canEdit}
+                        disabled={disableFilterChange}
                         searchPlaceholder="Search branch..."
                         onChange={onChangeBranch}
                     />

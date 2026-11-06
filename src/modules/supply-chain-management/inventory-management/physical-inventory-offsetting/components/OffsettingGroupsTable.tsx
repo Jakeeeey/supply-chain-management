@@ -1,15 +1,18 @@
 "use client";
 
+import * as React from "react";
 import type { PhysicalInventoryOffsetGroup } from "../types";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Edit2, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Edit2, MessageSquare, Trash2 } from "lucide-react";
 
 type Props = {
     groups: PhysicalInventoryOffsetGroup[];
     onEditGroup?: (groupId: string) => void;
     onDeleteGroup?: (groupId: string) => void;
+    onUpdateRemarks?: (groupId: string, remarks: string) => void;
     disabled?: boolean;
     isPending?: boolean;
 };
@@ -31,6 +34,7 @@ export function OffsettingGroupsTable({
                                            groups,
                                            onEditGroup,
                                            onDeleteGroup,
+                                           onUpdateRemarks,
                                            disabled = false,
                                            isPending = true,
                                        }: Props) {
@@ -164,6 +168,20 @@ export function OffsettingGroupsTable({
                             </div>
                         </div>
 
+                        {/* Optional Remarks input per group */}
+                        <div className="px-3 py-2 bg-muted/10 border-t">
+                            <div className="flex items-center gap-1.5">
+                                <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <Input
+                                    value={group.remarks ?? ""}
+                                    onChange={(e) => onUpdateRemarks?.(group.id, e.target.value)}
+                                    placeholder="Remarks (optional)..."
+                                    className="h-7 text-xs bg-background"
+                                    disabled={disabled || !isPending}
+                                />
+                            </div>
+                        </div>
+
                         <div className="p-3 bg-muted/20 border-t mt-auto">
                             <div className="flex items-center justify-between">
                                 <span className="text-xs font-bold text-muted-foreground uppercase">Net Difference</span>
@@ -177,4 +195,4 @@ export function OffsettingGroupsTable({
             ))}
         </div>
     );
-}
+}

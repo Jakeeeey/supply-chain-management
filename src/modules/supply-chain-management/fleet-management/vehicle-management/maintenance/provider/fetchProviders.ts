@@ -3,6 +3,7 @@ import type {
   VehicleOption,
   UserOption,
   VehiclePartOption,
+  BranchOption,
   CreateJORequestPayload,
   ApproveAssignPayload,
   IssuePartsPayload,
@@ -15,15 +16,17 @@ export interface MaintenanceOptionsResponse {
   vehicles: VehicleOption[];
   users: UserOption[];
   parts: VehiclePartOption[];
+  branches: BranchOption[];
 }
 
-export async function fetchMaintenanceOptions(): Promise<MaintenanceOptionsResponse> {
-  const res = await fetch(`${BASE_URL}?mode=options`, { cache: "no-store" });
+export async function fetchMaintenanceOptions(branchId?: number | string): Promise<MaintenanceOptionsResponse> {
+  const query = branchId ? `?mode=options&branch_id=${encodeURIComponent(branchId)}` : `?mode=options`;
+  const res = await fetch(`${BASE_URL}${query}`, { cache: "no-store" });
   if (!res.ok) {
     throw new Error("Failed to load options");
   }
   const json = await res.json();
-  return json.data || { vehicles: [], users: [], parts: [] };
+  return json.data || { vehicles: [], users: [], parts: [], branches: [] };
 }
 
 export async function fetchJobOrders(): Promise<VehicleJobOrder[]> {

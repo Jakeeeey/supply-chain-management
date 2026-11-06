@@ -16,17 +16,24 @@ export default function MaintenanceModule() {
     loading,
     actionLoading,
     jobOrders,
+    totalCount,
     rawJobOrders,
     vehicles,
     users,
     parts,
+    branches,
     searchQuery,
     setSearchQuery,
     statusFilter,
     setStatusFilter,
     typeFilter,
     setTypeFilter,
+    currentPage,
+    setCurrentPage,
+    pageSize,
+    setPageSize,
     refresh,
+    loadPartsForBranch,
     createRequest,
     approveAssign,
     startRepair,
@@ -96,6 +103,11 @@ export default function MaintenanceModule() {
         onOpenIssueParts={handleOpenIssueModal}
         onStartMaintenance={(jo) => startRepair(jo.id)}
         onOpenComplete={handleOpenCompleteModal}
+        currentPage={currentPage}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
       />
 
       {/* Dialogs */}
@@ -104,6 +116,8 @@ export default function MaintenanceModule() {
         onOpenChange={setOpenCreate}
         vehicles={vehicles}
         parts={parts}
+        branches={branches}
+        onBranchChange={loadPartsForBranch}
         onSubmit={createRequest}
         loading={actionLoading}
       />

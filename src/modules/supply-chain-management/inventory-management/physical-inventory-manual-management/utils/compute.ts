@@ -194,3 +194,51 @@ export function convertDisplayQtyToBaseQty(
 
     return roundTo(normalizedDisplayQty * normalizedUnitCount, 6);
 }
+
+export type CascadeVariantItem = {
+    product_id: number;
+    unit_count: number;
+};
+
+export function cascadeFamilyBaseStockToVariants<T extends CascadeVariantItem>(
+    totalBaseStock: number,
+    variants: T[],
+): Map<number, number> {
+    const allocatedCounts = new Map<number, number>();
+    
+    // Initialize all to 0
+    for (const v of variants) {
+        allocatedCounts.set(v.product_id, 0);
+    }
+    
+    // Sort variants from largest unit_count to smallest
+    const sortedVariants = [...variants].sort((a, b) => b.unit_count - a.unit_count);
+    
+    let remainingBaseStock = totalBaseStock;
+    const isNegative = remainingBaseStock < 0;
+    remainingBaseStock = Math.abs(remainingBaseStock);
+    
+    for (let i = 0; i < sortedVariants.length; i++) {
+        const variant = sortedVariants[i];
+        
+        let systemCount = 0;
+        if (variant.unit_count > 0 && remainingBaseStock >= variant.unit_count) {
+            systemCount = Math.floor(remainingBaseStock / variant.unit_count);
+            remainingBaseStock -= systemCount * variant.unit_count;
+        }
+        
+        if (isNegative) {
+            systemCount = -systemCount;
+        }
+
+        // If it's the last variant (smallest unit) and there is STILL remainder due to decimal math
+        if (i === sortedVariants.length - 1 && remainingBaseStock > 0) {
+            systemCount += (isNegative ? -remainingBaseStock : remainingBaseStock) / variant.unit_count;
+        }
+
+        // Only assign whole or exact numbers to prevent weird floating errors
+        allocatedCounts.set(variant.product_id, roundTo(systemCount, 6));
+    }
+    
+    return allocatedCounts;
+}

@@ -1,6 +1,6 @@
 // src/app/api/scm/physical-inventory/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import type { PhysicalInventoryHeaderRow } from "../../../../../modules/supply-chain-management/inventory-management/physical-inventory-management/types";
+import type { PhysicalInventoryHeaderRow } from "@/modules/supply-chain-management/inventory-management/physical-inventory-management/types";
 
 
 type DirectusSingleResponse<T> = {
@@ -91,8 +91,8 @@ function decodeUserIdFromJwtCookie(
         const payloadUnknown: unknown = JSON.parse(jsonStr);
         const sub =
             payloadUnknown &&
-            typeof payloadUnknown === "object" &&
-            "sub" in payloadUnknown
+                typeof payloadUnknown === "object" &&
+                "sub" in payloadUnknown
                 ? (payloadUnknown as { sub?: unknown }).sub
                 : undefined;
 

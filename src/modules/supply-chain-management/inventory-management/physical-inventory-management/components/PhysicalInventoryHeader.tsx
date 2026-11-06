@@ -22,6 +22,7 @@ type Props = {
     header: PhysicalInventoryHeaderRow | null;
     status: PhysicalInventoryStatus;
     canEdit: boolean;
+    hasLoadedDetails?: boolean;
     totalAmount: number;
     onChangePhNo: (value: string) => void;
     onChangeStockType: (value: "GOOD" | "BAD") => void;
@@ -82,6 +83,7 @@ export function PhysicalInventoryHeader(props: Props) {
         header,
         status,
         canEdit,
+        hasLoadedDetails,
         totalAmount,
         onChangePhNo,
         onChangeStockType,
@@ -188,7 +190,7 @@ export function PhysicalInventoryHeader(props: Props) {
                             type="datetime-local"
                             value={toInputDateTimeLocal(header?.starting_date)}
                             onChange={(e) => onChangeStartingDate(e.target.value)}
-                            disabled={!canEdit}
+                            disabled={!canEdit || hasLoadedDetails}
                         />
                     </div>
 
@@ -199,7 +201,7 @@ export function PhysicalInventoryHeader(props: Props) {
                             type="datetime-local"
                             value={toInputDateTimeLocal(header?.cutOff_date)}
                             onChange={(e) => onChangeCutoffDate(e.target.value)}
-                            disabled={!canEdit}
+                            disabled={!canEdit || hasLoadedDetails}
                         />
                     </div>
 
@@ -210,7 +212,7 @@ export function PhysicalInventoryHeader(props: Props) {
                             onValueChange={(value) =>
                                 onChangeStockType(value as "GOOD" | "BAD")
                             }
-                            disabled={!canEdit}
+                            disabled={!canEdit || hasLoadedDetails}
                         >
                             <SelectTrigger className="cursor-pointer">
                                 <SelectValue placeholder="Select stock type" />

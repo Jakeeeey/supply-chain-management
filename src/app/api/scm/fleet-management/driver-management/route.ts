@@ -24,6 +24,7 @@ const DRIVER_LICENSE_FIELDS = [
     "license_file_record_id",
     "license_verified_by",
     "license_verified_at",
+    "is_verified",
 ] as const;
 const DRIVER_CONTACT_FIELD_CACHE_TTL_MS = 5 * 60 * 1000;
 const DRIVER_BASE_FIELDS = [
@@ -31,6 +32,8 @@ const DRIVER_BASE_FIELDS = [
     "user_id",
     "branch_id",
     "bad_branch_id",
+    "created_by",
+    "updated_by",
     "created_at",
     "updated_at",
 ] as const;
@@ -355,6 +358,10 @@ async function licensePayload(body: Record<string, unknown>, currentUserId?: num
     } else if (isVerifiedExplicit) {
         payload.license_verified_at = new Date().toISOString();
     }
+
+    if ("is_verified" in body || "license_verified" in body) {
+        payload.is_verified = isVerifiedExplicit ? 1 : 0;
+    }
     return payload;
 }
 
@@ -362,12 +369,26 @@ function hasLicenseFieldIntent(body: Record<string, unknown>) {
     return DRIVER_LICENSE_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(body, field));
 }
 
-async function driverPayload(body: Record<string, unknown>, currentUserId?: number | null) {
+async function driverPayload(
+    body: Record<string, unknown>,
+    currentUserId?: number | null,
+    action: "create" | "update" = "update"
+) {
     let payload: Record<string, unknown> = {
         user_id: body.user_id,
         branch_id: body.branch_id,
         bad_branch_id: body.bad_branch_id || null,
     };
+
+    const validUserId = currentUserId ? await validateUserIdExists(currentUserId) : null;
+    if (action === "create") {
+        payload.created_by = validUserId;
+        payload.updated_by = null;
+    } else if (action === "update") {
+        if (validUserId) {
+            payload.updated_by = validUserId;
+        }
+    }
 
     if (hasContactFieldIntent(body)) {
         const contactFieldStatus = await getDriverContactFieldStatus();
@@ -534,7 +555,7 @@ export async function POST(request: NextRequest) {
         const createRes = await fetch(`${DIRECTUS_BASE}/items/driver`, {
             method: "POST",
             headers: directusHeaders(),
-            body: JSON.stringify(await driverPayload(body, authedUserId)),
+            body: JSON.stringify(await driverPayload(body, authedUserId, "create")),
         });
 
         if (!createRes.ok) {
@@ -630,7 +651,7 @@ export async function PATCH(request: NextRequest) {
         const updateRes = await fetch(`${DIRECTUS_BASE}/items/driver/${id}`, {
             method: "PATCH",
             headers: directusHeaders(),
-            body: JSON.stringify(await driverPayload(body, authedUserId)),
+            body: JSON.stringify(await driverPayload(body, authedUserId, "update")),
         });
 
         if (!updateRes.ok) {

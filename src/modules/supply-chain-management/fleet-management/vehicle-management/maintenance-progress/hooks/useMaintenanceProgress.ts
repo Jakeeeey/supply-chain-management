@@ -18,12 +18,16 @@ export function useMaintenanceProgress() {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [typeFilter, setTypeFilter] = React.useState("all");
 
-  const loadData = React.useCallback(async () => {
+  // Pagination states
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
+
+  const loadData = React.useCallback(async (branchId?: number | string) => {
     setLoading(true);
     try {
       const [jos, opt] = await Promise.all([
         fetchInProgressJobOrders(),
-        fetchProgressOptions().catch(() => ({ parts: [] })),
+        fetchProgressOptions(branchId).catch(() => ({ parts: [] })),
       ]);
       setJobOrders(jos);
       setParts(opt.parts);
@@ -34,9 +38,24 @@ export function useMaintenanceProgress() {
     }
   }, []);
 
+  const loadPartsForBranch = React.useCallback(async (branchId?: number | string) => {
+    try {
+      const opt = await fetchProgressOptions(branchId);
+      setParts(opt.parts);
+      return opt.parts;
+    } catch {
+      return [];
+    }
+  }, []);
+
   React.useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Reset page when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, typeFilter]);
 
   const handleIssueParts = async (payload: IssuePartsPayload) => {
     setActionLoading(true);
@@ -87,17 +106,29 @@ export function useMaintenanceProgress() {
     });
   }, [jobOrders, typeFilter, searchQuery]);
 
+  // Paginated records
+  const paginatedJobOrders = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredJobOrders.slice(startIndex, startIndex + pageSize);
+  }, [filteredJobOrders, currentPage, pageSize]);
+
   return {
     loading,
     actionLoading,
-    jobOrders: filteredJobOrders,
+    jobOrders: paginatedJobOrders,
     rawJobOrders: jobOrders,
+    totalCount: filteredJobOrders.length,
     parts,
     searchQuery,
     setSearchQuery,
     typeFilter,
     setTypeFilter,
+    currentPage,
+    setCurrentPage,
+    pageSize,
+    setPageSize,
     refresh: loadData,
+    loadPartsForBranch,
     issueParts: handleIssueParts,
     completeJO: handleCompleteJO,
   };

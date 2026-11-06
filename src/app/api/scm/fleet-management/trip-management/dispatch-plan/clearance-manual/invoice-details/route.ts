@@ -35,6 +35,17 @@ export async function GET(request: Request) {
         ]);
 
         const invoice = invoiceRes.data?.[0];
+        if (!invoice) {
+            return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
+        }
+
+        // Fetch corresponding sales_order to also check salesman_id if needed
+        const salesOrderRes = invoice.order_id
+            ? await fetcher(`/sales_order?filter[order_no][_eq]=${encodeURIComponent(invoice.order_id)}&limit=1`).catch(() => ({ data: [] }))
+            : { data: [] };
+        const salesOrder = salesOrderRes?.data?.[0];
+        const effectiveSalesmanId = invoice.salesman_id || salesOrder?.salesman_id || null;
+
         // 2. Fetch Customer, Products, Units, Salesman, and Branch info for joining
         interface Line {
             id?: number;
@@ -50,15 +61,17 @@ export async function GET(request: Request) {
         const unitIds = [...new Set(lines.map((l) => l.unit).filter(Boolean))];
 
         const [customerRes, productsRes, unitsRes, salesmanRes, branchRes] = await Promise.all([
-            fetcher(`/customer?filter[customer_code][_eq]=${invoice.customer_code}&limit=1`),
+            invoice.customer_code
+                ? fetcher(`/customer?filter[customer_code][_eq]=${encodeURIComponent(invoice.customer_code)}&limit=1`)
+                : Promise.resolve({ data: [] }),
             productIds.length > 0
                 ? fetcher(`/products?filter[product_id][_in]=${productIds.join(',')}&limit=-1`)
                 : Promise.resolve({ data: [] }),
             unitIds.length > 0
                 ? fetcher(`/units?filter[unit_id][_in]=${unitIds.join(',')}&limit=-1`)
                 : Promise.resolve({ data: [] }),
-            invoice.salesman_id
-                ? fetcher(`/salesman?filter[id][_eq]=${invoice.salesman_id}&limit=1`)
+            effectiveSalesmanId
+                ? fetcher(`/salesman?filter[id][_eq]=${effectiveSalesmanId}&limit=1`)
                 : Promise.resolve({ data: [] }),
             invoice.branch_id
                 ? fetcher(`/branches?filter[id][_eq]=${invoice.branch_id}&limit=1`)
@@ -108,7 +121,7 @@ export async function GET(request: Request) {
                 customer_name: customer?.customer_name || invoice.customer_code,
                 customer_code: invoice.customer_code,
                 status: invoice.transaction_status || 'Pending',
-                salesman_id: invoice.salesman_id,
+                salesman_id: effectiveSalesmanId,
                 salesman_name: salesman?.salesman_name || null,
                 salesman_code: salesman?.salesman_code || null,
                 branch_id: invoice.branch_id,

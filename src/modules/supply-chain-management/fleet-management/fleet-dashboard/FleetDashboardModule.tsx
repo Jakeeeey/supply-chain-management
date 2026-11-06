@@ -24,6 +24,22 @@ export default function FleetDashboardModule() {
     paginatedList,
     licenseStatusFilter,
     setLicenseStatusFilter,
+    licenseBranchFilter,
+    setLicenseBranchFilter,
+    vehicleStatusFilter,
+    setVehicleStatusFilter,
+    vehicleFuelFilter,
+    setVehicleFuelFilter,
+    vehicleFuelOptions,
+    driverStatusFilter,
+    setDriverStatusFilter,
+    driverBranchFilter,
+    setDriverBranchFilter,
+    driverBranchOptions,
+    joStatusFilter,
+    setJoStatusFilter,
+    joTypeFilter,
+    setJoTypeFilter,
     refresh,
   } = useFleetDashboard();
 
@@ -67,6 +83,22 @@ export default function FleetDashboardModule() {
           totalCount={totalItems}
           licenseStatusFilter={licenseStatusFilter}
           onLicenseStatusFilterChange={setLicenseStatusFilter}
+          licenseBranchFilter={licenseBranchFilter}
+          onLicenseBranchFilterChange={setLicenseBranchFilter}
+          vehicleStatusFilter={vehicleStatusFilter}
+          onVehicleStatusFilterChange={setVehicleStatusFilter}
+          vehicleFuelFilter={vehicleFuelFilter}
+          onVehicleFuelFilterChange={setVehicleFuelFilter}
+          vehicleFuelOptions={vehicleFuelOptions}
+          driverStatusFilter={driverStatusFilter}
+          onDriverStatusFilterChange={setDriverStatusFilter}
+          driverBranchFilter={driverBranchFilter}
+          onDriverBranchFilterChange={setDriverBranchFilter}
+          driverBranchOptions={driverBranchOptions}
+          joStatusFilter={joStatusFilter}
+          onJoStatusFilterChange={setJoStatusFilter}
+          joTypeFilter={joTypeFilter}
+          onJoTypeFilterChange={setJoTypeFilter}
         />
 
         <FleetDashboardTable

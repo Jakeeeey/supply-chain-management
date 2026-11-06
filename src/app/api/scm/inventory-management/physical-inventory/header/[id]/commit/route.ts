@@ -1,7 +1,14 @@
-// src/app/api/scm/physical-inventory/header/[id]/commit/route.ts
+// src/app/api/arf/inventory-management/physical-inventory/header/[id]/commit/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
-const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const DIRECTUS_URL = (
+    process.env.DIRECTUS_URL ||
+    process.env.NEXT_PUBLIC_DIRECTUS_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    ""
+)
+    .trim()
+    .replace(/\/+$/, "");
 const DIRECTUS_TOKEN =
     process.env.DIRECTUS_STATIC_TOKEN || process.env.DIRECTUS_SERVICE_TOKEN || "";
 
@@ -58,12 +65,38 @@ function directusHeaders(): Record<string, string> {
     return headers;
 }
 
+async function fetchWithRetry(
+    url: string,
+    init: RequestInit,
+    retries = 2,
+): Promise<Response> {
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            return await fetch(url, init);
+        } catch (error) {
+            lastError = error;
+            if (attempt < retries) {
+                await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+            }
+        }
+    }
+
+    const causeMsg =
+        lastError instanceof Error && "cause" in lastError && lastError.cause instanceof Error
+            ? ` (${lastError.cause.message})`
+            : "";
+    const baseMsg = lastError instanceof Error ? lastError.message : "Network error";
+    throw new Error(`Unable to reach database server: ${baseMsg}${causeMsg}`);
+}
+
 async function directusGetSingle<T>(path: string): Promise<T> {
     if (!DIRECTUS_URL) {
         throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured.");
     }
 
-    const response = await fetch(`${DIRECTUS_URL}${path}`, {
+    const response = await fetchWithRetry(`${DIRECTUS_URL}${path}`, {
         method: "GET",
         headers: directusHeaders(),
         cache: "no-store",
@@ -83,7 +116,7 @@ async function directusGetMany<T>(path: string): Promise<T[]> {
         throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured.");
     }
 
-    const response = await fetch(`${DIRECTUS_URL}${path}`, {
+    const response = await fetchWithRetry(`${DIRECTUS_URL}${path}`, {
         method: "GET",
         headers: directusHeaders(),
         cache: "no-store",
@@ -103,7 +136,7 @@ async function directusPatch<T>(path: string, payload: unknown): Promise<T> {
         throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured.");
     }
 
-    const response = await fetch(`${DIRECTUS_URL}${path}`, {
+    const response = await fetchWithRetry(`${DIRECTUS_URL}${path}`, {
         method: "PATCH",
         headers: directusHeaders(),
         cache: "no-store",
@@ -196,12 +229,18 @@ export async function POST(_req: NextRequest, context: RouteContext) {
 
         const total_amount = sumHeaderTotalAmount(details);
 
+        const getPhTimeISOString = () => {
+            const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }));
+            const pad = (n: number) => n.toString().padStart(2, "0");
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        };
+
         const updated = await directusPatch<PhysicalInventoryHeaderRow>(
             `/items/${TABLE_PH}/${headerId}`,
             {
                 isComitted: 1,
                 isCancelled: 0,
-                committed_at: new Date().toISOString(),
+                committed_at: getPhTimeISOString(),
                 total_amount,
             },
         );

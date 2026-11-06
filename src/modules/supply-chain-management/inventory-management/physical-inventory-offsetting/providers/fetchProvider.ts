@@ -27,18 +27,13 @@ import {
 import type {
     OffsetDirection,
     OffsettingSelectableRow,
+    PhysicalInventoryOffsetGroup,
     PhysicalInventoryOffsettingReportMeta,
     PhysicalInventoryOffsettingSnapshot,
 } from "../types";
 
 function toSelectionAmount(row: GroupedPhysicalInventoryChildRow): number {
-    const diffCost = Math.abs(row.difference_cost ?? 0);
-    if (diffCost > 0) return diffCost;
-
-    const amount = Math.abs(row.amount ?? 0);
-    if (amount > 0) return amount;
-
-    return Math.abs(row.variance_base ?? row.variance ?? 0);
+    return Math.abs(row.difference_cost ?? 0);
 }
 
 function toProductLabel(row: GroupedPhysicalInventoryChildRow): string {
@@ -54,6 +49,8 @@ function toProductLabel(row: GroupedPhysicalInventoryChildRow): string {
 function toSelectableRow(
     row: GroupedPhysicalInventoryChildRow,
     direction: OffsetDirection,
+    offsetMatch: number | null,
+    offsetRemarks: string | null,
 ): OffsettingSelectableRow {
     return {
         ...row,
@@ -61,6 +58,8 @@ function toSelectableRow(
         row_id: row.detail_id || row.product_id,
         product_label: toProductLabel(row),
         selection_amount: toSelectionAmount(row),
+        offset_match: offsetMatch,
+        offset_remarks: offsetRemarks,
     };
 }
 
@@ -175,6 +174,7 @@ export async function loadPhysicalInventoryOffsettingSnapshot(
                 isComitted: header.isComitted,
             }),
             rows: [],
+            initialGroups: [],
             reportMeta,
         };
     }
@@ -192,16 +192,76 @@ export async function loadPhysicalInventoryOffsettingSnapshot(
         runningInventoryRows,
         ph_id: header.id,
         rfidCountByDetailId,
+        ignoreRfid: true,
     });
+
+    const detailMetaMap = new Map<number, { match: number | null; remarks: string | null }>();
+    for (const d of details) {
+        detailMetaMap.set(d.id, {
+            match: d.offset_match ?? null,
+            remarks: d.offset_remarks ?? null,
+        });
+    }
 
     const flattenedRows = groupedRows.flatMap((group) => group.rows);
     const selectableRows = flattenedRows
         .filter((row) => row.variance !== 0 || row.variance_base !== 0)
-        .map((row) =>
-            row.variance < 0
-                ? toSelectableRow(row, "SHORT")
-                : toSelectableRow(row, "OVER"),
-        );
+        .map((row) => {
+            const meta = detailMetaMap.get(row.detail_id ?? 0) || { match: null, remarks: null };
+            return row.variance < 0
+                ? toSelectableRow(row, "SHORT", meta.match, meta.remarks)
+                : toSelectableRow(row, "OVER", meta.match, meta.remarks);
+        });
+
+    const groupsByMatch = new Map<
+        number,
+        {
+            short_rows: OffsettingSelectableRow[];
+            over_rows: OffsettingSelectableRow[];
+            remarks: string | null;
+        }
+    >();
+
+    for (const row of selectableRows) {
+        const match = row.offset_match;
+        if (match && match > 0) {
+            if (!groupsByMatch.has(match)) {
+                groupsByMatch.set(match, {
+                    short_rows: [],
+                    over_rows: [],
+                    remarks: row.offset_remarks || null,
+                });
+            }
+            const g = groupsByMatch.get(match)!;
+            if (row.offset_direction === "SHORT") {
+                g.short_rows.push(row);
+            } else {
+                g.over_rows.push(row);
+            }
+            if (!g.remarks && row.offset_remarks) {
+                g.remarks = row.offset_remarks;
+            }
+        }
+    }
+
+    const initialGroups: PhysicalInventoryOffsetGroup[] = Array.from(groupsByMatch.entries())
+        .sort(([a], [b]) => a - b)
+        .map(([matchNumber, groupData]) => {
+            const short_total = groupData.short_rows.reduce((acc, r) => acc + r.selection_amount, 0);
+            const over_total = groupData.over_rows.reduce((acc, r) => acc + r.selection_amount, 0);
+            return {
+                id: `offset-match-${matchNumber}`,
+                ph_id: header.id,
+                created_at: header.date_encoded || new Date().toISOString(),
+                short_rows: groupData.short_rows,
+                over_rows: groupData.over_rows,
+                short_total,
+                over_total,
+                difference: short_total - over_total,
+                offset_match: matchNumber,
+                remarks: groupData.remarks ?? undefined,
+            };
+        });
 
     const status: PhysicalInventoryStatus = derivePhysicalInventoryStatus({
         isCancelled: header.isCancelled,
@@ -212,6 +272,7 @@ export async function loadPhysicalInventoryOffsettingSnapshot(
         header,
         status,
         rows: selectableRows,
+        initialGroups,
         reportMeta,
     };
 }

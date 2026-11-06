@@ -48,7 +48,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
             method: "GET",
             headers: {
                 Authorization: `Bearer ${token}`,
-                Cookie: `vos_access_token=${token}`,
                 Accept: "application/json",
             },
             cache: "no-store",
@@ -65,7 +64,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
                 method: "GET",
                 headers: {
                     Authorization: `Bearer ${token}`,
-                    Cookie: `vos_access_token=${token}`,
                     Accept: "application/json",
                 },
                 cache: "no-store",
@@ -81,7 +79,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
                     },
                 });
             }
-            
+
             const data = await fallbackRes.json();
             return NextResponse.json({ ok: true, data });
         }

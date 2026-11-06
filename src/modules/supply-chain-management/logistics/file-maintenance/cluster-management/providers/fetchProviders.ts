@@ -1,4 +1,4 @@
-import { ClusterWithAreas, ClusterFormValues } from "../types";
+import { ClusterWithAreas, ClusterFormValues, COAOption } from "../types";
 
 const API_BASE = "/api/scm/logistics/file-maintenance/cluster-management";
 
@@ -132,6 +132,14 @@ export async function getCluster(
   if (!res.ok) throw new Error(await readError(res));
   const json = await res.json();
   return json?.data;
+}
+
+/** Fetch active chart of accounts for budgeting */
+export async function listCoaOptions(): Promise<COAOption[]> {
+  const res = await fetch(`${API_BASE}?type=coa_options`);
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json?.data ?? [];
 }
 
 /** Create a new cluster with areas */

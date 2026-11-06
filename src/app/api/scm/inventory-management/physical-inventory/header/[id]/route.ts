@@ -1,4 +1,4 @@
-//src/app/api/scm/physical-inventory/header/[id]/route.ts
+//src/app/api/arf/inventory-management/physical-inventory/header/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -86,6 +86,7 @@ export async function PATCH(
         if ("committed_at" in body) payload.committed_at = typeof body.committed_at === "string" ? body.committed_at : null;
         if ("cancelled_at" in body) payload.cancelled_at = typeof body.cancelled_at === "string" ? body.cancelled_at : null;
         if ("total_amount" in body) payload.total_amount = Number.isFinite(Number(body.total_amount)) ? Number(body.total_amount) : 0;
+        if ("is_offset" in body) payload.is_offset = Number(body.is_offset) === 1 ? 1 : 0;
 
         if (encoderId) {
             payload.encoder_id = encoderId;

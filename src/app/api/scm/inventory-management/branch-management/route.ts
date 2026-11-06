@@ -160,7 +160,32 @@ export async function POST(req: NextRequest) {
             postal_code,
             isMoving,
             isActive,
+            isMain,
         } = body;
+
+        const isMainValue = isMain ? 1 : 0;
+
+        // If setting this branch as Main, unset isMain on any existing main branches
+        if (isMainValue === 1) {
+            try {
+                const existingMainRes = await fetch(`${DIRECTUS_BASE}/items/branches?filter[isMain][_eq]=1&limit=-1`, {
+                    headers: directusHeaders(),
+                });
+                if (existingMainRes.ok) {
+                    const existingMainData = await existingMainRes.json();
+                    const existingMainList = existingMainData.data || [];
+                    for (const m of existingMainList) {
+                        await fetch(`${DIRECTUS_BASE}/items/branches/${m.id}`, {
+                            method: "PATCH",
+                            headers: directusHeaders(),
+                            body: JSON.stringify({ isMain: 0 }),
+                        });
+                    }
+                }
+            } catch (clearErr) {
+                console.error("Error clearing existing main branches:", clearErr);
+            }
+        }
 
         const date_added = new Date().toISOString().split("T")[0];
 
@@ -180,6 +205,7 @@ export async function POST(req: NextRequest) {
             isReturn: 0,
             isBadStock: 0,
             isActive: isActive ? 1 : 0,
+            isMain: isMainValue,
         };
 
         // Second Save: Bad Stock Branch
@@ -198,6 +224,7 @@ export async function POST(req: NextRequest) {
             isReturn: 1,
             isBadStock: 1,
             isActive: isActive ? 1 : 0,
+            isMain: isMainValue,
         };
 
         // Execute saves in sequence (or parallel, but sequence is safer for partial failures)
@@ -254,6 +281,31 @@ export async function PATCH(req: NextRequest) {
         // Convert boolean to number for Directus
         if (updateData.isMoving !== undefined) updateData.isMoving = updateData.isMoving ? 1 : 0;
         if (updateData.isActive !== undefined) updateData.isActive = updateData.isActive ? 1 : 0;
+        if (updateData.isMain !== undefined) updateData.isMain = updateData.isMain ? 1 : 0;
+
+        // If setting this branch as Main, unset isMain on other branches
+        if (updateData.isMain === 1) {
+            try {
+                const existingMainRes = await fetch(`${DIRECTUS_BASE}/items/branches?filter[isMain][_eq]=1&limit=-1`, {
+                    headers: directusHeaders(),
+                });
+                if (existingMainRes.ok) {
+                    const existingMainData = await existingMainRes.json();
+                    const existingMainList = existingMainData.data || [];
+                    for (const m of existingMainList) {
+                        if (m.id !== id) {
+                            await fetch(`${DIRECTUS_BASE}/items/branches/${m.id}`, {
+                                method: "PATCH",
+                                headers: directusHeaders(),
+                                body: JSON.stringify({ isMain: 0 }),
+                            });
+                        }
+                    }
+                }
+            } catch (clearErr) {
+                console.error("Error clearing existing main branches:", clearErr);
+            }
+        }
 
         // 2. Update the target branch
         const res = await fetch(`${DIRECTUS_BASE}/items/branches/${id}`, {

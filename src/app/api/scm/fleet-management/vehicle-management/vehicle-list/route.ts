@@ -5,9 +5,16 @@ import type { NextRequest } from "next/server";
 export const runtime = "nodejs";
 
 const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const DIRECTUS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN || "";
 
 function json(res: unknown, status = 200) {
   return NextResponse.json(res, { status });
+}
+
+function directusHeaders(extra: Record<string, string> = {}) {
+  const h: Record<string, string> = { "Content-Type": "application/json", ...extra };
+  if (DIRECTUS_TOKEN) h.Authorization = `Bearer ${DIRECTUS_TOKEN}`;
+  return h;
 }
 
 async function readUpstream(res: Response) {
@@ -26,7 +33,7 @@ export async function GET(req: NextRequest) {
 
     const upstream = await fetch(`${DIRECTUS_URL}/items/vehicles?limit=${encodeURIComponent(limit)}`, {
       cache: "no-store",
-      headers: { "Content-Type": "application/json" },
+      headers: directusHeaders(),
     });
 
     const { body } = await readUpstream(upstream);
@@ -46,7 +53,7 @@ export async function POST(req: NextRequest) {
     const upstream = await fetch(`${DIRECTUS_URL}/items/vehicles`, {
       method: "POST",
       cache: "no-store",
-      headers: { "Content-Type": "application/json" },
+      headers: directusHeaders(),
       body: JSON.stringify(payload),
     });
 

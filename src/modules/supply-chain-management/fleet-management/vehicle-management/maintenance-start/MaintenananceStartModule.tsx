@@ -14,12 +14,18 @@ export default function MaintenanceStartModule() {
     actionLoading,
     jobOrders,
     rawJobOrders,
+    totalCount,
     parts,
     searchQuery,
     setSearchQuery,
     typeFilter,
     setTypeFilter,
+    currentPage,
+    setCurrentPage,
+    pageSize,
+    setPageSize,
     refresh,
+    loadPartsForBranch,
     startMaintenance,
     issueParts,
   } = useMaintenanceStart();
@@ -28,8 +34,15 @@ export default function MaintenanceStartModule() {
   const [openDetails, setOpenDetails] = React.useState(false);
   const [selectedJO, setSelectedJO] = React.useState<VehicleJobOrder | null>(null);
 
-  const handleOpenIssueParts = (jo: VehicleJobOrder) => {
+  const handleOpenIssueParts = async (jo: VehicleJobOrder) => {
     setSelectedJO(jo);
+    const branchId =
+      typeof jo.branch_id === "object" && jo.branch_id !== null
+        ? jo.branch_id.id
+        : jo.branch_id;
+    if (branchId) {
+      await loadPartsForBranch(branchId);
+    }
     setOpenIssueParts(true);
   };
 
@@ -71,6 +84,11 @@ export default function MaintenanceStartModule() {
         onViewDetails={handleViewDetails}
         onOpenIssueParts={handleOpenIssueParts}
         onStartMaintenance={handleStartMaintenance}
+        currentPage={currentPage}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
       />
 
       {/* Dialogs */}

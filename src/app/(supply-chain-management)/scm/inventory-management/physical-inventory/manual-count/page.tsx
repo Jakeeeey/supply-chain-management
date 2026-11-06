@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { NavUser } from "@/components/shared/app-sidebar/nav-user";
+import { NavUser } from "@/components/shared/app-sidebar/nav-user"; // Adjust this relative path if your nav-user is located elsewhere!
 
 import { cookies } from "next/headers";
 import PhysicalInventoryManualWorkspaceClient from "./PhysicalInventoryManualWorkspaceClient";

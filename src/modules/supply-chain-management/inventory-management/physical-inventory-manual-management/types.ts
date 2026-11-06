@@ -69,6 +69,7 @@ export type ProductRow = {
     unit_of_measurement_count: number | null;
 
     isActive: number;
+    cost_per_unit: number | null;
 };
 
 export type ProductPerSupplierRow = {
@@ -113,6 +114,7 @@ export type PhysicalInventoryHeaderRow = {
 
     // optional future-ready field
     isPending?: number;
+    is_scm?: number | null;
 };
 
 export type PhysicalInventoryDetailRow = {
@@ -153,6 +155,7 @@ export type PhysicalInventoryHeaderUpsertPayload = {
     committed_at?: string | null;
     cancelled_at?: string | null;
     total_amount?: number | null;
+    is_scm?: number;
 
     // optional future-ready field
     isPending?: number;
@@ -188,6 +191,7 @@ export type RunningInventoryApiRow = {
     movementAfter: number | null;
     runningInventory: number | null;
     supplierShortcut: string | null;
+    hasMovement?: boolean;
 };
 
 export type RunningInventoryRow = {
@@ -208,6 +212,7 @@ export type RunningInventoryRow = {
     movement_after: number | null;
     running_inventory: number | null;
     supplier_shortcut: string | null;
+    has_movement?: boolean;
 };
 
 export type PhysicalInventoryFiltersType = {
@@ -215,6 +220,7 @@ export type PhysicalInventoryFiltersType = {
     supplier_id: number | null;
     category_id: number | null;
     price_type_id: number | null;
+    cutOffDate?: string | null;
 };
 
 export type LoadProductsValidation = {
@@ -240,6 +246,8 @@ export type EligibleVariantRow = {
     unit_count: number;
 
     unit_price: number | null;
+    cost_per_unit: number | null;
+    brand_name: string | null;
 };
 
 export type GroupedPhysicalInventoryChildRow = {
@@ -261,6 +269,7 @@ export type GroupedPhysicalInventoryChildRow = {
     unit_count: number;
 
     unit_price: number | null;
+    cost_per_unit: number | null;
 
     detail_id: number | null;
     ph_id: number | null;
@@ -274,6 +283,7 @@ export type GroupedPhysicalInventoryChildRow = {
 
     requires_rfid: boolean;
     rfid_count: number;
+    brand_name: string | null;
 };
 
 export type GroupedPhysicalInventoryRow = {
@@ -283,6 +293,7 @@ export type GroupedPhysicalInventoryRow = {
     base_product_code: string | null;
     base_barcode: string | null;
     category_name: string | null;
+    brand_name: string | null;
 
     total_system_count_base: number;
     total_physical_count_base: number;
@@ -322,4 +333,24 @@ export type DirectusItemsResponse<T> = {
 
 export type DirectusItemResponse<T> = {
     data: T;
+};
+export type PhysicalInventoryAttachmentRow = {
+    id: number;
+    physical_inventory_id: number;
+    directus_file_id: string;
+    created_by:
+        | number
+        | {
+            user_id: number;
+            user_fname: string | null;
+            user_lname: string | null;
+        }
+        | null;
+    created_at: string;
+    file_details?: {
+        id: string;
+        filename_download: string;
+        filesize: number;
+        type: string;
+    } | null;
 };

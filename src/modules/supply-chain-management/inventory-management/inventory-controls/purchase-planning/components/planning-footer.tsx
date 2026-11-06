@@ -129,7 +129,7 @@ export function PlanningFooter({
             doc.text(`Logic Mode: ${isForecast ? "Forecast" : "Historical"}`, 14, 42)
             doc.text(`Simulation Target DTL: Class A: ${resolvedTargets.A ?? 21} Days | Class B: ${resolvedTargets.B ?? 15} Days | Class C: ${resolvedTargets.C ?? 15} Days`, 14, 48)
 
-            const tableColumns = ["SKU", "Product Name", "ABC", "SOH", "MAV", "Suggested", "DTL", "Order Qty", "Total Value"]
+            const tableColumns = ["SKU", "Product Name", "ABC", "SOH", "In Transit", "MAV", "Suggested", "DTL", "Order Qty", "Total Value"]
             const tableRows = (data as PlanningRow[]).map((row: PlanningRow) => {
                 const price = Number(row.computedPricePerBox || 0)
                 const orderQty = Number(row.orderQty || 0)
@@ -149,6 +149,7 @@ export function PlanningFooter({
                     row.productName || "Unknown Product",
                     row.abcClass || "-",
                     Number(row.currentStockBoxes || 0).toFixed(1),
+                    Number(row.inTransitBoxes || 0).toFixed(1),
                     Number(row.mav || 0).toFixed(1),
                     Number(row.suggestedQty || 0).toFixed(2),
                     `${dtl > 0 ? dtl.toFixed(1) : "0.0"}d`,
@@ -164,7 +165,7 @@ export function PlanningFooter({
                 theme: 'striped',
                 headStyles: {fillColor: [15, 23, 42], textColor: 255},
                 styles: {fontSize: 8, cellPadding: 3},
-                columnStyles: { 7: {fontStyle: 'bold', textColor: [15, 23, 42]}, 8: {halign: 'right'} }
+                columnStyles: { 8: {fontStyle: 'bold', textColor: [15, 23, 42]}, 9: {halign: 'right'} }
             })
 
             const finalY = (doc as unknown as JsPDFWithAutoTable).lastAutoTable.finalY || 50
