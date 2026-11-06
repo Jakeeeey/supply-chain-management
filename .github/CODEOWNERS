@@ -1,45 +1,42 @@
-/.github/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
+# Global Default Code Owners (Requires approval/reviewers)
+* @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
 
-/src/app/(customer-relationship-management)/crm/_components/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
+# Protected Root Configurations & Directories
+/.github/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/public/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/components.json @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/eslint.config.mjs @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/next.config.ts @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/next-env.d.ts @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-createn-dev
+/package.json @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830  @angelolandingin-dev @vertextechcorpofficial-create
+/postcss.config.mjs @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830  @angelolandingin-dev @vertextechcorpofficial-create
+/tsconfig.json @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
 
-/src/app/(customer-relationship-management)/layout.tsx @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
+# Protected Source Directories & Root Files
+/src/actions/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/src/components/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/src/hooks/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/src/lib/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/src/middleware.ts @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/src/test-support/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/src/types/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
 
-/src/actions/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
+# Protected Modules
+/src/modules/cms/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/src/modules/shared/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
 
-/src/app/(customer-relationship-management)/crm/_components/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
+# Protected App Routes & Files
+/src/app/globals.css @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/src/app/layout.tsx @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/src/app/favicon.ico @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/src/app/(public)/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/src/app/(supply-chain-management)/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/src/app/main-dashboard/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
+/src/app/api/auth/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830 @angelolandingin-dev @vertextechcorpofficial-create
 
-/src/app/(customer-relationship-management)/crm/[...slug]/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/src/app/layout.tsx @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/src/app/(public)/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/src/app/api/auth/@Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/src/app/main-dashboard/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/src/app/globals.css @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/src/components/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/src/hooks/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/src/lib @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/src/modules/cms/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/src/types/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/components.json @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/eslint.config.mjs @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/next.config.ts @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/next-env.d.ts @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/package.json @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/postcss.config.mjs @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
-
-/tsconfig.json @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
+# ==========================================
+# EXEMPTED PATHS (No approval required)
+# ==========================================
+/src/app/(supply-chain-management)/scm/
+/src/app/api/
+/src/modules/supply-chain-management/
