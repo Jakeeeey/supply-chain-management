@@ -19,11 +19,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import {
   MoreHorizontal,
   Eye,
   Truck,
   UserCheck,
+  Building2,
 } from "lucide-react";
 
 interface JobOrdersTableProps {
@@ -34,12 +36,23 @@ interface JobOrdersTableProps {
   onOpenIssueParts?: (jo: VehicleJobOrder) => void;
   onStartMaintenance?: (jo: VehicleJobOrder) => void;
   onOpenComplete?: (jo: VehicleJobOrder) => void;
+  // Pagination props
+  currentPage?: number;
+  pageSize?: number;
+  totalCount?: number;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
 }
 
 export function JobOrdersTable({
   jobOrders,
   loading,
   onViewDetails,
+  currentPage = 1,
+  pageSize = 10,
+  totalCount = 0,
+  onPageChange,
+  onPageSizeChange,
 }: JobOrdersTableProps) {
   const getStatusBadge = (status: string) => {
     switch (status?.toLowerCase()) {
@@ -93,116 +106,139 @@ export function JobOrdersTable({
   }
 
   return (
-    <div className="rounded-md border bg-card overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[140px]">JO Number</TableHead>
-            <TableHead>Vehicle</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Priority</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Mechanic</TableHead>
-            <TableHead>Parts</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {jobOrders.map((jo) => {
-            const vehicle = typeof jo.vehicle_id === "object" && jo.vehicle_id !== null ? jo.vehicle_id : null;
-            const mechanic = typeof jo.mechanic_id === "object" && jo.mechanic_id !== null ? jo.mechanic_id : null;
-            const partsCount = jo.parts?.length || 0;
-            const issuedCount = jo.parts?.reduce((acc, p) => acc + (p.quantity_issued || 0), 0) || 0;
+    <div className="space-y-4">
+      <div className="rounded-md border bg-card overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[140px]">JO Number</TableHead>
+              <TableHead>Vehicle</TableHead>
+              <TableHead>Branch</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Priority</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Mechanic</TableHead>
+              <TableHead>Parts</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {jobOrders.map((jo) => {
+              const vehicle = typeof jo.vehicle_id === "object" && jo.vehicle_id !== null ? jo.vehicle_id : null;
+              const mechanic = typeof jo.mechanic_id === "object" && jo.mechanic_id !== null ? jo.mechanic_id : null;
+              const branch = typeof jo.branch_id === "object" && jo.branch_id !== null ? jo.branch_id : null;
+              const partsCount = jo.parts?.length || 0;
+              const issuedCount = jo.parts?.reduce((acc, p) => acc + (p.quantity_issued || 0), 0) || 0;
 
-            return (
-              <TableRow key={jo.id}>
-                {/* JO Number */}
-                <TableCell className="font-semibold text-primary">
-                  {jo.jo_no}
-                  <div className="text-xs text-muted-foreground font-normal">
-                    {jo.requested_at ? new Date(jo.requested_at).toLocaleDateString() : ""}
-                  </div>
-                </TableCell>
+              return (
+                <TableRow key={jo.id}>
+                  {/* JO Number */}
+                  <TableCell className="font-semibold text-primary">
+                    {jo.jo_no}
+                    <div className="text-xs text-muted-foreground font-normal">
+                      {jo.requested_at ? new Date(jo.requested_at).toLocaleDateString() : ""}
+                    </div>
+                  </TableCell>
 
-                {/* Vehicle */}
-                <TableCell>
-                  <div className="font-medium text-foreground">
-                    {vehicle?.vehicle_plate || vehicle?.plate_number || `Vehicle #${typeof jo.vehicle_id === "object" && jo.vehicle_id !== null ? (jo.vehicle_id.vehicle_id || jo.vehicle_id.id) : jo.vehicle_id}`}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {vehicle ? ([vehicle.make, vehicle.model].filter(Boolean).join(" ") || vehicle.name || "") : ""}
-                  </div>
-                </TableCell>
+                  {/* Vehicle */}
+                  <TableCell>
+                    <div className="font-medium text-foreground">
+                      {vehicle?.vehicle_plate || vehicle?.plate_number || `Vehicle #${typeof jo.vehicle_id === "object" && jo.vehicle_id !== null ? (jo.vehicle_id.vehicle_id || jo.vehicle_id.id) : jo.vehicle_id}`}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {vehicle ? ([vehicle.make, vehicle.model].filter(Boolean).join(" ") || vehicle.name || "") : ""}
+                    </div>
+                  </TableCell>
 
-                {/* JO Type */}
-                <TableCell>
-                  <span className="text-sm font-medium">{jo.jo_type}</span>
-                </TableCell>
-
-                {/* Priority */}
-                <TableCell>{getPriorityBadge(jo.priority)}</TableCell>
-
-                {/* Status */}
-                <TableCell>{getStatusBadge(jo.status)}</TableCell>
-
-                {/* Mechanic */}
-                <TableCell>
-                  {(() => {
-                    if (!mechanic) {
-                      return jo.mechanic_id ? (
-                        <span className="text-xs text-foreground font-medium">Mechanic #{String(typeof jo.mechanic_id === "object" ? (jo.mechanic_id.id || jo.mechanic_id.user_id) : jo.mechanic_id)}</span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground italic">Unassigned</span>
-                      );
-                    }
-                    const f = mechanic.first_name || mechanic.user_fname || "";
-                    const l = mechanic.last_name || mechanic.user_lname || "";
-                    const full = [f, l].filter(Boolean).join(" ");
-                    return (
-                      <div className="flex items-center gap-1.5 text-xs text-foreground">
-                        <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
-                        <span>{full || `Mechanic #${mechanic.id || mechanic.user_id}`}</span>
-                      </div>
-                    );
-                  })()}
-                </TableCell>
-
-                {/* Parts Summary */}
-                <TableCell>
-                  <div className="text-xs">
-                    <span className="font-medium text-foreground">{partsCount} item(s)</span>
-                    {partsCount > 0 && (
-                      <span className="text-muted-foreground ml-1">
-                        ({issuedCount} issued)
+                  {/* Branch */}
+                  <TableCell>
+                    <div className="flex items-center gap-1.5 text-xs text-foreground">
+                      <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span>
+                        {branch?.branch_name || (jo.branch_id ? `Branch #${typeof jo.branch_id === "object" ? jo.branch_id.id : jo.branch_id}` : "N/A")}
                       </span>
-                    )}
-                  </div>
-                </TableCell>
+                    </div>
+                  </TableCell>
 
-                {/* Actions Dropdown */}
-                <TableCell className="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => onViewDetails(jo)}>
-                        <Eye className="h-4 w-4 mr-2" />
-                        View Details
-                      </DropdownMenuItem>
+                  {/* JO Type */}
+                  <TableCell>
+                    <span className="text-sm font-medium">{jo.jo_type}</span>
+                  </TableCell>
 
-                      {/* Actions for Requested, Approved, and In Progress are separated into dedicated modules */}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+                  {/* Priority */}
+                  <TableCell>{getPriorityBadge(jo.priority)}</TableCell>
+
+                  {/* Status */}
+                  <TableCell>{getStatusBadge(jo.status)}</TableCell>
+
+                  {/* Mechanic */}
+                  <TableCell>
+                    {(() => {
+                      if (!mechanic) {
+                        return jo.mechanic_id ? (
+                          <span className="text-xs text-foreground font-medium">Mechanic #{String(typeof jo.mechanic_id === "object" ? (jo.mechanic_id.id || jo.mechanic_id.user_id) : jo.mechanic_id)}</span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">Unassigned</span>
+                        );
+                      }
+                      const f = mechanic.first_name || mechanic.user_fname || "";
+                      const l = mechanic.last_name || mechanic.user_lname || "";
+                      const full = [f, l].filter(Boolean).join(" ");
+                      return (
+                        <div className="flex items-center gap-1.5 text-xs text-foreground">
+                          <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+                          <span>{full || `Mechanic #${mechanic.id || mechanic.user_id}`}</span>
+                        </div>
+                      );
+                    })()}
+                  </TableCell>
+
+                  {/* Parts Summary */}
+                  <TableCell>
+                    <div className="text-xs">
+                      <span className="font-medium text-foreground">{partsCount} item(s)</span>
+                      {partsCount > 0 && (
+                        <span className="text-muted-foreground ml-1">
+                          ({issuedCount} issued)
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+
+                  {/* Actions Dropdown */}
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => onViewDetails(jo)}>
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Details
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Pagination Controls */}
+      {onPageChange && onPageSizeChange && totalCount > 0 && (
+        <DataTablePagination
+          pageIndex={currentPage}
+          pageSize={pageSize}
+          rowCount={totalCount}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+        />
+      )}
     </div>
   );
 }

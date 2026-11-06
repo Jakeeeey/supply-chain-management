@@ -40,7 +40,7 @@ export function JODetailsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden p-6">
         <DialogHeader>
           <div className="flex items-center justify-between pr-4">
             <DialogTitle className="flex items-center gap-2 text-lg">
@@ -53,9 +53,9 @@ export function JODetailsDialog({
           </div>
         </DialogHeader>
 
-        <div className="space-y-4 pt-2 text-sm">
+        <div className="space-y-4 pt-2 text-sm w-full min-w-0">
           {/* Key Info Banner */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-muted/40 p-3 rounded-lg">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-muted/40 p-3 rounded-lg w-full min-w-0">
             <div>
               <span className="text-xs text-muted-foreground block">Vehicle</span>
               <span className="font-semibold">{vehicle?.vehicle_plate || vehicle?.plate_number || "N/A"}</span>
@@ -81,11 +81,11 @@ export function JODetailsDialog({
           </div>
 
           {/* Description */}
-          <div>
+          <div className="w-full min-w-0">
             <span className="text-xs font-semibold text-muted-foreground block mb-1">
               Issue / Maintenance Details
             </span>
-            <p className="bg-card border p-3 rounded-md text-foreground leading-relaxed">
+            <p className="bg-card border p-3 rounded-md text-foreground leading-relaxed break-words [overflow-wrap:anywhere] [word-break:break-word] w-full min-w-0">
               {jobOrder.description}
             </p>
           </div>
