@@ -64,6 +64,9 @@ export function DispatchEditModal({
       remarks: "",
       amount: 0,
       helpers: [{ user_id: 0 }],
+      fuel_liter: undefined,
+      budgets: [],
+      cluster_budgets: [],
     },
   });
 
@@ -91,6 +94,7 @@ export function DispatchEditModal({
     form,
     tripId: planId,
     vehicles: masterData?.vehicles,
+    masterData,
   });
 
   const selectedBranch = useWatch({
@@ -108,8 +112,6 @@ export function DispatchEditModal({
     name: "amount",
   }) || 0;
 
-
-
   // Load existing plan data when modal opens
   useEffect(() => {
     if (open && planId) {
@@ -123,13 +125,24 @@ export function DispatchEditModal({
           if (!res.ok) throw new Error("Failed to load details");
           const result = await res.json();
           const p = result.data;
-          setIsReadOnly(p.status !== "DRAFT");
+          const isAutoApproval = Boolean(masterData?.isAutoApprovalEnabled);
+          setIsReadOnly(
+            isAutoApproval ? p.status !== "For Dispatch" : p.status !== "DRAFT",
+          );
           const loadedIds = p.dispatch_ids?.length
             ? p.dispatch_ids.map(Number)
             : p.dispatch_id
               ? [Number(p.dispatch_id)]
               : [];
           const branchId = p.starting_point || 0;
+
+          const loadedBudgets = p.budgets && p.budgets.length > 0 
+            ? p.budgets 
+            : [];
+
+          const loadedClusterBudgets = p.cluster_budgets && p.cluster_budgets.length > 0
+            ? p.cluster_budgets
+            : [];
 
           form.reset({
             pre_dispatch_plan_ids: loadedIds,
@@ -141,6 +154,9 @@ export function DispatchEditModal({
             remarks: p.remarks || "",
             amount: p.amount || 0,
             helpers: p.helpers?.length ? p.helpers : [{ user_id: 0 }],
+            fuel_liter: p.fuel_liter ?? undefined,
+            budgets: loadedBudgets,
+            cluster_budgets: loadedClusterBudgets,
           });
 
           if (loadedIds.length > 0) {
@@ -152,13 +168,6 @@ export function DispatchEditModal({
             const detailsResult = await detailsRes.json();
             const loadedDetails: EnrichedPlanDetail[] = detailsResult.data || [];
             setPlanDetails(loadedDetails);
-
-            // Recalculate amount as SUM of sales invoice amounts
-            const totalAmount = loadedDetails.reduce(
-              (sum, d) => sum + (d.amount || 0),
-              0,
-            );
-            form.setValue("amount", totalAmount);
 
             // Load approved plans (including the Dispatched ones)
             await loadApprovedPlans(branchId, 1, "", false, loadedIds);
@@ -174,12 +183,25 @@ export function DispatchEditModal({
       };
       fetchDetails();
     } else {
-      form.reset();
+      form.reset({
+        pre_dispatch_plan_ids: [],
+        starting_point: 0,
+        vehicle_id: 0,
+        driver_id: 0,
+        estimated_time_of_dispatch: "",
+        estimated_time_of_arrival: "",
+        remarks: "",
+        amount: 0,
+        helpers: [{ user_id: 0 }],
+        fuel_liter: undefined,
+        budgets: [],
+        cluster_budgets: [],
+      });
       setPlanDetails([]);
       setApprovedPlans([]);
       setIsReadOnly(false);
     }
-  }, [open, planId, form, loadApprovedPlans, setPlanDetails, setApprovedPlans]);
+  }, [open, planId, form, loadApprovedPlans, setPlanDetails, setApprovedPlans, masterData?.isAutoApprovalEnabled]);
 
   const onSubmit = async (values: DispatchCreationFormValues) => {
     if (!planId || isReadOnly) return;
@@ -268,7 +290,8 @@ export function DispatchEditModal({
                 />
 
                 <TripConfigurationForm 
-                  masterData={masterData} 
+                  masterData={masterData}
+                  approvedPlans={approvedPlans}
                   vehicleCapacity={vehicleCapacity}
                   disabled={isReadOnly || isLoadingPlans}
                 />
@@ -289,7 +312,9 @@ export function DispatchEditModal({
               <div className="flex items-center justify-between px-6 py-4 border-t border-border/50 bg-muted/10">
                 <p className="text-xs text-muted-foreground">
                   {isReadOnly
-                    ? "This dispatch trip is not in DRAFT status and cannot be modified."
+                    ? masterData?.isAutoApprovalEnabled
+                      ? "This dispatch trip is not in For Dispatch status and cannot be modified."
+                      : "This dispatch trip is not in DRAFT status and cannot be modified."
                     : selectedPlanIds.length > 0
                       ? "Adjust details and reorder invoices if needed before saving."
                       : "Review and update dispatch trip details."}

@@ -59,6 +59,7 @@ const statusVariant: Record<
 
 export const getDispatchPlanColumns = (
   onEdit: (plan: DispatchPlanSummary) => void,
+  isAutoApprovalEnabled?: boolean,
 ): ColumnDef<DispatchPlanSummary>[] => [
   {
     accessorKey: "dpNumber",
@@ -251,7 +252,9 @@ export const getDispatchPlanColumns = (
     header: "",
     cell: ({ row }) => {
       const status = row.original.status;
-      const isEditable = status === "DRAFT";
+      const isEditable = isAutoApprovalEnabled
+        ? status === "For Dispatch"
+        : status === "DRAFT";
       return (
         <Button
           className="text-sm rounded-lg"
