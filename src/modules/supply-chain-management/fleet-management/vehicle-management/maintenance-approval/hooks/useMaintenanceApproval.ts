@@ -17,6 +17,10 @@ export function useMaintenanceApproval() {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [typeFilter, setTypeFilter] = React.useState("all");
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
+
   const loadData = React.useCallback(async () => {
     setLoading(true);
     try {
@@ -36,6 +40,11 @@ export function useMaintenanceApproval() {
   React.useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Reset page when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, typeFilter]);
 
   const approveAssign = async (payload: ApproveAssignPayload) => {
     setActionLoading(true);
@@ -73,16 +82,27 @@ export function useMaintenanceApproval() {
     });
   }, [jobOrders, typeFilter, searchQuery]);
 
+  // Paginated records
+  const paginatedJobOrders = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredJobOrders.slice(startIndex, startIndex + pageSize);
+  }, [filteredJobOrders, currentPage, pageSize]);
+
   return {
     loading,
     actionLoading,
-    jobOrders: filteredJobOrders,
+    jobOrders: paginatedJobOrders,
     rawJobOrders: jobOrders,
+    totalCount: filteredJobOrders.length,
     users,
     searchQuery,
     setSearchQuery,
     typeFilter,
     setTypeFilter,
+    currentPage,
+    setCurrentPage,
+    pageSize,
+    setPageSize,
     refresh: loadData,
     approveAssign,
   };

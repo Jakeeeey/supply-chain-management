@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
     const params = new URLSearchParams();
     params.set("limit", "-1");
     params.set("sort", "-id");
-    params.set("fields", "*,vehicle_id.*,requested_by.*,approved_by.*,mechanic_id.*");
+    params.set("fields", "*,vehicle_id.*,requested_by.*,approved_by.*,rejected_by.*,mechanic_id.*");
     params.set("filter[status][_eq]", "Requested");
 
     const upstream = await fetch(`${DIRECTUS_URL}/items/vehicle_job_orders?${params.toString()}`, {
@@ -151,22 +151,54 @@ export async function PATCH(req: NextRequest) {
         return json({ error: "Missing required approval payload" }, 400);
       }
 
-      const updateData: Record<string, unknown> = {
-        status: decision,
-        approved_by: userId,
-        approved_at: new Date().toISOString(),
-        decision_remarks: decision_remarks || null,
-      };
+      // Enforce strict UTC timestamp
+      const utcNow = new Date().toISOString();
 
-      if (decision === "Approved" && mechanic_id) {
-        updateData.mechanic_id = Number(mechanic_id);
+      let updateData: Record<string, unknown> = {};
+
+      if (decision === "Approved") {
+        updateData = {
+          status: "Approved",
+          approved_by: userId,
+          approved_at: utcNow,
+          decision_remarks: decision_remarks || null,
+        };
+        if (mechanic_id) {
+          updateData.mechanic_id = Number(mechanic_id);
+        }
+      } else {
+        // Rejection path - do NOT set approved_by or approved_at
+        updateData = {
+          status: "Rejected",
+          rejected_by: userId,
+          rejected_at: utcNow,
+          approved_by: null,
+          approved_at: null,
+          decision_remarks: decision_remarks || null,
+        };
       }
 
-      const res = await fetch(`${DIRECTUS_URL}/items/vehicle_job_orders/${job_order_id}`, {
+      // Perform patch with resilience if rejected_by / rejected_at columns do not yet exist in Directus schema
+      let res = await fetch(`${DIRECTUS_URL}/items/vehicle_job_orders/${job_order_id}`, {
         method: "PATCH",
         headers: directusHeaders(),
         body: JSON.stringify(updateData),
       });
+
+      // If Directus rejects due to unknown field (e.g. rejected_by not yet in schema), fallback safely
+      if (!res.ok && decision === "Rejected") {
+        const fallbackData = {
+          status: "Rejected",
+          approved_by: null,
+          approved_at: null,
+          decision_remarks: decision_remarks || null,
+        };
+        res = await fetch(`${DIRECTUS_URL}/items/vehicle_job_orders/${job_order_id}`, {
+          method: "PATCH",
+          headers: directusHeaders(),
+          body: JSON.stringify(fallbackData),
+        });
+      }
 
       const body = await res.json().catch(() => ({}));
       return json(body, res.status);

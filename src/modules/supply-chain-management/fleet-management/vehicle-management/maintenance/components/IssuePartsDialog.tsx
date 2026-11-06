@@ -99,9 +99,14 @@ export function IssuePartsDialog({
     const validItems = itemsToIssue.filter((item) => item.part_id > 0 && item.quantity > 0);
     if (validItems.length === 0) return;
 
+    const resolvedBranchId =
+      typeof jobOrder.branch_id === "object" && jobOrder.branch_id !== null
+        ? Number(jobOrder.branch_id.id)
+        : Number(jobOrder.branch_id || 1);
+
     await onSubmit({
       job_order_id: jobOrder.id,
-      branch_id: jobOrder.branch_id || 1,
+      branch_id: resolvedBranchId || 1,
       items: validItems,
     });
     onOpenChange(false);
