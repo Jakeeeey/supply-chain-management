@@ -154,12 +154,17 @@ export async function createJunction(
 // ─── Re-exports from specialized repository files ───────────
 // Preserves backward compatibility for `import * as repo from "./dispatch.repo"`
 
-export { fetchMasterData, fetchPurchaseOrders } from "./master-data.repo";
+export {
+  fetchMasterData,
+  fetchPurchaseOrders,
+  fetchDispatchAutoApprovalSetting,
+} from "./master-data.repo";
 export { fetchApprovedPreDispatchPlans } from "./pdp-enrichment.repo";
 export {
   fetchPostDispatchPlanDetails,
   fetchPlanDetails,
   fetchAllBudgets,
   fetchPlanBudgets,
+  fetchPlanFuelAllocation,
   fetchPdpInvoiceIds,
 } from "./plan-details.repo";

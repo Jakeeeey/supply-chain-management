@@ -20,7 +20,7 @@ export default function DispatchCreationPage() {
   );
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  const { dispatchSummary, isLoadingSummary, refreshSummary } =
+  const { dispatchSummary, isLoadingSummary, refreshSummary, masterData } =
     useDispatchCreation();
 
   const handleEdit = useCallback((plan: DispatchPlanSummary) => {
@@ -37,6 +37,7 @@ export default function DispatchCreationPage() {
           sorting={sorting}
           onSortingChange={setSorting}
           onEdit={handleEdit}
+          isAutoApprovalEnabled={Boolean(masterData?.isAutoApprovalEnabled)}
           actionComponent={
             <Button onClick={() => setIsModalOpen(true)}>
               <Plus className="w-4 h-4" /> Create 

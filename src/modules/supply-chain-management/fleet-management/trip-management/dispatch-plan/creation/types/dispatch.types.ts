@@ -43,6 +43,32 @@ export interface COAOption {
   is_payment?: number | { type: string; data: number[] };
 }
 
+/** Row from the `cluster` collection. */
+export interface ClusterRow {
+  id: number;
+  cluster_name: string;
+  proximity_level?: number;
+}
+
+/** Row from the `cluster_coa_budget` collection enriched with COA info. */
+export interface ClusterCoaBudgetRow {
+  id: number;
+  cluster_id: number;
+  coa_id: number;
+  budget: number;
+  account_title?: string;
+  gl_code?: string;
+}
+
+/** Row from the `dp_budget_snapshot` collection. */
+export interface DpBudgetSnapshotRow {
+  id?: number;
+  post_dispatch_plan_id: number;
+  chart_of_accounts_id: number;
+  amount: number;
+  created_at?: string;
+}
+
 /** Aggregated master-data payload returned to the client. */
 export interface DispatchCreationMasterData {
   drivers: DriverOption[];
@@ -50,6 +76,9 @@ export interface DispatchCreationMasterData {
   vehicles: VehicleOption[];
   branches: BranchOption[];
   coa: COAOption[];
+  clusters?: ClusterRow[];
+  cluster_coa_budgets?: ClusterCoaBudgetRow[];
+  isAutoApprovalEnabled?: boolean;
 }
 
 // ─── Raw Directus Row Shapes ────────────────────────────────
@@ -127,6 +156,19 @@ export interface PostDispatchBudgetRow {
   remarks?: string;
 }
 
+/** Row from the `user_fuel_allocation` collection. */
+export interface UserFuelAllocationRow {
+  id?: number;
+  doc_no?: string | null;
+  dispatch_id?: number;
+  user_id?: number | null;
+  liter?: number;
+  created_at?: string;
+  created_by?: number | null;
+  updated_at?: string | null;
+  updated_by?: number | null;
+}
+
 /** Row from the `post_dispatch_invoices` collection. */
 export interface PostDispatchInvoiceRow {
   id?: number;
@@ -167,12 +209,6 @@ export interface PurchaseOrderRow {
   supplier_name: string;
   total_amount: number;
   inventory_status: string;
-}
-
-/** Row from the `cluster` collection. */
-export interface ClusterRow {
-  id: number;
-  cluster_name: string;
 }
 
 /** Row from the `dispatch_plan_details` collection. */
@@ -223,6 +259,7 @@ export interface PostDispatchOtherRowDetail {
 /** Enriched approved PDP for the sidebar picker. */
 export interface EnrichedApprovedPlan extends RawDispatchPlan {
   cluster_name: string;
+  cluster_proximity_level?: number;
   total_items: number;
   total_weight: number;
   is_selectable: boolean;
@@ -300,6 +337,9 @@ export interface PostDispatchPlanDetails {
   remarks?: string;
   dispatch_ids?: number[];
   helpers: { user_id: number }[];
+  fuel_liter?: number | null;
+  budgets?: { coa_id: number; amount: number; remarks?: string }[];
+  cluster_budgets?: { coa_id: number; amount: number }[];
 }
 
 // ─── Generic Directus Response Wrapper ──────────────────────
