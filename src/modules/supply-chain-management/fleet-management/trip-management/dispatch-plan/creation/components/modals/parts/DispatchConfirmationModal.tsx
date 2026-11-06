@@ -65,6 +65,18 @@ export function DispatchConfirmationModal({
   );
 
   const tripAmount = payload.amount || 0;
+  const isAutoApprovalEnabled = Boolean(masterData?.isAutoApprovalEnabled);
+
+  const manualBudget = (payload.budgets || []).reduce(
+    (sum, b) => sum + (Number(b.amount) || 0),
+    0,
+  );
+  const clusterBudget = (payload.cluster_budgets || []).reduce(
+    (sum, c) => sum + (Number(c.amount) || 0),
+    0,
+  );
+  const totalBudget = manualBudget + clusterBudget;
+  const fuelLiter = payload.fuel_liter;
 
   const selectedPdps = payload.pre_dispatch_plan_ids || [];
 
@@ -78,7 +90,7 @@ export function DispatchConfirmationModal({
               variant="secondary"
               className="font-mono text-xs font-medium px-2 py-0.5 ml-2"
             >
-              DRAFT
+              {isAutoApprovalEnabled ? "FOR DISPATCH" : "DRAFT"}
             </Badge>
           </DialogTitle>
         </DialogHeader>
@@ -157,6 +169,36 @@ export function DispatchConfirmationModal({
                 })}
               </span>
             </div>
+
+            {isAutoApprovalEnabled && (
+              <>
+                <div className="flex flex-col gap-1 border-b border-border/40 pb-2">
+                  <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                    Fuel Allocation
+                  </span>
+                  <span className="font-medium text-foreground tabular-nums">
+                    {fuelLiter !== undefined && fuelLiter !== null && Number(fuelLiter) > 0
+                      ? `${Number(fuelLiter).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })} Liters`
+                      : "—"}
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-1 border-b border-border/40 pb-2 text-right">
+                  <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                    Total Budget
+                  </span>
+                  <span className="font-medium text-emerald-600 tabular-nums">
+                    ₱
+                    {Number(totalBudget).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="space-y-3">

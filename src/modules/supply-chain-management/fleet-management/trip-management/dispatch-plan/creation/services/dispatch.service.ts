@@ -15,6 +15,7 @@ import type {
   PostDispatchPlanDetails,
   PostDispatchPurchaseRow,
   UpdateHeaderPayload,
+  UserFuelAllocationRow,
 } from "../types/dispatch.types";
 import type {
   DispatchCreationFormValues,
@@ -70,6 +71,15 @@ export async function getPlanBudgets(
 }
 
 /**
+ * Returns fuel allocation for a specific plan.
+ */
+export async function getPlanFuelAllocation(
+  planId: number,
+): Promise<UserFuelAllocationRow | null> {
+  return repo.fetchPlanFuelAllocation(planId);
+}
+
+/**
  * Returns full post-dispatch plan details including staff and linked PDP.
  */
 export async function getPostPlanDetails(
@@ -85,7 +95,7 @@ export async function getPurchaseOrders(query?: string, branchId?: number) {
   return repo.fetchPurchaseOrders(query, branchId);
 }
 /**
- * Creates a complete dispatch plan: header + staff + junction + budgets + invoices.
+ * Creates a complete dispatch plan: header + staff + junction + budgets + fuel allocation + invoices.
  * Also marks the source Pre-Dispatch Plan as "Dispatched".
  *
  * Returns the new plan ID.
@@ -94,6 +104,8 @@ export async function createDispatchPlan(
   data: DispatchCreationFormValues,
   currentUserId: number,
 ): Promise<{ success: true; id: number }> {
+  const isAutoApprovalEnabled = await repo.fetchDispatchAutoApprovalSetting();
+
   // 1. Insert plan header
   const planPayload: PlanHeaderPayload = {
     doc_no: generateDispatchNo(),
@@ -101,7 +113,7 @@ export async function createDispatchPlan(
     driver_id: data.driver_id,
     vehicle_id: data.vehicle_id,
     starting_point: data.starting_point,
-    status: "For Approval",
+    status: isAutoApprovalEnabled ? "For Dispatch" : "For Approval",
     amount: data.amount,
     // encoder_id falls back to currentUserId when no explicit encoder is provided.
     encoder_id: data.encoder_id ?? currentUserId,
@@ -116,6 +128,7 @@ export async function createDispatchPlan(
 
   const planDoc = await repo.createPlanHeader(planPayload);
   const newPlanId = planDoc.data.id;
+  const docNo = planDoc.data.doc_no || planPayload.doc_no;
 
   // 2. Prepare sub-payloads
   const staffPayloads = prepareStaffPayload(
@@ -148,6 +161,47 @@ export async function createDispatchPlan(
     });
   }
 
+  // Budget Payloads & Fuel Allocation Payload (only when dispatch_auto_approval == 1)
+  const budgetPayloads: {
+    post_dispatch_plan_id: number;
+    coa_id: number;
+    amount: number;
+    remarks: string;
+  }[] = [];
+  const fuelPayloads: UserFuelAllocationRow[] = [];
+
+  if (isAutoApprovalEnabled) {
+    const manualBudgetPayloads = (data.budgets || [])
+      .filter((b) => Number(b.coa_id) > 0 && Number(b.amount) > 0)
+      .map((b) => ({
+        post_dispatch_plan_id: newPlanId,
+        coa_id: b.coa_id,
+        amount: b.amount,
+        remarks: b.remarks || "",
+      }));
+
+    const clusterBudgetPayloads = (data.cluster_budgets || [])
+      .filter((c) => Number(c.coa_id) > 0 && Number(c.amount) > 0)
+      .map((c) => ({
+        post_dispatch_plan_id: newPlanId,
+        coa_id: c.coa_id,
+        amount: c.amount,
+        remarks: "Cluster COA Budget",
+      }));
+
+    budgetPayloads.push(...manualBudgetPayloads, ...clusterBudgetPayloads);
+
+    if (data.fuel_liter !== undefined && data.fuel_liter !== null && Number(data.fuel_liter) > 0) {
+      fuelPayloads.push({
+        doc_no: docNo,
+        dispatch_id: newPlanId,
+        user_id: data.driver_id,
+        liter: Number(data.fuel_liter),
+        created_by: currentUserId || null,
+      });
+    }
+  }
+
   // 3. Batch inserts + status update
   // Collect unique PO IDs for status update
   const poIdsToDispatch = [...new Set(purchasePayloads.map((p) => Number(p.po_id)).filter(Boolean))];
@@ -158,6 +212,8 @@ export async function createDispatchPlan(
     repo.batchCreate("post_dispatch_invoices", invoicePayloads),
     repo.batchCreate("post_dispatch_plan_others", othersPayloads),
     repo.batchCreate("post_dispatch_purchases", purchasePayloads),
+    repo.batchCreate("post_dispatch_budgeting", budgetPayloads),
+    repo.batchCreate("user_fuel_allocation", fuelPayloads),
     ...data.pre_dispatch_plan_ids.map(pdpId => repo.updateDispatchPlanStatus(pdpId, "Dispatched")),
     ...poIdsToDispatch.map(poId => repo.updatePurchaseOrderStatus(poId, 12)),
   ]);
@@ -167,7 +223,7 @@ export async function createDispatchPlan(
 
 /**
  * Updates an existing dispatch plan's trip configuration:
- * PDP swap, invoice sync, header update, and staff replacement.
+ * PDP swap, invoice sync, header update, staff replacement, and budget/fuel allocation update.
  */
 export async function updateTrip(
   planId: number,
@@ -228,7 +284,6 @@ export async function updateTrip(
 
   // Always sync if PDP ids or invoices were provided
   if (newPdpIds || data.invoices) {
-
     const oldIds = await repo.fetchIdsByFilter(
       "post_dispatch_invoices",
       "post_dispatch_plan_id",
@@ -279,7 +334,70 @@ export async function updateTrip(
     ]);
   }
 
-  // 3. Update Header & Staff
+  // 3. Update Budgets & Fuel Allocation if dispatch_auto_approval == 1
+  const isAutoApprovalEnabled = await repo.fetchDispatchAutoApprovalSetting();
+  const budgetAndFuelTasks: Promise<void>[] = [];
+  if (isAutoApprovalEnabled && (data.budgets !== undefined || data.cluster_budgets !== undefined)) {
+    budgetAndFuelTasks.push((async () => {
+      const existingBudgetIds = await repo.fetchIdsByFilter(
+        "post_dispatch_budgeting",
+        "post_dispatch_plan_id",
+        planId,
+      );
+      await repo.deleteByIds("post_dispatch_budgeting", existingBudgetIds);
+
+      const manualPayloads = (data.budgets || [])
+        .filter((b) => Number(b.coa_id) > 0 && Number(b.amount) > 0)
+        .map((b) => ({
+          post_dispatch_plan_id: planId,
+          coa_id: b.coa_id,
+          amount: b.amount,
+          remarks: b.remarks || "",
+        }));
+
+      const clusterPayloads = (data.cluster_budgets || [])
+        .filter((c) => Number(c.coa_id) > 0 && Number(c.amount) > 0)
+        .map((c) => ({
+          post_dispatch_plan_id: planId,
+          coa_id: c.coa_id,
+          amount: c.amount,
+          remarks: "Cluster COA Budget",
+        }));
+
+      const combinedBudgets = [...manualPayloads, ...clusterPayloads];
+      if (combinedBudgets.length > 0) {
+        await repo.batchCreate("post_dispatch_budgeting", combinedBudgets);
+      }
+    })());
+  }
+
+  if (isAutoApprovalEnabled && data.fuel_liter !== undefined) {
+    budgetAndFuelTasks.push((async () => {
+      const existingFuelIds = await repo.fetchIdsByFilter(
+        "user_fuel_allocation",
+        "dispatch_id",
+        planId,
+      );
+      const isExisting = existingFuelIds.length > 0;
+      await repo.deleteByIds("user_fuel_allocation", existingFuelIds);
+
+      if (data.fuel_liter !== null && Number(data.fuel_liter) > 0) {
+        const planDetails = await repo.fetchPostDispatchPlanDetails(planId);
+        await repo.batchCreate("user_fuel_allocation", [
+          {
+            doc_no: planDetails.doc_no || null,
+            dispatch_id: planId,
+            user_id: data.driver_id,
+            liter: Number(data.fuel_liter),
+            created_by: currentUserId || null,
+            updated_by: isExisting ? (currentUserId || null) : null,
+          },
+        ]);
+      }
+    })());
+  }
+
+  // 4. Update Header & Staff
   const headerPayload: UpdateHeaderPayload = {
     driver_id: data.driver_id,
     vehicle_id: data.vehicle_id,
@@ -308,6 +426,7 @@ export async function updateTrip(
   await Promise.all([
     repo.updatePlanHeader(planId, headerPayload),
     ...pdpSwapTasks,
+    ...budgetAndFuelTasks,
     (async () => {
       const staffIds = await repo.fetchIdsByFilter(
         "post_dispatch_plan_staff",
@@ -321,4 +440,3 @@ export async function updateTrip(
 
   return { success: true };
 }
-
