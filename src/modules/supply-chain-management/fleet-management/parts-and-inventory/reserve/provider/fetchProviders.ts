@@ -22,6 +22,20 @@ export async function fetchJobOrders(): Promise<JobOrderRef[]> {
   }
 }
 
+export async function fetchAvailablePartsByBranch(branchId: string | number): Promise<VehiclePart[]> {
+  if (!branchId || branchId === "all") return [];
+  try {
+    const res = await fetch(`${BASE_URL}?action=available-parts&issuing_branch_id=${branchId}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const json = await res.json().catch(() => ({ data: [] }));
+    return Array.isArray(json?.data) ? json.data : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchIssuedPartsHistory(jobOrderId?: number): Promise<JobOrderPart[]> {
   const params = new URLSearchParams();
   if (jobOrderId) params.set("job_order_id", String(jobOrderId));

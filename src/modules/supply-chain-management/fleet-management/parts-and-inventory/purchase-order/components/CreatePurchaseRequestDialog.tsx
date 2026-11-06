@@ -22,8 +22,8 @@ import {
 } from "@/components/ui/select";
 import type { Branch } from "../../stock-in/types";
 import type { VehiclePart } from "../../registration/types";
-import type { ReorderTriggerItem, PurchaseRequestPriority, Supplier } from "../types";
-import { createPurchaseRequest } from "../provider/fetchProviders";
+import type { ReorderTriggerItem, PurchaseRequestPriority, Supplier, PurchaseRequest } from "../types";
+import { createPurchaseRequest, updatePurchaseRequest } from "../provider/fetchProviders";
 import { SearchableSelect } from "./SearchableSelect";
 import { AlertCircle, Calendar as CalendarIcon, Loader2, ShoppingCart, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -39,7 +39,33 @@ interface CreatePurchaseRequestDialogProps {
   parts: VehiclePart[];
   suppliers?: Supplier[];
   initialTrigger?: ReorderTriggerItem | null;
+  editPr?: PurchaseRequest | null;
   onSuccess: () => void;
+}
+
+// Helper to resolve linked default supplier ID from a part
+function getPartSupplierId(part?: VehiclePart | null): string {
+  if (!part) return "";
+  if (part.supplier_id) return String(part.supplier_id);
+  if (part.supplier && typeof part.supplier === "object" && part.supplier.id) {
+    return String(part.supplier.id);
+  }
+  if (Array.isArray(part.suppliers) && part.suppliers.length > 0) {
+    const first = part.suppliers[0];
+    if (typeof first === "object" && first !== null) {
+      if ("id" in first && first.id) return String(first.id);
+      if ("supplier_id" in first) {
+        const sId =
+          typeof first.supplier_id === "object" && first.supplier_id !== null
+            ? (first.supplier_id as { id?: number }).id
+            : first.supplier_id;
+        if (sId) return String(sId);
+      }
+    } else if (typeof first === "number") {
+      return String(first);
+    }
+  }
+  return "";
 }
 
 export function CreatePurchaseRequestDialog({
@@ -49,6 +75,7 @@ export function CreatePurchaseRequestDialog({
   parts,
   suppliers = [],
   initialTrigger,
+  editPr,
   onSuccess,
 }: CreatePurchaseRequestDialogProps) {
   const [branchId, setBranchId] = React.useState<string>("");
@@ -64,32 +91,63 @@ export function CreatePurchaseRequestDialog({
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
   const [submitted, setSubmitted] = React.useState<boolean>(false);
 
-  // Populate from trigger if passed, or default
+  const isEditMode = Boolean(editPr);
+
+  // Populate from editPr, trigger if passed, or default
   React.useEffect(() => {
     if (open) {
       setSubmitted(false);
       setFieldErrors({});
       setError("");
 
-      if (initialTrigger) {
+      if (editPr) {
+        const bId = typeof editPr.branch_id === "object" && editPr.branch_id !== null ? String(editPr.branch_id.id) : String(editPr.branch_id || "");
+        const pId = typeof editPr.part_id === "object" && editPr.part_id !== null ? String(editPr.part_id.id) : String(editPr.part_id || "");
+        const sId = typeof editPr.supplier_id === "object" && editPr.supplier_id !== null ? String(editPr.supplier_id.id) : String(editPr.supplier_id || "");
+        setBranchId(bId);
+        setPartId(pId);
+        setQuantity(String(editPr.quantity || 1));
+        setPriority(editPr.priority || "Normal");
+        setSupplierId(sId);
+        setExpectedDate(editPr.expected_delivery_date ? editPr.expected_delivery_date.slice(0, 10) : "");
+        setNotes(editPr.notes || "");
+      } else if (initialTrigger) {
         setBranchId(String(initialTrigger.branch_id));
         setPartId(String(initialTrigger.part_id));
         setQuantity(String(initialTrigger.suggested_quantity || 10));
         setPriority(initialTrigger.on_hand <= 0 ? "Critical" : "Urgent");
         setNotes(`Replenishment triggered by low stock alert (On-hand: ${initialTrigger.on_hand}, Reorder Point: ${initialTrigger.reorder_point})`);
+
+        // Auto-select linked supplier of trigger part if configured
+        const matchingPart = parts.find((p) => p.id === initialTrigger.part_id);
+        const autoSupplierId = getPartSupplierId(matchingPart);
+        setSupplierId(autoSupplierId);
       } else {
-        setBranchId((prev) => (prev ? prev : branches[0] ? String(branches[0].id) : ""));
-        setPartId((prev) => (prev ? prev : parts[0] ? String(parts[0].id) : ""));
+        const defaultBranch = branches[0] ? String(branches[0].id) : "";
+        const defaultPart = parts[0] ? String(parts[0].id) : "";
+        setBranchId((prev) => (prev ? prev : defaultBranch));
+        setPartId((prev) => (prev ? prev : defaultPart));
         setQuantity("10");
         setPriority("Normal");
-        setSupplierId("");
+
+        const firstPart = parts[0] || null;
+        const autoSupplierId = getPartSupplierId(firstPart);
+        setSupplierId(autoSupplierId);
         setExpectedDate("");
         setNotes("");
       }
     }
-  }, [open, initialTrigger, branches, parts]);
+  }, [open, editPr, initialTrigger, branches, parts]);
 
-  // Selected part for unit cost calculation
+  // When user selects another part, auto-populate linked supplier if available
+  const handlePartChange = (newPartId: string) => {
+    setPartId(newPartId);
+    const matchingPart = parts.find((p) => String(p.id) === newPartId);
+    const autoSupplierId = getPartSupplierId(matchingPart);
+    if (autoSupplierId) {
+      setSupplierId(autoSupplierId);
+    }
+  };
   const selectedPart = React.useMemo(() => {
     return parts.find((p) => String(p.id) === partId);
   }, [parts, partId]);
@@ -143,24 +201,39 @@ export function CreatePurchaseRequestDialog({
 
     setSubmitting(true);
     try {
-      await createPurchaseRequest({
-        branch_id: Number(branchId),
-        part_id: Number(partId),
-        quantity: qty,
-        estimated_cost: estimatedCost,
-        priority,
-        supplier_id: Number(supplierId),
-        supplier_name: selectedSupplier ? selectedSupplier.supplier_name : undefined,
-        expected_delivery_date: expectedDate || undefined,
-        notes: notes.trim() || undefined,
-      });
+      if (isEditMode && editPr) {
+        await updatePurchaseRequest({
+          id: editPr.id,
+          branch_id: Number(branchId),
+          part_id: Number(partId),
+          quantity: qty,
+          estimated_cost: estimatedCost,
+          priority,
+          supplier_id: Number(supplierId),
+          supplier_name: selectedSupplier ? selectedSupplier.supplier_name : undefined,
+          expected_delivery_date: expectedDate || undefined,
+          notes: notes.trim() || undefined,
+        });
+      } else {
+        await createPurchaseRequest({
+          branch_id: Number(branchId),
+          part_id: Number(partId),
+          quantity: qty,
+          estimated_cost: estimatedCost,
+          priority,
+          supplier_id: Number(supplierId),
+          supplier_name: selectedSupplier ? selectedSupplier.supplier_name : undefined,
+          expected_delivery_date: expectedDate || undefined,
+          notes: notes.trim() || undefined,
+        });
+      }
 
       onSuccess();
       onOpenChange(false);
       setSubmitted(false);
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || "Failed to create purchase request");
+      setError(e.message || (isEditMode ? "Failed to update purchase request" : "Failed to create purchase request"));
     } finally {
       setSubmitting(false);
     }
@@ -172,10 +245,12 @@ export function CreatePurchaseRequestDialog({
         <DialogHeader>
           <DialogTitle className="text-base flex items-center gap-2">
             <ShoppingCart className="h-4 w-4 text-primary" />
-            Create Purchase Request / Replenishment
+            {isEditMode ? `Edit Purchase Request (${editPr?.pr_no})` : "Create Purchase Request / Replenishment"}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Generate an official purchase request to replenish low stock parts across branches.
+            {isEditMode
+              ? "Modify the details of this pending purchase request before approval."
+              : "Generate an official purchase request to replenish low stock parts across branches."}
           </DialogDescription>
         </DialogHeader>
 
@@ -245,7 +320,7 @@ export function CreatePurchaseRequestDialog({
               }))}
               value={partId}
               onValueChange={(val) => {
-                setPartId(val);
+                handlePartChange(val);
                 if (submitted && fieldErrors.part_id) {
                   setFieldErrors((prev) => ({ ...prev, part_id: "" }));
                 }
@@ -403,10 +478,10 @@ export function CreatePurchaseRequestDialog({
               {submitting ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                  Submitting...
+                  {isEditMode ? "Saving Changes..." : "Submitting..."}
                 </>
               ) : (
-                "Submit Purchase Request"
+                isEditMode ? "Save Changes" : "Submit Purchase Request"
               )}
             </Button>
           </DialogFooter>

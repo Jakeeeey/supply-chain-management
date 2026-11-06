@@ -54,9 +54,23 @@ export interface PurchaseRequest {
   }>;
   requested_by?: number | string | null;
   requested_at?: string | null;
+  created_by?: number | string | null;
   decided_by?: number | string | null;
   decided_at?: string | null;
   created_at: string;
+}
+
+export interface UpdatePurchaseRequestPayload {
+  id: number;
+  branch_id?: number;
+  part_id?: number;
+  quantity?: number;
+  estimated_cost?: number;
+  priority?: PurchaseRequestPriority;
+  supplier_id?: number | null;
+  supplier_name?: string | null;
+  expected_delivery_date?: string | null;
+  notes?: string | null;
 }
 
 export interface CreatePurchaseRequestPayload {

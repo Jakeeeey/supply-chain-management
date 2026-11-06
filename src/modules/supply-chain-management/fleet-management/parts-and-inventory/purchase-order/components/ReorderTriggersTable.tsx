@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ShoppingCart, Layers } from "lucide-react";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 
 interface ReorderTriggersTableProps {
   items: ReorderTriggerItem[];
@@ -33,6 +34,19 @@ export function ReorderTriggersTable({
   onSelectionChange,
   onBulkReorder,
 }: ReorderTriggersTableProps) {
+  const [currentPage, setCurrentPage] = React.useState<number>(1);
+  const [pageSize, setPageSize] = React.useState<number>(10);
+
+  // Reset to first page when items count changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [items.length]);
+
+  const paginatedItems = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return items.slice(start, start + pageSize);
+  }, [items, currentPage, pageSize]);
+
   const selectedTotalCost = React.useMemo(() => {
     return selectedItems.reduce((acc, it) => acc + (it.suggested_quantity * it.unit_cost), 0);
   }, [selectedItems]);
@@ -148,7 +162,7 @@ export function ReorderTriggersTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.map((item) => {
+            {paginatedItems.map((item) => {
               const isOutOfStock = item.on_hand <= 0;
               const lineEstimatedCost = item.suggested_quantity * item.unit_cost;
               const selected = isItemSelected(item);
@@ -220,6 +234,21 @@ export function ReorderTriggersTable({
             })}
           </TableBody>
         </Table>
+
+        {items.length > 0 && (
+          <div className="border-t p-2">
+            <DataTablePagination
+              pageIndex={currentPage}
+              pageSize={pageSize}
+              rowCount={items.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(newSize) => {
+                setPageSize(newSize);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

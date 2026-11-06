@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Wrench, Layers } from "lucide-react";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 
 interface IssuedPartsTableProps {
   items: JobOrderPart[];
@@ -21,6 +22,20 @@ interface IssuedPartsTableProps {
 }
 
 export function IssuedPartsTable({ items, loading }: IssuedPartsTableProps) {
+  const [currentPage, setCurrentPage] = React.useState<number>(1);
+  const [pageSize, setPageSize] = React.useState<number>(10);
+
+  // Reset page when items dataset changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [items.length]);
+
+  const totalRows = items.length;
+  const paginatedItems = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return items.slice(start, start + pageSize);
+  }, [items, currentPage, pageSize]);
+
   if (loading && items.length === 0) {
     return (
       <div className="rounded-md border p-4 space-y-3">
@@ -44,72 +59,89 @@ export function IssuedPartsTable({ items, loading }: IssuedPartsTableProps) {
   }
 
   return (
-    <div className="rounded-md border overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[120px]">Issued Date</TableHead>
-            <TableHead className="w-[130px]">JO Number</TableHead>
-            <TableHead>Vehicle Info</TableHead>
-            <TableHead>Part Code & Name</TableHead>
-            <TableHead className="text-right">Qty Issued</TableHead>
-            <TableHead className="text-right">Unit Cost</TableHead>
-            <TableHead className="text-right">Total Cost</TableHead>
-            <TableHead>Remarks</TableHead>
-            <TableHead className="text-center">Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.map((item) => {
-            const jo = typeof item.job_order_id === "object" && item.job_order_id !== null ? (item.job_order_id as JobOrderRef) : null;
-            const joNo = jo?.jo_no || (typeof item.job_order_id === "number" ? `JO #${item.job_order_id}` : "—");
+    <div className="space-y-3">
+      <div className="rounded-md border overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[120px]">Issued Date</TableHead>
+              <TableHead className="w-[130px]">JO Number</TableHead>
+              <TableHead>Vehicle Info</TableHead>
+              <TableHead>Part Code & Name</TableHead>
+              <TableHead className="text-right">Qty Issued</TableHead>
+              <TableHead className="text-right">Unit Cost</TableHead>
+              <TableHead className="text-right">Total Cost</TableHead>
+              <TableHead>Remarks</TableHead>
+              <TableHead className="text-center">Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {paginatedItems.map((item) => {
+              const jo = typeof item.job_order_id === "object" && item.job_order_id !== null ? (item.job_order_id as JobOrderRef) : null;
+              const joNo = jo?.jo_no || (typeof item.job_order_id === "number" ? `JO #${item.job_order_id}` : "—");
 
-            const v = jo?.vehicle_id && typeof jo.vehicle_id === "object" ? (jo.vehicle_id as VehicleRef) : null;
-            const vehicleText = v?.plate_number || v?.vehicle_name || "—";
+              const v = jo?.vehicle_id && typeof jo.vehicle_id === "object" ? (jo.vehicle_id as VehicleRef) : null;
+              const vehicleText = v?.plate_number || v?.vehicle_name || "—";
 
-            const part = typeof item.part_id === "object" && item.part_id !== null ? (item.part_id as VehiclePart) : null;
-            const partCode = part?.part_code || (typeof item.part_id === "number" ? `Part #${item.part_id}` : "—");
-            const partName = part?.part_name || "—";
-            const unit = part?.unit || "pc";
+              const part = typeof item.part_id === "object" && item.part_id !== null ? (item.part_id as VehiclePart) : null;
+              const partCode = part?.part_code || (typeof item.part_id === "number" ? `Part #${item.part_id}` : "—");
+              const partName = part?.part_name || "—";
+              const unit = part?.unit || "pc";
 
-            const lineTotal = Number(item.quantity_issued || item.quantity_requested || 0) * Number(item.unit_cost || 0);
-            const dateStr = item.issued_at ? new Date(item.issued_at).toLocaleDateString() : "—";
+              const lineTotal = Number(item.quantity_issued || item.quantity_requested || 0) * Number(item.unit_cost || 0);
+              const dateStr = item.issued_at ? new Date(item.issued_at).toLocaleDateString() : "—";
 
-            return (
-              <TableRow key={item.id}>
-                <TableCell className="text-xs text-muted-foreground">{dateStr}</TableCell>
-                <TableCell className="font-mono text-xs font-semibold">{joNo}</TableCell>
-                <TableCell>
-                  <span className="text-xs font-medium">{vehicleText}</span>
-                </TableCell>
-                <TableCell>
-                  <div className="text-xs font-mono font-medium">{partCode}</div>
-                  <div className="text-xs text-muted-foreground">{partName}</div>
-                </TableCell>
-                <TableCell className="text-right font-bold text-sm text-foreground">
-                  {item.quantity_issued || item.quantity_requested}{" "}
-                  <span className="text-xs text-muted-foreground font-normal">{unit}</span>
-                </TableCell>
-                <TableCell className="text-right font-medium text-xs">
-                  ₱{Number(item.unit_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </TableCell>
-                <TableCell className="text-right font-semibold text-xs">
-                  ₱{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground max-w-[180px] truncate">
-                  {item.remarks || "—"}
-                </TableCell>
-                <TableCell className="text-center">
-                  <Badge variant="outline" className="text-blue-700 bg-blue-50 border-blue-200 text-xs gap-1">
-                    <Wrench className="h-3 w-3" />
-                    Issued to JO
-                  </Badge>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+              return (
+                <TableRow key={item.id}>
+                  <TableCell className="text-xs text-muted-foreground">{dateStr}</TableCell>
+                  <TableCell className="font-mono text-xs font-semibold">{joNo}</TableCell>
+                  <TableCell>
+                    <span className="text-xs font-medium">{vehicleText}</span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-xs font-mono font-medium">{partCode}</div>
+                    <div className="text-xs text-muted-foreground">{partName}</div>
+                  </TableCell>
+                  <TableCell className="text-right font-bold text-sm text-foreground">
+                    {item.quantity_issued || item.quantity_requested}{" "}
+                    <span className="text-xs text-muted-foreground font-normal">{unit}</span>
+                  </TableCell>
+                  <TableCell className="text-right font-medium text-xs">
+                    ₱{Number(item.unit_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold text-xs">
+                    ₱{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground max-w-[180px] truncate">
+                    {item.remarks || "—"}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="outline" className="text-blue-700 bg-blue-50 border-blue-200 text-xs gap-1">
+                      <Wrench className="h-3 w-3" />
+                      Issued to JO
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+
+      {totalRows > 0 && (
+        <div className="py-2 border-t">
+          <DataTablePagination
+            pageIndex={currentPage}
+            pageSize={pageSize}
+            rowCount={totalRows}
+            onPageChange={(page) => setCurrentPage(page)}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
