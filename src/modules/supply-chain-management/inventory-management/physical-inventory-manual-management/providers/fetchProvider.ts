@@ -1022,10 +1022,60 @@ export async function fetchPhysicalInventoryAttachments(
                     physical_inventory_id: { _eq: physicalInventoryId },
                 }),
                 sort: "-created_at",
+                limit: "-1",
                 fields: "id,physical_inventory_id,directus_file_id,created_by.user_id,created_by.user_fname,created_by.user_lname,created_at",
             }
         );
-        return res.data || [];
+
+        const rows = res.data || [];
+        if (rows.length === 0) return [];
+
+        // Collect all distinct file UUIDs to query their metadata from Directus /files
+        const fileIds = Array.from(
+            new Set(rows.map((r) => r.directus_file_id).filter(Boolean))
+        );
+
+        if (fileIds.length > 0) {
+            try {
+                const filesRes = await apiGet<DirectusItemsResponse<{
+                    id: string;
+                    filename_download: string;
+                    type?: string;
+                    filesize?: number;
+                }>>(`${API_BASE}/directus/files`, {
+                    "filter[id][_in]": fileIds.join(","),
+                    limit: "-1",
+                    fields: "id,filename_download,type,filesize",
+                });
+
+                const fileMap = new Map<string, {
+                    id: string;
+                    filename_download: string;
+                    type?: string;
+                    filesize?: number;
+                }>();
+
+                for (const f of filesRes.data || []) {
+                    fileMap.set(f.id, f);
+                }
+
+                for (const row of rows) {
+                    if (row.directus_file_id && fileMap.has(row.directus_file_id)) {
+                        const meta = fileMap.get(row.directus_file_id)!;
+                        row.file_details = {
+                            id: meta.id,
+                            filename_download: meta.filename_download,
+                            filesize: meta.filesize || 0,
+                            type: meta.type || "",
+                        };
+                    }
+                }
+            } catch (err) {
+                console.warn("Could not fetch file metadata for attachments:", err);
+            }
+        }
+
+        return rows;
     } catch (err) {
         console.error("fetchPhysicalInventoryAttachments error:", err);
         return [];

@@ -53,6 +53,7 @@ type Props = {
     phId: number;
     onBack?: () => void;
     onCommitted?: (header: PhysicalInventoryHeaderRow) => void;
+    onUnsavedChangesChange?: (hasUnsaved: boolean) => void;
     currentUser?: { id: number; name: string };
 };
 
@@ -75,11 +76,19 @@ export function PhysicalInventoryOffsettingModule({
                                                       phId,
                                                       onBack,
                                                       onCommitted,
+                                                      onUnsavedChangesChange,
                                                       currentUser,
                                                   }: Props) {
     const [isLoading, setIsLoading] = React.useState(true);
     const [isSaving, setIsSaving] = React.useState(false);
     const [isCreatingGroup, setIsCreatingGroup] = React.useState(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false);
+    const [unsavedGroupIds, setUnsavedGroupIds] = React.useState<Set<string>>(new Set());
+
+    React.useEffect(() => {
+        onUnsavedChangesChange?.(hasUnsavedChanges);
+    }, [hasUnsavedChanges, onUnsavedChangesChange]);
+
     const [openSaveDialog, setOpenSaveDialog] = React.useState(false);
     const [openCountSheetDialog, setOpenCountSheetDialog] = React.useState(false);
 
@@ -163,6 +172,8 @@ export function PhysicalInventoryOffsettingModule({
             setReportMeta(snapshot.reportMeta);
             setSelectedShortIds([]);
             setSelectedOverIds([]);
+            setHasUnsavedChanges(false);
+            setUnsavedGroupIds(new Set());
         } catch (error) {
             const message =
                 error instanceof Error
@@ -221,6 +232,8 @@ export function PhysicalInventoryOffsettingModule({
             };
 
             setOffsetGroups((prev) => [...prev, nextGroup]);
+            setUnsavedGroupIds((prev) => new Set([...prev, nextGroup.id]));
+            setHasUnsavedChanges(true);
             setSelectedShortIds([]);
             setSelectedOverIds([]);
 
@@ -298,22 +311,61 @@ export function PhysicalInventoryOffsettingModule({
             }
 
             // 2. Group-based detail updates for offset_match
+            const allAssignedDetailIds = new Set<number>();
             const updates: Array<{ id: number; offset_match: number | null; offset_remarks?: string | null }> = [];
-            offsetGroups.forEach((group, index) => {
+            const detailAssignmentMap = new Map<number, { match: number; remarks: string | null }>();
+
+            const normalizedGroups: PhysicalInventoryOffsetGroup[] = offsetGroups.map((group, index) => {
                 const groupMatchNumber = index + 1;
                 const remarks = group.remarks?.trim() || null;
 
                 group.short_rows.forEach((row) => {
                     if (row.detail_id) {
+                        allAssignedDetailIds.add(row.detail_id);
+                        detailAssignmentMap.set(row.detail_id, { match: groupMatchNumber, remarks });
                         updates.push({ id: row.detail_id, offset_match: groupMatchNumber, offset_remarks: remarks });
                     }
                 });
                 group.over_rows.forEach((row) => {
                     if (row.detail_id) {
+                        allAssignedDetailIds.add(row.detail_id);
+                        detailAssignmentMap.set(row.detail_id, { match: groupMatchNumber, remarks });
                         updates.push({ id: row.detail_id, offset_match: groupMatchNumber, offset_remarks: remarks });
                     }
                 });
+
+                return {
+                    ...group,
+                    id: `offset-match-${groupMatchNumber}`,
+                    offset_match: groupMatchNumber,
+                    remarks,
+                    short_rows: group.short_rows.map((r) => ({
+                        ...r,
+                        offset_match: groupMatchNumber,
+                        offset_remarks: remarks,
+                    })),
+                    over_rows: group.over_rows.map((r) => ({
+                        ...r,
+                        offset_match: groupMatchNumber,
+                        offset_remarks: remarks,
+                    })),
+                };
             });
+
+            // Reset unassigned detail rows that previously had an offset_match or offset_remarks
+            varianceRows
+                .filter(
+                    (r) =>
+                        r.detail_id !== null &&
+                        r.detail_id !== undefined &&
+                        !allAssignedDetailIds.has(r.detail_id) &&
+                        ((r.offset_match && r.offset_match > 0) || Boolean(r.offset_remarks))
+                )
+                .forEach((r) => {
+                    if (r.detail_id) {
+                        updates.push({ id: r.detail_id, offset_match: null, offset_remarks: null });
+                    }
+                });
 
             if (updates.length > 0) {
                 await updatePhysicalInventoryDetailsBulk(updates);
@@ -325,6 +377,27 @@ export function PhysicalInventoryOffsettingModule({
             });
 
             setHeader(updatedHeader);
+            setOffsetGroups(normalizedGroups);
+            setVarianceRows((prev) =>
+                prev.map((row) => {
+                    if (!row.detail_id) return row;
+                    const assigned = detailAssignmentMap.get(row.detail_id);
+                    if (assigned) {
+                        return {
+                            ...row,
+                            offset_match: assigned.match,
+                            offset_remarks: assigned.remarks,
+                        };
+                    }
+                    return {
+                        ...row,
+                        offset_match: 0,
+                        offset_remarks: null,
+                    };
+                })
+            );
+            setHasUnsavedChanges(false);
+            setUnsavedGroupIds(new Set());
             setOpenSaveDialog(false);
             onCommitted?.(updatedHeader);
 
@@ -336,12 +409,14 @@ export function PhysicalInventoryOffsettingModule({
         } finally {
             setIsSaving(false);
         }
-    }, [header?.id, offsetGroups, onCommitted]);
+    }, [header?.id, offsetGroups, onCommitted, varianceRows]);
 
         const handleUpdateRemarks = React.useCallback((groupId: string, remarks: string) => {
         setOffsetGroups((prev) =>
             prev.map((group) => (group.id === groupId ? { ...group, remarks } : group))
         );
+        setUnsavedGroupIds((prev) => new Set([...prev, groupId]));
+        setHasUnsavedChanges(true);
     }, []);
 
     const handleEditOffsetGroup = React.useCallback(
@@ -359,6 +434,12 @@ export function PhysicalInventoryOffsettingModule({
 
             // Remove group
             setOffsetGroups((prev) => prev.filter((g) => g.id !== groupId));
+            setUnsavedGroupIds((prev) => {
+                const next = new Set(prev);
+                next.delete(groupId);
+                return next;
+            });
+            setHasUnsavedChanges(true);
             toast.info("Group disbanded. Items restored to selection pool.");
         },
         [offsetGroups],
@@ -366,6 +447,12 @@ export function PhysicalInventoryOffsettingModule({
 
     const handleDeleteOffsetGroup = React.useCallback((groupId: string) => {
         setOffsetGroups((prev) => prev.filter((g) => g.id !== groupId));
+        setUnsavedGroupIds((prev) => {
+            const next = new Set(prev);
+            next.delete(groupId);
+            return next;
+        });
+        setHasUnsavedChanges(true);
         toast.info("Offset group removed.");
     }, []);
 
@@ -380,7 +467,7 @@ export function PhysicalInventoryOffsettingModule({
         !isCreatingGroup &&
         isOffsettable;
 
-    const canSave = Boolean(header?.id) && !isLoading && !isSaving && isOffsettable && offsetGroups.length > 0;
+    const canSave = Boolean(header?.id) && !isLoading && !isSaving && isOffsettable && offsetGroups.length > 0 && hasUnsavedChanges;
 
     if (isLoading || !header) {
         return (
@@ -625,6 +712,7 @@ export function PhysicalInventoryOffsettingModule({
                     onUpdateRemarks={handleUpdateRemarks}
                     isPending={isOffsettable}
                     disabled={isSaving}
+                    unsavedGroupIds={unsavedGroupIds}
                 />
             </div>
 

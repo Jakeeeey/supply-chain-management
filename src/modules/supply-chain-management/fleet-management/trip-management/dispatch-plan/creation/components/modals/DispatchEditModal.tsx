@@ -136,8 +136,8 @@ export function DispatchEditModal({
               : [];
           const branchId = p.starting_point || 0;
 
-          const loadedBudgets = p.budgets && p.budgets.length > 0 
-            ? p.budgets 
+          const loadedBudgets = p.budgets && p.budgets.length > 0
+            ? p.budgets
             : [];
 
           const loadedClusterBudgets = p.cluster_budgets && p.cluster_budgets.length > 0
@@ -289,7 +289,7 @@ export function DispatchEditModal({
                   disabled={isReadOnly}
                 />
 
-                <TripConfigurationForm 
+                <TripConfigurationForm
                   masterData={masterData}
                   approvedPlans={approvedPlans}
                   vehicleCapacity={vehicleCapacity}
