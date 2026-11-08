@@ -49,6 +49,7 @@ type Props = {
     onCreateNew?: () => void;
     hideCreateButton?: boolean;
     offsetOnly?: boolean;
+    scmOnly?: boolean;
 };
 
 const PAGE_SIZE = 6;
@@ -127,6 +128,7 @@ export function PhysicalInventoryListModule(props: Props) {
         onCreateNew,
         hideCreateButton = false,
         offsetOnly = false,
+        scmOnly = false,
     } = props;
 
     const [isLoading, setIsLoading] = React.useState(true);
@@ -192,16 +194,19 @@ export function PhysicalInventoryListModule(props: Props) {
                 !offsetOnly ||
                 (row.is_scm === 1 && row.isComitted === 1);
 
+            const matchesScmOnly = !scmOnly || row.is_scm === 1;
+
             return (
                 matchesSearch &&
                 matchesBranch &&
                 matchesSupplier &&
                 matchesStatus &&
                 matchesStockType &&
-                matchesOffsetOnly
+                matchesOffsetOnly &&
+                matchesScmOnly
             );
         });
-    }, [filters, rows, offsetOnly]);
+    }, [filters, rows, offsetOnly, scmOnly]);
 
     React.useEffect(() => {
         setPage(1);
