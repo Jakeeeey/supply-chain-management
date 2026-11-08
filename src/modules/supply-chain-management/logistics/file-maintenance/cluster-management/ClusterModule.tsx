@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Plus, MoreHorizontal, Pencil, MapPin, Eye } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, MapPin, Eye, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { ColumnDef } from "@tanstack/react-table";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,6 +48,34 @@ function buildColumns(
         <span className="font-medium">{row.original.cluster_name}</span>
       ),
       meta: { label: "Cluster Name" },
+    },
+    {
+      accessorKey: "proximity_level",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-3 h-8 font-medium"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Proximity Level
+          <ArrowUpDown className="ml-1.5 h-3.5 w-3.5 text-muted-foreground" />
+        </Button>
+      ),
+      cell: ({ row }) => {
+        const level = row.original.proximity_level;
+        if (level === null || level === undefined) {
+          return (
+            <span className="text-xs text-muted-foreground italic">Not set</span>
+          );
+        }
+        return (
+          <Badge variant="secondary" className="font-mono text-xs tabular-nums">
+            Level {level}
+          </Badge>
+        );
+      },
+      meta: { label: "Proximity Level" },
     },
     {
       id: "area",
@@ -183,7 +212,7 @@ export default function ClusterModule() {
   const columns = buildColumns(handleEdit, handleView);
 
   const sortedData = useMemo(
-    () => [...data].sort((a, b) => b.id - a.id),
+    () => [...data].sort((a, b) => (a.proximity_level ?? Number.MAX_SAFE_INTEGER) - (b.proximity_level ?? Number.MAX_SAFE_INTEGER)),
     [data],
   );
 

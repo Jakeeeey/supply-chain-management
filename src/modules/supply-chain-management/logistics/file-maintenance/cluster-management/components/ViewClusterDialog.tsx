@@ -66,7 +66,7 @@ export function ViewClusterDialog({
 
         {/* ── Top Header Info ──────────────────────────────────────────────── */}
         <div className="rounded-lg border bg-muted/30 p-4 mt-2">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Cluster Name
@@ -74,6 +74,16 @@ export function ViewClusterDialog({
               <p className="text-base font-semibold text-foreground mt-1">
                 {cluster.cluster_name}
               </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Proximity Level
+              </p>
+              <div className="mt-1">
+                <Badge variant="secondary" className="font-mono text-xs tabular-nums">
+                  Level {cluster.proximity_level ?? 1}
+                </Badge>
+              </div>
             </div>
             <div>
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">

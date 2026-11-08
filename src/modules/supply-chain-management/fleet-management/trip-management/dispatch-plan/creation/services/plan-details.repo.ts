@@ -17,6 +17,7 @@ import type {
   PostDispatchStaffRow,
   RawSalesInvoice,
   RawSalesOrder,
+  UserFuelAllocationRow,
 } from "../types/dispatch.types";
 import { fetchItems, fetchItemsInChunks } from "./api";
 
@@ -28,7 +29,7 @@ import { fetchItems, fetchItemsInChunks } from "./api";
 export async function fetchPostDispatchPlanDetails(
   planId: number,
 ): Promise<PostDispatchPlanDetails> {
-  const [planRes, staffRes, junctionRes] = await Promise.all([
+  const [planRes, staffRes, junctionRes, budgetsRes, fuelRes] = await Promise.all([
     fetchItems<PostDispatchPlanRow>("/items/post_dispatch_plan", {
       "filter[id][_eq]": planId,
       fields: "*",
@@ -43,6 +44,16 @@ export async function fetchPostDispatchPlanDetails(
       "filter[post_dispatch_plan_id][_eq]": planId,
       fields: "dispatch_plan_id",
       limit: -1,
+    }),
+    fetchItems<PostDispatchBudgetRow>("/items/post_dispatch_budgeting", {
+      "filter[post_dispatch_plan_id][_eq]": planId,
+      fields: "coa_id,amount,remarks",
+      limit: -1,
+    }),
+    fetchItems<UserFuelAllocationRow>("/items/user_fuel_allocation", {
+      "filter[dispatch_id][_eq]": planId,
+      fields: "id,doc_no,dispatch_id,user_id,liter",
+      limit: 1,
     }),
   ]);
 
@@ -65,12 +76,35 @@ export async function fetchPostDispatchPlanDetails(
     ),
   ];
 
+  const fuelRecord = fuelRes.data?.[0];
+  const fuelLiter = fuelRecord?.liter != null ? Number(fuelRecord.liter) : undefined;
+  
+  // Filter out Cluster COA Budget rows (remarks === "Cluster COA Budget") so only user manual lines are loaded in edit form
+  const rawBudgets = budgetsRes.data || [];
+  const budgets = rawBudgets
+    .filter((b) => b.remarks !== "Cluster COA Budget")
+    .map((b) => ({
+      coa_id: Number(b.coa_id),
+      amount: Number(b.amount),
+      remarks: b.remarks || "",
+    }));
+
+  const cluster_budgets = rawBudgets
+    .filter((b) => b.remarks === "Cluster COA Budget")
+    .map((b) => ({
+      coa_id: Number(b.coa_id),
+      amount: Number(b.amount),
+    }));
+
   return {
     ...planData,
     dispatch_ids,
     dispatch_id: linkedPdp?.dispatch_plan_id || planData.dispatch_id,
     driver_id: driver?.user_id ?? planData.driver_id,
     helpers: helpers.map((h) => ({ user_id: h.user_id })),
+    fuel_liter: fuelLiter,
+    budgets,
+    cluster_budgets,
   };
 }
 
@@ -411,6 +445,23 @@ export async function fetchPlanBudgets(
     },
   );
   return res.data || [];
+}
+
+/**
+ * Fetches fuel allocation for a specific dispatch plan.
+ */
+export async function fetchPlanFuelAllocation(
+  planId: number,
+): Promise<UserFuelAllocationRow | null> {
+  const res = await fetchItems<UserFuelAllocationRow>(
+    "/items/user_fuel_allocation",
+    {
+      "filter[dispatch_id][_eq]": planId,
+      fields: "id,doc_no,dispatch_id,user_id,liter",
+      limit: 1,
+    },
+  );
+  return res.data?.[0] || null;
 }
 
 // ─── Invoice ID Resolution ──────────────────────────────────

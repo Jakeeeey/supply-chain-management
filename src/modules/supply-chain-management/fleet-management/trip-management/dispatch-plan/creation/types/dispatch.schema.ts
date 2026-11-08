@@ -25,6 +25,23 @@ export const CrewHelperSchema = z.object({
   user_id: z.number().min(1, "Helper selection is required"),
 });
 
+/** A single budget allocation line entry. */
+export const BudgetLineSchema = z.object({
+  coa_id: z
+    .number({ message: "Chart of Account is required" })
+    .min(1, "Chart of Account is required"),
+  amount: z
+    .number({ message: "Amount is required" })
+    .min(0.01, "Amount must be greater than 0"),
+  remarks: z.string().optional(),
+});
+
+/** A single cluster COA budget item entry. */
+export const ClusterBudgetItemSchema = z.object({
+  coa_id: z.number().min(1),
+  amount: z.number().min(0),
+});
+
 /** A single invoice reference or manual route stop entry. */
 export const InvoiceRefSchema = z.object({
   invoice_id: z.number().optional(),
@@ -58,7 +75,7 @@ export const DispatchCreationFormSchema = z
     estimated_time_of_dispatch: z.string().min(1, "ETOP is required"),
     estimated_time_of_arrival: z.string().min(1, "ETOA is required"),
     remarks: z.string().optional(),
-    amount: z.number().optional(), // Pulled from pre-dispatch invoice totals
+    amount: z.number().optional(), // Pulled from pre-dispatch invoice totals + cluster COA budget
 
     // Crew (post_dispatch_plan_staff)
     driver_id: z.number().min(1, "Driver is required"),
@@ -66,6 +83,20 @@ export const DispatchCreationFormSchema = z
       .array(CrewHelperSchema)
       .min(1, "At least one helper is required")
       .max(2, "Maximum of 2 helpers allowed"),
+
+    // Fuel & Budget Allocation
+    fuel_liter: z
+      .number({ message: "Fuel liters must be a valid number" })
+      .min(0, "Fuel liters cannot be negative")
+      .optional()
+      .nullable(),
+    budgets: z
+      .array(BudgetLineSchema)
+      .max(5, "Maximum of 5 budget lines allowed")
+      .optional(),
+    cluster_budgets: z
+      .array(ClusterBudgetItemSchema)
+      .optional(),
 
     // Invoices (post_dispatch_invoices) - needed for reordering/persistence
     invoices: z.array(InvoiceRefSchema).optional(),
@@ -118,6 +149,13 @@ export const UpdateTripSchema = z
       .optional()
       .transform((val) => val || [])
       .pipe(z.array(CrewHelperSchema).max(2, "Maximum of 2 helpers allowed")),
+    fuel_liter: z
+      .number({ message: "Fuel liters must be a valid number" })
+      .min(0, "Fuel liters cannot be negative")
+      .optional()
+      .nullable(),
+    budgets: z.array(BudgetLineSchema).max(5, "Maximum of 5 budget lines allowed").optional(),
+    cluster_budgets: z.array(ClusterBudgetItemSchema).optional(),
     invoices: z.array(InvoiceRefSchema).optional(),
     encoder_id: z.number().optional(),
   })
