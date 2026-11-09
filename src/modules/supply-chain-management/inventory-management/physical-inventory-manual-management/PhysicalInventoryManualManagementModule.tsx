@@ -26,7 +26,6 @@ import {
     buildGroupedPhysicalInventoryRows,
     buildVariantsFromSavedDetails,
     cancelPhysicalInventory,
-    commitPhysicalInventory,
     canEditPhysicalInventory,
     computeAmount,
     computeDifferenceCost,
@@ -68,7 +67,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
     Ban,
-    CheckCircle2,
+    Clock,
     Boxes,
     ClipboardList,
     Download,
@@ -81,6 +80,7 @@ import {
     UploadCloud,
     RefreshCcw,
     Search,
+    Timer,
     X,
 } from "lucide-react";
 
@@ -218,8 +218,6 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
     const [isLoadingProducts, setIsLoadingProducts] = React.useState(false);
     const [isCancelling, setIsCancelling] = React.useState(false);
     const [openCancelDialog, setOpenCancelDialog] = React.useState(false);
-    const [isCommitting, setIsCommitting] = React.useState(false);
-    const [openCommitDialog, setOpenCommitDialog] = React.useState(false);
     const [isHydratingRecord, setIsHydratingRecord] = React.useState(false);
     const [isRebuildingGroups, setIsRebuildingGroups] = React.useState(false);
     const [isSavingDetailBatch, setIsSavingDetailBatch] = React.useState(false);
@@ -228,8 +226,12 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
     const [openAuditReportDialog, setOpenAuditReportDialog] = React.useState(false);
     const [auditReportBlobUrl, setAuditReportBlobUrl] = React.useState<string | null>(null);
     const [auditReportDoc, setAuditReportDoc] = React.useState<jsPDF | null>(null);
-    const [isCheckingAttachments, setIsCheckingAttachments] = React.useState(false);
     const [isToolbarExpanded, setIsToolbarExpanded] = React.useState(false);
+
+    // Auto-commit countdown states
+    const [earliestAttachmentTime, setEarliestAttachmentTime] = React.useState<number | null>(null);
+    const [remainingSeconds, setRemainingSeconds] = React.useState<number | null>(null);
+    const [isTimerExpired, setIsTimerExpired] = React.useState(false);
 
     const [branches, setBranches] = React.useState<BranchRow[]>([]);
     const [suppliers, setSuppliers] = React.useState<SupplierRow[]>([]);
@@ -260,6 +262,96 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
         "ALL" | "VARIANCE" | "UNCOUNTED"
     >("ALL");
     const [activeQuickCategory, setActiveQuickCategory] = React.useState<string>("ALL");
+
+    // Helper to refresh attachment info and calculate auto-commit target
+    const refreshAttachmentTimer = React.useCallback(async (phId: number) => {
+        try {
+            const attachments = await fetchPhysicalInventoryAttachments(phId);
+            if (!attachments || attachments.length === 0) {
+                setEarliestAttachmentTime(null);
+                setRemainingSeconds(null);
+                setIsTimerExpired(false);
+                return;
+            }
+
+            // Find earliest attachment created_at (ascending order)
+            const sorted = [...attachments].sort((a, b) => {
+                const aTime = a.created_at ? new Date(a.created_at).getTime() : Infinity;
+                const bTime = b.created_at ? new Date(b.created_at).getTime() : Infinity;
+                return aTime - bTime;
+            });
+
+            const earliest = sorted[0];
+            if (!earliest?.created_at) {
+                setEarliestAttachmentTime(null);
+                setRemainingSeconds(null);
+                setIsTimerExpired(false);
+                return;
+            }
+
+            // Safe parsing considering Philippine Time (GMT+8) / ISO
+            const rawIso = earliest.created_at;
+            const createdMs = new Date(rawIso).getTime();
+            const cleanIso = rawIso.replace("Z", "");
+            const phParsedMs = new Date(`${cleanIso}+08:00`).getTime();
+            const effectiveMs = Math.min(
+                Number.isFinite(createdMs) ? createdMs : Infinity,
+                Number.isFinite(phParsedMs) ? phParsedMs : Infinity
+            );
+
+            if (Number.isFinite(effectiveMs) && effectiveMs > 0) {
+                setEarliestAttachmentTime(effectiveMs);
+            }
+        } catch {
+            setEarliestAttachmentTime(null);
+        }
+    }, []);
+
+    // Load attachment timer on header change
+    React.useEffect(() => {
+        const isCommitted = normalizeFlagValue(header?.isComitted) === 1;
+        const isCancelled = normalizeFlagValue(header?.isCancelled) === 1;
+
+        if (header?.id && header.id > 0 && !isCommitted && !isCancelled) {
+            void refreshAttachmentTimer(header.id);
+        } else {
+            setEarliestAttachmentTime(null);
+            setRemainingSeconds(null);
+            setIsTimerExpired(false);
+        }
+    }, [header?.id, header?.isComitted, header?.isCancelled, refreshAttachmentTimer]);
+
+    // Active countdown ticker
+    React.useEffect(() => {
+        const isCommitted = normalizeFlagValue(header?.isComitted) === 1;
+        const isCancelled = normalizeFlagValue(header?.isCancelled) === 1;
+
+        if (!earliestAttachmentTime || isCommitted || isCancelled) {
+            setRemainingSeconds(null);
+            setIsTimerExpired(false);
+            return;
+        }
+
+        const targetTime = earliestAttachmentTime + 8 * 60 * 60 * 1000;
+
+        const updateTimer = () => {
+            const now = Date.now();
+            const diffSeconds = Math.floor((targetTime - now) / 1000);
+
+            if (diffSeconds <= 0) {
+                setRemainingSeconds(0);
+                setIsTimerExpired(true);
+            } else {
+                setRemainingSeconds(diffSeconds);
+                setIsTimerExpired(false);
+            }
+        };
+
+        updateTimer();
+        const interval = setInterval(updateTimer, 1000);
+
+        return () => clearInterval(interval);
+    }, [earliestAttachmentTime, header?.isComitted, header?.isCancelled]);
 
     React.useEffect(() => {
         if (filters.branch_id && currentUser) {
@@ -603,9 +695,10 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 if (initialHeaderId && initialHeaderId > 0) {
                     setIsHydratingRecord(true);
 
-                    const [existingHeader, existingDetails] = await Promise.all([
+                    const [existingHeader, existingDetails, existingAttachments] = await Promise.all([
                         fetchPhysicalInventoryById(initialHeaderId),
                         fetchPhysicalInventoryDetails(initialHeaderId),
+                        fetchPhysicalInventoryAttachments(initialHeaderId),
                     ]);
 
                     if (cancelled) return;
@@ -620,6 +713,31 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                     setHeader(existingHeader);
                     setDetailRows(existingDetails);
                     setFilters(nextFilters);
+
+                    // Compute earliest attachment timestamp immediately
+                    if (existingAttachments && existingAttachments.length > 0) {
+                        const sorted = [...existingAttachments].sort((a, b) => {
+                            const aTime = a.created_at ? new Date(a.created_at).getTime() : Infinity;
+                            const bTime = b.created_at ? new Date(b.created_at).getTime() : Infinity;
+                            return aTime - bTime;
+                        });
+                        const earliest = sorted[0];
+                        if (earliest?.created_at) {
+                            const rawIso = earliest.created_at;
+                            const createdMs = new Date(rawIso).getTime();
+                            const cleanIso = rawIso.replace("Z", "");
+                            const phParsedMs = new Date(`${cleanIso}+08:00`).getTime();
+                            const effectiveMs = Math.min(
+                                Number.isFinite(createdMs) ? createdMs : Infinity,
+                                Number.isFinite(phParsedMs) ? phParsedMs : Infinity
+                            );
+                            if (Number.isFinite(effectiveMs) && effectiveMs > 0) {
+                                setEarliestAttachmentTime(effectiveMs);
+                            }
+                        }
+                    } else {
+                        setEarliestAttachmentTime(null);
+                    }
 
                     if (existingHeader.supplier_id) {
                         const scopedCategories = getSupplierScopedCategoriesFromLookup(
@@ -1282,93 +1400,6 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
         }
     }, [filters, header, rebuildGroupedRows, refreshRunningInventoryReadModel]);
 
-
-    const handleCommitButtonClick = React.useCallback(async () => {
-        if (!header?.id) {
-            toast.error("This PI must exist before commit.");
-            return;
-        }
-
-        try {
-            setIsCheckingAttachments(true);
-            const attachments = await fetchPhysicalInventoryAttachments(header.id);
-            if (!attachments || attachments.length === 0) {
-                toast.error("Please upload a count sheet before committing this Physical Inventory.");
-                return;
-            }
-            setOpenCommitDialog(true);
-        } catch (error) {
-            console.error("Failed to check attachments before commit:", error);
-            toast.error("Please upload a count sheet before committing this Physical Inventory.");
-        } finally {
-            setIsCheckingAttachments(false);
-        }
-    }, [header?.id]);
-
-    const handleCommit = React.useCallback(async () => {
-        if (!header?.id) {
-            toast.error("This PI must exist before commit.");
-            return;
-        }
-
-        if (!canEdit) {
-            toast.error("This PI can no longer be edited.");
-            return;
-        }
-
-        try {
-            setIsCommitting(true);
-
-            await flushDirtyDetails();
-
-            const updatedHeader = await commitPhysicalInventory(header.id);
-
-            setHeader(updatedHeader);
-            onRecordChange?.(updatedHeader);
-
-            rebuildGroupedRows({
-                nextDetails: detailRows,
-                nextHeader: updatedHeader,
-                nextFilters: filters,
-            });
-
-            setOpenCommitDialog(false);
-            toast.success("Physical Inventory committed successfully.");
-        } catch (error) {
-            setOpenCommitDialog(false);
-
-            try {
-                const latestHeader = await fetchPhysicalInventoryById(header.id);
-                setHeader(latestHeader);
-                onRecordChange?.(latestHeader);
-
-                rebuildGroupedRows({
-                    nextDetails: detailRows,
-                    nextHeader: latestHeader,
-                    nextFilters: filters,
-                });
-
-                if (normalizeFlagValue(latestHeader.isComitted) === 1) {
-                    toast.success("Physical Inventory committed successfully.");
-                    return;
-                }
-            } catch {
-                // Ignore secondary verification error and show primary error message below
-            }
-
-            const rawMessage = error instanceof Error ? error.message : "Failed to commit PI.";
-            const friendlyMessage =
-                rawMessage.toLowerCase().includes("fetch failed") ||
-                rawMessage.toLowerCase().includes("unable to reach database")
-                    ? "Unable to commit Physical Inventory due to a server connection issue. The record remains in Pending status—please try again."
-                    : rawMessage;
-
-            toast.error(friendlyMessage);
-        } finally {
-            setIsCommitting(false);
-        }
-    }, [canEdit, detailRows, filters, flushDirtyDetails, header?.id, onRecordChange, rebuildGroupedRows]);
-
     const handleCancel = React.useCallback(async () => {
         if (!header?.id) {
             toast.error("This PI must exist before cancel.");
@@ -1467,21 +1498,6 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-
-                        <Button
-                            variant="outline"
-                            className="cursor-pointer border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
-                            onClick={handleCommitButtonClick}
-                            disabled={!header?.id || !hasLoadedDetails || !canEdit || isCommitting || isCheckingAttachments}
-                        >
-                            {isCheckingAttachments ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                                <CheckCircle2 className="mr-2 h-4 w-4" />
-                            )}
-                            Commit PI
-                        </Button>
-
                         <Button
                             variant="outline"
                             className="cursor-pointer"
@@ -1575,6 +1591,51 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                         </Button>
                     </div>
                 </div>
+
+                {/* Dedicated Auto-Commit Countdown Banner */}
+                {earliestAttachmentTime && status === "Pending" && (
+                    <div className="mt-3 flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50/80 p-3.5 shadow-xs dark:border-amber-900/50 dark:bg-amber-950/30 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
+                                <Timer className="h-5 w-5 animate-pulse" />
+                            </div>
+                            <div className="space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                                        Auto-Commit Countdown
+                                    </span>
+                                    {isTimerExpired && (
+                                        <span className="inline-flex items-center rounded-md bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700 animate-pulse dark:bg-red-950/50 dark:text-red-300">
+                                            Timer Expired (Auto-committing...)
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-amber-800/90 dark:text-amber-300/80">
+                                    This session will automatically commit once the timer reaches zero. Please finalize your counts.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center self-end sm:self-auto">
+                            <div className="flex items-baseline gap-1 rounded-lg border border-amber-300/80 bg-white/90 px-3.5 py-1.5 shadow-xs dark:border-amber-800 dark:bg-black/40">
+                                <Clock className="mr-1.5 h-4 w-4 self-center text-amber-700 dark:text-amber-400" />
+                                <span className="font-mono text-xl sm:text-2xl font-black tracking-wider text-amber-950 dark:text-amber-100">
+                                    {remainingSeconds !== null ? (
+                                        (() => {
+                                            const h = Math.floor(remainingSeconds / 3600);
+                                            const m = Math.floor((remainingSeconds % 3600) / 60);
+                                            const s = remainingSeconds % 60;
+                                            const pad = (n: number) => n.toString().padStart(2, "0");
+                                            return `${pad(h)}:${pad(m)}:${pad(s)}`;
+                                        })()
+                                    ) : (
+                                        "--:--:--"
+                                    )}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <PhysicalInventoryHeader
@@ -1941,44 +2002,6 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 onPhysicalCountBlur={handlePhysicalCountBlur}
             />
 
-
-            <AlertDialog open={openCommitDialog} onOpenChange={setOpenCommitDialog}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Commit Physical Inventory?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This will finalize the physical count, update stock balances, and lock the record as read-only.
-                            This action cannot be undone.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel
-                            className="cursor-pointer"
-                            disabled={isCommitting}
-                        >
-                            Cancel
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
-                            onClick={(event) => {
-                                event.preventDefault();
-                                void handleCommit();
-                            }}
-                            disabled={isCommitting}
-                        >
-                            {isCommitting ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Committing...
-                                </>
-                            ) : (
-                                "Commit PI"
-                            )}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
             <AlertDialog open={openCancelDialog} onOpenChange={setOpenCancelDialog}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -2026,7 +2049,12 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
 
             <PhysicalInventoryUploadCountSheetDialog
                 isOpen={openUploadDialog}
-                onOpenChange={setOpenUploadDialog}
+                onOpenChange={(open) => {
+                    setOpenUploadDialog(open);
+                    if (!open && header?.id) {
+                        void refreshAttachmentTimer(header.id);
+                    }
+                }}
                 physicalInventoryId={header?.id || null}
                 phNo={header?.ph_no}
                 canEdit={canEdit}

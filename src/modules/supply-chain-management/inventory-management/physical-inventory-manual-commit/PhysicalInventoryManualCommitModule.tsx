@@ -1,0 +1,2290 @@
+//src/modules/supply-chain-management/physical-inventory-manual-commit/PhysicalInventoryManualCommitModule.tsx
+"use client";
+
+import * as React from "react";
+import { toast } from "sonner";
+
+import type {
+    BranchRow,
+    CategoryRow,
+    EligibleVariantRow,
+    GroupedPhysicalInventoryChildRow,
+    GroupedPhysicalInventoryRow,
+    PhysicalInventoryDetailRow,
+    PhysicalInventoryDetailUpsertPayload,
+    PhysicalInventoryFiltersType,
+    PhysicalInventoryHeaderRow,
+    PhysicalInventoryHeaderUpsertPayload,
+    PhysicalInventoryStatus,
+    PriceTypeRow,
+    ProductLookupBundle,
+    RunningInventoryRow,
+    SupplierRow,
+} from "../physical-inventory-manual-management/types";
+import {
+    buildEligibleVariants,
+    buildGroupedPhysicalInventoryRows,
+    buildVariantsFromSavedDetails,
+    cancelPhysicalInventory,
+    commitPhysicalInventory,
+    computeAmount,
+    computeDifferenceCost,
+    computeVariance,
+    convertBaseQtyToDisplayQty,
+    createPhysicalInventoryDetailsBulk,
+    createPhysicalInventoryHeader,
+    derivePhysicalInventoryStatus,
+    fetchBranches,
+    fetchLatestCommittedCutoffDateByBranch,
+    fetchNextPhysicalInventoryNumber,
+    fetchPhysicalInventoryById,
+    fetchPhysicalInventoryDetails,
+    fetchPhysicalInventoryAttachments,
+    fetchPriceTypes,
+    fetchProductLookupBundle,
+    fetchRunningInventoryFiltered,
+    fetchSuppliers,
+    getSupplierScopedCategoriesFromLookup,
+    resolveRunningInventoryFilterParams,
+    sumHeaderTotalAmount,
+    updatePhysicalInventoryDetailsBulk,
+    updatePhysicalInventoryHeader,
+    validateLoadProductsFilters,
+    normalizeFlagValue,
+    type BulkPhysicalInventoryDetailUpdateItem,
+} from "../physical-inventory-manual-management";
+
+import { Button } from "@/components/ui/button";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+    CheckCircle2,
+    Clock,
+    Boxes,
+    ClipboardList,
+    Download,
+    Eye,
+    EyeOff,
+    FileText,
+    Loader2,
+    Plus,
+    RefreshCcw,
+    Search,
+    Timer,
+    X,
+} from "lucide-react";
+
+import {
+    PhysicalInventoryAddProductDialog,
+    PhysicalInventoryUploadCountSheetDialog,
+    PhysicalInventoryFilters as PhysicalInventoryFiltersCard,
+    PhysicalInventoryHeader,
+    PhysicalInventoryTable,
+} from "../physical-inventory-manual-management/components";
+import { generateAuditReportPdf } from "../physical-inventory-manual-management/utils/printAuditReportPdf";
+import type jsPDF from "jspdf";
+
+type Props = {
+    initialHeaderId?: number | null;
+    onRecordChange?: (header: PhysicalInventoryHeaderRow) => void;
+    currentUser?: { id: number; name: string } | null;
+};
+
+type RebuildInput = {
+    nextDetails?: PhysicalInventoryDetailRow[];
+    nextHeader?: PhysicalInventoryHeaderRow | null;
+    nextFilters?: PhysicalInventoryFiltersType;
+    nextRunningInventoryRows?: RunningInventoryRow[];
+};
+
+function nowInputValue(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}:00`;
+}
+
+function toNullableNumberInput(value: string): number {
+    if (!value.trim()) return 0;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function fmtBaseQty(value: number): string {
+    return `${value.toLocaleString("en-PH", {
+        maximumFractionDigits: 0,
+    })} PCS`;
+}
+
+function fmtInteger(value: number): string {
+    return value.toLocaleString("en-PH", {
+        maximumFractionDigits: 0,
+    });
+}
+
+function fmtMoney(value: number): string {
+    return value.toLocaleString("en-PH", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+}
+
+function valueTone(value: number): string {
+    if (value > 0) return "text-emerald-700 dark:text-emerald-300";
+    if (value < 0) return "text-red-700 dark:text-red-300";
+    return "text-foreground";
+}
+
+function kpiCardTone(value: number): string {
+    if (value > 0) {
+        return "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/40 dark:bg-emerald-950/20";
+    }
+    if (value < 0) {
+        return "border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/20";
+    }
+    return "border-border bg-background";
+}
+
+function buildRunningInventoryCacheKey(input: {
+    branchName: string;
+    supplierShortcut?: string;
+    productCategory?: string;
+    cutOffDate?: string;
+    startingDate?: string;
+}): string {
+    return [
+        input.branchName.trim().toLowerCase(),
+        (input.supplierShortcut ?? "__any__").trim().toLowerCase(),
+        (input.productCategory ?? "__all__").trim().toLowerCase(),
+        (input.cutOffDate ?? "__no_cutoff__").trim().toLowerCase(),
+        (input.startingDate ?? "__no_starting__").trim().toLowerCase(),
+    ].join("::");
+}
+
+function normalizeSearchText(value: string): string {
+    return value.trim().toLowerCase();
+}
+
+function matchesGroupedRowSearch(
+    row: GroupedPhysicalInventoryRow,
+    keyword: string,
+): boolean {
+    const normalizedKeyword = normalizeSearchText(keyword);
+    if (!normalizedKeyword) return true;
+
+    const haystack = [
+        row.base_product_name,
+        row.base_product_code ?? "",
+        row.base_barcode ?? "",
+        row.category_name ?? "",
+        ...row.rows.map((child) => child.product_name),
+        ...row.rows.map((child) => child.product_code ?? ""),
+        ...row.rows.map((child) => child.barcode ?? ""),
+        ...row.rows.map((child) => child.unit_name ?? ""),
+        ...row.rows.map((child) => child.unit_shortcut ?? ""),
+    ]
+        .join(" ")
+        .toLowerCase();
+
+    return haystack.includes(normalizedKeyword);
+}
+
+function groupedRowHasVariance(row: GroupedPhysicalInventoryRow): boolean {
+    return row.rows.some((child) => child.variance !== 0 || child.variance_base !== 0);
+}
+
+function groupedRowHasUncounted(row: GroupedPhysicalInventoryRow): boolean {
+    return row.rows.some((child) => child.physical_count === 0);
+}
+
+export function PhysicalInventoryManualCommitModule(props: Props) {
+    const { initialHeaderId = null, onRecordChange, currentUser } = props;
+
+    const [isBootLoading, setIsBootLoading] = React.useState(true);
+    const [isLoadingProducts, setIsLoadingProducts] = React.useState(false);
+    const [isCancelling, setIsCancelling] = React.useState(false);
+    const [openCancelDialog, setOpenCancelDialog] = React.useState(false);
+    const [isCommitting, setIsCommitting] = React.useState(false);
+    const [openCommitDialog, setOpenCommitDialog] = React.useState(false);
+    const [isHydratingRecord, setIsHydratingRecord] = React.useState(false);
+    const [isRebuildingGroups, setIsRebuildingGroups] = React.useState(false);
+    const [isSavingDetailBatch, setIsSavingDetailBatch] = React.useState(false);
+    const [openAddProductDialog, setOpenAddProductDialog] = React.useState(false);
+    const [openUploadDialog, setOpenUploadDialog] = React.useState(false);
+    const [openAuditReportDialog, setOpenAuditReportDialog] = React.useState(false);
+    const [auditReportBlobUrl, setAuditReportBlobUrl] = React.useState<string | null>(null);
+    const [auditReportDoc, setAuditReportDoc] = React.useState<jsPDF | null>(null);
+    const [isCheckingAttachments, setIsCheckingAttachments] = React.useState(false);
+    const [isToolbarExpanded, setIsToolbarExpanded] = React.useState(false);
+
+    // Auto-commit countdown states
+    const [earliestAttachmentTime, setEarliestAttachmentTime] = React.useState<number | null>(null);
+    const [remainingSeconds, setRemainingSeconds] = React.useState<number | null>(null);
+    const [isTimerExpired, setIsTimerExpired] = React.useState(false);
+
+    const [branches, setBranches] = React.useState<BranchRow[]>([]);
+    const [suppliers, setSuppliers] = React.useState<SupplierRow[]>([]);
+    const [categories, setCategories] = React.useState<CategoryRow[]>([]);
+    const [priceTypes, setPriceTypes] = React.useState<PriceTypeRow[]>([]);
+    const [lookupBundle, setLookupBundle] = React.useState<ProductLookupBundle | null>(null);
+
+    const filteredRunningInventoryCacheRef = React.useRef<Record<string, RunningInventoryRow[]>>(
+        {},
+    );
+    const dirtyDetailIdsRef = React.useRef<Set<number>>(new Set());
+
+    const [runningInventoryRows, setRunningInventoryRows] = React.useState<RunningInventoryRow[]>([]);
+
+    const [header, setHeader] = React.useState<PhysicalInventoryHeaderRow | null>(null);
+    const [detailRows, setDetailRows] = React.useState<PhysicalInventoryDetailRow[]>([]);
+    const [groupedRows, setGroupedRows] = React.useState<GroupedPhysicalInventoryRow[]>([]);
+
+    const [filters, setFilters] = React.useState<PhysicalInventoryFiltersType>({
+        branch_id: null,
+        supplier_id: null,
+        category_id: null,
+        price_type_id: null,
+    });
+
+    const [productSearch, setProductSearch] = React.useState("");
+    const [activeQuickFilter, setActiveQuickFilter] = React.useState<
+        "ALL" | "VARIANCE" | "UNCOUNTED"
+    >("ALL");
+    const [activeQuickCategory, setActiveQuickCategory] = React.useState<string>("ALL");
+
+    // Helper to refresh attachment info and calculate auto-commit target
+    const refreshAttachmentTimer = React.useCallback(async (phId: number) => {
+        try {
+            const attachments = await fetchPhysicalInventoryAttachments(phId);
+            if (!attachments || attachments.length === 0) {
+                setEarliestAttachmentTime(null);
+                setRemainingSeconds(null);
+                setIsTimerExpired(false);
+                return;
+            }
+
+            // Find earliest attachment created_at (ascending order)
+            const sorted = [...attachments].sort((a, b) => {
+                const aTime = a.created_at ? new Date(a.created_at).getTime() : Infinity;
+                const bTime = b.created_at ? new Date(b.created_at).getTime() : Infinity;
+                return aTime - bTime;
+            });
+
+            const earliest = sorted[0];
+            if (!earliest?.created_at) {
+                setEarliestAttachmentTime(null);
+                setRemainingSeconds(null);
+                setIsTimerExpired(false);
+                return;
+            }
+
+            // Safe parsing considering Philippine Time (GMT+8) / ISO
+            const rawIso = earliest.created_at;
+            const createdMs = new Date(rawIso).getTime();
+            const cleanIso = rawIso.replace("Z", "");
+            const phParsedMs = new Date(`${cleanIso}+08:00`).getTime();
+            const effectiveMs = Math.min(
+                Number.isFinite(createdMs) ? createdMs : Infinity,
+                Number.isFinite(phParsedMs) ? phParsedMs : Infinity
+            );
+
+            if (Number.isFinite(effectiveMs) && effectiveMs > 0) {
+                setEarliestAttachmentTime(effectiveMs);
+            }
+        } catch {
+            setEarliestAttachmentTime(null);
+        }
+    }, []);
+
+    // Load attachment timer on header change
+    React.useEffect(() => {
+        const isCommitted = normalizeFlagValue(header?.isComitted) === 1;
+        const isCancelled = normalizeFlagValue(header?.isCancelled) === 1;
+
+        if (header?.id && header.id > 0 && !isCommitted && !isCancelled) {
+            void refreshAttachmentTimer(header.id);
+        } else {
+            setEarliestAttachmentTime(null);
+            setRemainingSeconds(null);
+            setIsTimerExpired(false);
+        }
+    }, [header?.id, header?.isComitted, header?.isCancelled, refreshAttachmentTimer]);
+
+    // Active countdown ticker
+    React.useEffect(() => {
+        const isCommitted = normalizeFlagValue(header?.isComitted) === 1;
+        const isCancelled = normalizeFlagValue(header?.isCancelled) === 1;
+
+        if (!earliestAttachmentTime || isCommitted || isCancelled) {
+            setRemainingSeconds(null);
+            setIsTimerExpired(false);
+            return;
+        }
+
+        const targetTime = earliestAttachmentTime + 8 * 60 * 60 * 1000;
+
+        const updateTimer = () => {
+            const now = Date.now();
+            const diffSeconds = Math.floor((targetTime - now) / 1000);
+
+            if (diffSeconds <= 0) {
+                setRemainingSeconds(0);
+                setIsTimerExpired(true);
+            } else {
+                setRemainingSeconds(diffSeconds);
+                setIsTimerExpired(false);
+            }
+        };
+
+        updateTimer();
+        const interval = setInterval(updateTimer, 1000);
+
+        return () => clearInterval(interval);
+    }, [earliestAttachmentTime, header?.isComitted, header?.isCancelled]);
+
+    React.useEffect(() => {
+        if (filters.branch_id && currentUser) {
+            setHeader((prev) => {
+                if (!prev) return prev;
+                if (prev.id !== 0) return prev;
+                if (prev.date_encoded && prev.encoder_id) return prev;
+                return {
+                    ...prev,
+                    date_encoded: nowInputValue(),
+                    encoder_id: {
+                        user_id: currentUser.id,
+                        user_fname: currentUser.name,
+                        user_lname: "",
+                    },
+                };
+            });
+        }
+    }, [filters.branch_id, currentUser]);
+
+    const hasLoadedDetails = detailRows.length > 0;
+
+    const status: PhysicalInventoryStatus = derivePhysicalInventoryStatus({
+        isCancelled: header?.isCancelled,
+        isComitted: header?.isComitted,
+    });
+
+    // In Manual Count Commit module, all records are strictly non-editable / read-only
+    const canEdit = false;
+
+    const totalAmount = React.useMemo(() => sumHeaderTotalAmount(detailRows), [detailRows]);
+
+    const grandTotals = React.useMemo(() => {
+        return groupedRows.reduce(
+            (acc, group) => {
+                acc.system_base += group.total_system_count_base;
+                acc.physical_base += group.total_physical_count_base;
+                acc.variance_base += group.total_variance_base;
+                acc.difference_cost += group.total_difference_cost;
+                acc.amount += group.total_amount;
+                return acc;
+            },
+            {
+                system_base: 0,
+                physical_base: 0,
+                variance_base: 0,
+                difference_cost: 0,
+                amount: 0,
+            },
+        );
+    }, [groupedRows]);
+
+    const operationalSummary = React.useMemo(() => {
+        let rowsWithVariance = 0;
+        let uncountedRows = 0;
+
+        for (const group of groupedRows) {
+            for (const row of group.rows) {
+                if (row.variance !== 0 || row.variance_base !== 0) {
+                    rowsWithVariance += 1;
+                }
+                if (row.physical_count === 0) {
+                    uncountedRows += 1;
+                }
+            }
+        }
+
+        return {
+            skuGroups: groupedRows.length,
+            detailRows: detailRows.length,
+            rowsWithVariance,
+            uncountedRows,
+        };
+    }, [detailRows.length, groupedRows]);
+
+    const quickFilterCounts = React.useMemo(() => {
+        return {
+            ALL: groupedRows.length,
+            VARIANCE: groupedRows.filter(groupedRowHasVariance).length,
+            UNCOUNTED: groupedRows.filter(groupedRowHasUncounted).length,
+        };
+    }, [groupedRows]);
+
+    const quickCategoryOptions = React.useMemo(() => {
+        const counts = new Map<string, number>();
+
+        for (const group of groupedRows) {
+            const categoryLabel = (group.category_name ?? "Uncategorized").trim() || "Uncategorized";
+            counts.set(categoryLabel, (counts.get(categoryLabel) ?? 0) + 1);
+        }
+
+        return [
+            {
+                key: "ALL",
+                label: "All Categories",
+                count: groupedRows.length,
+            },
+            ...Array.from(counts.entries())
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([label, count]) => ({
+                    key: label,
+                    label,
+                    count,
+                })),
+        ];
+    }, [groupedRows]);
+
+    const visibleGroupedRows = React.useMemo(() => {
+        return groupedRows.filter((group) => {
+            const categoryLabel = (group.category_name ?? "Uncategorized").trim() || "Uncategorized";
+
+            const matchesCategory =
+                activeQuickCategory === "ALL" || categoryLabel === activeQuickCategory;
+
+            const matchesSearch = matchesGroupedRowSearch(group, productSearch);
+
+            const matchesOperationalFilter =
+                activeQuickFilter === "ALL" ||
+                (activeQuickFilter === "VARIANCE" && groupedRowHasVariance(group)) ||
+                (activeQuickFilter === "UNCOUNTED" && groupedRowHasUncounted(group));
+
+            return matchesCategory && matchesSearch && matchesOperationalFilter;
+        });
+    }, [activeQuickCategory, activeQuickFilter, groupedRows, productSearch]);
+
+    const eligibleVariants = React.useMemo(() => {
+        const sId = Number(filters.supplier_id);
+        const cId = Number(filters.category_id);
+        const pId = Number(filters.price_type_id);
+
+        if (!lookupBundle || !sId || !cId || !pId) return [];
+
+        return buildEligibleVariants({
+            supplierId: sId,
+            categoryId: cId,
+            priceTypeId: pId,
+            lookup: lookupBundle,
+        });
+    }, [filters.supplier_id, filters.category_id, filters.price_type_id, lookupBundle]);
+
+    const rebuildGroupedRows = React.useCallback(
+        (input?: RebuildInput) => {
+            const activeHeader = input?.nextHeader ?? header;
+            const activeDetails = input?.nextDetails ?? detailRows;
+            const activeFilters = input?.nextFilters ?? filters;
+            const activeLookup = lookupBundle;
+            const activeRunningInventoryRows =
+                input?.nextRunningInventoryRows ?? runningInventoryRows;
+
+            if (!activeLookup || !activeFilters.branch_id) {
+                setGroupedRows([]);
+                return;
+            }
+
+            if (
+                activeDetails.length === 0 &&
+                (!activeFilters.supplier_id ||
+                    !activeFilters.category_id ||
+                    !activeFilters.price_type_id)
+            ) {
+                setGroupedRows([]);
+                return;
+            }
+
+            try {
+                setIsRebuildingGroups(true);
+
+                const variants = buildVariantsFromSavedDetails({
+                    details: activeDetails,
+                    priceTypeId: activeFilters.price_type_id,
+                    lookup: activeLookup,
+                });
+
+                const nextGrouped = buildGroupedPhysicalInventoryRows({
+                    branch_id: activeFilters.branch_id,
+                    variants,
+                    details: activeDetails,
+                    runningInventoryRows: activeRunningInventoryRows,
+                    ph_id: activeHeader?.id ?? null,
+                    ignoreRfid: true,
+                });
+
+                setGroupedRows(nextGrouped);
+            } finally {
+                setIsRebuildingGroups(false);
+            }
+        },
+        [detailRows, filters, header, lookupBundle, runningInventoryRows],
+    );
+
+    const refreshRunningInventoryReadModel = React.useCallback(
+        async (
+            nextFilters: PhysicalInventoryFiltersType & { cutOffDate?: string | null },
+            nextLookup?: ProductLookupBundle | null,
+        ): Promise<RunningInventoryRow[]> => {
+            const activeLookup = nextLookup ?? lookupBundle;
+
+            if (
+                !activeLookup ||
+                !nextFilters.branch_id ||
+                !nextFilters.supplier_id ||
+                !nextFilters.category_id ||
+                !branches.length ||
+                !suppliers.length
+            ) {
+                setRunningInventoryRows([]);
+                return [];
+            }
+
+            const params = resolveRunningInventoryFilterParams({
+                branchId: nextFilters.branch_id,
+                supplierId: nextFilters.supplier_id,
+                categoryId: nextFilters.category_id,
+                branches,
+                suppliers,
+                lookup: activeLookup,
+                cutOffDate: nextFilters.cutOffDate,
+            });
+
+            const cacheKey = buildRunningInventoryCacheKey(params);
+            const cached = filteredRunningInventoryCacheRef.current[cacheKey];
+
+            if (cached) {
+                setRunningInventoryRows(cached);
+                return cached;
+            }
+
+            const rows = await fetchRunningInventoryFiltered(params);
+            filteredRunningInventoryCacheRef.current[cacheKey] = rows;
+            setRunningInventoryRows(rows);
+            return rows;
+        },
+        [branches, lookupBundle, suppliers],
+    );
+
+    const reloadDetails = React.useCallback(async (id: number) => {
+        const [nextDetails] = await Promise.all([
+            fetchPhysicalInventoryDetails(id),
+            updatePhysicalInventoryHeader(id, { total_amount: 0 }),
+        ]);
+
+        const finalHeader = await updatePhysicalInventoryHeader(id, {
+            total_amount: sumHeaderTotalAmount(nextDetails)
+        });
+
+        setDetailRows(nextDetails);
+        setHeader(finalHeader);
+        onRecordChange?.(finalHeader);
+
+        rebuildGroupedRows({
+            nextDetails,
+            nextHeader: finalHeader,
+            nextFilters: filters,
+        });
+    }, [filters, onRecordChange, rebuildGroupedRows]);
+
+    const flushDirtyDetails = React.useCallback(async () => {
+        if (!header?.id) return;
+        if (!dirtyDetailIdsRef.current.size) return;
+
+        const dirtyIds = new Set(dirtyDetailIdsRef.current);
+
+        const updates: BulkPhysicalInventoryDetailUpdateItem[] = detailRows
+            .filter((detail) => dirtyIds.has(detail.id))
+            .map((detail) => ({
+                id: detail.id,
+                physical_count: detail.physical_count,
+                variance: detail.variance,
+                difference_cost: detail.difference_cost,
+                amount: detail.amount,
+            }));
+
+        if (!updates.length) {
+            dirtyDetailIdsRef.current.clear();
+            return;
+        }
+
+        try {
+            setIsSavingDetailBatch(true);
+
+            const updatedRows = await updatePhysicalInventoryDetailsBulk(updates);
+            const updatedMap = new Map(updatedRows.map((row) => [row.id, row]));
+
+            const nextDetails = detailRows.map((detail) => updatedMap.get(detail.id) ?? detail);
+
+            setDetailRows(nextDetails);
+            for (const id of dirtyIds) {
+                dirtyDetailIdsRef.current.delete(id);
+            }
+
+            const nextHeader = await updatePhysicalInventoryHeader(header.id, {
+                total_amount: sumHeaderTotalAmount(nextDetails),
+            });
+
+            setHeader(nextHeader);
+            onRecordChange?.(nextHeader);
+
+            rebuildGroupedRows({
+                nextDetails,
+                nextHeader,
+                nextFilters: filters,
+            });
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : "Failed to save physical count batch.";
+            toast.error(message);
+        } finally {
+            setIsSavingDetailBatch(false);
+        }
+    }, [detailRows, filters, header, onRecordChange, rebuildGroupedRows]);
+
+    React.useEffect(() => {
+        let cancelled = false;
+
+        async function boot() {
+            try {
+                setIsBootLoading(true);
+                setGroupedRows([]);
+                setDetailRows([]);
+                setCategories([]);
+                setRunningInventoryRows([]);
+                dirtyDetailIdsRef.current.clear();
+
+                const [nextBranches, nextSuppliers, nextPriceTypes, nextLookup] =
+                    await Promise.all([
+                        fetchBranches(),
+                        fetchSuppliers(),
+                        fetchPriceTypes(),
+                        fetchProductLookupBundle(),
+                    ]);
+
+                if (cancelled) return;
+
+                setBranches(nextBranches);
+                setSuppliers(nextSuppliers);
+                setPriceTypes(nextPriceTypes);
+                setLookupBundle(nextLookup);
+
+                if (initialHeaderId && initialHeaderId > 0) {
+                    setIsHydratingRecord(true);
+
+                    const [existingHeader, existingDetails, existingAttachments] = await Promise.all([
+                        fetchPhysicalInventoryById(initialHeaderId),
+                        fetchPhysicalInventoryDetails(initialHeaderId),
+                        fetchPhysicalInventoryAttachments(initialHeaderId),
+                    ]);
+
+                    if (cancelled) return;
+
+                    const nextFilters: PhysicalInventoryFiltersType = {
+                        branch_id: existingHeader.branch_id ? Number(existingHeader.branch_id) : null,
+                        supplier_id: existingHeader.supplier_id ? Number(existingHeader.supplier_id) : null,
+                        category_id: existingHeader.category_id ? Number(existingHeader.category_id) : null,
+                        price_type_id: existingHeader.price_type ? Number(existingHeader.price_type) : null,
+                    };
+
+                    setHeader(existingHeader);
+                    setDetailRows(existingDetails);
+                    setFilters(nextFilters);
+
+                    // Compute earliest attachment timestamp immediately
+                    if (existingAttachments && existingAttachments.length > 0) {
+                        const sorted = [...existingAttachments].sort((a, b) => {
+                            const aTime = a.created_at ? new Date(a.created_at).getTime() : Infinity;
+                            const bTime = b.created_at ? new Date(b.created_at).getTime() : Infinity;
+                            return aTime - bTime;
+                        });
+                        const earliest = sorted[0];
+                        if (earliest?.created_at) {
+                            const rawIso = earliest.created_at;
+                            const createdMs = new Date(rawIso).getTime();
+                            const cleanIso = rawIso.replace("Z", "");
+                            const phParsedMs = new Date(`${cleanIso}+08:00`).getTime();
+                            const effectiveMs = Math.min(
+                                Number.isFinite(createdMs) ? createdMs : Infinity,
+                                Number.isFinite(phParsedMs) ? phParsedMs : Infinity
+                            );
+                            if (Number.isFinite(effectiveMs) && effectiveMs > 0) {
+                                setEarliestAttachmentTime(effectiveMs);
+                            }
+                        }
+                    } else {
+                        setEarliestAttachmentTime(null);
+                    }
+
+                    if (existingHeader.supplier_id) {
+                        const scopedCategories = getSupplierScopedCategoriesFromLookup(
+                            existingHeader.supplier_id,
+                            nextLookup,
+                        );
+
+                        if (!cancelled) {
+                            setCategories(scopedCategories);
+                        }
+                    } else {
+                        setCategories([]);
+                    }
+
+                    const nextRunningRows = await (async (): Promise<RunningInventoryRow[]> => {
+                        const branchId = nextFilters.branch_id;
+                        const supplierId = nextFilters.supplier_id;
+                        const categoryId = nextFilters.category_id;
+                        const priceTypeId = nextFilters.price_type_id;
+
+                        if (!branchId || !supplierId || !categoryId || !priceTypeId) {
+                            return [];
+                        }
+
+                        const params = resolveRunningInventoryFilterParams({
+                            branchId,
+                            supplierId,
+                            categoryId,
+                            branches: nextBranches,
+                            suppliers: nextSuppliers,
+                            lookup: nextLookup,
+                            cutOffDate: existingHeader.cutOff_date,
+                        });
+
+                        const cacheKey = buildRunningInventoryCacheKey(params);
+                        const cached = filteredRunningInventoryCacheRef.current[cacheKey];
+
+                        if (cached) {
+                            return cached;
+                        }
+
+                        const rows = await fetchRunningInventoryFiltered(params);
+                        filteredRunningInventoryCacheRef.current[cacheKey] = rows;
+                        return rows;
+                    })();
+
+                    if (cancelled) return;
+
+                    setRunningInventoryRows(nextRunningRows);
+
+                    if (nextFilters.branch_id && existingDetails.length > 0) {
+                        const variants = buildVariantsFromSavedDetails({
+                            details: existingDetails,
+                            priceTypeId: nextFilters.price_type_id,
+                            lookup: nextLookup,
+                        });
+
+                        const nextGrouped = buildGroupedPhysicalInventoryRows({
+                            branch_id: nextFilters.branch_id,
+                            variants,
+                            details: existingDetails,
+                            runningInventoryRows: nextRunningRows,
+                            ph_id: existingHeader.id ?? null,
+                            ignoreRfid: true,
+                        });
+
+                        setGroupedRows(nextGrouped);
+                    } else {
+                        setGroupedRows([]);
+                    }
+
+                    setIsHydratingRecord(false);
+                    return;
+                }
+
+                const nextPhNo = await fetchNextPhysicalInventoryNumber();
+
+                const draftHeader: PhysicalInventoryHeaderRow = {
+                    id: 0,
+                    ph_no: nextPhNo,
+                    date_encoded: null,
+                    cutOff_date: nowInputValue(),
+                    starting_date: null,
+                    price_type: null,
+                    stock_type: "GOOD",
+                    branch_id: null,
+                    remarks: "",
+                    isComitted: 0,
+                    isCancelled: 0,
+                    committed_at: null,
+                    cancelled_at: null,
+                    total_amount: 0,
+                    supplier_id: null,
+                    category_id: null,
+                    encoder_id: null,
+                };
+
+                if (cancelled) return;
+
+                setHeader(draftHeader);
+                setDetailRows([]);
+                setGroupedRows([]);
+                setCategories([]);
+                setRunningInventoryRows([]);
+                setFilters({
+                    branch_id: null,
+                    supplier_id: null,
+                    category_id: null,
+                    price_type_id: null,
+                });
+            } catch (error) {
+                const message = error instanceof Error ? error.message : "Failed to load module.";
+                toast.error(message);
+            } finally {
+                if (!cancelled) {
+                    setIsBootLoading(false);
+                    setIsHydratingRecord(false);
+                }
+            }
+        }
+
+        void boot();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [initialHeaderId]);
+
+    React.useEffect(() => {
+        async function syncStartingDate() {
+            if (!filters.branch_id || hasLoadedDetails || (header?.id ?? 0) > 0) return;
+
+            try {
+                const latestCutoff = await fetchLatestCommittedCutoffDateByBranch(filters.branch_id);
+
+                setHeader((prev) => {
+                    if (!prev) return prev;
+
+                    if (prev.branch_id === filters.branch_id && prev.starting_date === latestCutoff) {
+                        return prev;
+                    }
+
+                    return {
+                        ...prev,
+                        branch_id: filters.branch_id,
+                        starting_date: latestCutoff,
+                    };
+                });
+            } catch (error) {
+                const message =
+                    error instanceof Error ? error.message : "Failed to derive starting date.";
+                toast.error(message);
+            }
+        }
+
+        void syncStartingDate();
+    }, [filters.branch_id, hasLoadedDetails, header?.id]);
+
+    React.useEffect(() => {
+        if (!lookupBundle || !filters.supplier_id) {
+            setCategories([]);
+            return;
+        }
+
+        const rows = getSupplierScopedCategoriesFromLookup(filters.supplier_id, lookupBundle);
+        setCategories(rows);
+    }, [filters.supplier_id, lookupBundle]);
+
+    React.useEffect(() => {
+        if (isBootLoading || !lookupBundle) return;
+
+        if (
+            !filters.branch_id ||
+            !filters.supplier_id ||
+            !filters.category_id ||
+            !filters.price_type_id
+        ) {
+            if (!hasLoadedDetails) {
+                setRunningInventoryRows([]);
+                setGroupedRows([]);
+            }
+            return;
+        }
+
+        void refreshRunningInventoryReadModel({
+            branch_id: filters.branch_id,
+            supplier_id: filters.supplier_id,
+            category_id: filters.category_id,
+            price_type_id: filters.price_type_id,
+            cutOffDate: header?.cutOff_date,
+        });
+    }, [
+        filters.branch_id,
+        filters.supplier_id,
+        filters.category_id,
+        filters.price_type_id,
+        isBootLoading,
+        lookupBundle,
+        refreshRunningInventoryReadModel,
+        header?.cutOff_date,
+        hasLoadedDetails,
+    ]);
+
+    React.useEffect(() => {
+        if (isBootLoading || !lookupBundle) return;
+
+        if (
+            !filters.branch_id ||
+            !filters.supplier_id ||
+            !filters.category_id ||
+            !filters.price_type_id
+        ) {
+            if (!hasLoadedDetails) {
+                setGroupedRows([]);
+            }
+            return;
+        }
+
+        rebuildGroupedRows();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+        filters.branch_id,
+        filters.supplier_id,
+        filters.category_id,
+        filters.price_type_id,
+        isBootLoading,
+        lookupBundle,
+        runningInventoryRows,
+        hasLoadedDetails,
+    ]);
+
+    React.useEffect(() => {
+        if (activeQuickCategory === "ALL") return;
+
+        const exists = quickCategoryOptions.some(
+            (option) => option.key === activeQuickCategory,
+        );
+
+        if (!exists) {
+            setActiveQuickCategory("ALL");
+        }
+    }, [activeQuickCategory, quickCategoryOptions]);
+
+    const ensureHeaderSaved = React.useCallback(async (): Promise<PhysicalInventoryHeaderRow> => {
+        if (!header) {
+            throw new Error("Header state is not initialized.");
+        }
+
+        if (!(header.ph_no ?? "").trim()) {
+            throw new Error("PH No is required.");
+        }
+
+        if (!header.stock_type) {
+            throw new Error("Stock type is required.");
+        }
+
+        if (!filters.branch_id) {
+            throw new Error("Branch is required.");
+        }
+
+        if (!filters.supplier_id) {
+            throw new Error("Supplier is required.");
+        }
+
+        if (!filters.category_id) {
+            throw new Error("Category is required.");
+        }
+
+        if (!filters.price_type_id) {
+            throw new Error("Price type is required.");
+        }
+
+        if (!header.starting_date) {
+            throw new Error("Starting date is required.");
+        }
+
+        const payload: PhysicalInventoryHeaderUpsertPayload = {
+            ph_no: (header.ph_no ?? "").trim(),
+            cutOff_date: header.cutOff_date,
+            starting_date: header.starting_date,
+            price_type: filters.price_type_id,
+            stock_type: header.stock_type ?? "GOOD",
+            branch_id: filters.branch_id,
+            remarks: header.remarks ?? "",
+            supplier_id: filters.supplier_id,
+            category_id: filters.category_id,
+            isComitted: header.isComitted,
+            isCancelled: header.isCancelled,
+            total_amount: totalAmount,
+            is_scm: 1,
+        };
+
+        if (header.id > 0) {
+            const updated = await updatePhysicalInventoryHeader(header.id, payload);
+            setHeader(updated);
+            onRecordChange?.(updated);
+            return updated;
+        }
+
+        const created = await createPhysicalInventoryHeader(payload);
+        setHeader(created);
+        onRecordChange?.(created);
+        return created;
+    }, [
+        filters.branch_id,
+        filters.category_id,
+        filters.price_type_id,
+        filters.supplier_id,
+        header,
+        onRecordChange,
+        totalAmount,
+    ]);
+
+
+    const handleLoadProducts = React.useCallback(async () => {
+        const validation = validateLoadProductsFilters(filters);
+        if (!validation.ok) {
+            toast.error(validation.message ?? "Please complete the required filters.");
+            return;
+        }
+
+        if (!canEdit) {
+            toast.error("This PI can no longer be edited.");
+            return;
+        }
+
+        if (hasLoadedDetails) {
+            toast.error("Products are already loaded.");
+            return;
+        }
+
+        if (!lookupBundle) {
+            toast.error("Product lookup data is still loading.");
+            return;
+        }
+
+        try {
+            setIsLoadingProducts(true);
+
+            const savedHeader = await ensureHeaderSaved();
+
+            const runningInventoryFilterParams = resolveRunningInventoryFilterParams({
+                branchId: filters.branch_id as number,
+                supplierId: null, // Always get branch-wide stock to ensure accurate system counts
+                categoryId: filters.category_id as number,
+                branches,
+                suppliers,
+                lookup: lookupBundle,
+                cutOffDate: savedHeader.cutOff_date,
+                startingDate: savedHeader.starting_date,
+            });
+
+            const runningInventoryCacheKey = buildRunningInventoryCacheKey(
+                runningInventoryFilterParams,
+            );
+
+            const nextRunningInventoryRows =
+                await fetchRunningInventoryFiltered(runningInventoryFilterParams);
+
+            filteredRunningInventoryCacheRef.current[runningInventoryCacheKey] =
+                nextRunningInventoryRows;
+            setRunningInventoryRows(nextRunningInventoryRows);
+
+            const eligibleVariants = buildEligibleVariants({
+                supplierId: filters.supplier_id as number,
+                categoryId: filters.category_id as number,
+                priceTypeId: filters.price_type_id as number,
+                lookup: lookupBundle,
+            });
+
+            if (!eligibleVariants.length) {
+                toast.error("No eligible products found for the selected filters.");
+                return;
+            }
+
+            // Aggregate running inventory and movement tracking by product ID across all suppliers
+            const runningInventoryByProductId = new Map<number, number>();
+            const movementByProductId = new Map<number, boolean>();
+            for (const row of nextRunningInventoryRows) {
+                const current = runningInventoryByProductId.get(row.product_id) ?? 0;
+                runningInventoryByProductId.set(row.product_id, current + (row.running_inventory ?? 0));
+                if (row.has_movement) {
+                    movementByProductId.set(row.product_id, true);
+                }
+            }
+
+            // Identify product families with movement in the selected date range
+            const familiesWithMovement = new Set<number>();
+
+            for (const variant of eligibleVariants) {
+                const familyKey = variant.parent_id ?? variant.product_id;
+                const hasMovement = movementByProductId.get(variant.product_id) === true;
+
+                if (hasMovement) {
+                    familiesWithMovement.add(familyKey);
+                }
+            }
+
+            // Compute allocations directly based on specific variant's stock
+            const systemCountAllocations = new Map<number, number>();
+
+            for (const variant of eligibleVariants) {
+                const familyKey = variant.parent_id ?? variant.product_id;
+                if (!familiesWithMovement.has(familyKey)) continue;
+
+                const stock = runningInventoryByProductId.get(variant.product_id) ?? 0;
+                const systemCount = convertBaseQtyToDisplayQty(stock, variant.unit_count);
+                systemCountAllocations.set(variant.product_id, systemCount);
+            }
+
+            // Load entire families if at least one member has movement in the date range
+            const detailPayloads = eligibleVariants
+                .filter((variant) => {
+                    const familyKey = variant.parent_id ?? variant.product_id;
+                    return familiesWithMovement.has(familyKey);
+                })
+                .map((variant) => {
+                    const systemCount = systemCountAllocations.get(variant.product_id) ?? 0;
+
+                    const initialPhysicalCount = 0;
+                    const variance = computeVariance(initialPhysicalCount, systemCount);
+                    const differenceCost = computeDifferenceCost(variance, variant.unit_price);
+                    const amount = computeAmount(initialPhysicalCount, variant.unit_price);
+
+                    return {
+                        ph_id: savedHeader.id,
+                        product_id: variant.product_id,
+                        unit_price: variant.unit_price,
+                        system_count: systemCount,
+                        physical_count: initialPhysicalCount,
+                        variance,
+                        difference_cost: differenceCost,
+                        amount,
+                        offset_match: 0,
+                    };
+                });
+
+            await createPhysicalInventoryDetailsBulk(detailPayloads);
+
+            const persistedDetails = await fetchPhysicalInventoryDetails(savedHeader.id);
+            setDetailRows(persistedDetails);
+            dirtyDetailIdsRef.current.clear();
+
+            const nextHeader = await updatePhysicalInventoryHeader(savedHeader.id, {
+                total_amount: sumHeaderTotalAmount(persistedDetails),
+            });
+
+            setHeader(nextHeader);
+            onRecordChange?.(nextHeader);
+
+            rebuildGroupedRows({
+                nextDetails: persistedDetails,
+                nextHeader,
+                nextFilters: filters,
+                nextRunningInventoryRows,
+            });
+
+            toast.success("Products loaded successfully.");
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Failed to load products.";
+            toast.error(message);
+        } finally {
+            setIsLoadingProducts(false);
+        }
+    }, [
+        branches,
+        canEdit,
+        ensureHeaderSaved,
+        filters,
+        hasLoadedDetails,
+        lookupBundle,
+        onRecordChange,
+        rebuildGroupedRows,
+        suppliers,
+    ]);
+
+    const handleAddProduct = React.useCallback(
+        async (variant: EligibleVariantRow) => {
+            if (!header?.id || !canEdit) return;
+
+            try {
+                // Determine family key (Parent ID or root product ID)
+                const familyKey = variant.parent_id ?? variant.product_id;
+
+                // Find all siblings in the same family from eligibleVariants
+                const familySiblings = eligibleVariants.filter((v) => {
+                    const vFamilyKey = v.parent_id ?? v.product_id;
+                    return vFamilyKey === familyKey;
+                });
+
+                // Identify which siblings are already loaded
+                const existingProductIds = new Set(detailRows.map((d) => d.product_id));
+                const siblingsToLoad = familySiblings.filter((v) => !existingProductIds.has(v.product_id));
+
+                if (siblingsToLoad.length === 0) {
+                    toast.info("All variants for this family are already added.");
+                    return;
+                }
+
+                // Fetch running inventory for specific products
+                const systemCountAllocations = new Map<number, number>();
+                
+                for (const sibling of familySiblings) {
+                    const siblingStock = runningInventoryRows
+                        .filter((r) => r.branch_id === header.branch_id && r.product_id === sibling.product_id)
+                        .reduce((acc, r) => acc + (r.running_inventory ?? 0), 0);
+                        
+                    const systemCount = convertBaseQtyToDisplayQty(siblingStock, sibling.unit_count);
+                    systemCountAllocations.set(sibling.product_id, systemCount);
+                }
+
+                const payloads: PhysicalInventoryDetailUpsertPayload[] = siblingsToLoad.map((sibling) => {
+                    const systemCount = systemCountAllocations.get(sibling.product_id) ?? 0;
+
+                    const initialPhysicalCount = 0;
+                    const variance = computeVariance(initialPhysicalCount, systemCount);
+                    const differenceCost = computeDifferenceCost(variance, sibling.unit_price);
+                    const amount = computeAmount(initialPhysicalCount, sibling.unit_price);
+
+                    return {
+                        ph_id: header.id,
+                        product_id: sibling.product_id,
+                        unit_price: sibling.unit_price,
+                        system_count: systemCount,
+                        physical_count: initialPhysicalCount,
+                        variance,
+                        difference_cost: differenceCost,
+                        amount,
+                        offset_match: 0,
+                    };
+                });
+
+                await createPhysicalInventoryDetailsBulk(payloads);
+                await reloadDetails(header.id);
+
+                if (payloads.length > 1) {
+                    toast.success(`Added ${payloads.length} variants for family "${variant.product_name}".`);
+                } else {
+                    toast.success(`Product "${variant.product_name}" added.`);
+                }
+            } catch (error) {
+                const message =
+                    error instanceof Error ? error.message : "Failed to add product family.";
+                toast.error(message);
+            }
+        },
+        [canEdit, detailRows, eligibleVariants, header, reloadDetails, runningInventoryRows]
+    );
+
+    const handlePhysicalCountChange = React.useCallback(
+        (row: GroupedPhysicalInventoryChildRow, value: string) => {
+            const parsed = toNullableNumberInput(value);
+
+            if (row.detail_id) {
+                dirtyDetailIdsRef.current.add(row.detail_id);
+            }
+
+            setGroupedRows((prev) =>
+                prev.map((group) => {
+                    if (group.family_key !== row.family_key) return group;
+
+                    const nextRows = group.rows.map((child) => {
+                        if (child.product_id !== row.product_id) return child;
+
+                        const nextPhysical = parsed;
+                        const nextVariance = computeVariance(nextPhysical, child.system_count);
+                        const nextDifferenceCost = computeDifferenceCost(
+                            nextVariance,
+                            child.unit_price,
+                        );
+                        const nextAmount = computeAmount(nextPhysical, child.unit_price);
+
+                        return {
+                            ...child,
+                            physical_count: nextPhysical,
+                            variance: nextVariance,
+                            variance_base: nextVariance * child.unit_count,
+                            difference_cost: nextDifferenceCost,
+                            amount: nextAmount,
+                        };
+                    });
+
+                    return {
+                        ...group,
+                        rows: nextRows,
+                        total_system_count_base: nextRows.reduce(
+                            (acc, child) => acc + child.system_count * child.unit_count,
+                            0,
+                        ),
+                        total_physical_count_base: nextRows.reduce(
+                            (acc, child) => acc + child.physical_count * child.unit_count,
+                            0,
+                        ),
+                        total_variance_base: nextRows.reduce(
+                            (acc, child) => acc + child.variance_base,
+                            0,
+                        ),
+                        total_difference_cost: nextRows.reduce(
+                            (acc, child) => acc + child.difference_cost,
+                            0,
+                        ),
+                        total_amount: nextRows.reduce((acc, child) => acc + child.amount, 0),
+                    };
+                }),
+            );
+
+            setDetailRows((prev) =>
+                prev.map((detail) => {
+                    if (detail.product_id !== row.product_id) return detail;
+
+                    const nextVariance = computeVariance(parsed, detail.system_count ?? 0);
+                    const nextDifferenceCost = computeDifferenceCost(
+                        nextVariance,
+                        detail.unit_price,
+                    );
+                    const nextAmount = computeAmount(parsed, detail.unit_price);
+
+                    return {
+                        ...detail,
+                        physical_count: parsed,
+                        variance: nextVariance,
+                        difference_cost: nextDifferenceCost,
+                        amount: nextAmount,
+                    };
+                }),
+            );
+        },
+        [],
+    );
+
+    const handlePhysicalCountBlur = React.useCallback(async () => {
+        await flushDirtyDetails();
+    }, [flushDirtyDetails]);
+
+    const handleRefreshGroups = React.useCallback(async () => {
+        try {
+            if (!header?.id) return;
+
+            const [nextDetails, nextRunningInventoryRows] =
+                await Promise.all([
+                    fetchPhysicalInventoryDetails(header.id),
+                    refreshRunningInventoryReadModel({ ...filters, cutOffDate: header.cutOff_date }),
+                ]);
+
+            setDetailRows(nextDetails);
+            dirtyDetailIdsRef.current.clear();
+
+            rebuildGroupedRows({
+                nextDetails,
+                nextHeader: header,
+                nextFilters: filters,
+                nextRunningInventoryRows,
+            });
+
+            toast.success("Detail view refreshed.");
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : "Failed to refresh details.";
+            toast.error(message);
+        }
+    }, [filters, header, rebuildGroupedRows, refreshRunningInventoryReadModel]);
+
+
+    const handleCommitButtonClick = React.useCallback(async () => {
+        if (!header?.id) {
+            toast.error("This PI must exist before commit.");
+            return;
+        }
+
+        try {
+            setIsCheckingAttachments(true);
+            const attachments = await fetchPhysicalInventoryAttachments(header.id);
+            if (!attachments || attachments.length === 0) {
+                toast.error("Please upload a count sheet before committing this Physical Inventory.");
+                return;
+            }
+            setOpenCommitDialog(true);
+        } catch (error) {
+            console.error("Failed to check attachments before commit:", error);
+            toast.error("Please upload a count sheet before committing this Physical Inventory.");
+        } finally {
+            setIsCheckingAttachments(false);
+        }
+    }, [header?.id]);
+
+    const handleCommit = React.useCallback(async () => {
+        if (!header?.id) {
+            toast.error("This PI must exist before commit.");
+            return;
+        }
+
+        if (!canEdit) {
+            toast.error("This PI can no longer be edited.");
+            return;
+        }
+
+        try {
+            setIsCommitting(true);
+
+            await flushDirtyDetails();
+
+            const updatedHeader = await commitPhysicalInventory(header.id);
+
+            setHeader(updatedHeader);
+            onRecordChange?.(updatedHeader);
+
+            rebuildGroupedRows({
+                nextDetails: detailRows,
+                nextHeader: updatedHeader,
+                nextFilters: filters,
+            });
+
+            setOpenCommitDialog(false);
+            toast.success("Physical Inventory committed successfully.");
+        } catch (error) {
+            setOpenCommitDialog(false);
+
+            try {
+                const latestHeader = await fetchPhysicalInventoryById(header.id);
+                setHeader(latestHeader);
+                onRecordChange?.(latestHeader);
+
+                rebuildGroupedRows({
+                    nextDetails: detailRows,
+                    nextHeader: latestHeader,
+                    nextFilters: filters,
+                });
+
+                if (normalizeFlagValue(latestHeader.isComitted) === 1) {
+                    toast.success("Physical Inventory committed successfully.");
+                    return;
+                }
+            } catch {
+                // Ignore secondary verification error and show primary error message below
+            }
+
+            const rawMessage = error instanceof Error ? error.message : "Failed to commit PI.";
+            const friendlyMessage =
+                rawMessage.toLowerCase().includes("fetch failed") ||
+                rawMessage.toLowerCase().includes("unable to reach database")
+                    ? "Unable to commit Physical Inventory due to a server connection issue. The record remains in Pending status—please try again."
+                    : rawMessage;
+
+            toast.error(friendlyMessage);
+        } finally {
+            setIsCommitting(false);
+        }
+    }, [canEdit, detailRows, filters, flushDirtyDetails, header?.id, onRecordChange, rebuildGroupedRows]);
+
+    const handleCancel = React.useCallback(async () => {
+        if (!header?.id) {
+            toast.error("This PI must exist before cancel.");
+            return;
+        }
+
+        if (!canEdit) {
+            toast.error("This PI can no longer be edited.");
+            return;
+        }
+
+        try {
+            setIsCancelling(true);
+
+            const updatedHeader = await cancelPhysicalInventory(header.id);
+
+            setHeader(updatedHeader);
+            onRecordChange?.(updatedHeader);
+
+            rebuildGroupedRows({
+                nextDetails: detailRows,
+                nextHeader: updatedHeader,
+                nextFilters: filters,
+            });
+
+            setOpenCancelDialog(false);
+            toast.success("Physical Inventory cancelled successfully.");
+        } catch (error) {
+            setOpenCancelDialog(false);
+
+            try {
+                const latestHeader = await fetchPhysicalInventoryById(header.id);
+                setHeader(latestHeader);
+                onRecordChange?.(latestHeader);
+
+                rebuildGroupedRows({
+                    nextDetails: detailRows,
+                    nextHeader: latestHeader,
+                    nextFilters: filters,
+                });
+
+                if (normalizeFlagValue(latestHeader.isCancelled) === 1) {
+                    toast.success("Physical Inventory cancelled successfully.");
+                    return;
+                }
+            } catch {
+                // Ignore secondary verification error
+            }
+
+            const message = error instanceof Error ? error.message : "Failed to cancel PI.";
+            toast.error(message);
+        } finally {
+            setIsCancelling(false);
+        }
+    }, [canEdit, detailRows, filters, header?.id, onRecordChange, rebuildGroupedRows]);
+
+    if (isBootLoading || !header) {
+        return (
+            <div className="flex min-h-[280px] items-center justify-center rounded-2xl border bg-background">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading Physical Inventory module...
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-4">
+            <div className="rounded-2xl border bg-background px-3 py-3 shadow-sm sm:px-4">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                            <div className="rounded-xl border bg-muted/40 p-2">
+                                <ClipboardList className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <h1 className="text-lg font-semibold tracking-tight">
+                                    Physical Inventory Manual Count Commit
+                                </h1>
+                                <p className="text-sm text-muted-foreground">
+                                    Review verified counts and commit the physical inventory session to finalize stock balances.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            variant="outline"
+                            className="cursor-pointer border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                            onClick={handleCommitButtonClick}
+                            disabled={!header?.id || !hasLoadedDetails || status !== "Pending" || isCommitting || isCheckingAttachments}
+                        >
+                            {isCheckingAttachments ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <CheckCircle2 className="mr-2 h-4 w-4" />
+                            )}
+                            Commit PI
+                        </Button>
+
+                        <Button
+                            variant="outline"
+                            className="cursor-pointer"
+                            onClick={handleRefreshGroups}
+                            disabled={
+                                !header.id ||
+                                isBootLoading ||
+                                isLoadingProducts ||
+                                isSavingDetailBatch ||
+                                isRebuildingGroups
+                            }
+                        >
+                            <RefreshCcw className="mr-2 h-4 w-4" />
+                            Refresh
+                        </Button>
+
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="cursor-pointer border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/40"
+                            onClick={() => {
+                                if (!header) return;
+                                const bName = branches.find((b) => b.id == (filters.branch_id ?? header.branch_id))?.branch_name ?? "";
+                                const sName = suppliers.find((s) => s.id == (filters.supplier_id ?? header.supplier_id))?.supplier_name ?? "";
+                                const pName = priceTypes.find((pt) => pt.price_type_id == (filters.price_type_id ?? header.price_type))?.price_type_name ?? "";
+
+                                const doc = generateAuditReportPdf({
+                                    header,
+                                    groupedRows,
+                                    branchName: bName,
+                                    supplierName: sName,
+                                    priceTypeName: pName,
+                                });
+
+                                if (auditReportBlobUrl) {
+                                    URL.revokeObjectURL(auditReportBlobUrl);
+                                }
+                                const blob = doc.output("blob");
+                                const url = URL.createObjectURL(blob);
+                                setAuditReportBlobUrl(url);
+                                setAuditReportDoc(doc);
+                                setOpenAuditReportDialog(true);
+                            }}
+                            disabled={!hasLoadedDetails || !header?.id}
+                        >
+                            <FileText className="mr-2 h-4 w-4" />
+                            Audit Report
+                        </Button>
+
+                        <Button
+                            variant="outline"
+                            className="cursor-pointer border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-900/60 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-900/40"
+                            onClick={() => setOpenUploadDialog(true)}
+                            disabled={!header?.id}
+                            title="View Count Sheet"
+                        >
+                            <Eye className="mr-2 h-4 w-4" />
+                            View Count Sheet
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Dedicated Auto-Commit Countdown Banner */}
+                {earliestAttachmentTime && status === "Pending" && (
+                    <div className="mt-3 flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50/80 p-3.5 shadow-xs dark:border-amber-900/50 dark:bg-amber-950/30 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
+                                <Timer className="h-5 w-5 animate-pulse" />
+                            </div>
+                            <div className="space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                                        Auto-Commit Countdown
+                                    </span>
+                                    {isTimerExpired && (
+                                        <span className="inline-flex items-center rounded-md bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700 animate-pulse dark:bg-red-950/50 dark:text-red-300">
+                                            Timer Expired (Auto-committing...)
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-amber-800/90 dark:text-amber-300/80">
+                                    This session will automatically commit once the timer reaches zero. Please finalize your counts.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center self-end sm:self-auto">
+                            <div className="flex items-baseline gap-1 rounded-lg border border-amber-300/80 bg-white/90 px-3.5 py-1.5 shadow-xs dark:border-amber-800 dark:bg-black/40">
+                                <Clock className="mr-1.5 h-4 w-4 self-center text-amber-700 dark:text-amber-400" />
+                                <span className="font-mono text-xl sm:text-2xl font-black tracking-wider text-amber-950 dark:text-amber-100">
+                                    {remainingSeconds !== null ? (
+                                        (() => {
+                                            const h = Math.floor(remainingSeconds / 3600);
+                                            const m = Math.floor((remainingSeconds % 3600) / 60);
+                                            const s = remainingSeconds % 60;
+                                            const pad = (n: number) => n.toString().padStart(2, "0");
+                                            return `${pad(h)}:${pad(m)}:${pad(s)}`;
+                                        })()
+                                    ) : (
+                                        "--:--:--"
+                                    )}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <PhysicalInventoryHeader
+                header={header}
+                status={status}
+                canEdit={canEdit}
+                hasLoadedDetails={hasLoadedDetails}
+                totalAmount={totalAmount}
+                onChangePhNo={(value) =>
+                    setHeader((prev) => (prev ? { ...prev, ph_no: value } : prev))
+                }
+                onChangeStockType={(value) =>
+                    setHeader((prev) => (prev ? { ...prev, stock_type: value } : prev))
+                }
+                onChangeRemarks={(value) =>
+                    setHeader((prev) => (prev ? { ...prev, remarks: value } : prev))
+                }
+                onChangeCutoffDate={(value) =>
+                    setHeader((prev) => (prev ? { ...prev, cutOff_date: value } : prev))
+                }
+                onChangeStartingDate={(value) =>
+                    setHeader((prev) => (prev ? { ...prev, starting_date: value } : prev))
+                }
+            />
+
+            <PhysicalInventoryFiltersCard
+                filters={filters}
+                branches={branches}
+                suppliers={suppliers}
+                categories={categories}
+                priceTypes={priceTypes}
+                canEdit={canEdit}
+                hasLoadedDetails={hasLoadedDetails}
+                isLoadingProducts={isLoadingProducts}
+                onChangeBranch={(value) => {
+                    setFilters((prev) => ({
+                        ...prev,
+                        branch_id: value,
+                    }));
+
+                    setHeader((prev) => {
+                        if (!prev) return prev;
+                        return {
+                            ...prev,
+                            branch_id: value,
+                        };
+                    });
+                }}
+                onChangeSupplier={(value) => {
+                    setFilters((prev) => ({
+                        ...prev,
+                        supplier_id: value,
+                        category_id: null,
+                    }));
+
+                    setHeader((prev) => {
+                        if (!prev) return prev;
+                        return {
+                            ...prev,
+                            supplier_id: value,
+                            category_id: null,
+                        };
+                    });
+                }}
+                onChangeCategory={(value) => {
+                    setFilters((prev) => ({
+                        ...prev,
+                        category_id: value,
+                    }));
+
+                    setHeader((prev) => {
+                        if (!prev) return prev;
+                        return {
+                            ...prev,
+                            category_id: value,
+                        };
+                    });
+                }}
+                onChangePriceType={(value) => {
+                    setFilters((prev) => ({
+                        ...prev,
+                        price_type_id: value,
+                    }));
+
+                    setHeader((prev) => {
+                        if (!prev) return prev;
+                        return {
+                            ...prev,
+                            price_type: value,
+                        };
+                    });
+                }}
+                onLoadProducts={handleLoadProducts}
+            />
+
+            {groupedRows.length > 0 ? (
+                <>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+                        <div
+                            className={`rounded-2xl border px-4 py-3 shadow-sm ${kpiCardTone(
+                                grandTotals.system_base,
+                            )}`}
+                        >
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Total System Count
+                            </p>
+                            <p className="mt-1 text-lg font-semibold tabular-nums">
+                                {fmtBaseQty(grandTotals.system_base)}
+                            </p>
+                        </div>
+
+                        <div
+                            className={`rounded-2xl border px-4 py-3 shadow-sm ${kpiCardTone(
+                                grandTotals.physical_base,
+                            )}`}
+                        >
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Total Physical Count
+                            </p>
+                            <p className="mt-1 text-lg font-semibold tabular-nums">
+                                {fmtBaseQty(grandTotals.physical_base)}
+                            </p>
+                        </div>
+
+                        <div
+                            className={`rounded-2xl border px-4 py-3 shadow-sm ${kpiCardTone(
+                                grandTotals.variance_base,
+                            )}`}
+                        >
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Total Variance
+                            </p>
+                            <p
+                                className={`mt-1 text-lg font-semibold tabular-nums ${valueTone(
+                                    grandTotals.variance_base,
+                                )}`}
+                            >
+                                {fmtBaseQty(grandTotals.variance_base)}
+                            </p>
+                        </div>
+
+                        <div
+                            className={`rounded-2xl border px-4 py-3 shadow-sm ${kpiCardTone(
+                                grandTotals.difference_cost,
+                            )}`}
+                        >
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Total Diff Cost
+                            </p>
+                            <p
+                                className={`mt-1 text-lg font-semibold tabular-nums ${valueTone(
+                                    grandTotals.difference_cost,
+                                )}`}
+                            >
+                                ₱ {fmtMoney(grandTotals.difference_cost)}
+                            </p>
+                        </div>
+
+                        <div
+                            className={`rounded-2xl border px-4 py-3 shadow-sm ${kpiCardTone(
+                                grandTotals.amount,
+                            )}`}
+                        >
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Total Amount
+                            </p>
+                            <p className="mt-1 text-lg font-semibold tabular-nums">
+                                ₱ {fmtMoney(grandTotals.amount)}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+                        <div className="rounded-2xl border bg-muted/15 px-4 py-3 shadow-sm">
+                            <div className="flex items-center gap-2">
+                                <Boxes className="h-4 w-4 text-muted-foreground" />
+                                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                    Loaded SKU Groups
+                                </p>
+                            </div>
+                            <p className="mt-1 text-base font-semibold tabular-nums">
+                                {fmtInteger(operationalSummary.skuGroups)}
+                            </p>
+                        </div>
+
+                        <div className="rounded-2xl border bg-muted/15 px-4 py-3 shadow-sm">
+                            <div className="flex items-center gap-2">
+                                <ClipboardList className="h-4 w-4 text-muted-foreground" />
+                                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                    Detail Rows
+                                </p>
+                            </div>
+                            <p className="mt-1 text-base font-semibold tabular-nums">
+                                {fmtInteger(operationalSummary.detailRows)}
+                            </p>
+                        </div>
+
+                        <div className="rounded-2xl border bg-muted/15 px-4 py-3 shadow-sm">
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Rows With Variance
+                            </p>
+                            <p
+                                className={`mt-1 text-base font-semibold tabular-nums ${valueTone(
+                                    operationalSummary.rowsWithVariance,
+                                )}`}
+                            >
+                                {fmtInteger(operationalSummary.rowsWithVariance)}
+                            </p>
+                        </div>
+
+                        <div className="rounded-2xl border bg-muted/15 px-4 py-3 shadow-sm">
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Zero / Uncounted Rows
+                            </p>
+                            <p className="mt-1 text-base font-semibold tabular-nums">
+                                {fmtInteger(operationalSummary.uncountedRows)}
+                            </p>
+                        </div>
+                    </div>
+                </>
+            ) : null}
+
+            <div id="pi-manual-product-finder-sentinel" className="rounded-2xl border bg-background px-4 py-4 shadow-sm">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="space-y-1">
+                        <h3 className="text-sm font-semibold tracking-tight">Product Finder</h3>
+                        <p className="text-sm text-muted-foreground">
+                            Search loaded products and quickly narrow the counting view.
+                        </p>
+                    </div>
+
+                    <div className="flex w-full items-center gap-2 xl:max-w-xl">
+                        <div className="relative w-full">
+                            <input
+                                value={productSearch}
+                                onChange={(event) => setProductSearch(event.target.value)}
+                                placeholder="Search product code, name, barcode, UOM..."
+                                className="flex h-10 w-full rounded-md border bg-background pl-3 pr-10 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                            <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        </div>
+                        <Button
+                            variant="outline"
+                            className="cursor-pointer shrink-0"
+                            onClick={() => setOpenAddProductDialog(true)}
+                            disabled={!canEdit || !header?.id}
+                        >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Add Product
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                        {[
+                            {
+                                key: "ALL" as const,
+                                label: "All",
+                                count: quickFilterCounts.ALL,
+                            },
+                            {
+                                key: "VARIANCE" as const,
+                                label: "With Variance",
+                                count: quickFilterCounts.VARIANCE,
+                            },
+                            {
+                                key: "UNCOUNTED" as const,
+                                label: "Uncounted",
+                                count: quickFilterCounts.UNCOUNTED,
+                            },
+                        ].map((option) => {
+                            const isActive = activeQuickFilter === option.key;
+
+                            return (
+                                <button
+                                    key={option.key}
+                                    type="button"
+                                    onClick={() => setActiveQuickFilter(option.key)}
+                                    className={[
+                                        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition cursor-pointer",
+                                        isActive
+                                            ? "border-primary bg-primary text-primary-foreground"
+                                            : "border-border bg-muted/30 text-muted-foreground hover:bg-muted",
+                                    ].join(" ")}
+                                >
+                                    <span>{option.label}</span>
+                                    <span
+                                        className={[
+                                            "rounded-full px-1.5 py-0.5 text-[10px]",
+                                            isActive
+                                                ? "bg-primary-foreground/15 text-primary-foreground"
+                                                : "bg-background text-foreground",
+                                        ].join(" ")}
+                                    >
+                                        {option.count}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                        {quickCategoryOptions.map((option) => {
+                            const isActive = activeQuickCategory === option.key;
+
+                            return (
+                                <button
+                                    key={option.key}
+                                    type="button"
+                                    onClick={() => setActiveQuickCategory(option.key)}
+                                    className={[
+                                        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition cursor-pointer",
+                                        isActive
+                                            ? "border-emerald-600 bg-emerald-600 text-white"
+                                            : "border-border bg-background text-muted-foreground hover:bg-muted",
+                                    ].join(" ")}
+                                >
+                                    <span>{option.label}</span>
+                                    <span
+                                        className={[
+                                            "rounded-full px-1.5 py-0.5 text-[10px]",
+                                            isActive
+                                                ? "bg-white/15 text-white"
+                                                : "bg-muted text-foreground",
+                                        ].join(" ")}
+                                    >
+                                        {option.count}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <span>
+                        Showing{" "}
+                        <span className="font-semibold text-foreground">
+                            {visibleGroupedRows.length}
+                        </span>{" "}
+                        of{" "}
+                        <span className="font-semibold text-foreground">
+                            {groupedRows.length}
+                        </span>{" "}
+                        SKU groups
+                    </span>
+                    <span>
+                        Filter:{" "}
+                        <span className="font-semibold text-foreground">{activeQuickFilter}</span>
+                    </span>
+                    <span>
+                        Category:{" "}
+                        <span className="font-semibold text-foreground">{activeQuickCategory}</span>
+                    </span>
+                </div>
+            </div>
+
+            <PhysicalInventoryTable
+                rows={visibleGroupedRows}
+                isLoading={isBootLoading || isHydratingRecord || isLoadingProducts}
+                canEdit={canEdit}
+                onPhysicalCountChange={handlePhysicalCountChange}
+                onPhysicalCountBlur={handlePhysicalCountBlur}
+            />
+
+
+            <AlertDialog open={openCommitDialog} onOpenChange={setOpenCommitDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Commit Physical Inventory?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will finalize the physical count, update stock balances, and lock the record as read-only.
+                            This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel
+                            className="cursor-pointer"
+                            disabled={isCommitting}
+                        >
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                            onClick={(event) => {
+                                event.preventDefault();
+                                void handleCommit();
+                            }}
+                            disabled={isCommitting}
+                        >
+                            {isCommitting ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Committing...
+                                </>
+                            ) : (
+                                "Commit PI"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={openCancelDialog} onOpenChange={setOpenCancelDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Cancel Physical Inventory?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will mark the record as cancelled and make it read-only.
+                            Use this only for invalid or abandoned draft sessions.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel
+                            className="cursor-pointer"
+                            disabled={isCancelling}
+                        >
+                            Back
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            className="cursor-pointer"
+                            onClick={(event) => {
+                                event.preventDefault();
+                                void handleCancel();
+                            }}
+                            disabled={isCancelling}
+                        >
+                            {isCancelling ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Cancelling...
+                                </>
+                            ) : (
+                                "Cancel PI"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <PhysicalInventoryAddProductDialog
+                open={openAddProductDialog}
+                onOpenChange={setOpenAddProductDialog}
+                eligibleVariants={eligibleVariants}
+                existingProductIds={new Set(detailRows.map((d) => d.product_id))}
+                onAdd={handleAddProduct}
+            />
+
+            <PhysicalInventoryUploadCountSheetDialog
+                isOpen={openUploadDialog}
+                onOpenChange={(open) => {
+                    setOpenUploadDialog(open);
+                    if (!open && header?.id) {
+                        void refreshAttachmentTimer(header.id);
+                    }
+                }}
+                physicalInventoryId={header?.id || null}
+                phNo={header?.ph_no}
+                canEdit={canEdit}
+                isCommitted={normalizeFlagValue(header?.isComitted) === 1}
+                currentUserId={currentUser?.id}
+            />
+
+            {/* Audit Report PDF Preview Modal */}
+            <AlertDialog
+                open={openAuditReportDialog}
+                onOpenChange={(open) => {
+                    setOpenAuditReportDialog(open);
+                    if (!open && auditReportBlobUrl) {
+                        URL.revokeObjectURL(auditReportBlobUrl);
+                        setAuditReportBlobUrl(null);
+                        setAuditReportDoc(null);
+                    }
+                }}
+            >
+                <AlertDialogContent
+                    style={{ maxWidth: "80rem" }}
+                    className="w-[92vw] h-[92vh] flex flex-col justify-between rounded-2xl p-6"
+                >
+                    <AlertDialogHeader className="flex flex-row items-center justify-between pb-3 border-b">
+                        <div>
+                            <AlertDialogTitle className="text-lg font-bold tracking-tight">
+                                Physical Inventory Audit Report
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-xs text-muted-foreground">
+                                Preview the generated document format below.
+                            </AlertDialogDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                className="cursor-pointer rounded-xl font-semibold border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-900/60 dark:bg-indigo-950/30 dark:text-indigo-300 hover:scale-105 active:scale-95 transition-all text-xs"
+                                onClick={() => {
+                                    if (auditReportDoc) {
+                                        const filename = `Physical_Inventory_Audit_Report_${header?.ph_no || header?.id}.pdf`;
+                                        auditReportDoc.save(filename);
+                                    }
+                                }}
+                            >
+                                <Download className="mr-1.5 h-3.5 w-3.5" />
+                                Download PDF
+                            </Button>
+                            <AlertDialogCancel className="cursor-pointer rounded-xl mt-0">
+                                Close
+                            </AlertDialogCancel>
+                        </div>
+                    </AlertDialogHeader>
+
+                    <div className="flex-1 w-full overflow-hidden my-3 rounded-xl border bg-muted/20 relative flex items-center justify-center">
+                        {auditReportBlobUrl ? (
+                            <iframe
+                                src={auditReportBlobUrl}
+                                title="Physical Inventory Audit Report PDF"
+                                className="w-full h-full border-0"
+                            />
+                        ) : (
+                            <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground text-sm">
+                                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                <span>Generating document preview...</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <AlertDialogFooter className="hidden">
+                        <AlertDialogCancel>Close</AlertDialogCancel>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {groupedRows.length > 0 && (
+                <>
+                    {/* Floating Eye Toggle (Bottom-Right) */}
+                    {!isToolbarExpanded && (
+                        <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 items-end transition-all duration-300 pointer-events-none">
+                            <Button
+                                className="rounded-full h-12 w-12 p-0 bg-primary/30 hover:bg-primary/60 text-primary-foreground shadow-lg shadow-primary/40 hover:scale-105 active:scale-95 transition-all shrink-0 pointer-events-auto"
+                                onClick={() => setIsToolbarExpanded(true)}
+                                title="Show search bar"
+                            >
+                                <Eye className="h-5 w-5" />
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* Floating Search Bar (Bottom-Center Expanded) */}
+                    {isToolbarExpanded && (
+                        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-xl px-4 z-[9999] transition-all duration-300 pointer-events-none">
+                            <div className="flex items-center gap-3 bg-background/95 backdrop-blur-xl border border-primary/20 shadow-[0_-10px_50px_rgba(0,0,0,0.25)] rounded-full p-2 ring-1 ring-black/5 pointer-events-auto">
+                                <div className="relative flex-1 bg-muted/40 rounded-full border border-transparent focus-within:bg-background transition-all">
+                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/60" />
+                                    <input
+                                        value={productSearch}
+                                        onChange={(e) => setProductSearch(e.target.value)}
+                                        placeholder="Search loaded products..."
+                                        className="h-12 w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none text-sm pl-12 pr-10 placeholder:text-muted-foreground/50"
+                                    />
+                                    {Boolean(productSearch) && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+                                            onClick={() => setProductSearch("")}
+                                            title="Clear search"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="rounded-full h-12 w-12 shrink-0 text-muted-foreground hover:text-foreground"
+                                    onClick={() => setIsToolbarExpanded(false)}
+                                    title="Hide search bar"
+                                >
+                                    <EyeOff className="h-5 w-5" />
+                                </Button>
+                                <Button
+                                    className="rounded-full h-12 w-12 p-0 bg-primary text-primary-foreground shadow-lg shadow-primary/40 hover:scale-105 active:scale-95 transition-all shrink-0"
+                                    onClick={() => setOpenAddProductDialog(true)}
+                                    disabled={!canEdit}
+                                    title="Add Product Manually"
+                                >
+                                    <Plus className="h-6 w-6" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </>
+            )}
+        </div>
+    );
+}
