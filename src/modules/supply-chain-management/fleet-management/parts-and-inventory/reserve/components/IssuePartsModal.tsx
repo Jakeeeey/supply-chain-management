@@ -5,6 +5,7 @@ import type { IssuePartsInput, JobOrderRef, VehicleRef } from "../types";
 import type { VehiclePart } from "../../registration/types";
 import type { Branch } from "../../stock-in/types";
 import { SearchableSelect } from "./SearchableSelect";
+import { fetchAvailablePartsByBranch } from "../provider/fetchProviders";
 import {
   Dialog,
   DialogContent,
@@ -39,7 +40,6 @@ export function IssuePartsModal({
   open,
   onOpenChange,
   jobOrders,
-  parts,
   branches,
   saving,
   onSave,
@@ -51,6 +51,9 @@ export function IssuePartsModal({
     { part_id: "", quantity: "1", unit_cost: "0", remarks: "" },
   ]);
 
+  const [availableParts, setAvailableParts] = React.useState<VehiclePart[]>([]);
+  const [loadingParts, setLoadingParts] = React.useState(false);
+
   const [errors, setErrors] = React.useState<{
     jobOrderId?: string;
     branchId?: string;
@@ -58,6 +61,7 @@ export function IssuePartsModal({
   }>({});
   const [submitted, setSubmitted] = React.useState(false);
 
+  // When modal opens, clear and initialize
   React.useEffect(() => {
     if (open) {
       setJobOrderId("");
@@ -69,6 +73,38 @@ export function IssuePartsModal({
     }
   }, [open, branches]);
 
+  // Reactive effect: When branchId changes, fetch parts available specifically in that branch
+  React.useEffect(() => {
+    if (!branchId) {
+      setAvailableParts([]);
+      return;
+    }
+
+    let isMounted = true;
+    setLoadingParts(true);
+
+    fetchAvailablePartsByBranch(branchId)
+      .then((data) => {
+        if (isMounted) {
+          setAvailableParts(data);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setAvailableParts([]);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setLoadingParts(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [branchId]);
+
   // When jobOrderId changes, auto-set branch if JO has branch_id
   const handleJoChange = (selectedJoId: string) => {
     setJobOrderId(selectedJoId);
@@ -78,10 +114,26 @@ export function IssuePartsModal({
         typeof jo.branch_id === "object" && jo.branch_id !== null
           ? jo.branch_id.id
           : Number(jo.branch_id);
-      setBranchId(String(bId));
+      handleBranchChange(String(bId));
     }
     if (submitted && errors.jobOrderId) {
       setErrors((prev) => ({ ...prev, jobOrderId: undefined }));
+    }
+  };
+
+  // Branch change handler: clears selected parts in item rows and triggers refetch
+  const handleBranchChange = (newBranchId: string) => {
+    setBranchId(newBranchId);
+    // Instantly reset parts in existing rows
+    setItems((prev) =>
+      prev.map((it) => ({
+        ...it,
+        part_id: "",
+        unit_cost: "0",
+      }))
+    );
+    if (submitted && errors.branchId) {
+      setErrors((prev) => ({ ...prev, branchId: undefined }));
     }
   };
 
@@ -100,7 +152,7 @@ export function IssuePartsModal({
       copy[index] = { ...copy[index], [field]: value };
 
       if (field === "part_id") {
-        const selectedPart = parts.find((p) => String(p.id) === value);
+        const selectedPart = availableParts.find((p) => String(p.id) === value);
         if (selectedPart) {
           copy[index].unit_cost = String(selectedPart.unit_cost ?? 0);
         }
@@ -199,11 +251,21 @@ export function IssuePartsModal({
   }, [branches]);
 
   const partOptions = React.useMemo(() => {
-    return parts.map((p) => ({
-      value: String(p.id),
-      label: `${p.part_code} — ${p.part_name} (${p.unit})`,
-    }));
-  }, [parts]);
+    return availableParts.map((p) => {
+      const pWithStock = p as VehiclePart & { on_hand?: number; available?: number };
+      const availText =
+        pWithStock.available !== undefined
+          ? ` (Available: ${pWithStock.available} ${p.unit})`
+          : pWithStock.on_hand !== undefined
+          ? ` (On Hand: ${pWithStock.on_hand} ${p.unit})`
+          : ` (${p.unit})`;
+
+      return {
+        value: String(p.id),
+        label: `${p.part_code} — ${p.part_name}${availText}`,
+      };
+    });
+  }, [availableParts]);
 
   const grandTotal = items.reduce((sum, item) => {
     const q = Number(item.quantity) || 0;
@@ -252,12 +314,7 @@ export function IssuePartsModal({
                 <SearchableSelect
                   options={branchOptions}
                   value={branchId}
-                  onValueChange={(val) => {
-                    setBranchId(val);
-                    if (submitted && errors.branchId) {
-                      setErrors((prev) => ({ ...prev, branchId: undefined }));
-                    }
-                  }}
+                  onValueChange={handleBranchChange}
                   placeholder="Search branch name..."
                   className={`w-full ${
                     submitted && errors.branchId ? "border-destructive text-destructive" : ""
@@ -309,12 +366,31 @@ export function IssuePartsModal({
                       <div className="flex-1 w-full min-w-[280px] space-y-1 relative">
                         <Label className="text-xs text-muted-foreground">
                           Part <span className="text-destructive font-bold">*</span>
+                          {loadingParts && (
+                            <span className="text-[10px] text-muted-foreground ml-2 animate-pulse">
+                              (Loading branch stock...)
+                            </span>
+                          )}
+                          {!branchId && (
+                            <span className="text-[10px] text-amber-600 ml-2">
+                              (Select an issuing branch first)
+                            </span>
+                          )}
                         </Label>
                         <SearchableSelect
                           options={partOptions}
                           value={item.part_id}
                           onValueChange={(val) => handleItemChange(idx, "part_id", val)}
-                          placeholder="Search part code or name..."
+                          placeholder={
+                            !branchId
+                              ? "Select an issuing branch first..."
+                              : loadingParts
+                              ? "Loading parts..."
+                              : partOptions.length === 0
+                              ? "No parts in stock at this branch"
+                              : "Search part code or name..."
+                          }
+                          disabled={!branchId || loadingParts}
                           className={`h-9 text-xs w-full ${
                             submitted && rowErr?.part_id ? "border-destructive text-destructive" : ""
                           }`}

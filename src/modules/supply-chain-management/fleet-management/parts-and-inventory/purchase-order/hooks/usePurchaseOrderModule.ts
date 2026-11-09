@@ -65,7 +65,7 @@ export function usePurchaseOrderModule() {
     }
   };
 
-  // Active PRs key set (Pending, Approved, Ordered) to prevent duplicate reorders
+  // Active PRs key set (Pending, Approved, Ordered) to prevent duplicate reorders for the specific branch
   const activePrKeys = React.useMemo(() => {
     const keys = new Set<string>();
     const activeStatuses = new Set(["pending", "approved", "ordered"]);
@@ -74,18 +74,28 @@ export function usePurchaseOrderModule() {
       const bId = typeof p.branch_id === "object" && p.branch_id !== null ? p.branch_id.id : p.branch_id;
       const pId = typeof p.part_id === "object" && p.part_id !== null ? p.part_id.id : p.part_id;
       if (pId && bId) keys.add(`${pId}-${bId}`);
-      if (pId) keys.add(`${pId}`);
     });
     return keys;
   }, [prs]);
 
-  // Filter triggers: only include items that don't have active PRs
+  // Filter triggers: only include items that don't have active PRs in that branch, and filter by selectedBranch
   const availableTriggers = React.useMemo(() => {
-    return triggers.filter((t) => {
+    let list = triggers.filter((t) => {
       const key = `${t.part_id}-${t.branch_id}`;
-      return !activePrKeys.has(key) && !activePrKeys.has(`${t.part_id}`);
+      return !activePrKeys.has(key);
     });
-  }, [triggers, activePrKeys]);
+
+    if (selectedBranch && selectedBranch !== "all") {
+      list = list.filter((t) => {
+        const bId = String(t.branch_id);
+        const bName = String(t.branch_name || "").toLowerCase();
+        const target = selectedBranch.toLowerCase().trim();
+        return bId === selectedBranch || bName.includes(target);
+      });
+    }
+
+    return list;
+  }, [triggers, activePrKeys, selectedBranch]);
 
   // Filter triggers by search query
   const filteredTriggers = React.useMemo(() => {
@@ -100,11 +110,23 @@ export function usePurchaseOrderModule() {
     );
   }, [availableTriggers, search]);
 
-  // Filter PRs by search query
+  // Filter PRs by branch and search query
   const filteredPrs = React.useMemo(() => {
-    if (!search.trim()) return prs;
+    let result = prs;
+
+    // Strict branch filtering on client-side to prevent any cross-branch data leakage
+    if (selectedBranch && selectedBranch !== "all") {
+      result = result.filter((p) => {
+        const bId = typeof p.branch_id === "object" && p.branch_id !== null ? String(p.branch_id.id) : String(p.branch_id);
+        const bName = typeof p.branch_id === "object" && p.branch_id !== null ? String(p.branch_id.branch_name || "").toLowerCase() : "";
+        const target = selectedBranch.toLowerCase().trim();
+        return bId === selectedBranch || bName.includes(target);
+      });
+    }
+
+    if (!search.trim()) return result;
     const s = search.toLowerCase();
-    return prs.filter((p) => {
+    return result.filter((p) => {
       const pName = typeof p.part_id === "object" && p.part_id !== null ? p.part_id.part_name : "";
       const pCode = typeof p.part_id === "object" && p.part_id !== null ? p.part_id.part_code : "";
       return (
@@ -114,7 +136,7 @@ export function usePurchaseOrderModule() {
         (p.notes && p.notes.toLowerCase().includes(s))
       );
     });
-  }, [prs, search]);
+  }, [prs, selectedBranch, search]);
 
   // KPI Metrics
   const metrics = React.useMemo(() => {
