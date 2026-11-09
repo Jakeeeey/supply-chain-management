@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { decodeJwtPayload, COOKIE_NAME } from "@/lib/auth-utils";
 
 export const runtime = "nodejs";
 
@@ -7,6 +8,19 @@ const DIRECTUS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN || "";
 
 function json(res: unknown, status = 200) {
   return NextResponse.json(res, { status });
+}
+
+function getUserIdFromRequest(req: NextRequest): number | null {
+  try {
+    const token = req.cookies.get(COOKIE_NAME)?.value;
+    if (!token) return null;
+    const payload = decodeJwtPayload(token);
+    const rawId = payload?.user_id ?? payload?.id ?? payload?.sub;
+    const num = Number(rawId);
+    return isNaN(num) || num <= 0 ? null : num;
+  } catch {
+    return null;
+  }
 }
 
 function directusHeaders(extra: Record<string, string> = {}) {
@@ -27,7 +41,7 @@ export async function GET(req: NextRequest) {
     const params = new URLSearchParams();
     params.set("limit", "-1");
     params.set("sort", "-id");
-    params.set("fields", "*,part_id.*,part_id.classification_id.*,branch_id.*,job_order_id.*,vehicle_id.*");
+    params.set("fields", "*,part_id.*,part_id.classification_id.*,branch_id.*,job_order_id.*,vehicle_id.*,created_by.*");
 
     // Exclude 'Stock In' movements to show outbound / issue / disposal
     if (movementType && movementType !== "all") {
@@ -98,7 +112,9 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Log outbound movement in vehicle_part_movements
-    const movementPayload = {
+    const userId = getUserIdFromRequest(req);
+
+    const movementPayload: Record<string, unknown> = {
       part_id: partIdNum,
       branch_id: branchIdNum,
       movement_type: movement_type || "Disposal",
@@ -106,6 +122,7 @@ export async function POST(req: NextRequest) {
       unit_cost: cost,
       reference_no: reference_no || `SO-${Date.now().toString().slice(-6)}`,
       remarks: remarks || "",
+      created_by: userId || null,
     };
 
     const movRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_movements`, {

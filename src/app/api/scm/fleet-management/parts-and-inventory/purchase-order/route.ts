@@ -34,17 +34,28 @@ export async function GET(req: NextRequest) {
     if (!DIRECTUS_URL) throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured");
 
     const url = new URL(req.url);
-    const branchId = url.searchParams.get("branch_id");
+    const branchParam = url.searchParams.get("branch_id") || url.searchParams.get("branch");
 
-    // 1. Fetch parts, stock, purchase requests, purchase request items, and suppliers
-    const [partsRes, stockRes, prRes, prItemsRes, suppliersRes] = await Promise.all([
+    let branchId: string | null = null;
+    let branchNameFilter: string | null = null;
+
+    if (branchParam && branchParam !== "all") {
+      if (/^\d+$/.test(branchParam)) {
+        branchId = branchParam;
+      } else {
+        branchNameFilter = branchParam.toLowerCase().trim();
+      }
+    }
+
+    // 1. Fetch parts, stock, purchase requests, purchase request items, suppliers, and branches
+    const [partsRes, stockRes, prRes, prItemsRes, suppliersRes, branchesRes] = await Promise.all([
       fetch(`${DIRECTUS_URL}/items/vehicle_parts?limit=-1&fields=*,classification_id.*`, {
         cache: "no-store",
         headers: directusHeaders(),
       }),
       fetch(
         `${DIRECTUS_URL}/items/vehicle_part_stock?limit=-1&fields=*,part_id.*,branch_id.*${
-          branchId && branchId !== "all" ? `&filter[branch_id][_eq]=${branchId}` : ""
+          branchId ? `&filter[branch_id][_eq]=${branchId}` : ""
         }`,
         {
           cache: "no-store",
@@ -52,10 +63,15 @@ export async function GET(req: NextRequest) {
         }
       ),
       // Fetch purchase requests (include supplier_id relation)
-      fetch(`${DIRECTUS_URL}/items/vehicle_part_purchase_requests?limit=-1&sort=-id&fields=*,branch_id.*,supplier_id.*`, {
-        cache: "no-store",
-        headers: directusHeaders(),
-      }).catch(() => null),
+      fetch(
+        `${DIRECTUS_URL}/items/vehicle_part_purchase_requests?limit=-1&sort=-id&fields=*,branch_id.*,supplier_id.*${
+          branchId ? `&filter[branch_id][_eq]=${branchId}` : ""
+        }`,
+        {
+          cache: "no-store",
+          headers: directusHeaders(),
+        }
+      ).catch(() => null),
       // Fetch purchase request items
       fetch(`${DIRECTUS_URL}/items/vehicle_part_purchase_request_items?limit=-1&fields=*,part_id.*`, {
         cache: "no-store",
@@ -63,6 +79,11 @@ export async function GET(req: NextRequest) {
       }).catch(() => null),
       // Fetch suppliers
       fetch(`${DIRECTUS_URL}/items/suppliers?limit=-1&fields=id,supplier_name,supplier_shortcut,contact_person,phone_number,email_address&sort=supplier_name`, {
+        cache: "no-store",
+        headers: directusHeaders(),
+      }).catch(() => null),
+      // Fetch branches for accurate name lookup
+      fetch(`${DIRECTUS_URL}/items/branches?limit=-1&fields=id,branch_name`, {
         cache: "no-store",
         headers: directusHeaders(),
       }).catch(() => null),
@@ -82,6 +103,13 @@ export async function GET(req: NextRequest) {
     const suppliers = Array.isArray(suppliersData?.data) ? suppliersData.data : [];
     const supplierMap = new Map<number, Record<string, unknown>>();
     suppliers.forEach((s: { id: number }) => supplierMap.set(Number(s.id), s));
+
+    const branchesData = branchesRes && branchesRes.ok ? await branchesRes.json().catch(() => ({ data: [] })) : { data: [] };
+    const branchRecords = Array.isArray(branchesData?.data) ? branchesData.data : [];
+    const branchMap = new Map<number, string>();
+    branchRecords.forEach((b: { id: number; branch_name?: string }) => {
+      branchMap.set(Number(b.id), b.branch_name || `Branch #${b.id}`);
+    });
 
     let prItems: Array<Record<string, unknown>> = [];
     if (prRes && prRes.ok) {
@@ -146,6 +174,23 @@ export async function GET(req: NextRequest) {
           items: linkedItems,
         };
       });
+
+      // Strict branch post-filter if branch parameter provided
+      if (branchId || branchNameFilter) {
+        prItems = prItems.filter((pr) => {
+          const prBranchObj = typeof pr.branch_id === "object" && pr.branch_id !== null ? (pr.branch_id as Record<string, unknown>) : null;
+          const prBranchIdNum = prBranchObj ? Number(prBranchObj.id) : Number(pr.branch_id);
+          const prBranchName = String(prBranchObj?.branch_name || "").toLowerCase().trim();
+
+          if (branchId && prBranchIdNum !== Number(branchId)) {
+            return false;
+          }
+          if (branchNameFilter && !prBranchName.includes(branchNameFilter)) {
+            return false;
+          }
+          return true;
+        });
+      }
     }
 
     // Calculate low stock / reorder triggers
@@ -169,7 +214,6 @@ export async function GET(req: NextRequest) {
 
         if (primaryPartId && prBranchId) {
           activePrKeys.add(`${primaryPartId}-${prBranchId}`);
-          activePrKeys.add(`${primaryPartId}`); // Also track part globally if needed
         }
 
         const linkedItems = Array.isArray(pr.items) ? (pr.items as Record<string, unknown>[]) : [];
@@ -179,7 +223,6 @@ export async function GET(req: NextRequest) {
             : Number(it.part_id);
           if (itPartId && prBranchId) {
             activePrKeys.add(`${itPartId}-${prBranchId}`);
-            activePrKeys.add(`${itPartId}`);
           }
         });
       });
@@ -199,8 +242,8 @@ export async function GET(req: NextRequest) {
       const key = `${partId}-${b.id}`;
       processedPartIds.add(key);
 
-      // If already has an active PR (Pending / Approved / Ordered), don't trigger reorder to prevent duplicate
-      if (activePrKeys.has(key) || activePrKeys.has(`${partId}`)) {
+      // If already has an active PR (Pending / Approved / Ordered) for this branch, don't trigger duplicate
+      if (activePrKeys.has(key)) {
         return;
       }
 
@@ -242,13 +285,14 @@ export async function GET(req: NextRequest) {
     parts.forEach((p: Record<string, unknown>) => {
       const partId = Number(p.id);
       const reorderPoint = Number(p.reorder_point) || 0;
-      const targetBranchId = branchId && branchId !== "all" ? Number(branchId) : 1;
+      const targetBranchId = branchId ? Number(branchId) : 1;
+      const resolvedBranchName = branchMap.get(targetBranchId) || (targetBranchId === 1 ? "Central Warehouse" : `Branch #${targetBranchId}`);
       const key = `${partId}-${targetBranchId}`;
 
       // If not yet in triggers and has no positive stock record
       if (!processedPartIds.has(key)) {
-        // Skip if already in an active PR
-        if (activePrKeys.has(key) || activePrKeys.has(`${partId}`)) {
+        // Skip if already in an active PR for this branch
+        if (activePrKeys.has(key)) {
           return;
         }
 
@@ -263,7 +307,7 @@ export async function GET(req: NextRequest) {
           const classObj = typeof p.classification_id === "object" && p.classification_id !== null ? (p.classification_id as Record<string, unknown>) : null;
 
           triggers.push({
-            id: `cat-${partId}`,
+            id: `cat-${partId}-${targetBranchId}`,
             part_id: p.id,
             part_code: p.part_code,
             part_name: p.part_name,
@@ -272,7 +316,7 @@ export async function GET(req: NextRequest) {
             unit: p.unit || "pc",
             unit_cost: Number(p.unit_cost) || 0,
             branch_id: targetBranchId,
-            branch_name: "Central Warehouse",
+            branch_name: resolvedBranchName,
             on_hand: 0,
             reserved: 0,
             available: 0,
@@ -355,6 +399,7 @@ export async function POST(req: NextRequest) {
       notes: notes || "",
       requested_by: currentUserId || null,
       requested_at: nowIso,
+      created_by: currentUserId || null,
       created_at: nowIso,
     };
 
@@ -579,4 +624,72 @@ export async function PATCH(req: NextRequest) {
     return json({ error: String(err?.message || err) }, 500);
   }
 }
+
+export async function PUT(req: NextRequest) {
+  try {
+    if (!DIRECTUS_URL) throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured");
+
+    const payload = await req.json();
+    const { id, branch_id, part_id, quantity, estimated_cost, priority, supplier_id, supplier_name, expected_delivery_date, notes } = payload;
+
+    if (!id) {
+      return json({ error: "Purchase Request ID is required for updating." }, 400);
+    }
+
+    // Fetch existing PR record to verify status
+    const getRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_purchase_requests/${id}?fields=id,status,created_by,requested_by`, {
+      cache: "no-store",
+      headers: directusHeaders(),
+    });
+
+    if (!getRes.ok) {
+      return json({ error: "Purchase request not found." }, 404);
+    }
+
+    const prData = await getRes.json().catch(() => ({}));
+    const pr = prData?.data;
+
+    if (!pr) {
+      return json({ error: "Purchase request not found." }, 404);
+    }
+
+    // Workflow check: Only allow editing if status is pending
+    const currentStatus = String(pr.status || "").toLowerCase().trim();
+    if (currentStatus !== "pending") {
+      return json({
+        error: `Only pending purchase requests can be edited. This purchase request is currently '${pr.status}'.`
+      }, 403);
+    }
+
+    // Prepare update payload
+    const updateBody: Record<string, unknown> = {};
+    if (branch_id !== undefined) updateBody.branch_id = Number(branch_id);
+    if (part_id !== undefined) updateBody.part_id = Number(part_id);
+    if (quantity !== undefined) updateBody.quantity = Number(quantity);
+    if (estimated_cost !== undefined) updateBody.estimated_cost = Number(estimated_cost);
+    if (priority !== undefined) updateBody.priority = priority;
+    if (supplier_id !== undefined) updateBody.supplier_id = supplier_id ? Number(supplier_id) : null;
+    if (supplier_name !== undefined) updateBody.supplier_name = supplier_name;
+    if (expected_delivery_date !== undefined) updateBody.expected_delivery_date = expected_delivery_date || null;
+    if (notes !== undefined) updateBody.notes = notes;
+
+    const updateRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_purchase_requests/${id}`, {
+      method: "PATCH",
+      headers: directusHeaders(),
+      body: JSON.stringify(updateBody),
+    });
+
+    if (!updateRes.ok) {
+      const errorJson = await updateRes.json().catch(() => ({}));
+      return json({ error: errorJson?.errors?.[0]?.message || "Failed to update purchase request." }, updateRes.status);
+    }
+
+    const updatedData = await updateRes.json().catch(() => ({}));
+    return json({ success: true, data: updatedData?.data || updatedData }, 200);
+  } catch (e: unknown) {
+    const err = e as Error;
+    return json({ error: String(err?.message || err) }, 500);
+  }
+}
+
 

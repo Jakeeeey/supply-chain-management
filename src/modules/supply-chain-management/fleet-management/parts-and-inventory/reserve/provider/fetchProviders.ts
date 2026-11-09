@@ -5,6 +5,7 @@ import type {
   JobOrderRef,
   JobOrdersApiResponse,
 } from "../types";
+import type { VehiclePart } from "../../registration/types";
 import { fetchVehicleParts } from "../../registration/provider/fetchProviders";
 import { fetchBranches } from "../../stock-in/provider/fetchProviders";
 
@@ -17,6 +18,20 @@ export async function fetchJobOrders(): Promise<JobOrderRef[]> {
     if (!res.ok) return [];
     const json: JobOrdersApiResponse = await res.json().catch(() => ({ data: [] }));
     return json.data || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchAvailablePartsByBranch(branchId: string | number): Promise<VehiclePart[]> {
+  if (!branchId || branchId === "all") return [];
+  try {
+    const res = await fetch(`${BASE_URL}?action=available-parts&issuing_branch_id=${branchId}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const json = await res.json().catch(() => ({ data: [] }));
+    return Array.isArray(json?.data) ? json.data : [];
   } catch {
     return [];
   }

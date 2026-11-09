@@ -36,6 +36,18 @@ export interface BatchStockInInput {
   items: StockInItemPayload[];
 }
 
+export interface StockInTransactionHeader {
+  reference_no: string;
+  created_at: string;
+  branch_id?: number | Branch | null;
+  branch_name: string;
+  total_items: number;
+  total_quantity: number;
+  total_amount: number;
+  remarks?: string | null;
+  items: StockMovement[];
+}
+
 export interface StockMovementsApiResponse {
   data: StockMovement[];
   meta?: {

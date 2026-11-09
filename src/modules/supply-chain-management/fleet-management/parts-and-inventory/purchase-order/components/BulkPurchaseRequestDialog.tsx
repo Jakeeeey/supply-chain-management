@@ -62,6 +62,31 @@ interface EditableBulkItem {
   quantity: number;
 }
 
+// Helper to resolve linked default supplier ID from a part
+function getPartSupplierId(part?: VehiclePart | null): string {
+  if (!part) return "";
+  if (part.supplier_id) return String(part.supplier_id);
+  if (part.supplier && typeof part.supplier === "object" && part.supplier.id) {
+    return String(part.supplier.id);
+  }
+  if (Array.isArray(part.suppliers) && part.suppliers.length > 0) {
+    const first = part.suppliers[0];
+    if (typeof first === "object" && first !== null) {
+      if ("id" in first && first.id) return String(first.id);
+      if ("supplier_id" in first) {
+        const sId =
+          typeof first.supplier_id === "object" && first.supplier_id !== null
+            ? (first.supplier_id as { id?: number }).id
+            : first.supplier_id;
+        if (sId) return String(sId);
+      }
+    } else if (typeof first === "number") {
+      return String(first);
+    }
+  }
+  return "";
+}
+
 export function BulkPurchaseRequestDialog({
   open,
   onOpenChange,
@@ -121,7 +146,6 @@ export function BulkPurchaseRequestDialog({
   React.useEffect(() => {
     if (open) {
       setError("");
-      setSupplierId("");
       setExpectedDate("");
       setNotes("");
 
@@ -146,11 +170,20 @@ export function BulkPurchaseRequestDialog({
       }));
       setItems(initItems);
 
+      // Auto-populate supplier from the first selected part if pre-configured
+      let autoSupplierId = "";
+      if (selectedItems.length > 0) {
+        const firstPartId = selectedItems[0].part_id;
+        const matchingPart = parts.find((p) => p.id === firstPartId);
+        autoSupplierId = getPartSupplierId(matchingPart);
+      }
+      setSupplierId(autoSupplierId);
+
       // If any critical, default to Critical/Urgent
       const hasCritical = selectedItems.some((i) => i.on_hand <= 0);
       setPriority(hasCritical ? "Critical" : "Normal");
     }
-  }, [open, selectedItems, branches]);
+  }, [open, selectedItems, branches, parts]);
 
   // When branchId or stockMap updates, sync on_hand for all items
   React.useEffect(() => {
@@ -218,6 +251,13 @@ export function BulkPurchaseRequestDialog({
         quantity: Math.max(1, Number(p.reorder_point || 10)),
       },
     ]);
+
+    // Auto-populate supplier if currently unset or if newly added part has a configured supplier
+    const partSupplierId = getPartSupplierId(p);
+    if (partSupplierId && (!supplierId || items.length === 0)) {
+      setSupplierId(partSupplierId);
+    }
+
     setSelectedPartToAdd("");
   };
 

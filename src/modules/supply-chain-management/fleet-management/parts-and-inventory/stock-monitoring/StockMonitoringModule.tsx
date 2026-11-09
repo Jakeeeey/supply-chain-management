@@ -26,6 +26,8 @@ export default function StockMonitoringModule() {
     setClassificationFilter,
     viewMode,
     setViewMode,
+    includeZeroStock,
+    setIncludeZeroStock,
     reload,
   } = useStockMonitoring();
 
@@ -61,6 +63,8 @@ export default function StockMonitoringModule() {
         classifications={classifications}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
+        includeZeroStock={includeZeroStock}
+        onIncludeZeroStockChange={setIncludeZeroStock}
         onRefresh={reload}
         loading={loading}
       />

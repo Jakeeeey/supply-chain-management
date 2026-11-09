@@ -28,6 +28,7 @@ export function useStockMonitoring() {
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [classificationFilter, setClassificationFilter] = React.useState("all");
   const [viewMode, setViewMode] = React.useState<"branch" | "aggregated">("branch");
+  const [includeZeroStock, setIncludeZeroStock] = React.useState(false);
 
   const loadData = React.useCallback(async () => {
     try {
@@ -206,8 +207,8 @@ export function useStockMonitoring() {
       });
     });
 
-    // If a branch is selected, also show parts that currently have 0 stock in that branch
-    if (branchFilter !== "all") {
+    // If a branch is selected and user opted to include zero stock items, also show unstocked catalog parts
+    if (branchFilter !== "all" && includeZeroStock) {
       const selectedBranchName = branchMap.get(branchFilter) || "Selected Branch";
       parts.forEach((p) => {
         if (!recordedKeys.has(`${p.id}-${branchFilter}`)) {
@@ -245,11 +246,16 @@ export function useStockMonitoring() {
     }
 
     return result;
-  }, [stockRecords, parts, viewMode, branchFilter, classMap, branchMap]);
+  }, [stockRecords, parts, viewMode, branchFilter, includeZeroStock, classMap, branchMap]);
 
   // Filter items
   const filteredItems = React.useMemo(() => {
     return items.filter((item) => {
+      // If includeZeroStock is false, hide any item with on_hand <= 0
+      if (!includeZeroStock && item.on_hand <= 0) {
+        return false;
+      }
+
       // Search
       if (search.trim()) {
         const q = search.toLowerCase();
@@ -272,7 +278,7 @@ export function useStockMonitoring() {
 
       return true;
     });
-  }, [items, search, statusFilter, classificationFilter]);
+  }, [items, search, statusFilter, classificationFilter, includeZeroStock]);
 
   // KPIs
   const kpis: StockMonitoringKpis = React.useMemo(() => {
@@ -312,6 +318,8 @@ export function useStockMonitoring() {
     setClassificationFilter,
     viewMode,
     setViewMode,
+    includeZeroStock,
+    setIncludeZeroStock,
     reload: loadData,
   };
 }
