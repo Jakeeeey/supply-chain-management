@@ -16,7 +16,12 @@ function ensureDirectusBaseUrl(): void {
 function buildUpstreamUrl(slug: string[], request: NextRequest): string {
     ensureDirectusBaseUrl();
 
-    const upstream = new URL(`/items/${slug.join("/")}`, DIRECTUS_BASE_URL);
+    // Directus system endpoints (like /files) are at the root, whereas custom collections are under /items/
+    const firstSegment = slug[0];
+    const isSystemEndpoint = firstSegment === "files" || firstSegment === "users" || firstSegment === "folders";
+    const pathPrefix = isSystemEndpoint ? "" : "/items";
+
+    const upstream = new URL(`${pathPrefix}/${slug.join("/")}`, DIRECTUS_BASE_URL);
 
     request.nextUrl.searchParams.forEach((value, key) => {
         upstream.searchParams.set(key, value);

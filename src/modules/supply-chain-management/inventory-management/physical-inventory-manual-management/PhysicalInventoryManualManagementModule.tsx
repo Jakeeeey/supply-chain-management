@@ -71,8 +71,10 @@ import {
     CheckCircle2,
     Boxes,
     ClipboardList,
+    Download,
     Eye,
     EyeOff,
+    FileText,
     Loader2,
     Plus,
     Printer,
@@ -90,6 +92,8 @@ import {
     PhysicalInventoryTable,
 } from "./components";
 import { printAuditSheet } from "../physical-inventory-management/utils/printAuditSheet";
+import { generateAuditReportPdf } from "./utils/printAuditReportPdf";
+import type jsPDF from "jspdf";
 
 type Props = {
     initialHeaderId?: number | null;
@@ -221,6 +225,9 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
     const [isSavingDetailBatch, setIsSavingDetailBatch] = React.useState(false);
     const [openAddProductDialog, setOpenAddProductDialog] = React.useState(false);
     const [openUploadDialog, setOpenUploadDialog] = React.useState(false);
+    const [openAuditReportDialog, setOpenAuditReportDialog] = React.useState(false);
+    const [auditReportBlobUrl, setAuditReportBlobUrl] = React.useState<string | null>(null);
+    const [auditReportDoc, setAuditReportDoc] = React.useState<jsPDF | null>(null);
     const [isCheckingAttachments, setIsCheckingAttachments] = React.useState(false);
     const [isToolbarExpanded, setIsToolbarExpanded] = React.useState(false);
 
@@ -1524,6 +1531,39 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                         </Button>
 
                         <Button
+                            type="button"
+                            variant="outline"
+                            className="cursor-pointer border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/40"
+                            onClick={() => {
+                                if (!header) return;
+                                const bName = branches.find((b) => b.id == (filters.branch_id ?? header.branch_id))?.branch_name ?? "";
+                                const sName = suppliers.find((s) => s.id == (filters.supplier_id ?? header.supplier_id))?.supplier_name ?? "";
+                                const pName = priceTypes.find((pt) => pt.price_type_id == (filters.price_type_id ?? header.price_type))?.price_type_name ?? "";
+
+                                const doc = generateAuditReportPdf({
+                                    header,
+                                    groupedRows,
+                                    branchName: bName,
+                                    supplierName: sName,
+                                    priceTypeName: pName,
+                                });
+
+                                if (auditReportBlobUrl) {
+                                    URL.revokeObjectURL(auditReportBlobUrl);
+                                }
+                                const blob = doc.output("blob");
+                                const url = URL.createObjectURL(blob);
+                                setAuditReportBlobUrl(url);
+                                setAuditReportDoc(doc);
+                                setOpenAuditReportDialog(true);
+                            }}
+                            disabled={!hasLoadedDetails || !header?.id}
+                        >
+                            <FileText className="mr-2 h-4 w-4" />
+                            Audit Report
+                        </Button>
+
+                        <Button
                             variant="outline"
                             className="cursor-pointer border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-900/60 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-900/40"
                             onClick={() => setOpenUploadDialog(true)}
@@ -1993,6 +2033,72 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 isCommitted={normalizeFlagValue(header?.isComitted) === 1}
                 currentUserId={currentUser?.id}
             />
+
+            {/* Audit Report PDF Preview Modal */}
+            <AlertDialog
+                open={openAuditReportDialog}
+                onOpenChange={(open) => {
+                    setOpenAuditReportDialog(open);
+                    if (!open && auditReportBlobUrl) {
+                        URL.revokeObjectURL(auditReportBlobUrl);
+                        setAuditReportBlobUrl(null);
+                        setAuditReportDoc(null);
+                    }
+                }}
+            >
+                <AlertDialogContent
+                    style={{ maxWidth: "80rem" }}
+                    className="w-[92vw] h-[92vh] flex flex-col justify-between rounded-2xl p-6"
+                >
+                    <AlertDialogHeader className="flex flex-row items-center justify-between pb-3 border-b">
+                        <div>
+                            <AlertDialogTitle className="text-lg font-bold tracking-tight">
+                                Physical Inventory Audit Report
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-xs text-muted-foreground">
+                                Preview the generated document format below.
+                            </AlertDialogDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                className="cursor-pointer rounded-xl font-semibold border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-900/60 dark:bg-indigo-950/30 dark:text-indigo-300 hover:scale-105 active:scale-95 transition-all text-xs"
+                                onClick={() => {
+                                    if (auditReportDoc) {
+                                        const filename = `Physical_Inventory_Audit_Report_${header?.ph_no || header?.id}.pdf`;
+                                        auditReportDoc.save(filename);
+                                    }
+                                }}
+                            >
+                                <Download className="mr-1.5 h-3.5 w-3.5" />
+                                Download PDF
+                            </Button>
+                            <AlertDialogCancel className="cursor-pointer rounded-xl mt-0">
+                                Close
+                            </AlertDialogCancel>
+                        </div>
+                    </AlertDialogHeader>
+
+                    <div className="flex-1 w-full overflow-hidden my-3 rounded-xl border bg-muted/20 relative flex items-center justify-center">
+                        {auditReportBlobUrl ? (
+                            <iframe
+                                src={auditReportBlobUrl}
+                                title="Physical Inventory Audit Report PDF"
+                                className="w-full h-full border-0"
+                            />
+                        ) : (
+                            <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground text-sm">
+                                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                <span>Generating document preview...</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <AlertDialogFooter className="hidden">
+                        <AlertDialogCancel>Close</AlertDialogCancel>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {groupedRows.length > 0 && (
                 <>
