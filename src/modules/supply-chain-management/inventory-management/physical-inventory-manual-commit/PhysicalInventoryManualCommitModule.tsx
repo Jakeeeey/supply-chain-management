@@ -7,11 +7,9 @@ import { toast } from "sonner";
 import type {
     BranchRow,
     CategoryRow,
-    EligibleVariantRow,
     GroupedPhysicalInventoryChildRow,
     GroupedPhysicalInventoryRow,
     PhysicalInventoryDetailRow,
-    PhysicalInventoryDetailUpsertPayload,
     PhysicalInventoryFiltersType,
     PhysicalInventoryHeaderRow,
     PhysicalInventoryHeaderUpsertPayload,
@@ -25,7 +23,6 @@ import {
     buildEligibleVariants,
     buildGroupedPhysicalInventoryRows,
     buildVariantsFromSavedDetails,
-    cancelPhysicalInventory,
     commitPhysicalInventory,
     computeAmount,
     computeDifferenceCost,
@@ -75,7 +72,6 @@ import {
     EyeOff,
     FileText,
     Loader2,
-    Plus,
     RefreshCcw,
     Search,
     Timer,
@@ -83,7 +79,6 @@ import {
 } from "lucide-react";
 
 import {
-    PhysicalInventoryAddProductDialog,
     PhysicalInventoryUploadCountSheetDialog,
     PhysicalInventoryFilters as PhysicalInventoryFiltersCard,
     PhysicalInventoryHeader,
@@ -213,14 +208,11 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
 
     const [isBootLoading, setIsBootLoading] = React.useState(true);
     const [isLoadingProducts, setIsLoadingProducts] = React.useState(false);
-    const [isCancelling, setIsCancelling] = React.useState(false);
-    const [openCancelDialog, setOpenCancelDialog] = React.useState(false);
     const [isCommitting, setIsCommitting] = React.useState(false);
     const [openCommitDialog, setOpenCommitDialog] = React.useState(false);
     const [isHydratingRecord, setIsHydratingRecord] = React.useState(false);
     const [isRebuildingGroups, setIsRebuildingGroups] = React.useState(false);
     const [isSavingDetailBatch, setIsSavingDetailBatch] = React.useState(false);
-    const [openAddProductDialog, setOpenAddProductDialog] = React.useState(false);
     const [openUploadDialog, setOpenUploadDialog] = React.useState(false);
     const [openAuditReportDialog, setOpenAuditReportDialog] = React.useState(false);
     const [auditReportBlobUrl, setAuditReportBlobUrl] = React.useState<string | null>(null);
@@ -307,6 +299,16 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
         }
     }, []);
 
+    const hasLoadedDetails = detailRows.length > 0;
+
+    const status: PhysicalInventoryStatus = derivePhysicalInventoryStatus({
+        isCancelled: header?.isCancelled,
+        isComitted: header?.isComitted,
+    });
+
+    // In Manual Count Commit module, all records are strictly non-editable / read-only
+    const canEdit = false;
+
     // Load attachment timer on header change
     React.useEffect(() => {
         const isCommitted = normalizeFlagValue(header?.isComitted) === 1;
@@ -353,6 +355,35 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
         return () => clearInterval(interval);
     }, [earliestAttachmentTime, header?.isComitted, header?.isCancelled]);
 
+    // When timer expires, periodically check if background job marked record committed
+    React.useEffect(() => {
+        if (!isTimerExpired || !header?.id || status !== "Pending") return;
+
+        let cancelled = false;
+
+        const checkCommitted = async () => {
+            try {
+                const latest = await fetchPhysicalInventoryById(header.id);
+                if (cancelled) return;
+                if (normalizeFlagValue(latest.isComitted) === 1) {
+                    setHeader(latest);
+                    onRecordChange?.(latest);
+                }
+            } catch {
+                // Ignore background polling errors
+            }
+        };
+
+        const pollInterval = setInterval(() => {
+            void checkCommitted();
+        }, 15000);
+
+        return () => {
+            cancelled = true;
+            clearInterval(pollInterval);
+        };
+    }, [header?.id, isTimerExpired, onRecordChange, status]);
+
     React.useEffect(() => {
         if (filters.branch_id && currentUser) {
             setHeader((prev) => {
@@ -371,16 +402,6 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
             });
         }
     }, [filters.branch_id, currentUser]);
-
-    const hasLoadedDetails = detailRows.length > 0;
-
-    const status: PhysicalInventoryStatus = derivePhysicalInventoryStatus({
-        isCancelled: header?.isCancelled,
-        isComitted: header?.isComitted,
-    });
-
-    // In Manual Count Commit module, all records are strictly non-editable / read-only
-    const canEdit = false;
 
     const totalAmount = React.useMemo(() => sumHeaderTotalAmount(detailRows), [detailRows]);
 
@@ -477,21 +498,6 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
         });
     }, [activeQuickCategory, activeQuickFilter, groupedRows, productSearch]);
 
-    const eligibleVariants = React.useMemo(() => {
-        const sId = Number(filters.supplier_id);
-        const cId = Number(filters.category_id);
-        const pId = Number(filters.price_type_id);
-
-        if (!lookupBundle || !sId || !cId || !pId) return [];
-
-        return buildEligibleVariants({
-            supplierId: sId,
-            categoryId: cId,
-            priceTypeId: pId,
-            lookup: lookupBundle,
-        });
-    }, [filters.supplier_id, filters.category_id, filters.price_type_id, lookupBundle]);
-
     const rebuildGroupedRows = React.useCallback(
         (input?: RebuildInput) => {
             const activeHeader = input?.nextHeader ?? header;
@@ -586,27 +592,6 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
         },
         [branches, lookupBundle, suppliers],
     );
-
-    const reloadDetails = React.useCallback(async (id: number) => {
-        const [nextDetails] = await Promise.all([
-            fetchPhysicalInventoryDetails(id),
-            updatePhysicalInventoryHeader(id, { total_amount: 0 }),
-        ]);
-
-        const finalHeader = await updatePhysicalInventoryHeader(id, {
-            total_amount: sumHeaderTotalAmount(nextDetails)
-        });
-
-        setDetailRows(nextDetails);
-        setHeader(finalHeader);
-        onRecordChange?.(finalHeader);
-
-        rebuildGroupedRows({
-            nextDetails,
-            nextHeader: finalHeader,
-            nextFilters: filters,
-        });
-    }, [filters, onRecordChange, rebuildGroupedRows]);
 
     const flushDirtyDetails = React.useCallback(async () => {
         if (!header?.id) return;
@@ -1212,79 +1197,6 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
         suppliers,
     ]);
 
-    const handleAddProduct = React.useCallback(
-        async (variant: EligibleVariantRow) => {
-            if (!header?.id || !canEdit) return;
-
-            try {
-                // Determine family key (Parent ID or root product ID)
-                const familyKey = variant.parent_id ?? variant.product_id;
-
-                // Find all siblings in the same family from eligibleVariants
-                const familySiblings = eligibleVariants.filter((v) => {
-                    const vFamilyKey = v.parent_id ?? v.product_id;
-                    return vFamilyKey === familyKey;
-                });
-
-                // Identify which siblings are already loaded
-                const existingProductIds = new Set(detailRows.map((d) => d.product_id));
-                const siblingsToLoad = familySiblings.filter((v) => !existingProductIds.has(v.product_id));
-
-                if (siblingsToLoad.length === 0) {
-                    toast.info("All variants for this family are already added.");
-                    return;
-                }
-
-                // Fetch running inventory for specific products
-                const systemCountAllocations = new Map<number, number>();
-                
-                for (const sibling of familySiblings) {
-                    const siblingStock = runningInventoryRows
-                        .filter((r) => r.branch_id === header.branch_id && r.product_id === sibling.product_id)
-                        .reduce((acc, r) => acc + (r.running_inventory ?? 0), 0);
-                        
-                    const systemCount = convertBaseQtyToDisplayQty(siblingStock, sibling.unit_count);
-                    systemCountAllocations.set(sibling.product_id, systemCount);
-                }
-
-                const payloads: PhysicalInventoryDetailUpsertPayload[] = siblingsToLoad.map((sibling) => {
-                    const systemCount = systemCountAllocations.get(sibling.product_id) ?? 0;
-
-                    const initialPhysicalCount = 0;
-                    const variance = computeVariance(initialPhysicalCount, systemCount);
-                    const differenceCost = computeDifferenceCost(variance, sibling.unit_price);
-                    const amount = computeAmount(initialPhysicalCount, sibling.unit_price);
-
-                    return {
-                        ph_id: header.id,
-                        product_id: sibling.product_id,
-                        unit_price: sibling.unit_price,
-                        system_count: systemCount,
-                        physical_count: initialPhysicalCount,
-                        variance,
-                        difference_cost: differenceCost,
-                        amount,
-                        offset_match: 0,
-                    };
-                });
-
-                await createPhysicalInventoryDetailsBulk(payloads);
-                await reloadDetails(header.id);
-
-                if (payloads.length > 1) {
-                    toast.success(`Added ${payloads.length} variants for family "${variant.product_name}".`);
-                } else {
-                    toast.success(`Product "${variant.product_name}" added.`);
-                }
-            } catch (error) {
-                const message =
-                    error instanceof Error ? error.message : "Failed to add product family.";
-                toast.error(message);
-            }
-        },
-        [canEdit, detailRows, eligibleVariants, header, reloadDetails, runningInventoryRows]
-    );
-
     const handlePhysicalCountChange = React.useCallback(
         (row: GroupedPhysicalInventoryChildRow, value: string) => {
             const parsed = toNullableNumberInput(value);
@@ -1427,15 +1339,13 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
             return;
         }
 
-        if (!canEdit) {
-            toast.error("This PI can no longer be edited.");
+        if (status !== "Pending") {
+            toast.error("This PI is already committed or cancelled.");
             return;
         }
 
         try {
             setIsCommitting(true);
-
-            await flushDirtyDetails();
 
             const updatedHeader = await commitPhysicalInventory(header.id);
 
@@ -1483,63 +1393,7 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
         } finally {
             setIsCommitting(false);
         }
-    }, [canEdit, detailRows, filters, flushDirtyDetails, header?.id, onRecordChange, rebuildGroupedRows]);
-
-    const handleCancel = React.useCallback(async () => {
-        if (!header?.id) {
-            toast.error("This PI must exist before cancel.");
-            return;
-        }
-
-        if (!canEdit) {
-            toast.error("This PI can no longer be edited.");
-            return;
-        }
-
-        try {
-            setIsCancelling(true);
-
-            const updatedHeader = await cancelPhysicalInventory(header.id);
-
-            setHeader(updatedHeader);
-            onRecordChange?.(updatedHeader);
-
-            rebuildGroupedRows({
-                nextDetails: detailRows,
-                nextHeader: updatedHeader,
-                nextFilters: filters,
-            });
-
-            setOpenCancelDialog(false);
-            toast.success("Physical Inventory cancelled successfully.");
-        } catch (error) {
-            setOpenCancelDialog(false);
-
-            try {
-                const latestHeader = await fetchPhysicalInventoryById(header.id);
-                setHeader(latestHeader);
-                onRecordChange?.(latestHeader);
-
-                rebuildGroupedRows({
-                    nextDetails: detailRows,
-                    nextHeader: latestHeader,
-                    nextFilters: filters,
-                });
-
-                if (normalizeFlagValue(latestHeader.isCancelled) === 1) {
-                    toast.success("Physical Inventory cancelled successfully.");
-                    return;
-                }
-            } catch {
-                // Ignore secondary verification error
-            }
-
-            const message = error instanceof Error ? error.message : "Failed to cancel PI.";
-            toast.error(message);
-        } finally {
-            setIsCancelling(false);
-        }
-    }, [canEdit, detailRows, filters, header?.id, onRecordChange, rebuildGroupedRows]);
+    }, [detailRows, filters, header?.id, onRecordChange, rebuildGroupedRows, status]);
 
     if (isBootLoading || !header) {
         return (
@@ -1934,15 +1788,6 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
                             />
                             <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         </div>
-                        <Button
-                            variant="outline"
-                            className="cursor-pointer shrink-0"
-                            onClick={() => setOpenAddProductDialog(true)}
-                            disabled={!canEdit || !header?.id}
-                        >
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Product
-                        </Button>
                     </div>
                 </div>
 
@@ -2097,51 +1942,6 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
                 </AlertDialogContent>
             </AlertDialog>
 
-            <AlertDialog open={openCancelDialog} onOpenChange={setOpenCancelDialog}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Cancel Physical Inventory?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This will mark the record as cancelled and make it read-only.
-                            Use this only for invalid or abandoned draft sessions.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel
-                            className="cursor-pointer"
-                            disabled={isCancelling}
-                        >
-                            Back
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            className="cursor-pointer"
-                            onClick={(event) => {
-                                event.preventDefault();
-                                void handleCancel();
-                            }}
-                            disabled={isCancelling}
-                        >
-                            {isCancelling ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Cancelling...
-                                </>
-                            ) : (
-                                "Cancel PI"
-                            )}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
-            <PhysicalInventoryAddProductDialog
-                open={openAddProductDialog}
-                onOpenChange={setOpenAddProductDialog}
-                eligibleVariants={eligibleVariants}
-                existingProductIds={new Set(detailRows.map((d) => d.product_id))}
-                onAdd={handleAddProduct}
-            />
-
             <PhysicalInventoryUploadCountSheetDialog
                 isOpen={openUploadDialog}
                 onOpenChange={(open) => {
@@ -2271,14 +2071,6 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
                                     title="Hide search bar"
                                 >
                                     <EyeOff className="h-5 w-5" />
-                                </Button>
-                                <Button
-                                    className="rounded-full h-12 w-12 p-0 bg-primary text-primary-foreground shadow-lg shadow-primary/40 hover:scale-105 active:scale-95 transition-all shrink-0"
-                                    onClick={() => setOpenAddProductDialog(true)}
-                                    disabled={!canEdit}
-                                    title="Add Product Manually"
-                                >
-                                    <Plus className="h-6 w-6" />
                                 </Button>
                             </div>
                         </div>
