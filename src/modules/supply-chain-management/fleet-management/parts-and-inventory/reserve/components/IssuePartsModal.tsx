@@ -40,7 +40,6 @@ export function IssuePartsModal({
   open,
   onOpenChange,
   jobOrders,
-  parts: fallbackParts,
   branches,
   saving,
   onSave,

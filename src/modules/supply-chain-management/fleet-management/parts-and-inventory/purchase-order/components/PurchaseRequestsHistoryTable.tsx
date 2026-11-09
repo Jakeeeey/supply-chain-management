@@ -54,7 +54,6 @@ export function PurchaseRequestsHistoryTable({
     setCurrentPage(1);
   }, [items.length]);
 
-  const totalPages = Math.ceil(items.length / pageSize) || 1;
   const paginatedItems = React.useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return items.slice(start, start + pageSize);

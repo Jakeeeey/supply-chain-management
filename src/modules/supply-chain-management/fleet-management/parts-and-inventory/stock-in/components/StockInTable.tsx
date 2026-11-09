@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import type { Branch, StockInTransactionHeader, StockMovement } from "../types";
-import type { VehiclePart } from "../../registration/types";
 import {
   Table,
   TableBody,
