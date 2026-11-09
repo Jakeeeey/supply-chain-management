@@ -5,6 +5,7 @@ import type {
   JobOrderRef,
   JobOrdersApiResponse,
 } from "../types";
+import type { VehiclePart } from "../../registration/types";
 import { fetchVehicleParts } from "../../registration/provider/fetchProviders";
 import { fetchBranches } from "../../stock-in/provider/fetchProviders";
 
