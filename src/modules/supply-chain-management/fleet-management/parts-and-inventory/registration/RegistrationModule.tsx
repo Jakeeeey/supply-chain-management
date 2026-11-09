@@ -6,7 +6,6 @@ import type { CreateClassificationInput, CreateVehiclePartInput, UpdateVehiclePa
 import { PartRegistrationToolbar } from "./components/PartRegistrationToolbar";
 import { PartsTable } from "./components/PartsTable";
 import { PartFormDialog } from "./components/PartFormDialog";
-import { DeletePartDialog } from "./components/DeletePartDialog";
 import { QuickAddClassificationDialog } from "./components/QuickAddClassificationDialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
@@ -29,11 +28,9 @@ export default function RegistrationModule() {
     addClassification,
     addPart,
     editPart,
-    deletePart,
   } = useVehicleParts();
 
   const [formOpen, setFormOpen] = React.useState(false);
-  const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [addClassificationOpen, setAddClassificationOpen] = React.useState(false);
   const [selectedPart, setSelectedPart] = React.useState<VehiclePart | null>(null);
 
@@ -47,25 +44,11 @@ export default function RegistrationModule() {
     setFormOpen(true);
   };
 
-  const handleOpenDelete = (part: VehiclePart) => {
-    setSelectedPart(part);
-    setDeleteOpen(true);
-  };
-
   const handleSave = async (data: CreateVehiclePartInput | UpdateVehiclePartInput) => {
     if (selectedPart) {
       return await editPart(selectedPart.id, data);
     } else {
       return await addPart(data as CreateVehiclePartInput);
-    }
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!selectedPart) return;
-    const success = await deletePart(selectedPart.id);
-    if (success) {
-      setDeleteOpen(false);
-      setSelectedPart(null);
     }
   };
 
@@ -109,7 +92,6 @@ export default function RegistrationModule() {
         classifications={classifications}
         loading={loading}
         onEdit={handleOpenEdit}
-        onDelete={handleOpenDelete}
       />
 
       <PartFormDialog
@@ -128,14 +110,6 @@ export default function RegistrationModule() {
         onOpenChange={setAddClassificationOpen}
         onSave={handleSaveClassification}
         saving={saving}
-      />
-
-      <DeletePartDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        part={selectedPart}
-        deleting={saving}
-        onConfirm={handleConfirmDelete}
       />
     </div>
   );

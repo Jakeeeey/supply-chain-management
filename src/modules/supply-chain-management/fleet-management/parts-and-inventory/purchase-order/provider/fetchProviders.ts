@@ -75,3 +75,18 @@ export async function updatePurchaseRequestStatus(id: number, action: "approve" 
   return res.json();
 }
 
+export async function updatePurchaseRequest(payload: import("../types").UpdatePurchaseRequestPayload): Promise<unknown> {
+  const res = await fetch("/api/scm/fleet-management/parts-and-inventory/purchase-order", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData?.error || "Failed to update purchase request");
+  }
+
+  return res.json();
+}
+

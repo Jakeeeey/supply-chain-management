@@ -86,6 +86,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data });
     }
 
+    if (type === "plan_fuel_allocation") {
+      const planId = searchParams.get("plan_id");
+      if (!planId) {
+        return NextResponse.json(
+          { error: "plan_id is required" },
+          { status: 400 },
+        );
+      }
+      const data = await dispatchService.getPlanFuelAllocation(Number(planId));
+      return NextResponse.json({ data });
+    }
+
     if (type === "post_plan_details") {
       const planId = searchParams.get("plan_id");
       if (!planId) {
@@ -149,7 +161,6 @@ export async function POST(req: NextRequest) {
 /**
  * Updates an existing dispatch plan.
  * - `?action=update_trip` → full trip update (validated with UpdateTripSchema)
- * - default → budget-only update (validated with UpdateBudgetSchema)
  */
 export async function PATCH(req: NextRequest) {
   try {

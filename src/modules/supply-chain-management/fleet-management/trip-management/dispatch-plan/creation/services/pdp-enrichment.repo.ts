@@ -77,7 +77,7 @@ export async function fetchApprovedPreDispatchPlans(
 
   const [clustersRes, detailsRes] = await Promise.all([
     fetchItems<ClusterRow>("/items/cluster", {
-      fields: "id,cluster_name",
+      fields: "id,cluster_name,proximity_level",
       limit: -1,
     }),
     fetchItems<{ dispatch_id: number; sales_order_id: number }>(
@@ -221,7 +221,7 @@ export async function fetchApprovedPreDispatchPlans(
   // --- CONSOLIDATION CHECK END ---
 
   const clusterMap = new Map(
-    (clustersRes.data || []).map((c) => [c.id, c.cluster_name]),
+    (clustersRes.data || []).map((c) => [c.id, c]),
   );
 
   const detailCountMap = new Map<number, number>();
@@ -251,6 +251,7 @@ export async function fetchApprovedPreDispatchPlans(
     const total_items = detailCountMap.get(p.dispatch_id) || 0;
     const isStatusReady = planStatusReadyMap.get(p.dispatch_id) ?? false;
     const consolidationReason = consolidationReasonMap.get(p.dispatch_id);
+    const clusterObj = clusterMap.get(p.cluster_id || -1);
 
     let readiness_reason: EnrichedApprovedPlan["readiness_reason"] = null;
     if (!isStatusReady) readiness_reason = "Invalid Status";
@@ -258,7 +259,8 @@ export async function fetchApprovedPreDispatchPlans(
 
     return {
       ...p,
-      cluster_name: clusterMap.get(p.cluster_id || -1) || "Unassigned",
+      cluster_name: clusterObj?.cluster_name || "Unassigned",
+      cluster_proximity_level: clusterObj?.proximity_level,
       total_items,
       total_weight: planWeightMap.get(p.dispatch_id) || 0,
       is_selectable: total_items > 0 && readiness_reason === null,

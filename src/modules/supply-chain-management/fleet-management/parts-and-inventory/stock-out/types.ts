@@ -14,7 +14,7 @@ export interface OutboundMovement {
   vehicle_id?: number | { id: number; plate_number?: string; vehicle_name?: string } | null;
   reference_no?: string | null;
   remarks?: string | null;
-  created_by?: string | null;
+  created_by?: number | string | { id?: number; first_name?: string; last_name?: string; email?: string } | null;
   created_at: string;
 }
 

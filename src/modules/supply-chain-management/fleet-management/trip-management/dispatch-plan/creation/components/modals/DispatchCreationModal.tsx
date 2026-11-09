@@ -52,6 +52,9 @@ export function DispatchCreationModal({
       remarks: "",
       amount: 0,
       helpers: [{ user_id: 0 }],
+      fuel_liter: undefined,
+      budgets: [],
+      cluster_budgets: [],
     },
   });
 
@@ -81,6 +84,7 @@ export function DispatchCreationModal({
   } = useDispatchFormState({
     form,
     vehicles: masterData?.vehicles,
+    masterData,
   });
 
   const [isConfirming, setIsConfirming] = useState(false);
@@ -105,6 +109,7 @@ export function DispatchCreationModal({
   useEffect(() => {
     form.setValue("pre_dispatch_plan_ids", []);
     form.setValue("amount", 0);
+    form.setValue("cluster_budgets", []);
     setPlanDetails([]);
   }, [selectedBranch, form, setPlanDetails]);
 
@@ -112,7 +117,20 @@ export function DispatchCreationModal({
   useEffect(() => {
     if (open) {
       setTimeout(() => {
-        form.reset();
+        form.reset({
+          pre_dispatch_plan_ids: [],
+          starting_point: 0,
+          vehicle_id: 0,
+          driver_id: 0,
+          estimated_time_of_dispatch: "",
+          estimated_time_of_arrival: "",
+          remarks: "",
+          amount: 0,
+          helpers: [{ user_id: 0 }],
+          fuel_liter: undefined,
+          budgets: [],
+          cluster_budgets: [],
+        });
         onSearchChange("");
         setIsConfirming(false);
         setPendingPayload(null);
@@ -120,8 +138,6 @@ export function DispatchCreationModal({
       }, 0);
     }
   }, [open, form, onSearchChange, setPlanDetails]);
-
-
 
   const onSubmit = async (values: DispatchCreationFormValues) => {
     const payload = {
@@ -213,7 +229,8 @@ export function DispatchCreationModal({
                 />
 
                 <TripConfigurationForm 
-                  masterData={masterData} 
+                  masterData={masterData}
+                  approvedPlans={approvedPlans}
                   vehicleCapacity={vehicleCapacity}
                   disabled={isLoadingPlans}
                 />

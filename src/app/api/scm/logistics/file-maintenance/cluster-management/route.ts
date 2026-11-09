@@ -38,6 +38,7 @@ interface CoaItem {
 interface Cluster {
   id: number;
   cluster_name: string;
+  proximity_level: number;
   minimum_amount: number;
 }
 
@@ -176,7 +177,7 @@ export async function GET(req: NextRequest) {
 
     // ── List: all clusters joined with their areas & budgets ──────────
     const [clusters, allAreas, allBudgets, coas] = await Promise.all([
-      directusFetch(`${DIRECTUS_URL}${CLUSTER_ENDPOINT}?sort=-id&limit=-1`),
+      directusFetch(`${DIRECTUS_URL}${CLUSTER_ENDPOINT}?sort=proximity_level,id&limit=-1`),
       directusFetch(`${DIRECTUS_URL}${AREA_ENDPOINT}?sort=id&limit=-1`),
       directusFetch(`${DIRECTUS_URL}${COA_BUDGET_ENDPOINT}?sort=id&limit=-1`).catch(() => ({ data: [] })),
       directusFetch(`${DIRECTUS_URL}${COA_ENDPOINT}?fields=coa_id,account_title,gl_code&limit=-1`).catch(() => ({ data: [] })),
@@ -228,7 +229,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { cluster_name, minimum_amount, areas, coa_budgets } = body;
+    const { cluster_name, proximity_level, minimum_amount, areas, coa_budgets } = body;
+
+    const parsedProximity = Number(proximity_level);
+    if (!Number.isInteger(parsedProximity) || parsedProximity < 1) {
+      return json({ error: "Proximity level must be a whole number of at least 1." }, 400);
+    }
 
     // Verify company subscription limit for cluster
     const companyRes = await directusFetch(
@@ -265,15 +271,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 0. Strict duplication check (case-insensitive)
-    const existingCheck = await directusFetch(
-      `${DIRECTUS_URL}${CLUSTER_ENDPOINT}?filter[cluster_name][_icontains]=${encodeURIComponent(cluster_name)}&limit=1`
-    );
-    const isDuplicate = (existingCheck.data as Cluster[] | undefined)?.some(
+    // 0. Strict duplication check (case-insensitive cluster_name & unique proximity_level)
+    const [existingNameCheck, existingLevelCheck] = await Promise.all([
+      directusFetch(
+        `${DIRECTUS_URL}${CLUSTER_ENDPOINT}?filter[cluster_name][_icontains]=${encodeURIComponent(cluster_name)}&limit=1`
+      ),
+      directusFetch(
+        `${DIRECTUS_URL}${CLUSTER_ENDPOINT}?filter[proximity_level][_eq]=${parsedProximity}&limit=1`
+      ),
+    ]);
+
+    const isDuplicateName = (existingNameCheck.data as Cluster[] | undefined)?.some(
       (c: Cluster) => c.cluster_name?.toLowerCase().trim() === cluster_name.toLowerCase().trim()
     );
-    if (isDuplicate) {
+    if (isDuplicateName) {
       return json({ error: "This cluster name already exists (case-insensitive target)." }, 409);
+    }
+
+    const duplicateLevelCluster = (existingLevelCheck.data as Cluster[] | undefined)?.[0];
+    if (duplicateLevelCluster) {
+      return json(
+        { error: `Proximity level ${parsedProximity} is already assigned to "${duplicateLevelCluster.cluster_name}".` },
+        409
+      );
     }
 
     // 1. Create the cluster
@@ -281,7 +301,11 @@ export async function POST(req: NextRequest) {
       `${DIRECTUS_URL}${CLUSTER_ENDPOINT}`,
       {
         method: "POST",
-        body: JSON.stringify({ cluster_name, minimum_amount }),
+        body: JSON.stringify({
+          cluster_name,
+          proximity_level: parsedProximity,
+          minimum_amount,
+        }),
       },
     );
 
@@ -361,19 +385,40 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { cluster_name, minimum_amount, areas, coa_budgets } = body;
+    const { cluster_name, proximity_level, minimum_amount, areas, coa_budgets } = body;
 
-    // 0. Strict duplication check (case-insensitive)
-    const existingCheck = await directusFetch(
-      `${DIRECTUS_URL}${CLUSTER_ENDPOINT}?filter[cluster_name][_icontains]=${encodeURIComponent(cluster_name)}&limit=-1`
-    );
-    const isDuplicate = (existingCheck.data as Cluster[] | undefined)?.some(
+    const parsedProximity = Number(proximity_level);
+    if (!Number.isInteger(parsedProximity) || parsedProximity < 1) {
+      return json({ error: "Proximity level must be a whole number of at least 1." }, 400);
+    }
+
+    // 0. Strict duplication check (case-insensitive cluster_name & unique proximity_level)
+    const [existingNameCheck, existingLevelCheck] = await Promise.all([
+      directusFetch(
+        `${DIRECTUS_URL}${CLUSTER_ENDPOINT}?filter[cluster_name][_icontains]=${encodeURIComponent(cluster_name)}&limit=-1`
+      ),
+      directusFetch(
+        `${DIRECTUS_URL}${CLUSTER_ENDPOINT}?filter[proximity_level][_eq]=${parsedProximity}&limit=-1`
+      ),
+    ]);
+
+    const isDuplicateName = (existingNameCheck.data as Cluster[] | undefined)?.some(
       (c: Cluster) => 
         c.id !== parseInt(id) && 
         c.cluster_name?.toLowerCase().trim() === cluster_name.toLowerCase().trim()
     );
-    if (isDuplicate) {
+    if (isDuplicateName) {
       return json({ error: "This cluster name already exists (case-insensitive target)." }, 409);
+    }
+
+    const duplicateLevelCluster = (existingLevelCheck.data as Cluster[] | undefined)?.find(
+      (c: Cluster) => c.id !== parseInt(id) && Number(c.proximity_level) === parsedProximity
+    );
+    if (duplicateLevelCluster) {
+      return json(
+        { error: `Proximity level ${parsedProximity} is already assigned to "${duplicateLevelCluster.cluster_name}".` },
+        409
+      );
     }
 
     // 1. Update the cluster record
@@ -381,7 +426,11 @@ export async function PATCH(req: NextRequest) {
       `${DIRECTUS_URL}${CLUSTER_ENDPOINT}/${id}`,
       {
         method: "PATCH",
-        body: JSON.stringify({ cluster_name, minimum_amount }),
+        body: JSON.stringify({
+          cluster_name,
+          proximity_level: parsedProximity,
+          minimum_amount,
+        }),
       },
     );
 

@@ -1,6 +1,11 @@
 "use client";
 
-import type { EnrichedApprovedPlan, EnrichedPlanDetail, ReadinessFilter } from "../types/dispatch.types";
+import type {
+  DispatchCreationMasterData,
+  EnrichedApprovedPlan,
+  EnrichedPlanDetail,
+  ReadinessFilter,
+} from "../types/dispatch.types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { UseFormReturn } from "react-hook-form";
 import { DispatchCreationFormValues } from "../types/dispatch.schema";
@@ -15,6 +20,8 @@ interface UseDispatchFormStateOptions {
   tripId?: number | null;
   /** Master-data vehicles list for capacity lookup. */
   vehicles?: { vehicle_id: number; maximum_weight?: number | string }[];
+  /** Master-data for clusters and cluster COA budgets. */
+  masterData?: DispatchCreationMasterData | null;
 }
 
 // ─── Hook Return Shape ──────────────────────────────────────
@@ -81,6 +88,7 @@ export function useDispatchFormState({
   form,
   tripId,
   vehicles,
+  masterData,
 }: UseDispatchFormStateOptions): UseDispatchFormStateReturn {
   const [approvedPlans, setApprovedPlans] = useState<EnrichedApprovedPlan[]>([]);
   const [isLoadingPlans, setIsLoadingPlans] = useState(false);
@@ -113,11 +121,60 @@ export function useDispatchFormState({
     return Number(v?.maximum_weight || 0);
   }, [vehicles, selectedVehicleId]);
 
-  // ── Sync form amount with planDetails ─────────────────────
+  // ── Derived: winning cluster COA budgets ──────────────────
+  const isAutoApprovalEnabled = Boolean(masterData?.isAutoApprovalEnabled);
+  const selectedPlanIds = form.watch("pre_dispatch_plan_ids");
+  const winningClusterBudgets = useMemo(() => {
+    if (!isAutoApprovalEnabled) return [];
+    const ids = selectedPlanIds || [];
+    if (!ids.length || !approvedPlans.length) return [];
+
+    const selectedPdps = approvedPlans.filter((p) =>
+      ids.includes(Number(p.dispatch_id)),
+    );
+    const clusterIds = Array.from(
+      new Set(
+        selectedPdps
+          .map((p) => Number(p.cluster_id))
+          .filter((id) => Number.isFinite(id) && id > 0),
+      ),
+    );
+    if (!clusterIds.length) return [];
+
+    const clusters = (masterData?.clusters || []).filter((c) =>
+      clusterIds.includes(Number(c.id)),
+    );
+    if (!clusters.length) return [];
+
+    const winningCluster = [...clusters].sort((a, b) => {
+      const proxDiff =
+        (Number(b.proximity_level) || 0) - (Number(a.proximity_level) || 0);
+      if (proxDiff !== 0) return proxDiff;
+      return Number(b.id) - Number(a.id);
+    })[0];
+
+    if (!winningCluster) return [];
+
+    return (masterData?.cluster_coa_budgets || []).filter(
+      (b) => Number(b.cluster_id) === Number(winningCluster.id),
+    );
+  }, [isAutoApprovalEnabled, selectedPlanIds, approvedPlans, masterData?.clusters, masterData?.cluster_coa_budgets]);
+
+  // ── Sync form amount and cluster_budgets with planDetails & winningClusterBudgets ──
   useEffect(() => {
-    const total = planDetails.reduce((sum, d) => sum + (d.amount || 0), 0);
-    form.setValue("amount", total);
-  }, [planDetails, form]);
+    const invoiceTotal = planDetails.reduce((sum, d) => sum + (d.amount || 0), 0);
+    // Do NOT add clusterBudgetTotal to amount (Selected Route Value)
+    form.setValue("amount", invoiceTotal);
+    form.setValue(
+      "cluster_budgets",
+      isAutoApprovalEnabled
+        ? winningClusterBudgets.map((b) => ({
+            coa_id: Number(b.coa_id),
+            amount: Number(b.budget || 0),
+          }))
+        : [],
+    );
+  }, [planDetails, winningClusterBudgets, isAutoApprovalEnabled, form]);
 
 
   // ── Load approved plans from API ──────────────────────────

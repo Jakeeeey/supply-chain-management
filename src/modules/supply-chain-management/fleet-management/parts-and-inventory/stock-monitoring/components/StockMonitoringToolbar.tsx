@@ -7,6 +7,8 @@ import type { VehiclePartClassification } from "../../registration/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { SearchableFilterSelect } from "./SearchableFilterSelect";
 
 interface StockMonitoringToolbarProps {
@@ -22,6 +24,8 @@ interface StockMonitoringToolbarProps {
   classifications: VehiclePartClassification[];
   viewMode: "branch" | "aggregated";
   onViewModeChange: (mode: "branch" | "aggregated") => void;
+  includeZeroStock: boolean;
+  onIncludeZeroStockChange: (val: boolean) => void;
   onRefresh: () => void;
   loading: boolean;
 }
@@ -39,6 +43,8 @@ export function StockMonitoringToolbar({
   classifications,
   viewMode,
   onViewModeChange,
+  includeZeroStock,
+  onIncludeZeroStockChange,
   onRefresh,
   loading,
 }: StockMonitoringToolbarProps) {
@@ -97,6 +103,20 @@ export function StockMonitoringToolbar({
               placeholder="All Status"
               contentWidth="w-[170px]"
             />
+          </div>
+
+          <div className="flex items-center space-x-2 px-2 py-1.5 rounded-md border bg-muted/20">
+            <Checkbox
+              id="include-zero-stock"
+              checked={includeZeroStock}
+              onCheckedChange={(checked) => onIncludeZeroStockChange(Boolean(checked))}
+            />
+            <Label
+              htmlFor="include-zero-stock"
+              className="text-xs font-medium cursor-pointer select-none text-muted-foreground hover:text-foreground"
+            >
+              Include 0 Stock Items
+            </Label>
           </div>
 
           <Button variant="outline" size="icon" onClick={onRefresh} disabled={loading}>

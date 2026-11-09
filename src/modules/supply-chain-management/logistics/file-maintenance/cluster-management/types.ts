@@ -32,6 +32,7 @@ export interface COAOption {
 export interface ClusterWithAreas {
   id: number;
   cluster_name: string;
+  proximity_level: number;
   minimum_amount: number;
   areas: AreaItem[];
   coa_budgets?: ClusterCoaBudgetItem[];
@@ -57,6 +58,10 @@ export const clusterCoaBudgetSchema = z.object({
 export const clusterSchema = z
   .object({
     cluster_name: z.string().min(1, "Cluster name is required"),
+    proximity_level: z.coerce
+      .number()
+      .int("Proximity level must be a whole number")
+      .min(1, "Proximity level must be at least 1 (1 = nearest)"),
     minimum_amount: z.coerce
       .number()
       .gt(0, "Minimum amount must be greater than 0"),

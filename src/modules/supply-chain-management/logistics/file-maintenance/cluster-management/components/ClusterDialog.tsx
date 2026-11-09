@@ -62,6 +62,7 @@ export function ClusterDialog({
     resolver: zodResolver(clusterSchema) as unknown as Resolver<ClusterFormValues>,
     defaultValues: {
       cluster_name: "",
+      proximity_level: 1,
       minimum_amount: 0,
       areas: [{ province: "", city: "", baranggay: "" }],
       coa_budgets: [],
@@ -97,6 +98,7 @@ export function ClusterDialog({
       if (selectedCluster) {
         form.reset({
           cluster_name: selectedCluster.cluster_name,
+          proximity_level: selectedCluster.proximity_level ?? 1,
           minimum_amount: selectedCluster.minimum_amount,
           areas:
             selectedCluster.areas.length > 0
@@ -117,25 +119,59 @@ export function ClusterDialog({
               : [],
         });
       } else {
+        const maxProximity = allClusters.reduce(
+          (max, c) => Math.max(max, Number(c.proximity_level) || 0),
+          0
+        );
+        const nextProximityLevel = maxProximity + 1;
+
         form.reset({
           cluster_name: "",
+          proximity_level: nextProximityLevel,
           minimum_amount: 0,
           areas: [{ province: "", city: "", baranggay: "" }],
           coa_budgets: [],
         });
       }
     }
-  }, [open, selectedCluster, form]);
+  }, [open, selectedCluster, allClusters, form]);
 
   const handleOpenChange = (nextOpen: boolean) => {
     setCurrentStep(1);
     onOpenChange(nextOpen);
   };
 
+  const validateUniqueProximityLevel = (): boolean => {
+    const currentLevel = Number(form.getValues("proximity_level"));
+    if (!currentLevel || currentLevel < 1) return true;
+
+    const duplicateCluster = allClusters.find(
+      (c) =>
+        c.id !== selectedCluster?.id &&
+        Number(c.proximity_level) === currentLevel
+    );
+
+    if (duplicateCluster) {
+      form.setError("proximity_level", {
+        type: "manual",
+        message: `Proximity level ${currentLevel} is already assigned to "${duplicateCluster.cluster_name}".`,
+      });
+      return false;
+    }
+    return true;
+  };
+
   const handleNextStep = async () => {
     // Validate Step 1 fields before proceeding
-    const isStep1Valid = await form.trigger(["cluster_name", "minimum_amount", "areas"]);
-    if (!isStep1Valid) {
+    const isStep1Valid = await form.trigger([
+      "cluster_name",
+      "proximity_level",
+      "minimum_amount",
+      "areas",
+    ]);
+    const isProximityUnique = validateUniqueProximityLevel();
+
+    if (!isStep1Valid || !isProximityUnique) {
       toast.error("Please fill in all required fields in Step 1 correctly.");
       return;
     }
@@ -143,6 +179,12 @@ export function ClusterDialog({
   };
 
   const onSubmit: SubmitHandler<ClusterFormValues> = async (values) => {
+    if (!validateUniqueProximityLevel()) {
+      setCurrentStep(1);
+      toast.error("Please fix the Proximity Level conflict before saving.");
+      return;
+    }
+
     try {
       if (isEdit && selectedCluster) {
         await updateCluster(selectedCluster.id, values);
@@ -162,7 +204,12 @@ export function ClusterDialog({
 
   const onInvalid = (errors: Record<string, unknown>) => {
     // If errors are exclusively in Step 1, navigate user to Step 1
-    const hasStep1Errors = !!(errors.cluster_name || errors.minimum_amount || errors.areas);
+    const hasStep1Errors = !!(
+      errors.cluster_name ||
+      errors.proximity_level ||
+      errors.minimum_amount ||
+      errors.areas
+    );
     const hasStep2Errors = !!errors.coa_budgets;
 
     if (hasStep1Errors && !hasStep2Errors) {
@@ -215,8 +262,14 @@ export function ClusterDialog({
 
           <div
             onClick={async () => {
-              const valid = await form.trigger(["cluster_name", "minimum_amount", "areas"]);
-              if (valid) setCurrentStep(2);
+              const valid = await form.trigger([
+                "cluster_name",
+                "proximity_level",
+                "minimum_amount",
+                "areas",
+              ]);
+              const isUnique = validateUniqueProximityLevel();
+              if (valid && isUnique) setCurrentStep(2);
             }}
             className={cn(
               "flex-1 flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-colors",
@@ -271,6 +324,43 @@ export function ClusterDialog({
                             }}
                           />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* ── Proximity Level ─────────────────────────────────────── */}
+                  <FormField<ClusterFormValues>
+                    control={form.control}
+                    name="proximity_level"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          Proximity Level{" "}
+                          <span className="text-red-500">*</span>
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={1}
+                            step={1}
+                            placeholder="e.g. 1 (Nearest), 2, 3..."
+                            {...field}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              field.onChange(raw === "" ? "" : Number(raw));
+                              form.clearErrors("proximity_level");
+                            }}
+                            value={
+                              field.value === undefined || field.value === null
+                                ? ""
+                                : (field.value as number | string)
+                            }
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          1 = Nearest to base location, higher number = farther away (must be unique).
+                        </p>
                         <FormMessage />
                       </FormItem>
                     )}
