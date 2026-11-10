@@ -637,22 +637,25 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             const updatedRows = await updatePhysicalInventoryDetailsBulk(updates);
             const updatedMap = new Map(updatedRows.map((row) => [row.id, row]));
 
-            const nextDetails = detailRows.map((detail) => updatedMap.get(detail.id) ?? detail);
-
-            setDetailRows(nextDetails);
+            let nextDetailsSnapshot: typeof detailRows = [];
+            setDetailRows((prevDetails) => {
+                const merged = prevDetails.map((detail) => updatedMap.get(detail.id) ?? detail);
+                nextDetailsSnapshot = merged;
+                return merged;
+            });
             for (const id of dirtyIds) {
                 dirtyDetailIdsRef.current.delete(id);
             }
 
             const nextHeader = await updatePhysicalInventoryHeader(header.id, {
-                total_amount: sumHeaderTotalAmount(nextDetails),
+                total_amount: sumHeaderTotalAmount(nextDetailsSnapshot),
             });
 
             setHeader(nextHeader);
             onRecordChange?.(nextHeader);
 
             rebuildGroupedRows({
-                nextDetails,
+                nextDetails: nextDetailsSnapshot,
                 nextHeader,
                 nextFilters: filters,
             });
@@ -1287,6 +1290,79 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
         [canEdit, detailRows, eligibleVariants, header, reloadDetails, runningInventoryRows]
     );
 
+    const handleAddMultipleProducts = React.useCallback(
+        async (selectedVariants: EligibleVariantRow[]) => {
+            if (!header?.id || !canEdit || !selectedVariants.length) return;
+
+            try {
+                // Collect all family keys from selected representative variants
+                const selectedFamilyKeys = new Set(
+                    selectedVariants.map((v) => (v.parent_id && v.parent_id > 0 ? v.parent_id : v.product_id))
+                );
+
+                // Find all siblings in the selected families from eligibleVariants
+                const allFamilySiblings = eligibleVariants.filter((v) => {
+                    const vFamilyKey = v.parent_id && v.parent_id > 0 ? v.parent_id : v.product_id;
+                    return selectedFamilyKeys.has(vFamilyKey);
+                });
+
+                // Identify which siblings are already loaded
+                const existingProductIds = new Set(detailRows.map((d) => d.product_id));
+                const siblingsToLoad = allFamilySiblings.filter((v) => !existingProductIds.has(v.product_id));
+
+                if (siblingsToLoad.length === 0) {
+                    toast.info("All variants for the selected families are already added.");
+                    return;
+                }
+
+                // Compute running inventory allocations
+                const systemCountAllocations = new Map<number, number>();
+
+                for (const sibling of allFamilySiblings) {
+                    const siblingStock = runningInventoryRows
+                        .filter((r) => r.branch_id === header.branch_id && r.product_id === sibling.product_id)
+                        .reduce((acc, r) => acc + (r.running_inventory ?? 0), 0);
+
+                    const systemCount = convertBaseQtyToDisplayQty(siblingStock, sibling.unit_count);
+                    systemCountAllocations.set(sibling.product_id, systemCount);
+                }
+
+                const payloads: PhysicalInventoryDetailUpsertPayload[] = siblingsToLoad.map((sibling) => {
+                    const systemCount = systemCountAllocations.get(sibling.product_id) ?? 0;
+                    const initialPhysicalCount = 0;
+                    const variance = computeVariance(initialPhysicalCount, systemCount);
+                    const differenceCost = computeDifferenceCost(variance, sibling.unit_price);
+                    const amount = computeAmount(initialPhysicalCount, sibling.unit_price);
+
+                    return {
+                        ph_id: header.id,
+                        product_id: sibling.product_id,
+                        unit_price: sibling.unit_price,
+                        system_count: systemCount,
+                        physical_count: initialPhysicalCount,
+                        variance,
+                        difference_cost: differenceCost,
+                        amount,
+                        offset_match: 0,
+                    };
+                });
+
+                await createPhysicalInventoryDetailsBulk(payloads);
+                await reloadDetails(header.id);
+
+                toast.success(
+                    `Added ${payloads.length} variants across ${selectedFamilyKeys.size} product families.`
+                );
+            } catch (error) {
+                const message =
+                    error instanceof Error ? error.message : "Failed to add selected products.";
+                toast.error(message);
+                throw error;
+            }
+        },
+        [canEdit, detailRows, eligibleVariants, header, reloadDetails, runningInventoryRows]
+    );
+
     const handlePhysicalCountChange = React.useCallback(
         (row: GroupedPhysicalInventoryChildRow, value: string) => {
             const parsed = toNullableNumberInput(value);
@@ -1562,6 +1638,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                                     branchName: bName,
                                     supplierName: sName,
                                     priceTypeName: pName,
+                                    encoderName: currentUser?.name,
                                 });
 
                                 if (auditReportBlobUrl) {
@@ -2045,6 +2122,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 eligibleVariants={eligibleVariants}
                 existingProductIds={new Set(detailRows.map((d) => d.product_id))}
                 onAdd={handleAddProduct}
+                onAddMultiple={handleAddMultipleProducts}
             />
 
             <PhysicalInventoryUploadCountSheetDialog

@@ -2,6 +2,7 @@
 import type {
     PhysicalInventoryAttachmentRow,
     BranchRow,
+    BrandRow,
     CategoryRow,
     DirectusItemResponse,
     DirectusItemsResponse,
@@ -38,6 +39,7 @@ const TABLES = {
     product_per_supplier: "product_per_supplier",
     product_per_price_type: "product_per_price_type",
     categories: "categories",
+    brands: "brand",
     price_types: "price_types",
     units: "units",
     branches: "branches",
@@ -354,6 +356,14 @@ export async function fetchCategories(): Promise<CategoryRow[]> {
     }));
 }
 
+export async function fetchBrands(): Promise<BrandRow[]> {
+    return directusGetItems<BrandRow>(TABLES.brands, {
+        fields: "brand_id,brand_name",
+        sort: "brand_name",
+        limit: "-1",
+    });
+}
+
 export async function fetchUnits(): Promise<UnitRow[]> {
     return directusGetItems<UnitRow>(TABLES.units, {
         fields: "unit_id,unit_name,unit_shortcut,order",
@@ -386,13 +396,14 @@ export async function fetchProductPerPriceType(): Promise<ProductPerPriceTypeRow
 }
 
 export async function fetchProductLookupBundle(): Promise<ProductLookupBundle> {
-    const [products, product_per_supplier, product_per_price_type, categories, units] =
+    const [products, product_per_supplier, product_per_price_type, categories, units, brands] =
         await Promise.all([
             fetchProducts(),
             fetchProductPerSupplier(),
             fetchProductPerPriceType(),
             fetchCategories(),
             fetchUnits(),
+            fetchBrands(),
         ]);
 
     return {
@@ -401,6 +412,7 @@ export async function fetchProductLookupBundle(): Promise<ProductLookupBundle> {
         product_per_price_type,
         categories,
         units,
+        brands,
     };
 }
 
@@ -463,6 +475,13 @@ export function buildEligibleVariants(input: {
         unitMap.set(Number(row.unit_id), row);
     }
 
+    const brandMap = new Map<number, BrandRow>();
+    if (lookup.brands) {
+        for (const row of lookup.brands) {
+            brandMap.set(Number(row.brand_id), row);
+        }
+    }
+
     return lookup.products
         .filter((product) => {
             const familyKey = Number(product.parent_id && product.parent_id > 0
@@ -485,6 +504,10 @@ export function buildEligibleVariants(input: {
                 product.unit_of_measurement !== null
                     ? unitMap.get(Number(product.unit_of_measurement)) ?? null
                     : null;
+            const brand =
+                product.product_brand !== null
+                    ? brandMap.get(Number(product.product_brand)) ?? null
+                    : null;
 
             return {
                 product_id: productIdNum,
@@ -501,7 +524,7 @@ export function buildEligibleVariants(input: {
                 unit_count: normalizeUnitCount(product.unit_of_measurement_count),
                 unit_price: priceRow?.price ?? null,
                 cost_per_unit: product.cost_per_unit ? Number(product.cost_per_unit) : null,
-                brand_name: null,
+                brand_name: brand?.brand_name ?? null,
             };
         })
         .sort((a, b) => {
@@ -585,7 +608,7 @@ export async function fetchRunningInventoryFiltered(input: RunningInventoryFilte
 export async function fetchPhysicalInventoryList(): Promise<PhysicalInventoryHeaderRow[]> {
     return directusGetItems<PhysicalInventoryHeaderRow>(TABLES.physical_inventory, {
         fields:
-            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,total_amount,supplier_id,category_id,encoder_id",
+            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,total_amount,supplier_id,category_id,encoder_id,encoder_id.user_id,encoder_id.user_fname,encoder_id.user_lname,committed_by,committed_by.user_id,committed_by.user_fname,committed_by.user_lname",
         sort: "-id",
         limit: "-1",
     });
@@ -596,7 +619,7 @@ export async function fetchPhysicalInventoryById(
 ): Promise<PhysicalInventoryHeaderRow> {
     return directusGetItem<PhysicalInventoryHeaderRow>(TABLES.physical_inventory, id, {
         fields:
-            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,total_amount,supplier_id,category_id,encoder_id",
+            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,total_amount,supplier_id,category_id,encoder_id,encoder_id.user_id,encoder_id.user_fname,encoder_id.user_lname,committed_by,committed_by.user_id,committed_by.user_fname,committed_by.user_lname",
     });
 }
 
@@ -801,6 +824,13 @@ export function buildVariantsFromSavedDetails(input: {
         unitMap.set(row.unit_id, row);
     }
 
+    const brandMap = new Map<number, BrandRow>();
+    if (lookup.brands) {
+        for (const row of lookup.brands) {
+            brandMap.set(Number(row.brand_id), row);
+        }
+    }
+
     const priceMap = new Map<number, ProductPerPriceTypeRow>();
     for (const row of lookup.product_per_price_type) {
         if (row.price_type_id === priceTypeId) {
@@ -821,6 +851,10 @@ export function buildVariantsFromSavedDetails(input: {
                 product.unit_of_measurement !== null
                     ? unitMap.get(Number(product.unit_of_measurement)) ?? null
                     : null;
+            const brand =
+                product.product_brand !== null
+                    ? brandMap.get(Number(product.product_brand)) ?? null
+                    : null;
             const priceRow = priceMap.get(productIdNum) ?? null;
 
             return {
@@ -838,7 +872,7 @@ export function buildVariantsFromSavedDetails(input: {
                 unit_count: normalizeUnitCount(product.unit_of_measurement_count),
                 unit_price: detail?.unit_price ?? priceRow?.price ?? null,
                 cost_per_unit: product.cost_per_unit ? Number(product.cost_per_unit) : null,
-                brand_name: null,
+                brand_name: brand?.brand_name ?? null,
             };
         })
         .sort((a, b) => {
