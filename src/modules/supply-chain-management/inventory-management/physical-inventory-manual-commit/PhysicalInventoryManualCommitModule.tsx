@@ -12,7 +12,6 @@ import type {
     PhysicalInventoryDetailRow,
     PhysicalInventoryFiltersType,
     PhysicalInventoryHeaderRow,
-    PhysicalInventoryHeaderUpsertPayload,
     PhysicalInventoryStatus,
     PriceTypeRow,
     ProductLookupBundle,
@@ -20,16 +19,12 @@ import type {
     SupplierRow,
 } from "../physical-inventory-manual-management/types";
 import {
-    buildEligibleVariants,
     buildGroupedPhysicalInventoryRows,
     buildVariantsFromSavedDetails,
     commitPhysicalInventory,
     computeAmount,
     computeDifferenceCost,
     computeVariance,
-    convertBaseQtyToDisplayQty,
-    createPhysicalInventoryDetailsBulk,
-    createPhysicalInventoryHeader,
     derivePhysicalInventoryStatus,
     fetchBranches,
     fetchLatestCommittedCutoffDateByBranch,
@@ -46,7 +41,6 @@ import {
     sumHeaderTotalAmount,
     updatePhysicalInventoryDetailsBulk,
     updatePhysicalInventoryHeader,
-    validateLoadProductsFilters,
     normalizeFlagValue,
     type BulkPhysicalInventoryDetailUpdateItem,
 } from "../physical-inventory-manual-management";
@@ -207,7 +201,6 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
     const { initialHeaderId = null, onRecordChange, currentUser } = props;
 
     const [isBootLoading, setIsBootLoading] = React.useState(true);
-    const [isLoadingProducts, setIsLoadingProducts] = React.useState(false);
     const [isCommitting, setIsCommitting] = React.useState(false);
     const [openCommitDialog, setOpenCommitDialog] = React.useState(false);
     const [isHydratingRecord, setIsHydratingRecord] = React.useState(false);
@@ -620,22 +613,25 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
             const updatedRows = await updatePhysicalInventoryDetailsBulk(updates);
             const updatedMap = new Map(updatedRows.map((row) => [row.id, row]));
 
-            const nextDetails = detailRows.map((detail) => updatedMap.get(detail.id) ?? detail);
-
-            setDetailRows(nextDetails);
+            let nextDetailsSnapshot: typeof detailRows = [];
+            setDetailRows((prevDetails) => {
+                const merged = prevDetails.map((detail) => updatedMap.get(detail.id) ?? detail);
+                nextDetailsSnapshot = merged;
+                return merged;
+            });
             for (const id of dirtyIds) {
                 dirtyDetailIdsRef.current.delete(id);
             }
 
             const nextHeader = await updatePhysicalInventoryHeader(header.id, {
-                total_amount: sumHeaderTotalAmount(nextDetails),
+                total_amount: sumHeaderTotalAmount(nextDetailsSnapshot),
             });
 
             setHeader(nextHeader);
             onRecordChange?.(nextHeader);
 
             rebuildGroupedRows({
-                nextDetails,
+                nextDetails: nextDetailsSnapshot,
                 nextHeader,
                 nextFilters: filters,
             });
@@ -964,238 +960,9 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
         }
     }, [activeQuickCategory, quickCategoryOptions]);
 
-    const ensureHeaderSaved = React.useCallback(async (): Promise<PhysicalInventoryHeaderRow> => {
-        if (!header) {
-            throw new Error("Header state is not initialized.");
-        }
-
-        if (!(header.ph_no ?? "").trim()) {
-            throw new Error("PH No is required.");
-        }
-
-        if (!header.stock_type) {
-            throw new Error("Stock type is required.");
-        }
-
-        if (!filters.branch_id) {
-            throw new Error("Branch is required.");
-        }
-
-        if (!filters.supplier_id) {
-            throw new Error("Supplier is required.");
-        }
-
-        if (!filters.category_id) {
-            throw new Error("Category is required.");
-        }
-
-        if (!filters.price_type_id) {
-            throw new Error("Price type is required.");
-        }
-
-        if (!header.starting_date) {
-            throw new Error("Starting date is required.");
-        }
-
-        const payload: PhysicalInventoryHeaderUpsertPayload = {
-            ph_no: (header.ph_no ?? "").trim(),
-            cutOff_date: header.cutOff_date,
-            starting_date: header.starting_date,
-            price_type: filters.price_type_id,
-            stock_type: header.stock_type ?? "GOOD",
-            branch_id: filters.branch_id,
-            remarks: header.remarks ?? "",
-            supplier_id: filters.supplier_id,
-            category_id: filters.category_id,
-            isComitted: header.isComitted,
-            isCancelled: header.isCancelled,
-            total_amount: totalAmount,
-            is_scm: 1,
-        };
-
-        if (header.id > 0) {
-            const updated = await updatePhysicalInventoryHeader(header.id, payload);
-            setHeader(updated);
-            onRecordChange?.(updated);
-            return updated;
-        }
-
-        const created = await createPhysicalInventoryHeader(payload);
-        setHeader(created);
-        onRecordChange?.(created);
-        return created;
-    }, [
-        filters.branch_id,
-        filters.category_id,
-        filters.price_type_id,
-        filters.supplier_id,
-        header,
-        onRecordChange,
-        totalAmount,
-    ]);
-
-
     const handleLoadProducts = React.useCallback(async () => {
-        const validation = validateLoadProductsFilters(filters);
-        if (!validation.ok) {
-            toast.error(validation.message ?? "Please complete the required filters.");
-            return;
-        }
-
-        if (!canEdit) {
-            toast.error("This PI can no longer be edited.");
-            return;
-        }
-
-        if (hasLoadedDetails) {
-            toast.error("Products are already loaded.");
-            return;
-        }
-
-        if (!lookupBundle) {
-            toast.error("Product lookup data is still loading.");
-            return;
-        }
-
-        try {
-            setIsLoadingProducts(true);
-
-            const savedHeader = await ensureHeaderSaved();
-
-            const runningInventoryFilterParams = resolveRunningInventoryFilterParams({
-                branchId: filters.branch_id as number,
-                supplierId: null, // Always get branch-wide stock to ensure accurate system counts
-                categoryId: filters.category_id as number,
-                branches,
-                suppliers,
-                lookup: lookupBundle,
-                cutOffDate: savedHeader.cutOff_date,
-                startingDate: savedHeader.starting_date,
-            });
-
-            const runningInventoryCacheKey = buildRunningInventoryCacheKey(
-                runningInventoryFilterParams,
-            );
-
-            const nextRunningInventoryRows =
-                await fetchRunningInventoryFiltered(runningInventoryFilterParams);
-
-            filteredRunningInventoryCacheRef.current[runningInventoryCacheKey] =
-                nextRunningInventoryRows;
-            setRunningInventoryRows(nextRunningInventoryRows);
-
-            const eligibleVariants = buildEligibleVariants({
-                supplierId: filters.supplier_id as number,
-                categoryId: filters.category_id as number,
-                priceTypeId: filters.price_type_id as number,
-                lookup: lookupBundle,
-            });
-
-            if (!eligibleVariants.length) {
-                toast.error("No eligible products found for the selected filters.");
-                return;
-            }
-
-            // Aggregate running inventory and movement tracking by product ID across all suppliers
-            const runningInventoryByProductId = new Map<number, number>();
-            const movementByProductId = new Map<number, boolean>();
-            for (const row of nextRunningInventoryRows) {
-                const current = runningInventoryByProductId.get(row.product_id) ?? 0;
-                runningInventoryByProductId.set(row.product_id, current + (row.running_inventory ?? 0));
-                if (row.has_movement) {
-                    movementByProductId.set(row.product_id, true);
-                }
-            }
-
-            // Identify product families with movement in the selected date range
-            const familiesWithMovement = new Set<number>();
-
-            for (const variant of eligibleVariants) {
-                const familyKey = variant.parent_id ?? variant.product_id;
-                const hasMovement = movementByProductId.get(variant.product_id) === true;
-
-                if (hasMovement) {
-                    familiesWithMovement.add(familyKey);
-                }
-            }
-
-            // Compute allocations directly based on specific variant's stock
-            const systemCountAllocations = new Map<number, number>();
-
-            for (const variant of eligibleVariants) {
-                const familyKey = variant.parent_id ?? variant.product_id;
-                if (!familiesWithMovement.has(familyKey)) continue;
-
-                const stock = runningInventoryByProductId.get(variant.product_id) ?? 0;
-                const systemCount = convertBaseQtyToDisplayQty(stock, variant.unit_count);
-                systemCountAllocations.set(variant.product_id, systemCount);
-            }
-
-            // Load entire families if at least one member has movement in the date range
-            const detailPayloads = eligibleVariants
-                .filter((variant) => {
-                    const familyKey = variant.parent_id ?? variant.product_id;
-                    return familiesWithMovement.has(familyKey);
-                })
-                .map((variant) => {
-                    const systemCount = systemCountAllocations.get(variant.product_id) ?? 0;
-
-                    const initialPhysicalCount = 0;
-                    const variance = computeVariance(initialPhysicalCount, systemCount);
-                    const differenceCost = computeDifferenceCost(variance, variant.unit_price);
-                    const amount = computeAmount(initialPhysicalCount, variant.unit_price);
-
-                    return {
-                        ph_id: savedHeader.id,
-                        product_id: variant.product_id,
-                        unit_price: variant.unit_price,
-                        system_count: systemCount,
-                        physical_count: initialPhysicalCount,
-                        variance,
-                        difference_cost: differenceCost,
-                        amount,
-                        offset_match: 0,
-                    };
-                });
-
-            await createPhysicalInventoryDetailsBulk(detailPayloads);
-
-            const persistedDetails = await fetchPhysicalInventoryDetails(savedHeader.id);
-            setDetailRows(persistedDetails);
-            dirtyDetailIdsRef.current.clear();
-
-            const nextHeader = await updatePhysicalInventoryHeader(savedHeader.id, {
-                total_amount: sumHeaderTotalAmount(persistedDetails),
-            });
-
-            setHeader(nextHeader);
-            onRecordChange?.(nextHeader);
-
-            rebuildGroupedRows({
-                nextDetails: persistedDetails,
-                nextHeader,
-                nextFilters: filters,
-                nextRunningInventoryRows,
-            });
-
-            toast.success("Products loaded successfully.");
-        } catch (error) {
-            const message = error instanceof Error ? error.message : "Failed to load products.";
-            toast.error(message);
-        } finally {
-            setIsLoadingProducts(false);
-        }
-    }, [
-        branches,
-        canEdit,
-        ensureHeaderSaved,
-        filters,
-        hasLoadedDetails,
-        lookupBundle,
-        onRecordChange,
-        rebuildGroupedRows,
-        suppliers,
-    ]);
+        // In commit module, records are read-only and loaded via the PI list.
+    }, []);
 
     const handlePhysicalCountChange = React.useCallback(
         (row: GroupedPhysicalInventoryChildRow, value: string) => {
@@ -1448,7 +1215,6 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
                             disabled={
                                 !header.id ||
                                 isBootLoading ||
-                                isLoadingProducts ||
                                 isSavingDetailBatch ||
                                 isRebuildingGroups
                             }
@@ -1473,6 +1239,7 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
                                     branchName: bName,
                                     supplierName: sName,
                                     priceTypeName: pName,
+                                    encoderName: currentUser?.name,
                                 });
 
                                 if (auditReportBlobUrl) {
@@ -1580,7 +1347,7 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
                 priceTypes={priceTypes}
                 canEdit={canEdit}
                 hasLoadedDetails={hasLoadedDetails}
-                isLoadingProducts={isLoadingProducts}
+                isLoadingProducts={false}
                 onChangeBranch={(value) => {
                     setFilters((prev) => ({
                         ...prev,
@@ -1898,7 +1665,7 @@ export function PhysicalInventoryManualCommitModule(props: Props) {
 
             <PhysicalInventoryTable
                 rows={visibleGroupedRows}
-                isLoading={isBootLoading || isHydratingRecord || isLoadingProducts}
+                isLoading={isBootLoading || isHydratingRecord}
                 canEdit={canEdit}
                 onPhysicalCountChange={handlePhysicalCountChange}
                 onPhysicalCountBlur={handlePhysicalCountBlur}

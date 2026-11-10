@@ -47,6 +47,11 @@ export type RfidOnhandResult = {
     message?: string;
 };
 
+export type BrandRow = {
+    brand_id: number;
+    brand_name: string;
+};
+
 export type UnitRow = {
     unit_id: number;
     unit_name: string | null;
@@ -104,6 +109,14 @@ export type PhysicalInventoryHeaderRow = {
     supplier_id: number | null;
     category_id: number | null;
     encoder_id:
+        | number
+        | {
+            user_id: number;
+            user_fname: string | null;
+            user_lname: string | null;
+        }
+        | null;
+    committed_by?:
         | number
         | {
             user_id: number;
@@ -319,6 +332,7 @@ export type ProductLookupBundle = {
     product_per_price_type: ProductPerPriceTypeRow[];
     categories: CategoryRow[];
     units: UnitRow[];
+    brands: BrandRow[];
 };
 
 export type LoadProductsResult = {

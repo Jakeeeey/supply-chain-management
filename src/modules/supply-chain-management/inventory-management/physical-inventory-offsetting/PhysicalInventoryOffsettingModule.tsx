@@ -371,9 +371,10 @@ export function PhysicalInventoryOffsettingModule({
                 await updatePhysicalInventoryDetailsBulk(updates);
             }
 
-            // 3. Update header is_offset = 1
+            // 3. Update header is_offset (1 if there are active offset groups, 0 if all groups were deleted)
+            const nextIsOffset = normalizedGroups.length > 0 ? 1 : 0;
             const updatedHeader = await updatePhysicalInventoryHeader(header.id, {
-                is_offset: 1,
+                is_offset: nextIsOffset,
             });
 
             setHeader(updatedHeader);
@@ -458,7 +459,8 @@ export function PhysicalInventoryOffsettingModule({
 
     const isOffsettable = React.useMemo(() => {
         if (!header) return false;
-        return normalizeFlagValue(header.isCancelled) !== 1 && normalizeFlagValue(header.is_offset) !== 1;
+        // Option B: Allow offsetting reconciliation on committed PIs; lock only if cancelled
+        return normalizeFlagValue(header.isCancelled) !== 1;
     }, [header]);
 
     const canCreateGroup =
@@ -467,7 +469,12 @@ export function PhysicalInventoryOffsettingModule({
         !isCreatingGroup &&
         isOffsettable;
 
-    const canSave = Boolean(header?.id) && !isLoading && !isSaving && isOffsettable && offsetGroups.length > 0 && hasUnsavedChanges;
+    const canSave =
+        Boolean(header?.id) &&
+        !isLoading &&
+        !isSaving &&
+        isOffsettable &&
+        hasUnsavedChanges;
 
     if (isLoading || !header) {
         return (
