@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable, { type Styles } from "jspdf-autotable";
 import type { GroupedPhysicalInventoryChildRow, GroupedPhysicalInventoryRow, PhysicalInventoryHeaderRow } from "../types";
+import { normalizeFlagValue } from "./compute";
 
 export type GenerateAuditReportPdfArgs = {
     header: PhysicalInventoryHeaderRow;
@@ -8,6 +9,7 @@ export type GenerateAuditReportPdfArgs = {
     branchName: string;
     supplierName: string;
     priceTypeName: string;
+    encoderName?: string | null;
 };
 
 function fmtNumber(value: number): string {
@@ -17,7 +19,39 @@ function fmtNumber(value: number): string {
 }
 
 export function generateAuditReportPdf(args: GenerateAuditReportPdfArgs): jsPDF {
-    const { header, groupedRows, branchName, supplierName, priceTypeName } = args;
+    const { header, groupedRows, branchName, supplierName, priceTypeName, encoderName: explicitEncoderName } = args;
+
+    // Resolve encoder name from header.encoder_id or explicit argument
+    let resolvedEncoderName = explicitEncoderName?.trim() || "";
+    if (!resolvedEncoderName && header.encoder_id) {
+        if (typeof header.encoder_id === "object" && header.encoder_id !== null) {
+            const fname = header.encoder_id.user_fname?.trim() || "";
+            const lname = header.encoder_id.user_lname?.trim() || "";
+            resolvedEncoderName = [fname, lname].filter(Boolean).join(" ");
+            if (!resolvedEncoderName && header.encoder_id.user_id) {
+                resolvedEncoderName = `USER #${header.encoder_id.user_id}`;
+            }
+        } else if (typeof header.encoder_id === "number") {
+            resolvedEncoderName = `USER #${header.encoder_id}`;
+        }
+    }
+
+    // Resolve committer (Posted By)
+    const isCommitted = normalizeFlagValue(header.isComitted as unknown as Parameters<typeof normalizeFlagValue>[0]) === 1;
+    let resolvedCommitterName = "";
+    const isAutoCommitted = isCommitted && !header.committed_by;
+    if (isCommitted && header.committed_by) {
+        if (typeof header.committed_by === "object" && header.committed_by !== null) {
+            const fname = header.committed_by.user_fname?.trim() || "";
+            const lname = header.committed_by.user_lname?.trim() || "";
+            resolvedCommitterName = [fname, lname].filter(Boolean).join(" ");
+            if (!resolvedCommitterName && header.committed_by.user_id) {
+                resolvedCommitterName = `USER #${header.committed_by.user_id}`;
+            }
+        } else if (typeof header.committed_by === "number") {
+            resolvedCommitterName = `USER #${header.committed_by}`;
+        }
+    }
 
     const doc = new jsPDF({
         orientation: "portrait",
@@ -129,16 +163,21 @@ export function generateAuditReportPdf(args: GenerateAuditReportPdfArgs): jsPDF 
         const tableBody: Array<Array<{ content: string; styles?: Partial<Styles> }>> = [];
 
         for (const group of brandRows) {
-            // Find base row or highest system count
-            let maxSysRow = group.rows[0];
-            for (const r of group.rows) {
-                if ((r.system_count || 0) > (maxSysRow?.system_count || 0)) {
-                    maxSysRow = r;
-                }
+            // Build multi-line system display reflecting all tracked active UOMs with system count
+            const nonZeroSysRows = group.rows.filter((r) => (r.system_count ?? 0) !== 0);
+            let sysDisplay: string;
+            if (nonZeroSysRows.length > 0) {
+                sysDisplay = nonZeroSysRows
+                    .map((r) => {
+                        const uom = (r.unit_shortcut || r.unit_name || "PCS").toUpperCase();
+                        return `${fmtNumber(r.system_count || 0)} ${uom}`;
+                    })
+                    .join("\n");
+            } else {
+                const baseRow = group.rows.find((r) => r.parent_id === null) || group.rows[0];
+                const baseUom = (baseRow?.unit_shortcut || baseRow?.unit_name || "PCS").toUpperCase();
+                sysDisplay = `0 ${baseUom}`;
             }
-
-            const baseUom = (maxSysRow?.unit_shortcut || maxSysRow?.unit_name || "PCS").toUpperCase();
-            const sysDisplay = `${fmtNumber(maxSysRow?.system_count || 0)} ${baseUom}`;
 
             const boxChild = brandHasBox ? findUomChild(group.rows, ["BOX", "CASE", "BX"]) : null;
             const packChild = brandHasPack ? findUomChild(group.rows, ["PACK", "PCK", "PK"]) : null;
@@ -247,7 +286,7 @@ export function generateAuditReportPdf(args: GenerateAuditReportPdfArgs): jsPDF 
     }
 
     // 4. Sign-off Footer
-    if (currentY > 240) {
+    if (currentY > 230) {
         doc.addPage();
         currentY = 20;
     }
@@ -256,11 +295,16 @@ export function generateAuditReportPdf(args: GenerateAuditReportPdfArgs): jsPDF 
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0, 0, 0);
 
-    const footerYLine = currentY + 15;
-    const footerYText = currentY + 20;
+    const footerYLine = currentY + 22;
+    const footerYText = currentY + 26;
 
     // Counted By
     doc.text("Counted By:", 14, currentY + 5);
+    if (resolvedEncoderName) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.text(resolvedEncoderName.toUpperCase(), 14, footerYLine - 2);
+    }
     doc.line(14, footerYLine, 64, footerYLine);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
@@ -279,10 +323,23 @@ export function generateAuditReportPdf(args: GenerateAuditReportPdfArgs): jsPDF 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.text("Posted By:", 146, currentY + 5);
-    doc.line(146, footerYLine, 196, footerYLine);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.text("Signature over Printed Name", 146, footerYText);
+    if (isAutoCommitted) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.setTextColor(100, 100, 100);
+        doc.text("SYSTEM AUTO-COMMIT", 146, footerYLine - 2);
+        doc.setTextColor(0, 0, 0);
+    } else {
+        if (resolvedCommitterName) {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            doc.text(resolvedCommitterName.toUpperCase(), 146, footerYLine - 2);
+        }
+        doc.line(146, footerYLine, 196, footerYLine);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.text("Signature over Printed Name", 146, footerYText);
+    }
 
     return doc;
 }

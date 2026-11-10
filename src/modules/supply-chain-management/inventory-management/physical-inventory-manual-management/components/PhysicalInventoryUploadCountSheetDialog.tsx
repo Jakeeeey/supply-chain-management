@@ -12,16 +12,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
     Check,
     ChevronLeft,
     ChevronRight,
@@ -33,7 +23,6 @@ import {
     Loader2,
     RotateCcw,
     RotateCw,
-    Trash2,
     UploadCloud,
     X,
     ZoomIn,
@@ -44,7 +33,6 @@ import {
     fetchPhysicalInventoryAttachments,
     uploadCountSheetFile,
     createPhysicalInventoryAttachment,
-    deletePhysicalInventoryAttachment,
 } from "../providers/fetchProvider";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -144,8 +132,6 @@ export function PhysicalInventoryUploadCountSheetDialog({
     >([]);
     const [isLoading, setIsLoading] = React.useState(false);
     const [isUploading, setIsUploading] = React.useState(false);
-    const [attachmentToDelete, setAttachmentToDelete] = React.useState<number | null>(null);
-    const [isDeleting, setIsDeleting] = React.useState(false);
     const [isDragging, setIsDragging] = React.useState(false);
 
     // Canvas viewer state (for the active selected file)
@@ -355,22 +341,6 @@ export function PhysicalInventoryUploadCountSheetDialog({
         }
     };
 
-    const handleDelete = async () => {
-        if (!attachmentToDelete || isReadOnly) return;
-        setIsDeleting(true);
-        try {
-            await deletePhysicalInventoryAttachment(attachmentToDelete);
-            toast.success("Attachment deleted successfully.");
-            setAttachmentToDelete(null);
-            void loadAttachments();
-        } catch (error) {
-            console.error("Failed to delete attachment:", error);
-            toast.error("Failed to delete attachment.");
-        } finally {
-            setIsDeleting(false);
-        }
-    };
-
     const isReadOnly = !canEdit || Boolean(isCommitted);
     const isPresetScale = (ZOOM_PRESETS as readonly number[]).includes(scale);
     const zoomPercent = `${Math.round(scale * 100)}%`;
@@ -573,24 +543,6 @@ export function PhysicalInventoryUploadCountSheetDialog({
                                                     <span className="shrink-0">{sizeStr}</span>
                                                 </div>
                                                 <p className="text-[10px] text-muted-foreground/80 mt-0.5">{formattedDate}</p>
-                                            </div>
-
-                                            {/* Action buttons on card hover */}
-                                            <div className="flex items-center gap-0.5 shrink-0 self-center">
-                                                {!isReadOnly && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setAttachmentToDelete(att.id);
-                                                        }}
-                                                        title="Delete attachment"
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                )}
                                             </div>
                                         </div>
                                     );
@@ -815,34 +767,6 @@ export function PhysicalInventoryUploadCountSheetDialog({
                     </div>
                 </DialogContent>
             </Dialog>
-
-            {/* ── Delete Confirmation Dialog ────────────────────────────── */}
-            <AlertDialog
-                open={attachmentToDelete !== null}
-                onOpenChange={(open) => !open && setAttachmentToDelete(null)}
-            >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Attachment</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Are you sure you want to delete this count sheet attachment? This action cannot be undone.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeleting} className="cursor-pointer">
-                            Cancel
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={handleDelete}
-                            disabled={isDeleting}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 cursor-pointer"
-                        >
-                            {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Delete
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
         </>
     );
 }
