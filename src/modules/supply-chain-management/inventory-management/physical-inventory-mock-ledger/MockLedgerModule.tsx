@@ -1076,20 +1076,20 @@ export function MockLedgerModule(props: Props) {
 
             // Aggregate running inventory by product ID across all suppliers
             const runningInventoryByProductId = new Map<number, number>();
+            const productsWithMovement = new Set<number>();
             for (const row of nextRunningInventoryRows) {
                 const current = runningInventoryByProductId.get(row.product_id) ?? 0;
                 runningInventoryByProductId.set(row.product_id, current + (row.running_inventory ?? 0));
+                productsWithMovement.add(row.product_id);
             }
 
-            // Identify product families with stock
-            const familiesWithStock = new Set<number>();
+            // Identify product families with movements
+            const familiesWithMovements = new Set<number>();
 
             for (const variant of eligibleVariants) {
                 const familyKey = variant.parent_id ?? variant.product_id;
-                const stock = runningInventoryByProductId.get(variant.product_id) ?? 0;
-
-                if (stock !== 0) {
-                    familiesWithStock.add(familyKey);
+                if (productsWithMovement.has(variant.product_id)) {
+                    familiesWithMovements.add(familyKey);
                 }
             }
 
@@ -1098,18 +1098,18 @@ export function MockLedgerModule(props: Props) {
 
             for (const variant of eligibleVariants) {
                 const familyKey = variant.parent_id ?? variant.product_id;
-                if (!familiesWithStock.has(familyKey)) continue;
+                if (!familiesWithMovements.has(familyKey)) continue;
 
                 const stock = runningInventoryByProductId.get(variant.product_id) ?? 0;
                 const systemCount = convertBaseQtyToDisplayQty(stock, variant.unit_count);
                 systemCountAllocations.set(variant.product_id, systemCount);
             }
 
-            // Load entire families if at least one member has stock
+            // Load entire families if at least one member has movement
             const detailPayloads = eligibleVariants
                 .filter((variant) => {
                     const familyKey = variant.parent_id ?? variant.product_id;
-                    return familiesWithStock.has(familyKey);
+                    return familiesWithMovements.has(familyKey);
                 })
                 .map((variant) => {
                     const systemCount = systemCountAllocations.get(variant.product_id) ?? 0;
