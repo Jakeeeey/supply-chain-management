@@ -182,7 +182,7 @@ export function DriverModal({
                 license_verified_by: editingDriver.license_verified_by || null,
                 license_verified_at: editingDriver.license_verified_at || null,
             });
-            setIsVerified(!!editingDriver.license_verified_by);
+            setIsVerified(editingDriver.is_verified !== undefined && editingDriver.is_verified !== null ? Boolean(editingDriver.is_verified) : !!editingDriver.license_verified_by);
             if (editingDriver.license_file_record?.file_ref) {
                 const directusBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
                 setPreviewUrl(`${directusBase}/assets/${editingDriver.license_file_record.file_ref}`);

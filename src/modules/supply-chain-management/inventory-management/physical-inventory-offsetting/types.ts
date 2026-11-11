@@ -11,6 +11,8 @@ export type OffsettingSelectableRow = GroupedPhysicalInventoryChildRow & {
     row_id: number;
     product_label: string;
     selection_amount: number;
+    offset_match?: number | null;
+    offset_remarks?: string | null;
 };
 
 export type PhysicalInventoryOffsetGroup = {
@@ -22,7 +24,8 @@ export type PhysicalInventoryOffsetGroup = {
     short_total: number;
     over_total: number;
     difference: number;
-    remarks?: string;
+    offset_match?: number;
+    remarks?: string | null;
 };
 
 export type PhysicalInventoryOffsettingReportMeta = {
@@ -36,5 +39,6 @@ export type PhysicalInventoryOffsettingSnapshot = {
     header: PhysicalInventoryHeaderRow;
     status: PhysicalInventoryStatus;
     rows: OffsettingSelectableRow[];
+    initialGroups: PhysicalInventoryOffsetGroup[];
     reportMeta: PhysicalInventoryOffsettingReportMeta;
 };

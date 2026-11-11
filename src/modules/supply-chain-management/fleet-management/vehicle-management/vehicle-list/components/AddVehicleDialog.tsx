@@ -412,7 +412,7 @@ export function AddVehicleDialog({
       const created = await onCreate(payload);
 
       // Upload attached registration documents if any
-      const vehicleId = created?.vehicle_id;
+      const vehicleId = Number(created?.vehicle_id ?? (created as Record<string, unknown>)?.id ?? 0) || undefined;
       if (vehicleId && pendingDocs.length > 0) {
         for (const doc of pendingDocs) {
           if (!doc.file) continue;

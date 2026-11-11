@@ -26,7 +26,6 @@ import {
     buildGroupedPhysicalInventoryRows,
     buildVariantsFromSavedDetails,
     cancelPhysicalInventory,
-    commitPhysicalInventory,
     canEditPhysicalInventory,
     computeAmount,
     computeDifferenceCost,
@@ -68,17 +67,22 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
     Ban,
-    CheckCircle2,
+    Clock,
     Boxes,
     ClipboardList,
+    Download,
+    Eye,
+    EyeOff,
+    FileText,
     Loader2,
     Plus,
     Printer,
     UploadCloud,
     RefreshCcw,
     Search,
+    Timer,
+    X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 import {
     PhysicalInventoryAddProductDialog,
@@ -88,6 +92,8 @@ import {
     PhysicalInventoryTable,
 } from "./components";
 import { printAuditSheet } from "../physical-inventory-management/utils/printAuditSheet";
+import { generateAuditReportPdf } from "./utils/printAuditReportPdf";
+import type jsPDF from "jspdf";
 
 type Props = {
     initialHeaderId?: number | null;
@@ -212,41 +218,20 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
     const [isLoadingProducts, setIsLoadingProducts] = React.useState(false);
     const [isCancelling, setIsCancelling] = React.useState(false);
     const [openCancelDialog, setOpenCancelDialog] = React.useState(false);
-    const [isCommitting, setIsCommitting] = React.useState(false);
-    const [openCommitDialog, setOpenCommitDialog] = React.useState(false);
     const [isHydratingRecord, setIsHydratingRecord] = React.useState(false);
     const [isRebuildingGroups, setIsRebuildingGroups] = React.useState(false);
     const [isSavingDetailBatch, setIsSavingDetailBatch] = React.useState(false);
     const [openAddProductDialog, setOpenAddProductDialog] = React.useState(false);
     const [openUploadDialog, setOpenUploadDialog] = React.useState(false);
-    const [isCheckingAttachments, setIsCheckingAttachments] = React.useState(false);
-    const [isScrolled, setIsScrolled] = React.useState(false);
+    const [openAuditReportDialog, setOpenAuditReportDialog] = React.useState(false);
+    const [auditReportBlobUrl, setAuditReportBlobUrl] = React.useState<string | null>(null);
+    const [auditReportDoc, setAuditReportDoc] = React.useState<jsPDF | null>(null);
+    const [isToolbarExpanded, setIsToolbarExpanded] = React.useState(false);
 
-    React.useEffect(() => {
-        let ticking = false;
-
-        const handleScroll = () => {
-            if (!ticking) {
-                window.requestAnimationFrame(() => {
-                    const sentinel = document.getElementById("pi-manual-product-finder-sentinel");
-                    if (sentinel) {
-                        const rect = sentinel.getBoundingClientRect();
-                        const shouldBeScrolled = rect.bottom < 0;
-
-                        setIsScrolled(prev => {
-                            if (prev !== shouldBeScrolled) return shouldBeScrolled;
-                            return prev;
-                        });
-                    }
-                    ticking = false;
-                });
-                ticking = true;
-            }
-        };
-
-        document.addEventListener("scroll", handleScroll, { capture: true, passive: true });
-        return () => document.removeEventListener("scroll", handleScroll, true);
-    }, []);
+    // Auto-commit countdown states
+    const [earliestAttachmentTime, setEarliestAttachmentTime] = React.useState<number | null>(null);
+    const [remainingSeconds, setRemainingSeconds] = React.useState<number | null>(null);
+    const [isTimerExpired, setIsTimerExpired] = React.useState(false);
 
     const [branches, setBranches] = React.useState<BranchRow[]>([]);
     const [suppliers, setSuppliers] = React.useState<SupplierRow[]>([]);
@@ -278,6 +263,96 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
     >("ALL");
     const [activeQuickCategory, setActiveQuickCategory] = React.useState<string>("ALL");
 
+    // Helper to refresh attachment info and calculate auto-commit target
+    const refreshAttachmentTimer = React.useCallback(async (phId: number) => {
+        try {
+            const attachments = await fetchPhysicalInventoryAttachments(phId);
+            if (!attachments || attachments.length === 0) {
+                setEarliestAttachmentTime(null);
+                setRemainingSeconds(null);
+                setIsTimerExpired(false);
+                return;
+            }
+
+            // Find earliest attachment created_at (ascending order)
+            const sorted = [...attachments].sort((a, b) => {
+                const aTime = a.created_at ? new Date(a.created_at).getTime() : Infinity;
+                const bTime = b.created_at ? new Date(b.created_at).getTime() : Infinity;
+                return aTime - bTime;
+            });
+
+            const earliest = sorted[0];
+            if (!earliest?.created_at) {
+                setEarliestAttachmentTime(null);
+                setRemainingSeconds(null);
+                setIsTimerExpired(false);
+                return;
+            }
+
+            // Safe parsing considering Philippine Time (GMT+8) / ISO
+            const rawIso = earliest.created_at;
+            const createdMs = new Date(rawIso).getTime();
+            const cleanIso = rawIso.replace("Z", "");
+            const phParsedMs = new Date(`${cleanIso}+08:00`).getTime();
+            const effectiveMs = Math.min(
+                Number.isFinite(createdMs) ? createdMs : Infinity,
+                Number.isFinite(phParsedMs) ? phParsedMs : Infinity
+            );
+
+            if (Number.isFinite(effectiveMs) && effectiveMs > 0) {
+                setEarliestAttachmentTime(effectiveMs);
+            }
+        } catch {
+            setEarliestAttachmentTime(null);
+        }
+    }, []);
+
+    // Load attachment timer on header change
+    React.useEffect(() => {
+        const isCommitted = normalizeFlagValue(header?.isComitted) === 1;
+        const isCancelled = normalizeFlagValue(header?.isCancelled) === 1;
+
+        if (header?.id && header.id > 0 && !isCommitted && !isCancelled) {
+            void refreshAttachmentTimer(header.id);
+        } else {
+            setEarliestAttachmentTime(null);
+            setRemainingSeconds(null);
+            setIsTimerExpired(false);
+        }
+    }, [header?.id, header?.isComitted, header?.isCancelled, refreshAttachmentTimer]);
+
+    // Active countdown ticker
+    React.useEffect(() => {
+        const isCommitted = normalizeFlagValue(header?.isComitted) === 1;
+        const isCancelled = normalizeFlagValue(header?.isCancelled) === 1;
+
+        if (!earliestAttachmentTime || isCommitted || isCancelled) {
+            setRemainingSeconds(null);
+            setIsTimerExpired(false);
+            return;
+        }
+
+        const targetTime = earliestAttachmentTime + 8 * 60 * 60 * 1000;
+
+        const updateTimer = () => {
+            const now = Date.now();
+            const diffSeconds = Math.floor((targetTime - now) / 1000);
+
+            if (diffSeconds <= 0) {
+                setRemainingSeconds(0);
+                setIsTimerExpired(true);
+            } else {
+                setRemainingSeconds(diffSeconds);
+                setIsTimerExpired(false);
+            }
+        };
+
+        updateTimer();
+        const interval = setInterval(updateTimer, 1000);
+
+        return () => clearInterval(interval);
+    }, [earliestAttachmentTime, header?.isComitted, header?.isCancelled]);
+
     React.useEffect(() => {
         if (filters.branch_id && currentUser) {
             setHeader((prev) => {
@@ -286,7 +361,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 if (prev.date_encoded && prev.encoder_id) return prev;
                 return {
                     ...prev,
-                    date_encoded: new Date().toISOString(),
+                    date_encoded: nowInputValue(),
                     encoder_id: {
                         user_id: currentUser.id,
                         user_fname: currentUser.name,
@@ -562,22 +637,25 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             const updatedRows = await updatePhysicalInventoryDetailsBulk(updates);
             const updatedMap = new Map(updatedRows.map((row) => [row.id, row]));
 
-            const nextDetails = detailRows.map((detail) => updatedMap.get(detail.id) ?? detail);
-
-            setDetailRows(nextDetails);
+            let nextDetailsSnapshot: typeof detailRows = [];
+            setDetailRows((prevDetails) => {
+                const merged = prevDetails.map((detail) => updatedMap.get(detail.id) ?? detail);
+                nextDetailsSnapshot = merged;
+                return merged;
+            });
             for (const id of dirtyIds) {
                 dirtyDetailIdsRef.current.delete(id);
             }
 
             const nextHeader = await updatePhysicalInventoryHeader(header.id, {
-                total_amount: sumHeaderTotalAmount(nextDetails),
+                total_amount: sumHeaderTotalAmount(nextDetailsSnapshot),
             });
 
             setHeader(nextHeader);
             onRecordChange?.(nextHeader);
 
             rebuildGroupedRows({
-                nextDetails,
+                nextDetails: nextDetailsSnapshot,
                 nextHeader,
                 nextFilters: filters,
             });
@@ -620,9 +698,10 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 if (initialHeaderId && initialHeaderId > 0) {
                     setIsHydratingRecord(true);
 
-                    const [existingHeader, existingDetails] = await Promise.all([
+                    const [existingHeader, existingDetails, existingAttachments] = await Promise.all([
                         fetchPhysicalInventoryById(initialHeaderId),
                         fetchPhysicalInventoryDetails(initialHeaderId),
+                        fetchPhysicalInventoryAttachments(initialHeaderId),
                     ]);
 
                     if (cancelled) return;
@@ -637,6 +716,31 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                     setHeader(existingHeader);
                     setDetailRows(existingDetails);
                     setFilters(nextFilters);
+
+                    // Compute earliest attachment timestamp immediately
+                    if (existingAttachments && existingAttachments.length > 0) {
+                        const sorted = [...existingAttachments].sort((a, b) => {
+                            const aTime = a.created_at ? new Date(a.created_at).getTime() : Infinity;
+                            const bTime = b.created_at ? new Date(b.created_at).getTime() : Infinity;
+                            return aTime - bTime;
+                        });
+                        const earliest = sorted[0];
+                        if (earliest?.created_at) {
+                            const rawIso = earliest.created_at;
+                            const createdMs = new Date(rawIso).getTime();
+                            const cleanIso = rawIso.replace("Z", "");
+                            const phParsedMs = new Date(`${cleanIso}+08:00`).getTime();
+                            const effectiveMs = Math.min(
+                                Number.isFinite(createdMs) ? createdMs : Infinity,
+                                Number.isFinite(phParsedMs) ? phParsedMs : Infinity
+                            );
+                            if (Number.isFinite(effectiveMs) && effectiveMs > 0) {
+                                setEarliestAttachmentTime(effectiveMs);
+                            }
+                        }
+                    } else {
+                        setEarliestAttachmentTime(null);
+                    }
 
                     if (existingHeader.supplier_id) {
                         const scopedCategories = getSupplierScopedCategoriesFromLookup(
@@ -1186,6 +1290,79 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
         [canEdit, detailRows, eligibleVariants, header, reloadDetails, runningInventoryRows]
     );
 
+    const handleAddMultipleProducts = React.useCallback(
+        async (selectedVariants: EligibleVariantRow[]) => {
+            if (!header?.id || !canEdit || !selectedVariants.length) return;
+
+            try {
+                // Collect all family keys from selected representative variants
+                const selectedFamilyKeys = new Set(
+                    selectedVariants.map((v) => (v.parent_id && v.parent_id > 0 ? v.parent_id : v.product_id))
+                );
+
+                // Find all siblings in the selected families from eligibleVariants
+                const allFamilySiblings = eligibleVariants.filter((v) => {
+                    const vFamilyKey = v.parent_id && v.parent_id > 0 ? v.parent_id : v.product_id;
+                    return selectedFamilyKeys.has(vFamilyKey);
+                });
+
+                // Identify which siblings are already loaded
+                const existingProductIds = new Set(detailRows.map((d) => d.product_id));
+                const siblingsToLoad = allFamilySiblings.filter((v) => !existingProductIds.has(v.product_id));
+
+                if (siblingsToLoad.length === 0) {
+                    toast.info("All variants for the selected families are already added.");
+                    return;
+                }
+
+                // Compute running inventory allocations
+                const systemCountAllocations = new Map<number, number>();
+
+                for (const sibling of allFamilySiblings) {
+                    const siblingStock = runningInventoryRows
+                        .filter((r) => r.branch_id === header.branch_id && r.product_id === sibling.product_id)
+                        .reduce((acc, r) => acc + (r.running_inventory ?? 0), 0);
+
+                    const systemCount = convertBaseQtyToDisplayQty(siblingStock, sibling.unit_count);
+                    systemCountAllocations.set(sibling.product_id, systemCount);
+                }
+
+                const payloads: PhysicalInventoryDetailUpsertPayload[] = siblingsToLoad.map((sibling) => {
+                    const systemCount = systemCountAllocations.get(sibling.product_id) ?? 0;
+                    const initialPhysicalCount = 0;
+                    const variance = computeVariance(initialPhysicalCount, systemCount);
+                    const differenceCost = computeDifferenceCost(variance, sibling.unit_price);
+                    const amount = computeAmount(initialPhysicalCount, sibling.unit_price);
+
+                    return {
+                        ph_id: header.id,
+                        product_id: sibling.product_id,
+                        unit_price: sibling.unit_price,
+                        system_count: systemCount,
+                        physical_count: initialPhysicalCount,
+                        variance,
+                        difference_cost: differenceCost,
+                        amount,
+                        offset_match: 0,
+                    };
+                });
+
+                await createPhysicalInventoryDetailsBulk(payloads);
+                await reloadDetails(header.id);
+
+                toast.success(
+                    `Added ${payloads.length} variants across ${selectedFamilyKeys.size} product families.`
+                );
+            } catch (error) {
+                const message =
+                    error instanceof Error ? error.message : "Failed to add selected products.";
+                toast.error(message);
+                throw error;
+            }
+        },
+        [canEdit, detailRows, eligibleVariants, header, reloadDetails, runningInventoryRows]
+    );
+
     const handlePhysicalCountChange = React.useCallback(
         (row: GroupedPhysicalInventoryChildRow, value: string) => {
             const parsed = toNullableNumberInput(value);
@@ -1299,64 +1476,6 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
         }
     }, [filters, header, rebuildGroupedRows, refreshRunningInventoryReadModel]);
 
-
-    const handleCommitButtonClick = React.useCallback(async () => {
-        if (!header?.id) {
-            toast.error("This PI must exist before commit.");
-            return;
-        }
-
-        try {
-            setIsCheckingAttachments(true);
-            const attachments = await fetchPhysicalInventoryAttachments(header.id);
-            if (!attachments || attachments.length === 0) {
-                toast.error("Please upload a count sheet before committing this Physical Inventory.");
-                return;
-            }
-            setOpenCommitDialog(true);
-        } catch (error) {
-            console.error("Failed to check attachments before commit:", error);
-            toast.error("Please upload a count sheet before committing this Physical Inventory.");
-        } finally {
-            setIsCheckingAttachments(false);
-        }
-    }, [header?.id]);
-
-    const handleCommit = React.useCallback(async () => {
-        if (!header?.id) {
-            toast.error("This PI must exist before commit.");
-            return;
-        }
-
-        if (!canEdit) {
-            toast.error("This PI can no longer be edited.");
-            return;
-        }
-
-        try {
-            setIsCommitting(true);
-
-            const updatedHeader = await commitPhysicalInventory(header.id);
-
-            setHeader(updatedHeader);
-            onRecordChange?.(updatedHeader);
-
-            rebuildGroupedRows({
-                nextDetails: detailRows,
-                nextHeader: updatedHeader,
-                nextFilters: filters,
-            });
-
-            setOpenCommitDialog(false);
-            toast.success("Physical Inventory committed successfully.");
-        } catch (error) {
-            const message = error instanceof Error ? error.message : "Failed to commit PI.";
-            toast.error(message);
-        } finally {
-            setIsCommitting(false);
-        }
-    }, [canEdit, detailRows, filters, header?.id, onRecordChange, rebuildGroupedRows]);
-
     const handleCancel = React.useCallback(async () => {
         if (!header?.id) {
             toast.error("This PI must exist before cancel.");
@@ -1385,6 +1504,27 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
             setOpenCancelDialog(false);
             toast.success("Physical Inventory cancelled successfully.");
         } catch (error) {
+            setOpenCancelDialog(false);
+
+            try {
+                const latestHeader = await fetchPhysicalInventoryById(header.id);
+                setHeader(latestHeader);
+                onRecordChange?.(latestHeader);
+
+                rebuildGroupedRows({
+                    nextDetails: detailRows,
+                    nextHeader: latestHeader,
+                    nextFilters: filters,
+                });
+
+                if (normalizeFlagValue(latestHeader.isCancelled) === 1) {
+                    toast.success("Physical Inventory cancelled successfully.");
+                    return;
+                }
+            } catch {
+                // Ignore secondary verification error
+            }
+
             const message = error instanceof Error ? error.message : "Failed to cancel PI.";
             toast.error(message);
         } finally {
@@ -1434,21 +1574,6 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-
-                        <Button
-                            variant="outline"
-                            className="cursor-pointer border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
-                            onClick={handleCommitButtonClick}
-                            disabled={!header?.id || !hasLoadedDetails || !canEdit || isCommitting || isCheckingAttachments}
-                        >
-                            {isCheckingAttachments ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                                <CheckCircle2 className="mr-2 h-4 w-4" />
-                            )}
-                            Commit PI
-                        </Button>
-
                         <Button
                             variant="outline"
                             className="cursor-pointer"
@@ -1498,6 +1623,40 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                         </Button>
 
                         <Button
+                            type="button"
+                            variant="outline"
+                            className="cursor-pointer border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/40"
+                            onClick={() => {
+                                if (!header) return;
+                                const bName = branches.find((b) => b.id == (filters.branch_id ?? header.branch_id))?.branch_name ?? "";
+                                const sName = suppliers.find((s) => s.id == (filters.supplier_id ?? header.supplier_id))?.supplier_name ?? "";
+                                const pName = priceTypes.find((pt) => pt.price_type_id == (filters.price_type_id ?? header.price_type))?.price_type_name ?? "";
+
+                                const doc = generateAuditReportPdf({
+                                    header,
+                                    groupedRows,
+                                    branchName: bName,
+                                    supplierName: sName,
+                                    priceTypeName: pName,
+                                    encoderName: currentUser?.name,
+                                });
+
+                                if (auditReportBlobUrl) {
+                                    URL.revokeObjectURL(auditReportBlobUrl);
+                                }
+                                const blob = doc.output("blob");
+                                const url = URL.createObjectURL(blob);
+                                setAuditReportBlobUrl(url);
+                                setAuditReportDoc(doc);
+                                setOpenAuditReportDialog(true);
+                            }}
+                            disabled={!hasLoadedDetails || !header?.id}
+                        >
+                            <FileText className="mr-2 h-4 w-4" />
+                            Audit Report
+                        </Button>
+
+                        <Button
                             variant="outline"
                             className="cursor-pointer border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-900/60 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-900/40"
                             onClick={() => setOpenUploadDialog(true)}
@@ -1509,6 +1668,51 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                         </Button>
                     </div>
                 </div>
+
+                {/* Dedicated Auto-Commit Countdown Banner */}
+                {earliestAttachmentTime && status === "Pending" && (
+                    <div className="mt-3 flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50/80 p-3.5 shadow-xs dark:border-amber-900/50 dark:bg-amber-950/30 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
+                                <Timer className="h-5 w-5 animate-pulse" />
+                            </div>
+                            <div className="space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                                        Auto-Commit Countdown
+                                    </span>
+                                    {isTimerExpired && (
+                                        <span className="inline-flex items-center rounded-md bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700 animate-pulse dark:bg-red-950/50 dark:text-red-300">
+                                            Timer Expired (Auto-committing...)
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-amber-800/90 dark:text-amber-300/80">
+                                    This session will automatically commit once the timer reaches zero. Please finalize your counts.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center self-end sm:self-auto">
+                            <div className="flex items-baseline gap-1 rounded-lg border border-amber-300/80 bg-white/90 px-3.5 py-1.5 shadow-xs dark:border-amber-800 dark:bg-black/40">
+                                <Clock className="mr-1.5 h-4 w-4 self-center text-amber-700 dark:text-amber-400" />
+                                <span className="font-mono text-xl sm:text-2xl font-black tracking-wider text-amber-950 dark:text-amber-100">
+                                    {remainingSeconds !== null ? (
+                                        (() => {
+                                            const h = Math.floor(remainingSeconds / 3600);
+                                            const m = Math.floor((remainingSeconds % 3600) / 60);
+                                            const s = remainingSeconds % 60;
+                                            const pad = (n: number) => n.toString().padStart(2, "0");
+                                            return `${pad(h)}:${pad(m)}:${pad(s)}`;
+                                        })()
+                                    ) : (
+                                        "--:--:--"
+                                    )}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <PhysicalInventoryHeader
@@ -1875,44 +2079,6 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 onPhysicalCountBlur={handlePhysicalCountBlur}
             />
 
-
-            <AlertDialog open={openCommitDialog} onOpenChange={setOpenCommitDialog}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Commit Physical Inventory?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This will finalize the physical count, update stock balances, and lock the record as read-only.
-                            This action cannot be undone.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel
-                            className="cursor-pointer"
-                            disabled={isCommitting}
-                        >
-                            Cancel
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
-                            onClick={(event) => {
-                                event.preventDefault();
-                                void handleCommit();
-                            }}
-                            disabled={isCommitting}
-                        >
-                            {isCommitting ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Committing...
-                                </>
-                            ) : (
-                                "Commit PI"
-                            )}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
             <AlertDialog open={openCancelDialog} onOpenChange={setOpenCancelDialog}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -1956,11 +2122,17 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 eligibleVariants={eligibleVariants}
                 existingProductIds={new Set(detailRows.map((d) => d.product_id))}
                 onAdd={handleAddProduct}
+                onAddMultiple={handleAddMultipleProducts}
             />
 
             <PhysicalInventoryUploadCountSheetDialog
                 isOpen={openUploadDialog}
-                onOpenChange={setOpenUploadDialog}
+                onOpenChange={(open) => {
+                    setOpenUploadDialog(open);
+                    if (!open && header?.id) {
+                        void refreshAttachmentTimer(header.id);
+                    }
+                }}
                 physicalInventoryId={header?.id || null}
                 phNo={header?.ph_no}
                 canEdit={canEdit}
@@ -1968,33 +2140,133 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                 currentUserId={currentUser?.id}
             />
 
-            {groupedRows.length > 0 && (
-                <div
-                    className={cn(
-                        "fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] w-full max-w-xl px-4 pointer-events-none transition-all duration-500 ease-in-out",
-                        isScrolled ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-20 scale-90"
-                    )}
+            {/* Audit Report PDF Preview Modal */}
+            <AlertDialog
+                open={openAuditReportDialog}
+                onOpenChange={(open) => {
+                    setOpenAuditReportDialog(open);
+                    if (!open && auditReportBlobUrl) {
+                        URL.revokeObjectURL(auditReportBlobUrl);
+                        setAuditReportBlobUrl(null);
+                        setAuditReportDoc(null);
+                    }
+                }}
+            >
+                <AlertDialogContent
+                    style={{ maxWidth: "80rem" }}
+                    className="w-[92vw] h-[92vh] flex flex-col justify-between rounded-2xl p-6"
                 >
-                    <div className="flex items-center gap-3 bg-background/95 backdrop-blur-xl border border-primary/20 shadow-[0_-10px_50px_rgba(0,0,0,0.25)] rounded-full p-2 ring-1 ring-black/5 pointer-events-auto">
-                        <div className="relative flex-1 bg-muted/40 rounded-full border border-transparent focus-within:border-primary/20 focus-within:bg-background transition-all">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/60" />
-                            <input
-                                value={productSearch}
-                                onChange={(e) => setProductSearch(e.target.value)}
-                                placeholder="Search loaded products..."
-                                className="h-12 w-full bg-transparent border-none focus:ring-0 text-sm pl-12 pr-4 placeholder:text-muted-foreground/50"
-                            />
+                    <AlertDialogHeader className="flex flex-row items-center justify-between pb-3 border-b">
+                        <div>
+                            <AlertDialogTitle className="text-lg font-bold tracking-tight">
+                                Physical Inventory Audit Report
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-xs text-muted-foreground">
+                                Preview the generated document format below.
+                            </AlertDialogDescription>
                         </div>
-                        <Button
-                            className="rounded-full h-12 w-12 p-0 bg-primary text-primary-foreground shadow-lg shadow-primary/40 hover:scale-105 active:scale-95 transition-all shrink-0"
-                            onClick={() => setOpenAddProductDialog(true)}
-                            disabled={!canEdit}
-                            title="Add Product Manually"
-                        >
-                            <Plus className="h-6 w-6" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                className="cursor-pointer rounded-xl font-semibold border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-900/60 dark:bg-indigo-950/30 dark:text-indigo-300 hover:scale-105 active:scale-95 transition-all text-xs"
+                                onClick={() => {
+                                    if (auditReportDoc) {
+                                        const filename = `Physical_Inventory_Audit_Report_${header?.ph_no || header?.id}.pdf`;
+                                        auditReportDoc.save(filename);
+                                    }
+                                }}
+                            >
+                                <Download className="mr-1.5 h-3.5 w-3.5" />
+                                Download PDF
+                            </Button>
+                            <AlertDialogCancel className="cursor-pointer rounded-xl mt-0">
+                                Close
+                            </AlertDialogCancel>
+                        </div>
+                    </AlertDialogHeader>
+
+                    <div className="flex-1 w-full overflow-hidden my-3 rounded-xl border bg-muted/20 relative flex items-center justify-center">
+                        {auditReportBlobUrl ? (
+                            <iframe
+                                src={auditReportBlobUrl}
+                                title="Physical Inventory Audit Report PDF"
+                                className="w-full h-full border-0"
+                            />
+                        ) : (
+                            <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground text-sm">
+                                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                <span>Generating document preview...</span>
+                            </div>
+                        )}
                     </div>
-                </div>
+
+                    <AlertDialogFooter className="hidden">
+                        <AlertDialogCancel>Close</AlertDialogCancel>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {groupedRows.length > 0 && (
+                <>
+                    {/* Floating Eye Toggle (Bottom-Right) */}
+                    {!isToolbarExpanded && (
+                        <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 items-end transition-all duration-300 pointer-events-none">
+                            <Button
+                                className="rounded-full h-12 w-12 p-0 bg-primary/30 hover:bg-primary/60 text-primary-foreground shadow-lg shadow-primary/40 hover:scale-105 active:scale-95 transition-all shrink-0 pointer-events-auto"
+                                onClick={() => setIsToolbarExpanded(true)}
+                                title="Show search bar"
+                            >
+                                <Eye className="h-5 w-5" />
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* Floating Search Bar (Bottom-Center Expanded) */}
+                    {isToolbarExpanded && (
+                        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-xl px-4 z-[9999] transition-all duration-300 pointer-events-none">
+                            <div className="flex items-center gap-3 bg-background/95 backdrop-blur-xl border border-primary/20 shadow-[0_-10px_50px_rgba(0,0,0,0.25)] rounded-full p-2 ring-1 ring-black/5 pointer-events-auto">
+                                <div className="relative flex-1 bg-muted/40 rounded-full border border-transparent focus-within:bg-background transition-all">
+                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/60" />
+                                    <input
+                                        value={productSearch}
+                                        onChange={(e) => setProductSearch(e.target.value)}
+                                        placeholder="Search loaded products..."
+                                        className="h-12 w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none text-sm pl-12 pr-10 placeholder:text-muted-foreground/50"
+                                    />
+                                    {Boolean(productSearch) && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+                                            onClick={() => setProductSearch("")}
+                                            title="Clear search"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="rounded-full h-12 w-12 shrink-0 text-muted-foreground hover:text-foreground"
+                                    onClick={() => setIsToolbarExpanded(false)}
+                                    title="Hide search bar"
+                                >
+                                    <EyeOff className="h-5 w-5" />
+                                </Button>
+                                <Button
+                                    className="rounded-full h-12 w-12 p-0 bg-primary text-primary-foreground shadow-lg shadow-primary/40 hover:scale-105 active:scale-95 transition-all shrink-0"
+                                    onClick={() => setOpenAddProductDialog(true)}
+                                    disabled={!canEdit}
+                                    title="Add Product Manually"
+                                >
+                                    <Plus className="h-6 w-6" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );

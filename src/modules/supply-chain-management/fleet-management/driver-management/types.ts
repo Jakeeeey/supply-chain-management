@@ -10,6 +10,7 @@ export interface Driver {
     license_file_record_id?: number | null;
     license_verified_by?: number | null;
     license_verified_at?: string | null;
+    is_verified?: boolean | number | null;
     contact_phone?: string | null;
     contact_email?: string | null;
     contact_address?: string | null;

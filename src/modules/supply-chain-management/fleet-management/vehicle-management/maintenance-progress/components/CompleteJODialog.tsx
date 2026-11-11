@@ -59,27 +59,27 @@ export function CompleteJODialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto overflow-x-hidden p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CheckCheck className="h-5 w-5 text-emerald-600" />
-            Complete Job Order
+            <CheckCheck className="h-5 w-5 text-emerald-600 shrink-0" />
+            <span>Complete Job Order</span>
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
-          <div className="bg-muted/40 p-3 rounded-md text-sm space-y-1">
-            <div className="flex justify-between">
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1 w-full min-w-0">
+          <div className="bg-muted/40 p-3 rounded-md text-sm space-y-1 w-full min-w-0">
+            <div className="flex justify-between items-center">
               <span className="text-muted-foreground">JO Number:</span>
               <span className="font-semibold">{jobOrder.jo_no}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Type:</span>
               <span>{jobOrder.jo_type}</span>
             </div>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 w-full min-w-0">
             <Label htmlFor="completionRemarks">
               Completion Remarks <span className="text-destructive font-bold">*</span>
             </Label>
@@ -90,11 +90,12 @@ export function CompleteJODialog({
               onChange={(e) => setRemarks(e.target.value)}
               rows={3}
               required
+              className="w-full min-w-0 max-w-full break-words [overflow-wrap:anywhere] [word-break:break-word] resize-y"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+          <div className="grid grid-cols-2 gap-3 w-full min-w-0">
+            <div className="space-y-1.5 min-w-0">
               <Label htmlFor="laborCost">Labor Cost (₱)</Label>
               <Input
                 id="laborCost"
@@ -102,10 +103,11 @@ export function CompleteJODialog({
                 placeholder="0.00"
                 value={laborCost}
                 onChange={(e) => setLaborCost(e.target.value)}
+                className="w-full min-w-0"
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 min-w-0">
               <Label htmlFor="finalOdometer">Post-Service Odometer (km)</Label>
               <Input
                 id="finalOdometer"
@@ -113,11 +115,12 @@ export function CompleteJODialog({
                 placeholder="e.g. 45200"
                 value={finalOdometer}
                 onChange={(e) => setFinalOdometer(e.target.value)}
+                className="w-full min-w-0"
               />
             </div>
           </div>
 
-          <DialogFooter className="pt-2 border-t">
+          <DialogFooter className="pt-2 border-t flex flex-col-reverse sm:flex-row gap-2">
             <Button
               type="button"
               variant="outline"

@@ -9,7 +9,7 @@ import { PurchaseRequestsHistoryTable } from "./components/PurchaseRequestsHisto
 import { CreatePurchaseRequestDialog } from "./components/CreatePurchaseRequestDialog";
 import { BulkPurchaseRequestDialog } from "./components/BulkPurchaseRequestDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { ReorderTriggerItem } from "./types";
+import type { ReorderTriggerItem, PurchaseRequest } from "./types";
 
 export default function PurchaseOrderModule() {
   const {
@@ -32,15 +32,24 @@ export default function PurchaseOrderModule() {
   const [createModalOpen, setCreateModalOpen] = React.useState(false);
   const [bulkModalOpen, setBulkModalOpen] = React.useState(false);
   const [selectedTrigger, setSelectedTrigger] = React.useState<ReorderTriggerItem | null>(null);
+  const [selectedEditPr, setSelectedEditPr] = React.useState<PurchaseRequest | null>(null);
   const [selectedTriggers, setSelectedTriggers] = React.useState<ReorderTriggerItem[]>([]);
 
   const handleRequestReorder = (item: ReorderTriggerItem) => {
+    setSelectedEditPr(null);
     setSelectedTrigger(item);
     setCreateModalOpen(true);
   };
 
   const handleOpenBlankModal = () => {
+    setSelectedEditPr(null);
     setSelectedTrigger(null);
+    setCreateModalOpen(true);
+  };
+
+  const handleEditPr = (pr: PurchaseRequest) => {
+    setSelectedTrigger(null);
+    setSelectedEditPr(pr);
     setCreateModalOpen(true);
   };
 
@@ -106,11 +115,12 @@ export default function PurchaseOrderModule() {
             loading={loading}
             actionLoading={actionLoading}
             onStatusUpdate={onStatusUpdate}
+            onEditPr={handleEditPr}
           />
         </TabsContent>
       </Tabs>
 
-      {/* 4. Single Create PR Dialog */}
+      {/* 4. Single Create/Edit PR Dialog */}
       <CreatePurchaseRequestDialog
         open={createModalOpen}
         onOpenChange={setCreateModalOpen}
@@ -118,6 +128,7 @@ export default function PurchaseOrderModule() {
         parts={parts}
         suppliers={suppliers}
         initialTrigger={selectedTrigger}
+        editPr={selectedEditPr}
         onSuccess={refresh}
       />
 

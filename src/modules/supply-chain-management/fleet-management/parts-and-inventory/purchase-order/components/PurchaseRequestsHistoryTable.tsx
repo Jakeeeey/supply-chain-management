@@ -23,7 +23,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { FileText, MoreHorizontal, CheckCircle2, PackagePlus, XCircle, Eye } from "lucide-react";
+import { FileText, MoreHorizontal, CheckCircle2, PackagePlus, XCircle, Eye, Edit3 } from "lucide-react";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { ViewPurchaseRequestDialog } from "./ViewPurchaseRequestDialog";
 
 interface PurchaseRequestsHistoryTableProps {
@@ -32,6 +33,7 @@ interface PurchaseRequestsHistoryTableProps {
   loading: boolean;
   actionLoading?: boolean;
   onStatusUpdate?: (id: number, action: "approve" | "receive" | "cancel") => Promise<boolean>;
+  onEditPr?: (pr: PurchaseRequest) => void;
 }
 
 export function PurchaseRequestsHistoryTable({
@@ -40,9 +42,22 @@ export function PurchaseRequestsHistoryTable({
   loading,
   actionLoading,
   onStatusUpdate,
+  onEditPr,
 }: PurchaseRequestsHistoryTableProps) {
+  const [currentPage, setCurrentPage] = React.useState<number>(1);
+  const [pageSize, setPageSize] = React.useState<number>(10);
   const [selectedPr, setSelectedPr] = React.useState<PurchaseRequest | null>(null);
   const [openView, setOpenView] = React.useState(false);
+
+  // Reset to first page when items change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [items.length]);
+
+  const paginatedItems = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return items.slice(start, start + pageSize);
+  }, [items, currentPage, pageSize]);
 
   const handleOpenView = (pr: PurchaseRequest) => {
     setSelectedPr(pr);
@@ -89,7 +104,7 @@ export function PurchaseRequestsHistoryTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {items.map((item) => {
+          {paginatedItems.map((item) => {
             const rawPartId = typeof item.part_id === "object" && item.part_id !== null ? Number(item.part_id.id) : Number(item.part_id);
             const foundCatalogPart = parts.find((p) => Number(p.id) === rawPartId);
             const part =
@@ -183,6 +198,15 @@ export function PurchaseRequestsHistoryTable({
 
                       {item.status === "Pending" && (
                         <>
+                          {onEditPr && (
+                            <DropdownMenuItem
+                              onClick={() => onEditPr(item)}
+                              className="text-amber-600 focus:text-amber-600 cursor-pointer"
+                            >
+                              <Edit3 className="h-4 w-4 mr-2" />
+                              Edit Request
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem
                             onClick={() => onStatusUpdate?.(item.id, "approve")}
                             className="text-blue-600 focus:text-blue-600 cursor-pointer"
@@ -245,6 +269,21 @@ export function PurchaseRequestsHistoryTable({
         purchaseRequest={selectedPr}
         parts={parts}
       />
+
+      {items.length > 0 && (
+        <div className="border-t p-2">
+          <DataTablePagination
+            pageIndex={currentPage}
+            pageSize={pageSize}
+            rowCount={items.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

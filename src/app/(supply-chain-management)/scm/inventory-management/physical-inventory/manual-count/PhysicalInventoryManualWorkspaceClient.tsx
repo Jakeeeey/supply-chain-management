@@ -103,6 +103,7 @@ export default function PhysicalInventoryManualWorkspaceClient({ currentUser }: 
                                     selectedHeaderId={selectedHeaderId}
                                     onOpenRecord={handleOpenRecord}
                                     onCreateNew={handleCreateNew}
+                                    scmOnly={true}
                                 />
                             </div>
                         </motion.div>

@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
     const params = new URLSearchParams();
     params.set("limit", "-1");
     params.set("sort", "-id");
-    params.set("fields", "*,vehicle_id.*,requested_by.*,approved_by.*,mechanic_id.*");
+    params.set("fields", "*,vehicle_id.*,branch_id.*,requested_by.*,approved_by.*,mechanic_id.*");
     params.set("filter[status][_eq]", "Approved");
 
     const upstream = await fetch(`${DIRECTUS_URL}/items/vehicle_job_orders?${params.toString()}`, {
@@ -147,6 +147,7 @@ export async function PATCH(req: NextRequest) {
     const payload = await req.json();
     const { action } = payload;
     const userId = getUserIdFromRequest(req);
+    const utcNow = new Date().toISOString();
 
     // 1. Start Maintenance
     if (action === "start_maintenance") {
@@ -155,13 +156,19 @@ export async function PATCH(req: NextRequest) {
         return json({ error: "Missing job_order_id" }, 400);
       }
 
+      const updateData: Record<string, unknown> = {
+        status: "In Progress",
+        started_at: utcNow,
+      };
+
+      if (userId) {
+        updateData.updated_by = userId;
+      }
+
       const res = await fetch(`${DIRECTUS_URL}/items/vehicle_job_orders/${job_order_id}`, {
         method: "PATCH",
         headers: directusHeaders(),
-        body: JSON.stringify({
-          status: "In Progress",
-          started_at: new Date().toISOString(),
-        }),
+        body: JSON.stringify(updateData),
       });
 
       const body = await res.json().catch(() => ({}));
@@ -171,51 +178,171 @@ export async function PATCH(req: NextRequest) {
     // 2. Issue Parts
     if (action === "issue_parts") {
       const { job_order_id, branch_id, items } = payload;
-      if (!job_order_id || !items || !Array.isArray(items)) {
+      if (!job_order_id || !items || !Array.isArray(items) || items.length === 0) {
         return json({ error: "Missing job_order_id or parts items" }, 400);
       }
 
-      for (const item of items) {
-        // Record in vehicle_job_order_parts
-        await fetch(`${DIRECTUS_URL}/items/vehicle_job_order_parts`, {
-          method: "POST",
-          headers: directusHeaders(),
-          body: JSON.stringify({
-            job_order_id,
-            part_id: item.part_id,
-            quantity_requested: item.quantity,
-            quantity_issued: item.quantity,
-            unit_cost: item.unit_cost,
-            issued_by: userId,
-            issued_at: new Date().toISOString(),
-            remarks: item.remarks || "Issued from Maintenance Start",
-          }),
-        }).catch(() => null);
+      // 1. Retrieve the actual job order to resolve its designated branch & vehicle
+      const joRes = await fetch(`${DIRECTUS_URL}/items/vehicle_job_orders/${job_order_id}?fields=id,jo_no,branch_id,vehicle_id`, {
+        headers: directusHeaders(),
+        cache: "no-store",
+      });
+      const joData = await joRes.json().catch(() => ({}));
+      const jo = joData?.data;
 
-        // Deduct from vehicle_part_stock
+      const effectiveBranchId =
+        branch_id
+          ? Number(branch_id)
+          : typeof jo?.branch_id === "object" && jo?.branch_id !== null
+          ? Number(jo.branch_id.id)
+          : Number(jo?.branch_id || 1);
+
+      const vehicleId =
+        typeof jo?.vehicle_id === "object" && jo?.vehicle_id !== null
+          ? Number(jo.vehicle_id.id || jo.vehicle_id.vehicle_id)
+          : jo?.vehicle_id
+          ? Number(jo.vehicle_id)
+          : null;
+
+      const joNo = jo?.jo_no || `JO-#${job_order_id}`;
+
+      // Consolidate parts items to prevent duplicate rows & stacking multiplier issues
+      const consolidatedMap = new Map<number, { quantity: number; unit_cost: number; remarks?: string }>();
+      for (const it of items) {
+        const pId = Number(it.part_id);
+        const qty = Number(it.quantity);
+        if (!pId || qty <= 0) continue;
+        const existing = consolidatedMap.get(pId);
+        if (existing) {
+          existing.quantity += qty;
+        } else {
+          consolidatedMap.set(pId, {
+            quantity: qty,
+            unit_cost: Number(it.unit_cost || 0),
+            remarks: it.remarks,
+          });
+        }
+      }
+
+      // Check stock availability in the designated branch first (Zero-stock guard)
+      for (const [partId, item] of consolidatedMap.entries()) {
         const stockFilter = new URLSearchParams({
-          "filter[part_id][_eq]": String(item.part_id),
-          "filter[branch_id][_eq]": String(branch_id || 1),
+          "filter[part_id][_eq]": String(partId),
+          "filter[branch_id][_eq]": String(effectiveBranchId),
           limit: "1",
         });
 
         const stockRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_stock?${stockFilter.toString()}`, {
           headers: directusHeaders(),
+          cache: "no-store",
+        });
+        const stockBody = await stockRes.json().catch(() => ({ data: [] }));
+        const stockItem = stockBody?.data?.[0];
+        const onHand = Number(stockItem?.on_hand) || 0;
+
+        if (onHand <= 0) {
+          return json(
+            { error: `Part #${partId} is out of stock in Branch #${effectiveBranchId}. Zero-stock issuance is prohibited.` },
+            400
+          );
+        }
+
+        if (item.quantity > onHand) {
+          return json(
+            { error: `Requested quantity (${item.quantity}) exceeds available stock (${onHand}) for Part #${partId} in Branch #${effectiveBranchId}.` },
+            400
+          );
+        }
+      }
+
+      // Execute deductions and records atomically per consolidated part
+      for (const [partId, item] of consolidatedMap.entries()) {
+        // A. Check if already recorded in vehicle_job_order_parts
+        const jopFilter = new URLSearchParams({
+          "filter[job_order_id][_eq]": String(job_order_id),
+          "filter[part_id][_eq]": String(partId),
+          limit: "1",
+        });
+        const jopRes = await fetch(`${DIRECTUS_URL}/items/vehicle_job_order_parts?${jopFilter.toString()}`, {
+          headers: directusHeaders(),
+          cache: "no-store",
+        });
+        const jopData = await jopRes.json().catch(() => ({ data: [] }));
+        const existingJop = jopData?.data?.[0];
+
+        if (existingJop) {
+          await fetch(`${DIRECTUS_URL}/items/vehicle_job_order_parts/${existingJop.id}`, {
+            method: "PATCH",
+            headers: directusHeaders(),
+            body: JSON.stringify({
+              quantity_issued: (Number(existingJop.quantity_issued) || 0) + item.quantity,
+              issued_by: userId,
+              issued_at: utcNow,
+            }),
+          });
+        } else {
+          await fetch(`${DIRECTUS_URL}/items/vehicle_job_order_parts`, {
+            method: "POST",
+            headers: directusHeaders(),
+            body: JSON.stringify({
+              job_order_id,
+              part_id: partId,
+              quantity_requested: item.quantity,
+              quantity_issued: item.quantity,
+              unit_cost: item.unit_cost,
+              issued_by: userId,
+              issued_at: utcNow,
+              remarks: item.remarks || `Issued for ${joNo}`,
+            }),
+          }).catch(() => null);
+        }
+
+        // B. Log movement in vehicle_part_movements
+        await fetch(`${DIRECTUS_URL}/items/vehicle_part_movements`, {
+          method: "POST",
+          headers: directusHeaders(),
+          body: JSON.stringify({
+            part_id: partId,
+            branch_id: effectiveBranchId,
+            movement_type: "Issue",
+            quantity: item.quantity,
+            unit_cost: item.unit_cost,
+            job_order_id: Number(job_order_id),
+            vehicle_id: vehicleId,
+            reference_no: joNo,
+            remarks: item.remarks || `Issued from Maintenance Start (${joNo})`,
+            created_by: userId,
+            created_at: utcNow,
+          }),
+        }).catch(() => null);
+
+        // C. Deduct from vehicle_part_stock
+        const stockFilter = new URLSearchParams({
+          "filter[part_id][_eq]": String(partId),
+          "filter[branch_id][_eq]": String(effectiveBranchId),
+          limit: "1",
+        });
+        const stockRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_stock?${stockFilter.toString()}`, {
+          headers: directusHeaders(),
+          cache: "no-store",
         });
         const stockBody = await stockRes.json().catch(() => ({ data: [] }));
         const stockItem = stockBody?.data?.[0];
 
         if (stockItem) {
-          const newOnHand = Math.max(0, (Number(stockItem.on_hand) || 0) - Number(item.quantity));
+          const newOnHand = Math.max(0, (Number(stockItem.on_hand) || 0) - item.quantity);
           await fetch(`${DIRECTUS_URL}/items/vehicle_part_stock/${stockItem.id}`, {
             method: "PATCH",
             headers: directusHeaders(),
-            body: JSON.stringify({ on_hand: newOnHand }),
+            body: JSON.stringify({
+              on_hand: newOnHand,
+              updated_at: utcNow,
+            }),
           });
         }
       }
 
-      return json({ success: true }, 200);
+      return json({ success: true, message: "Parts issued successfully and stock accurately deducted." }, 200);
     }
 
     return json({ error: "Invalid action" }, 400);

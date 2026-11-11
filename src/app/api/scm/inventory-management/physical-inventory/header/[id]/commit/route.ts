@@ -1,7 +1,14 @@
 // src/app/api/arf/inventory-management/physical-inventory/header/[id]/commit/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
-const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const DIRECTUS_URL = (
+    process.env.DIRECTUS_URL ||
+    process.env.NEXT_PUBLIC_DIRECTUS_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    ""
+)
+    .trim()
+    .replace(/\/+$/, "");
 const DIRECTUS_TOKEN =
     process.env.DIRECTUS_STATIC_TOKEN || process.env.DIRECTUS_SERVICE_TOKEN || "";
 
@@ -58,12 +65,67 @@ function directusHeaders(): Record<string, string> {
     return headers;
 }
 
+function decodeUserIdFromJwtCookie(
+    req: NextRequest,
+    cookieName = "vos_access_token",
+): number | null {
+    const token = req.cookies.get(cookieName)?.value;
+    if (!token) return null;
+
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+
+    try {
+        const payloadPart = parts[1];
+        const pad = "=".repeat((4 - (payloadPart.length % 4)) % 4);
+        const b64 = (payloadPart + pad).replace(/-/g, "+").replace(/_/g, "/");
+        const jsonStr = Buffer.from(b64, "base64").toString("utf8");
+
+        const payloadUnknown: unknown = JSON.parse(jsonStr);
+        const sub =
+            payloadUnknown && typeof payloadUnknown === "object" && "sub" in payloadUnknown
+                ? (payloadUnknown as { sub?: unknown }).sub
+                : undefined;
+
+        const userId = Number(sub);
+        return Number.isFinite(userId) ? userId : null;
+    } catch {
+        return null;
+    }
+}
+
+async function fetchWithRetry(
+    url: string,
+    init: RequestInit,
+    retries = 2,
+): Promise<Response> {
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            return await fetch(url, init);
+        } catch (error) {
+            lastError = error;
+            if (attempt < retries) {
+                await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+            }
+        }
+    }
+
+    const causeMsg =
+        lastError instanceof Error && "cause" in lastError && lastError.cause instanceof Error
+            ? ` (${lastError.cause.message})`
+            : "";
+    const baseMsg = lastError instanceof Error ? lastError.message : "Network error";
+    throw new Error(`Unable to reach database server: ${baseMsg}${causeMsg}`);
+}
+
 async function directusGetSingle<T>(path: string): Promise<T> {
     if (!DIRECTUS_URL) {
         throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured.");
     }
 
-    const response = await fetch(`${DIRECTUS_URL}${path}`, {
+    const response = await fetchWithRetry(`${DIRECTUS_URL}${path}`, {
         method: "GET",
         headers: directusHeaders(),
         cache: "no-store",
@@ -83,7 +145,7 @@ async function directusGetMany<T>(path: string): Promise<T[]> {
         throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured.");
     }
 
-    const response = await fetch(`${DIRECTUS_URL}${path}`, {
+    const response = await fetchWithRetry(`${DIRECTUS_URL}${path}`, {
         method: "GET",
         headers: directusHeaders(),
         cache: "no-store",
@@ -103,7 +165,7 @@ async function directusPatch<T>(path: string, payload: unknown): Promise<T> {
         throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured.");
     }
 
-    const response = await fetch(`${DIRECTUS_URL}${path}`, {
+    const response = await fetchWithRetry(`${DIRECTUS_URL}${path}`, {
         method: "PATCH",
         headers: directusHeaders(),
         cache: "no-store",
@@ -123,10 +185,11 @@ function sumHeaderTotalAmount(details: PhysicalInventoryDetailRow[]): number {
     return details.reduce((acc, row) => acc + (Number(row.amount) || 0), 0);
 }
 
-export async function POST(_req: NextRequest, context: RouteContext) {
+export async function POST(req: NextRequest, context: RouteContext) {
     try {
         const { id } = await context.params;
         const headerId = Number(id);
+        const committerId = decodeUserIdFromJwtCookie(req);
 
         if (!Number.isFinite(headerId) || headerId <= 0) {
             return NextResponse.json(
@@ -202,14 +265,19 @@ export async function POST(_req: NextRequest, context: RouteContext) {
             return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
         };
 
+        const patchPayload: Record<string, unknown> = {
+            isComitted: 1,
+            isCancelled: 0,
+            committed_at: getPhTimeISOString(),
+            total_amount,
+        };
+        if (committerId) {
+            patchPayload.committed_by = committerId;
+        }
+
         const updated = await directusPatch<PhysicalInventoryHeaderRow>(
             `/items/${TABLE_PH}/${headerId}`,
-            {
-                isComitted: 1,
-                isCancelled: 0,
-                committed_at: getPhTimeISOString(),
-                total_amount,
-            },
+            patchPayload,
         );
 
         return NextResponse.json({ data: updated });

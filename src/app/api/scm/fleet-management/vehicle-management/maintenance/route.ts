@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
+
+const COOKIE_NAME = "vos_access_token";
+
+function getUserIdFromToken(token?: string | null): number | null {
+  if (!token) return null;
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    let s = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (s.length % 4) s += "=";
+    const json = JSON.parse(Buffer.from(s, "base64").toString("utf8"));
+    const id = json.id ?? json.user_id ?? json.sub;
+    return id ? Number(id) : null;
+  } catch {
+    return null;
+  }
+}
 
 const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const DIRECTUS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN || "";
@@ -26,7 +44,7 @@ export async function GET(req: NextRequest) {
     if (mode === "options") {
       const branchId = url.searchParams.get("branch_id");
 
-      const [vRes, uRes, pRes, sRes] = await Promise.all([
+      const [vRes, uRes, pRes, sRes, bRes] = await Promise.all([
         fetch(`${DIRECTUS_URL}/items/vehicles?limit=-1`, {
           cache: "no-store",
           headers: directusHeaders(),
@@ -46,12 +64,24 @@ export async function GET(req: NextRequest) {
           cache: "no-store",
           headers: directusHeaders(),
         }).catch(() => null),
+        fetch(`${DIRECTUS_URL}/items/branches?limit=-1&sort=branch_name`, {
+          cache: "no-store",
+          headers: directusHeaders(),
+        }).catch(() => null),
       ]);
 
       const vehicles = vRes ? (await vRes.json().catch(() => ({})))?.data || [] : [];
       const rawUsers = uRes ? (await uRes.json().catch(() => ({})))?.data || [] : [];
       const parts = pRes ? (await pRes.json().catch(() => ({})))?.data || [] : [];
       const stocks = sRes ? (await sRes.json().catch(() => ({})))?.data || [] : [];
+      const rawBranches = bRes ? (await bRes.json().catch(() => ({})))?.data || [] : [];
+
+      const branches = (Array.isArray(rawBranches) ? rawBranches : []).map((b: { id?: number; branch_id?: number; branch_name?: string; name?: string; branch_code?: string; location?: string }) => ({
+        id: b.id ?? b.branch_id,
+        branch_name: b.branch_name ?? b.name ?? `Branch #${b.id ?? b.branch_id}`,
+        branch_code: b.branch_code,
+        location: b.location,
+      }));
 
       interface RawUserRecord {
         user_id: number;
@@ -100,6 +130,7 @@ export async function GET(req: NextRequest) {
           vehicles,
           users,
           parts: partsWithStock,
+          branches,
         },
       });
     }
@@ -108,7 +139,7 @@ export async function GET(req: NextRequest) {
     const params = new URLSearchParams();
     params.set("limit", "-1");
     params.set("sort", "-id");
-    params.set("fields", "*,vehicle_id.*,requested_by.*,approved_by.*,mechanic_id.*");
+    params.set("fields", "*,vehicle_id.*,branch_id.*,requested_by.*,approved_by.*,mechanic_id.*");
 
     const upstream = await fetch(`${DIRECTUS_URL}/items/vehicle_job_orders?${params.toString()}`, {
       cache: "no-store",
@@ -174,6 +205,12 @@ export async function POST(req: NextRequest) {
         return json({ error: "Vehicle, JO type, and description are required." }, 400);
       }
 
+      // Resolve user from token if not explicitly provided
+      const cookieStore = await cookies();
+      const token = cookieStore.get(COOKIE_NAME)?.value;
+      const tokenUserId = getUserIdFromToken(token);
+      const effectiveRequestedBy = requested_by ? Number(requested_by) : tokenUserId;
+
       // Generate a unique jo_no: JO-YYYYMMDD-XXXX
       const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const randPart = Math.floor(1000 + Math.random() * 9000);
@@ -221,7 +258,7 @@ export async function POST(req: NextRequest) {
         description,
         odometer_reading: odometer_reading ? Number(odometer_reading) : null,
         status: "Requested",
-        requested_by: requested_by ? Number(requested_by) : null,
+        requested_by: effectiveRequestedBy ? Number(effectiveRequestedBy) : null,
         requested_at: new Date().toISOString(),
       };
 

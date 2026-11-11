@@ -71,6 +71,8 @@ export interface VehicleJobOrder {
   requested_at?: string;
   approved_by?: number | UserOption;
   approved_at?: string;
+  rejected_by?: number | UserOption;
+  rejected_at?: string;
   decision_remarks?: string;
   mechanic_id?: number | UserOption;
   started_at?: string;

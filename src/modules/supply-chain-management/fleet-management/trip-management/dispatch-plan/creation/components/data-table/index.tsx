@@ -11,6 +11,7 @@ interface DispatchPlanTableProps {
   data: DispatchPlanSummary[];
   isLoading: boolean;
   onEdit: (plan: DispatchPlanSummary) => void;
+  isAutoApprovalEnabled?: boolean;
   onSearch?: (v: string) => void;
   sorting?: SortingState;
   onSortingChange?: (sorting: SortingState) => void;
@@ -23,6 +24,7 @@ export const DispatchPlanTable = React.memo(function DispatchPlanTable({
   data,
   isLoading,
   onEdit,
+  isAutoApprovalEnabled,
   onSearch,
   sorting,
   onSortingChange,
@@ -31,8 +33,8 @@ export const DispatchPlanTable = React.memo(function DispatchPlanTable({
   actionComponent,
 }: DispatchPlanTableProps) {
   const columns = React.useMemo(
-    () => getDispatchPlanColumns(onEdit),
-    [onEdit],
+    () => getDispatchPlanColumns(onEdit, isAutoApprovalEnabled),
+    [onEdit, isAutoApprovalEnabled],
   );
 
   return (
