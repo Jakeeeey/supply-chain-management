@@ -87,6 +87,23 @@ export interface DispatchRow {
   invoices: ReconciliationRow[];
 }
 
+export interface DeliveryProof {
+  id: number;
+  postDispatchPlanId: number;
+  postDispatchInvoiceId: number;
+  driverUserId: number;
+  outcome: string;
+  remarks: string | null;
+  recipientName: string | null;
+  signatureFileId: string | null;
+  photoFileId: string;
+  capturedAt: string;
+  receivedAt: string;
+  latitude: number | null;
+  longitude: number | null;
+  commandId: string;
+}
+
 export interface ReconciliationRow {
   id: number;
   invoiceId: number;
@@ -101,6 +118,7 @@ export interface ReconciliationRow {
   missingQtys?: Record<string | number, number>;
   scannedQtys?: Record<string | number, number>;
   scannedSerials?: Record<string | number, string[]>;
+  deliveryProof?: DeliveryProof | null;
 }
 
 export interface InvoiceLine {

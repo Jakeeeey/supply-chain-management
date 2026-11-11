@@ -198,11 +198,16 @@ export async function GET(request: Request) {
             }
         });
 
-        // 7. Fetch Reconciliation Data (Unfulfilled Transactions)
-        const [transactionsRes] = await Promise.all([
+        // 7. Fetch Reconciliation Data (Unfulfilled Transactions) & Delivery Proofs
+        const pdiIds = invoices.map((inv: { id: number }) => inv.id);
+        const [transactionsRes, proofsRes] = await Promise.all([
             invoiceIds.length > 0 ? fetcher(`/unfulfilled_sales_transaction?filter[sales_invoice_id][_in]=${invoiceIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
+            (planIds.length > 0 || pdiIds.length > 0)
+                ? fetcher(`/post_dispatch_delivery_proofs?filter[post_dispatch_plan_id][_in]=${planIds.join(',')}&limit=-1`).catch(() => ({ data: [] }))
+                : Promise.resolve({ data: [] }),
         ]);
         const transactions = transactionsRes?.data || [];
+        const proofs = proofsRes?.data || [];
         const transactionIds = transactions.map((t: { id: number }) => t.id);
 
         const [transDetailsRes] = await Promise.all([
@@ -309,6 +314,28 @@ export async function GET(request: Request) {
                                 }
                             });
                             return map;
+                        })(),
+                        deliveryProof: (() => {
+                            const proof = proofs.find((p: { post_dispatch_invoice_id: number; post_dispatch_plan_id: number }) =>
+                                p.post_dispatch_invoice_id === inv.id || (p.post_dispatch_plan_id === plan.id && p.post_dispatch_invoice_id === inv.id)
+                            );
+                            if (!proof) return null;
+                            return {
+                                id: proof.id,
+                                postDispatchPlanId: proof.post_dispatch_plan_id,
+                                postDispatchInvoiceId: proof.post_dispatch_invoice_id,
+                                driverUserId: proof.driver_user_id,
+                                outcome: proof.outcome,
+                                remarks: proof.remarks || null,
+                                recipientName: proof.recipient_name || null,
+                                signatureFileId: proof.signature_file_id || null,
+                                photoFileId: proof.photo_file_id,
+                                capturedAt: proof.captured_at,
+                                receivedAt: proof.received_at,
+                                latitude: proof.latitude ? Number(proof.latitude) : null,
+                                longitude: proof.longitude ? Number(proof.longitude) : null,
+                                commandId: proof.command_id
+                            };
                         })()
                     };
                 });
