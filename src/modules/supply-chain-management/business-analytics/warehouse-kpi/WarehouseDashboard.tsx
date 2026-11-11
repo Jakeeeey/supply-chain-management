@@ -218,8 +218,8 @@ export default function WarehouseDashboard() {
   const measured = typeof score === "number" && Number.isFinite(score);
   const progress = measured ? Math.min(100, Math.max(0, score)) : 0;
   const scoreTone = !measured ? "neutral" : score >= (summary?.targetPercent ?? 100) ? "green"
-    : score >= (summary?.targetPercent ?? 100) * 0.9 ? "yellow"
-    : score >= (summary?.targetPercent ?? 100) * 0.8 ? "orange"
+    : score >= 75 ? "yellow"
+    : score >= 60 ? "orange"
     : "red";
   const scoreToneClasses = {
     green: {
