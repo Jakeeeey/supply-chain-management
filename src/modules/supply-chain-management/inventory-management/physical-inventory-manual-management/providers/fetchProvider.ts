@@ -1016,7 +1016,7 @@ function buildNextPhNoFromLatest(latestPhNo: string | null | undefined): string 
     const lastNumber = latestPhNo ? extractTrailingNumber(latestPhNo) : null;
     const nextNumber = (lastNumber ?? 0) + 1;
 
-    return `PH-${String(nextNumber).padStart(6, "0")}`;
+    return `PH-SCM-${String(nextNumber).padStart(6, "0")}`;
 }
 
 export async function fetchNextPhysicalInventoryNumber(): Promise<string> {
