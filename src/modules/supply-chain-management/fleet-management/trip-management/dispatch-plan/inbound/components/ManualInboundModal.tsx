@@ -6,10 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { KioskDispatchPlan, CustomerArrivalInfo, DeliveryStatus } from "../types";
-import { CheckCircle2, Truck, User, Loader2, AlertCircle, FileText, Users, UserCheck, Calendar } from "lucide-react";
+import { KioskDispatchPlan, CustomerArrivalInfo, DeliveryStatus, CustomerInvoice } from "../types";
+import { CheckCircle2, Truck, User, Loader2, AlertCircle, FileText, Users, UserCheck, Calendar, Image as ImageIcon } from "lucide-react";
 import { fetchProvider } from "../providers/fetchProvider";
 import { toast } from "sonner";
+import { DeliveryProofModal } from "../../clearance/components/DeliveryProofModal";
 
 interface ManualInboundModalProps {
     plan: KioskDispatchPlan | null;
@@ -28,6 +29,7 @@ export function ManualInboundModal({ plan, open, onOpenChange, onSuccess }: Manu
     const [loading, setLoading] = React.useState(false);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
+    const [selectedProofInvoice, setSelectedProofInvoice] = React.useState<{ invoice: CustomerInvoice; customerName: string } | null>(null);
 
     const fetchData = React.useCallback(async () => {
         if (!plan) return;
@@ -245,11 +247,27 @@ export function ManualInboundModal({ plan, open, onOpenChange, onSuccess }: Manu
                                                                 </div>
                                                                 <p className="text-[10px] font-black text-muted-foreground/60 tracking-widest uppercase">CODE: {customer.customer_code}</p>
                                                             </div>
-                                                            <div className="flex flex-wrap gap-2 pt-2">
+                                                            <div className="flex flex-col gap-2 pt-2">
                                                                 {customer.invoices.map((inv, idx) => (
-                                                                    <div key={idx} className="px-3 py-1.5 rounded-lg bg-muted/20 border border-border/40 flex items-center gap-2">
-                                                                        <FileText className="h-3 w-3 text-muted-foreground/60" />
-                                                                        <span className="text-[10px] font-bold text-foreground/70">{inv.no} • ₱{inv.amount.toLocaleString()}</span>
+                                                                    <div key={idx} className="px-3 py-2 rounded-xl bg-muted/20 border border-border/40 flex items-center justify-between gap-3 hover:bg-muted/30 transition-colors">
+                                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                                            <FileText className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
+                                                                            <span className="text-xs font-bold text-foreground/80 truncate">
+                                                                                {inv.no} <span className="text-muted-foreground/50 mx-1">•</span> ₱{inv.amount.toLocaleString()}
+                                                                            </span>
+                                                                        </div>
+                                                                        {inv.deliveryProof ? (
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="outline"
+                                                                                size="sm"
+                                                                                onClick={() => setSelectedProofInvoice({ invoice: inv, customerName: customer.customer_name })}
+                                                                                className="h-7 px-2.5 text-[11px] font-bold rounded-lg border-rose-500/30 text-rose-600 bg-rose-500/5 hover:bg-rose-500/10 hover:border-rose-500/50 flex items-center gap-1.5 shrink-0 transition-all shadow-none"
+                                                                            >
+                                                                                <ImageIcon className="h-3.5 w-3.5" />
+                                                                                Proof
+                                                                            </Button>
+                                                                        ) : null}
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -318,6 +336,14 @@ export function ManualInboundModal({ plan, open, onOpenChange, onSuccess }: Manu
                     </Button>
                 </div>
             </DialogContent>
+
+            <DeliveryProofModal 
+                isOpen={!!selectedProofInvoice}
+                onClose={() => setSelectedProofInvoice(null)}
+                proof={selectedProofInvoice?.invoice.deliveryProof || null}
+                invoiceNo={selectedProofInvoice?.invoice.no}
+                customerName={selectedProofInvoice?.customerName}
+            />
         </Dialog>
     );
 }

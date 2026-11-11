@@ -66,6 +66,13 @@ export async function GET(req: NextRequest) {
             const siData = await siRes.json();
             const sis = siData.data || [];
 
+            // Fetch delivery proofs for this plan
+            const proofsRes = await fetch(`${DIRECTUS_URL}/items/post_dispatch_delivery_proofs?filter[post_dispatch_plan_id][_eq]=${planId}&limit=-1`, {
+                headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+            }).catch(() => null);
+            const proofsData = proofsRes ? await proofsRes.json().catch(() => ({ data: [] })) : { data: [] };
+            const proofs = proofsData.data || [];
+
             const customerCodes = Array.from(new Set(sis.map((si: SalesInvoice) => si.customer_code).filter(Boolean)));
             
             // Fetch Customer Names
@@ -81,10 +88,31 @@ export async function GET(req: NextRequest) {
             });
 
             // Group invoices by customer
-            const customerGroup = new Map<string | number, { customer_code: string | number; customer_name: string; address: string; invoices: { no: string; amount: number }[] }>();
+            const customerGroup = new Map<string | number, { customer_code: string | number; customer_name: string; address: string; invoices: { id?: number; invoice_id?: number; no: string; amount: number; deliveryProof?: unknown }[] }>();
             sis.forEach((si: SalesInvoice) => {
                 const code = si.customer_code;
                 if (!code) return;
+
+                const matchedPdi = invoices.find((inv: { id: number; invoice_id: number }) => inv.invoice_id === si.invoice_id);
+                const pdiId = matchedPdi?.id;
+
+                const proof = proofs.find((p: { post_dispatch_invoice_id: number }) => p.post_dispatch_invoice_id === pdiId);
+                const deliveryProof = proof ? {
+                    id: proof.id,
+                    postDispatchPlanId: proof.post_dispatch_plan_id,
+                    postDispatchInvoiceId: proof.post_dispatch_invoice_id,
+                    driverUserId: proof.driver_user_id,
+                    outcome: proof.outcome,
+                    remarks: proof.remarks || null,
+                    recipientName: proof.recipient_name || null,
+                    signatureFileId: proof.signature_file_id || null,
+                    photoFileId: proof.photo_file_id,
+                    capturedAt: proof.captured_at,
+                    receivedAt: proof.received_at,
+                    latitude: proof.latitude ? Number(proof.latitude) : null,
+                    longitude: proof.longitude ? Number(proof.longitude) : null,
+                    commandId: proof.command_id
+                } : null;
 
                 if (!customerGroup.has(code)) {
                     const custName = custMap.get(code) || "Unknown";
@@ -98,8 +126,11 @@ export async function GET(req: NextRequest) {
                 const existing = customerGroup.get(code);
                 if (existing) {
                     existing.invoices.push({
+                        id: pdiId,
+                        invoice_id: si.invoice_id,
                         no: si.invoice_no,
-                        amount: si.net_amount ?? si.total_amount ?? 0
+                        amount: si.net_amount ?? si.total_amount ?? 0,
+                        deliveryProof
                     });
                 }
             });
