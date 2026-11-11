@@ -19,7 +19,6 @@ import {
   getPeriodFromSelections,
   percent,
   sameScope,
-  scopeLabel,
   scopeWarning,
   summarizeAuditCompletion,
 } from "./api";
