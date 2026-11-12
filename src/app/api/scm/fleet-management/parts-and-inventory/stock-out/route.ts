@@ -81,83 +81,121 @@ export async function POST(req: NextRequest) {
     if (!DIRECTUS_URL) throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured");
 
     const payload = await req.json();
-    const { branch_id, part_id, movement_type, quantity, unit_cost, reference_no, remarks } = payload;
+    const { branch_id, part_id, movement_type, quantity, unit_cost, reference_no, remarks, items } = payload;
 
     const branchIdNum = Number(branch_id);
-    const partIdNum = Number(part_id);
-    const qty = Number(quantity);
-    const cost = Number(unit_cost) || 0;
-
-    if (!branchIdNum || !partIdNum || !qty || qty <= 0) {
-      return json({ error: "Branch, part, and valid positive quantity are required." }, 400);
+    if (!branchIdNum) {
+      return json({ error: "Branch is required." }, 400);
     }
 
-    // 1. Check current stock
-    const stockUrl = `${DIRECTUS_URL}/items/vehicle_part_stock?filter[part_id][_eq]=${partIdNum}&filter[branch_id][_eq]=${branchIdNum}&limit=1`;
-    const stockRes = await fetch(stockUrl, {
-      cache: "no-store",
-      headers: directusHeaders(),
-    });
-    const stockData = await stockRes.json().catch(() => ({ data: [] }));
-    const existingStock = stockData.data?.[0];
+    // Normalize items into array
+    type StockOutItem = { part_id: number; quantity: number; unit_cost?: number; remarks?: string };
+    let requestItems: StockOutItem[] = [];
 
-    const currentOnHand = existingStock ? Number(existingStock.on_hand) || 0 : 0;
-    if (qty > currentOnHand) {
-      return json(
-        {
-          error: `Insufficient stock. Requested: ${qty}, Available on-hand: ${currentOnHand}`,
-        },
-        400
-      );
+    if (Array.isArray(items) && items.length > 0) {
+      requestItems = items
+        .map((it: { part_id: number | string; quantity: number | string; unit_cost?: number | string; remarks?: string }) => ({
+          part_id: Number(it.part_id),
+          quantity: Number(it.quantity),
+          unit_cost: Number(it.unit_cost || 0),
+          remarks: it.remarks || "",
+        }))
+        .filter((it) => it.part_id > 0 && it.quantity > 0);
+    } else if (part_id && quantity) {
+      const pNum = Number(part_id);
+      const qNum = Number(quantity);
+      if (pNum > 0 && qNum > 0) {
+        requestItems = [{ part_id: pNum, quantity: qNum, unit_cost: Number(unit_cost || 0), remarks }];
+      }
     }
 
-    // 2. Log outbound movement in vehicle_part_movements
+    if (requestItems.length === 0) {
+      return json({ error: "At least one valid part with a positive quantity is required." }, 400);
+    }
+
+    const assignedRefNo = reference_no && reference_no.trim() ? reference_no.trim() : `SO-${Date.now().toString().slice(-6)}`;
     const userId = getUserIdFromRequest(req);
+    const nowIso = new Date().toISOString();
+    const movType = movement_type || "Disposal";
 
-    const movementPayload: Record<string, unknown> = {
-      part_id: partIdNum,
-      branch_id: branchIdNum,
-      movement_type: movement_type || "Disposal",
-      quantity: qty,
-      unit_cost: cost,
-      reference_no: reference_no || `SO-${Date.now().toString().slice(-6)}`,
-      remarks: remarks || "",
-      created_by: userId || null,
-    };
-
-    const movRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_movements`, {
-      method: "POST",
-      headers: directusHeaders(),
-      body: JSON.stringify(movementPayload),
-    });
-
-    const movData = await movRes.json().catch(() => ({}));
-
-    // 3. Deduct stock from vehicle_part_stock
-    if (existingStock) {
-      const patchRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_stock/${existingStock.id}`, {
-        method: "PATCH",
+    // 1. Pre-validate stock for all items before any mutation
+    for (const item of requestItems) {
+      const stockUrl = `${DIRECTUS_URL}/items/vehicle_part_stock?filter[part_id][_eq]=${item.part_id}&filter[branch_id][_eq]=${branchIdNum}&limit=1`;
+      const stockRes = await fetch(stockUrl, {
+        cache: "no-store",
         headers: directusHeaders(),
-        body: JSON.stringify({
-          on_hand: Math.max(0, currentOnHand - qty),
-        }),
       });
+      const stockData = await stockRes.json().catch(() => ({ data: [] }));
+      const existingStock = stockData.data?.[0];
+      const currentOnHand = existingStock ? Number(existingStock.on_hand) || 0 : 0;
 
-      if (!patchRes.ok) {
-        const patchErr = await patchRes.json().catch(() => ({}));
-        console.error("Directus vehicle_part_stock deduction PATCH error:", patchErr);
+      if (item.quantity > currentOnHand) {
         return json(
           {
-            error:
-              patchErr?.errors?.[0]?.message ||
-              "Movement logged, but failed to deduct quantity from branch inventory in database.",
+            error: `Insufficient stock for Part #${item.part_id}. Requested: ${item.quantity}, Available on-hand: ${currentOnHand}`,
           },
-          patchRes.status || 500
+          400
         );
       }
     }
 
-    return json({ success: true, data: movData?.data || movementPayload }, 201);
+    // 2. Perform movement insertions and stock deductions
+    const createdMovements = [];
+
+    for (const item of requestItems) {
+      // Find current stock to update
+      const stockUrl = `${DIRECTUS_URL}/items/vehicle_part_stock?filter[part_id][_eq]=${item.part_id}&filter[branch_id][_eq]=${branchIdNum}&limit=1`;
+      const stockRes = await fetch(stockUrl, {
+        cache: "no-store",
+        headers: directusHeaders(),
+      });
+      const stockData = await stockRes.json().catch(() => ({ data: [] }));
+      const existingStock = stockData.data?.[0];
+      const currentOnHand = existingStock ? Number(existingStock.on_hand) || 0 : 0;
+
+      const movementPayload: Record<string, unknown> = {
+        part_id: item.part_id,
+        branch_id: branchIdNum,
+        movement_type: movType,
+        quantity: item.quantity,
+        unit_cost: item.unit_cost || 0,
+        reference_no: assignedRefNo,
+        remarks: item.remarks || remarks || "",
+        created_by: userId || null,
+        created_at: nowIso,
+      };
+
+      const movRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_movements`, {
+        method: "POST",
+        headers: directusHeaders(),
+        body: JSON.stringify(movementPayload),
+      });
+
+      const movData = await movRes.json().catch(() => ({}));
+      createdMovements.push(movData?.data || movementPayload);
+
+      // Deduct stock
+      if (existingStock) {
+        await fetch(`${DIRECTUS_URL}/items/vehicle_part_stock/${existingStock.id}`, {
+          method: "PATCH",
+          headers: directusHeaders(),
+          body: JSON.stringify({
+            on_hand: Math.max(0, currentOnHand - item.quantity),
+          }),
+        });
+      }
+    }
+
+    return json(
+      {
+        success: true,
+        reference_no: assignedRefNo,
+        count: createdMovements.length,
+        data: createdMovements[0],
+        items: createdMovements,
+      },
+      201
+    );
   } catch (e: unknown) {
     const err = e as Error;
     return json({ error: String(err?.message || err) }, 500);

@@ -18,14 +18,22 @@ export interface OutboundMovement {
   created_at: string;
 }
 
+export interface StockOutItemInput {
+  part_id: number;
+  quantity: number;
+  unit_cost?: number;
+  remarks?: string;
+}
+
 export interface StockOutPayload {
   branch_id: number;
-  part_id: number;
+  part_id?: number;
   movement_type: "Scrap" | "Damage" | "Disposal" | "Adjustment" | "Return";
-  quantity: number;
-  unit_cost: number;
+  quantity?: number;
+  unit_cost?: number;
   reference_no?: string;
   remarks: string;
+  items?: StockOutItemInput[];
 }
 
 export interface StockOutApiResponse {

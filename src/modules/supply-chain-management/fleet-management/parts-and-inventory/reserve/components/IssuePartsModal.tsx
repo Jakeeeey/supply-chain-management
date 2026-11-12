@@ -5,7 +5,7 @@ import type { IssuePartsInput, JobOrderRef, VehicleRef } from "../types";
 import type { VehiclePart } from "../../registration/types";
 import type { Branch } from "../../stock-in/types";
 import { SearchableSelect } from "./SearchableSelect";
-import { fetchAvailablePartsByBranch } from "../provider/fetchProviders";
+import { fetchAvailablePartsByBranch, fetchJobOrderRequestedParts } from "../provider/fetchProviders";
 import {
   Dialog,
   DialogContent,
@@ -61,17 +61,19 @@ export function IssuePartsModal({
   }>({});
   const [submitted, setSubmitted] = React.useState(false);
 
-  // When modal opens, clear and initialize
+  const [loadingJoParts, setLoadingJoParts] = React.useState(false);
+
+  // When modal opens, clear and initialize (do not auto-select branch so user must choose or pick JO)
   React.useEffect(() => {
     if (open) {
       setJobOrderId("");
-      setBranchId(branches.length > 0 ? String(branches[0].id) : "");
+      setBranchId("");
       setGeneralRemarks("");
       setItems([{ part_id: "", quantity: "1", unit_cost: "0", remarks: "" }]);
       setErrors({});
       setSubmitted(false);
     }
-  }, [open, branches]);
+  }, [open]);
 
   // Reactive effect: When branchId changes, fetch parts available specifically in that branch
   React.useEffect(() => {
@@ -105,19 +107,66 @@ export function IssuePartsModal({
     };
   }, [branchId]);
 
-  // When jobOrderId changes, auto-set branch if JO has branch_id
-  const handleJoChange = (selectedJoId: string) => {
+  // When jobOrderId changes, auto-set branch if JO has branch_id and auto-populate requested parts
+  const handleJoChange = async (selectedJoId: string) => {
     setJobOrderId(selectedJoId);
+    if (submitted && errors.jobOrderId) {
+      setErrors((prev) => ({ ...prev, jobOrderId: undefined }));
+    }
+
     const jo = jobOrders.find((j) => String(j.id) === selectedJoId);
+    let targetBranchId = branchId;
     if (jo?.branch_id) {
       const bId =
         typeof jo.branch_id === "object" && jo.branch_id !== null
-          ? jo.branch_id.id
-          : Number(jo.branch_id);
-      handleBranchChange(String(bId));
+          ? String(jo.branch_id.id)
+          : String(jo.branch_id);
+      targetBranchId = bId;
+      setBranchId(bId);
+      if (submitted && errors.branchId) {
+        setErrors((prev) => ({ ...prev, branchId: undefined }));
+      }
     }
-    if (submitted && errors.jobOrderId) {
-      setErrors((prev) => ({ ...prev, jobOrderId: undefined }));
+
+    if (!selectedJoId) return;
+
+    // Auto-fetch requested parts for this Job Order
+    setLoadingJoParts(true);
+    try {
+      const [joParts, branchParts] = await Promise.all([
+        fetchJobOrderRequestedParts(selectedJoId),
+        targetBranchId ? fetchAvailablePartsByBranch(targetBranchId) : Promise.resolve([]),
+      ]);
+
+      if (targetBranchId) {
+        setAvailableParts(branchParts);
+      }
+
+      if (joParts && joParts.length > 0) {
+        const mappedItems: ItemRowState[] = joParts.map((p) => {
+          const partId =
+            typeof p.part_id === "object" && p.part_id !== null
+              ? String(p.part_id.id)
+              : String(p.part_id || "");
+
+          const remainingRequested = Math.max(1, (p.quantity_requested || 0) - (p.quantity_issued || 0));
+          const unitCost = String(p.unit_cost || 0);
+
+          return {
+            part_id: partId,
+            quantity: String(remainingRequested),
+            unit_cost: unitCost,
+            remarks: p.remarks || "",
+          };
+        });
+        setItems(mappedItems.length > 0 ? mappedItems : [{ part_id: "", quantity: "1", unit_cost: "0", remarks: "" }]);
+      } else {
+        setItems([{ part_id: "", quantity: "1", unit_cost: "0", remarks: "" }]);
+      }
+    } catch {
+      // Keep default row if fetch fails
+    } finally {
+      setLoadingJoParts(false);
     }
   };
 
@@ -233,14 +282,16 @@ export function IssuePartsModal({
   };
 
   const joOptions = React.useMemo(() => {
-    return jobOrders.map((jo) => {
-      const v = typeof jo.vehicle_id === "object" && jo.vehicle_id !== null ? (jo.vehicle_id as VehicleRef) : null;
-      const vLabel = v?.plate_number ? ` [${v.plate_number}]` : "";
-      return {
-        value: String(jo.id),
-        label: `${jo.jo_no}${vLabel} (${jo.status})`,
-      };
-    });
+    return jobOrders
+      .filter((jo) => jo.status === "Approved" || jo.status === "In Progress")
+      .map((jo) => {
+        const v = typeof jo.vehicle_id === "object" && jo.vehicle_id !== null ? (jo.vehicle_id as VehicleRef) : null;
+        const vLabel = v?.plate_number ? ` [${v.plate_number}]` : "";
+        return {
+          value: String(jo.id),
+          label: `${jo.jo_no}${vLabel} (${jo.status})`,
+        };
+      });
   }, [jobOrders]);
 
   const branchOptions = React.useMemo(() => {
@@ -338,7 +389,14 @@ export function IssuePartsModal({
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-sm font-semibold">Parts to Issue</Label>
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm font-semibold">Parts to Issue</Label>
+                  {loadingJoParts && (
+                    <span className="text-xs text-primary animate-pulse font-medium">
+                      (Loading requested parts from JO...)
+                    </span>
+                  )}
+                </div>
                 <Button
                   type="button"
                   variant="outline"
