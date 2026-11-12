@@ -99,8 +99,9 @@ export function useMaintenance() {
       await createJobOrderRequest(payload);
       toast.success("Job order request submitted successfully!");
       await loadData();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to submit JO request.");
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e?.message || "Failed to submit JO request.");
       throw err;
     } finally {
       setActionLoading(false);
@@ -113,8 +114,9 @@ export function useMaintenance() {
       await updateJobOrderRequest(payload);
       toast.success("Job order request updated successfully!");
       await loadData();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to update JO request.");
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e?.message || "Failed to update JO request.");
       throw err;
     } finally {
       setActionLoading(false);
@@ -131,8 +133,9 @@ export function useMaintenance() {
         toast.success("Job order request has been rejected.");
       }
       await loadData();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to process approval.");
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e?.message || "Failed to process approval.");
       throw err;
     } finally {
       setActionLoading(false);
@@ -145,8 +148,9 @@ export function useMaintenance() {
       await startMaintenance(joId);
       toast.success("Maintenance started successfully!");
       await loadData();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to start maintenance.");
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e?.message || "Failed to start maintenance.");
       throw err;
     } finally {
       setActionLoading(false);
@@ -159,8 +163,9 @@ export function useMaintenance() {
       await issueJobOrderParts(payload);
       toast.success("Parts issued and stock deducted successfully!");
       await loadData();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to issue parts.");
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e?.message || "Failed to issue parts.");
       throw err;
     } finally {
       setActionLoading(false);
@@ -173,8 +178,9 @@ export function useMaintenance() {
       await completeJobOrder(payload);
       toast.success("Job order completed successfully!");
       await loadData();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to complete job order.");
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e?.message || "Failed to complete job order.");
       throw err;
     } finally {
       setActionLoading(false);

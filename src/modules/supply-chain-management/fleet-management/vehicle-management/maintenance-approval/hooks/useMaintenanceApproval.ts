@@ -57,9 +57,10 @@ export function useMaintenanceApproval() {
         toast.success("Job order request has been rejected.");
       }
       await loadData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error approving/rejecting job order:", err);
-      toast.error(err?.message || "Failed to process job order approval.");
+      const e = err as Error;
+      toast.error(e?.message || "Failed to process job order approval.");
       throw err;
     } finally {
       setActionLoading(false);

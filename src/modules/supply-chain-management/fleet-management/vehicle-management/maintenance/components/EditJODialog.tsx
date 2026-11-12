@@ -97,9 +97,7 @@ export function EditJODialog({
         setRequestedParts([]);
       }
     }
-  }, [open, jobOrder]);
-
-  if (!jobOrder) return null;
+  }, [open, jobOrder, onBranchChange]);
 
   const handleBranchChange = (val: string) => {
     setBranchId(val);
@@ -211,7 +209,7 @@ export function EditJODialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!vehicleId || !description.trim()) return;
+    if (!jobOrder || !vehicleId || !description.trim()) return;
 
     const validParts = requestedParts
       .filter((p) => p.part_id > 0 && p.quantity > 0)
@@ -235,6 +233,8 @@ export function EditJODialog({
 
     onOpenChange(false);
   };
+
+  if (!jobOrder) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -132,7 +132,11 @@ export async function GET(req: NextRequest) {
 
       const defaultTypes = ["Repair", "Preventive Maintenance", "Inspection"];
       const joTypesList = Array.isArray(rawJoTypes) && rawJoTypes.length > 0
-        ? rawJoTypes.map((t: any) => ({ id: t.id, type: t.type, description: t.description }))
+        ? rawJoTypes.map((t: { id?: number; type?: string; description?: string }) => ({
+            id: t.id,
+            type: t.type,
+            description: t.description,
+          }))
         : defaultTypes.map((t, idx) => ({ id: idx + 1, type: t }));
 
       return json({
