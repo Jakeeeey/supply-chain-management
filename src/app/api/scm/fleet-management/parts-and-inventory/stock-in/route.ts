@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { decodeJwtPayload, COOKIE_NAME } from "@/lib/auth-utils";
 
 export const runtime = "nodejs";
 
@@ -7,6 +8,19 @@ const DIRECTUS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN || "";
 
 function json(res: unknown, status = 200) {
   return NextResponse.json(res, { status });
+}
+
+function getUserIdFromRequest(req: NextRequest): number | null {
+  try {
+    const token = req.cookies.get(COOKIE_NAME)?.value;
+    if (!token) return null;
+    const payload = decodeJwtPayload(token);
+    const rawId = payload?.user_id ?? payload?.id ?? payload?.sub;
+    const num = Number(rawId);
+    return isNaN(num) || num <= 0 ? null : num;
+  } catch {
+    return null;
+  }
 }
 
 function directusHeaders(extra: Record<string, string> = {}) {
@@ -22,6 +36,25 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const search = url.searchParams.get("search");
     const branchId = url.searchParams.get("branch_id");
+    const checkRef = url.searchParams.get("check_ref");
+
+    // Quick lookup: check if reference_no is already taken globally across any branch
+    if (checkRef) {
+      const trimmedRef = checkRef.trim();
+      const checkParams = new URLSearchParams({
+        "filter[reference_no][_eq]": trimmedRef,
+        "filter[movement_type][_eq]": "Stock In",
+        limit: "1",
+        fields: "id,reference_no,branch_id",
+      });
+      const checkRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_movements?${checkParams.toString()}`, {
+        cache: "no-store",
+        headers: directusHeaders(),
+      });
+      const checkData = await checkRes.json().catch(() => ({ data: [] }));
+      const exists = Array.isArray(checkData?.data) && checkData.data.length > 0;
+      return json({ exists, reference_no: trimmedRef }, 200);
+    }
 
     const params = new URLSearchParams();
     params.set("limit", "-1");
@@ -72,6 +105,32 @@ export async function POST(req: NextRequest) {
       return json({ error: "Reference number, branch, and at least one item are required." }, 400);
     }
 
+    const trimmedRef = reference_no.trim();
+    const userId = getUserIdFromRequest(req);
+
+    // STRICT UNIQUE CHECK: Ensure reference number is globally unique across all branches
+    const checkParams = new URLSearchParams({
+      "filter[reference_no][_eq]": trimmedRef,
+      "filter[movement_type][_eq]": "Stock In",
+      limit: "1",
+      fields: "id,reference_no,branch_id",
+    });
+
+    const checkRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_movements?${checkParams.toString()}`, {
+      cache: "no-store",
+      headers: directusHeaders(),
+    });
+    const checkData = await checkRes.json().catch(() => ({ data: [] }));
+
+    if (Array.isArray(checkData?.data) && checkData.data.length > 0) {
+      return json(
+        {
+          error: `Reference number "${trimmedRef}" already exists. Reference numbers must be unique across all branches.`,
+        },
+        409
+      );
+    }
+
     const movementResults = [];
 
     for (const item of items) {
@@ -83,16 +142,20 @@ export async function POST(req: NextRequest) {
 
       if (!partId || qty <= 0) continue;
 
-      // 1. Log the stock movement
-      const movementPayload = {
+      // 1. Log the stock movement with created_by audit field
+      const movementPayload: Record<string, unknown> = {
         part_id: partId,
         branch_id: branchIdNum,
         movement_type: "Stock In",
         quantity: qty,
         unit_cost: cost,
-        reference_no: reference_no.trim(),
+        reference_no: trimmedRef,
         remarks: itemRemarks,
       };
+
+      if (userId) {
+        movementPayload.created_by = userId;
+      }
 
       const mRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_movements`, {
         method: "POST",
