@@ -13,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
-import { Eye, PackageCheck, CheckCheck, UserCheck, Building2 } from "lucide-react";
+import { Eye, CheckCheck, UserCheck, Building2 } from "lucide-react";
 
 interface MaintenanceProgressTableProps {
   jobOrders: VehicleJobOrder[];
@@ -24,7 +24,6 @@ interface MaintenanceProgressTableProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
   onViewDetails: (jo: VehicleJobOrder) => void;
-  onOpenIssueParts: (jo: VehicleJobOrder) => void;
   onOpenComplete: (jo: VehicleJobOrder) => void;
 }
 
@@ -37,7 +36,6 @@ export function MaintenanceProgressTable({
   onPageChange,
   onPageSizeChange,
   onViewDetails,
-  onOpenIssueParts,
   onOpenComplete,
 }: MaintenanceProgressTableProps) {
   const getPriorityBadge = (priority: string) => {
@@ -186,15 +184,6 @@ export function MaintenanceProgressTable({
                         >
                           <Eye className="h-3.5 w-3.5" />
                           Details
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 text-xs gap-1 text-amber-700 hover:text-amber-800 border-amber-200 hover:bg-amber-50"
-                          onClick={() => onOpenIssueParts(jo)}
-                        >
-                          <PackageCheck className="h-3.5 w-3.5 text-amber-600" />
-                          Issue Parts
                         </Button>
                         <Button
                           size="sm"

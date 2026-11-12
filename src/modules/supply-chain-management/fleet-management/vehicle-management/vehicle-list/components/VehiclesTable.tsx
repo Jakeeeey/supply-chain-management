@@ -24,6 +24,13 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function statusVariant(s: string) {
   const v = String(s || "").toLowerCase();
@@ -152,16 +159,23 @@ export function VehiclesTable({
   loading,
   currentPage,
   totalPages,
+  pageSize = 10,
+  totalCount = 0,
   onPageChange,
+  onPageSizeChange,
   onViewHistory,
 }: {
   rows: VehicleRow[];
   loading?: boolean;
   currentPage: number;
   totalPages: number;
+  pageSize?: number;
+  totalCount?: number;
   onPageChange: (page: number) => void;
+  onPageSizeChange?: (size: number) => void;
   onViewHistory: (row: VehicleRow) => void;
 }) {
+  const safeTotalPages = Math.max(1, totalPages);
   return (
     <div className="rounded-lg border bg-background dark:border-white/60">
       {/* ✅ Mobile (true responsive): Card list */}
@@ -234,68 +248,110 @@ export function VehiclesTable({
         </Table>
       </div>
 
-      {/* ✅ Pagination Controls */}
-      {!loading && totalPages > 1 && (
-        <div className="border-t p-4 flex justify-end">
-          <Pagination className="mx-0 w-auto">
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (currentPage > 1) onPageChange(currentPage - 1);
-                  }}
-                  className={currentPage <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                />
-              </PaginationItem>
+      {/* ✅ Pagination Controls with Rows per Page Binding */}
+      {!loading && (
+        <div className="border-t p-3 sm:p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3 text-xs sm:text-sm text-muted-foreground">
+            <span>
+              {totalCount > 0 ? (
+                <>
+                  Showing{" "}
+                  <strong className="text-foreground">
+                    {Math.min((currentPage - 1) * pageSize + 1, totalCount)}
+                  </strong>{" "}
+                  to{" "}
+                  <strong className="text-foreground">
+                    {Math.min(currentPage * pageSize, totalCount)}
+                  </strong>{" "}
+                  of <strong className="text-foreground">{totalCount}</strong> vehicles
+                </>
+              ) : (
+                "0 vehicles"
+              )}
+            </span>
 
-              {Array.from({ length: totalPages }).map((_, i) => {
-                const page = i + 1;
-                // Simple logic to show current, first, last, and neighbors
-                if (
-                  page === 1 ||
-                  page === totalPages ||
-                  (page >= currentPage - 1 && page <= currentPage + 1)
-                ) {
-                  return (
-                    <PaginationItem key={page}>
-                      <PaginationLink
-                        href="#"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          onPageChange(page);
-                        }}
-                        isActive={page === currentPage}
-                        className="cursor-pointer"
-                      >
-                        {page}
-                      </PaginationLink>
-                    </PaginationItem>
-                  );
-                }
-                if (page === currentPage - 2 || page === currentPage + 2) {
-                  return (
-                    <PaginationItem key={page}>
-                      <span className="px-2 text-muted-foreground">...</span>
-                    </PaginationItem>
-                  );
-                }
-                return null;
-              })}
+            {onPageSizeChange && (
+              <div className="flex items-center gap-1.5 pl-2 border-l">
+                <span className="text-xs">Rows per page:</span>
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={(val) => onPageSizeChange(Number(val))}
+                >
+                  <SelectTrigger className="h-7 w-[68px] text-xs">
+                    <SelectValue placeholder={String(pageSize)} />
+                  </SelectTrigger>
+                  <SelectContent side="top">
+                    {[10, 25, 50, 100].map((sz) => (
+                      <SelectItem key={sz} value={String(sz)} className="text-xs">
+                        {sz}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
 
-              <PaginationItem>
-                <PaginationNext
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (currentPage < totalPages) onPageChange(currentPage + 1);
-                  }}
-                  className={currentPage >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
+          {safeTotalPages > 1 && (
+            <Pagination className="mx-0 w-auto justify-end">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (currentPage > 1) onPageChange(currentPage - 1);
+                    }}
+                    className={currentPage <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+
+                {Array.from({ length: safeTotalPages }).map((_, i) => {
+                  const page = i + 1;
+                  if (
+                    page === 1 ||
+                    page === safeTotalPages ||
+                    (page >= currentPage - 1 && page <= currentPage + 1)
+                  ) {
+                    return (
+                      <PaginationItem key={page}>
+                        <PaginationLink
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onPageChange(page);
+                          }}
+                          isActive={page === currentPage}
+                          className="cursor-pointer"
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  }
+                  if (page === currentPage - 2 || page === currentPage + 2) {
+                    return (
+                      <PaginationItem key={page}>
+                        <span className="px-2 text-muted-foreground">...</span>
+                      </PaginationItem>
+                    );
+                  }
+                  return null;
+                })}
+
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (currentPage < safeTotalPages) onPageChange(currentPage + 1);
+                    }}
+                    className={currentPage >= safeTotalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
       )}
     </div>

@@ -13,13 +13,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
-import { Eye, PackageCheck, Play, UserCheck, Building2 } from "lucide-react";
+import { Eye, Play, UserCheck, Building2 } from "lucide-react";
 
 interface MaintenanceStartTableProps {
   jobOrders: VehicleJobOrder[];
   loading: boolean;
   onViewDetails: (jo: VehicleJobOrder) => void;
-  onOpenIssueParts: (jo: VehicleJobOrder) => void;
   onStartMaintenance: (jo: VehicleJobOrder) => void;
   currentPage?: number;
   pageSize?: number;
@@ -32,7 +31,6 @@ export function MaintenanceStartTable({
   jobOrders,
   loading,
   onViewDetails,
-  onOpenIssueParts,
   onStartMaintenance,
   currentPage = 1,
   pageSize = 10,
@@ -186,15 +184,6 @@ export function MaintenanceStartTable({
                         >
                           <Eye className="h-3.5 w-3.5" />
                           Details
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 text-xs gap-1 text-amber-700 hover:text-amber-800 border-amber-200 hover:bg-amber-50"
-                          onClick={() => onOpenIssueParts(jo)}
-                        >
-                          <PackageCheck className="h-3.5 w-3.5 text-amber-600" />
-                          Issue Parts
                         </Button>
                         <Button
                           size="sm"

@@ -1,6 +1,12 @@
-export type JOType = "Repair" | "Preventive Maintenance" | "Inspection";
+export type JOType = string;
 export type JOPriority = "Low" | "Normal" | "High" | "Urgent";
 export type JOStatus = "Requested" | "Approved" | "Rejected" | "In Progress" | "Completed" | "Cancelled";
+
+export interface VehicleJOTypeOption {
+  id: number;
+  type: string;
+  description?: string;
+}
 
 export interface BranchOption {
   id: number;
@@ -87,6 +93,8 @@ export interface VehicleJobOrder {
   labor_cost?: number;
   created_at?: string;
   updated_at?: string;
+  created_by?: number | UserOption;
+  updated_by?: number | UserOption;
   parts?: JobOrderPartItem[];
 }
 
@@ -98,6 +106,22 @@ export interface CreateJORequestPayload {
   description: string;
   odometer_reading?: number;
   requested_by?: number;
+  parts?: Array<{
+    part_id: number;
+    quantity_requested: number;
+    unit_cost: number;
+    remarks?: string;
+  }>;
+}
+
+export interface UpdateJORequestPayload {
+  job_order_id: number;
+  vehicle_id: number;
+  branch_id: number;
+  jo_type: JOType;
+  priority: JOPriority;
+  description: string;
+  odometer_reading?: number;
   parts?: Array<{
     part_id: number;
     quantity_requested: number;

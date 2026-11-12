@@ -5,6 +5,7 @@ import type {
   VehicleOption,
   VehiclePartOption,
   BranchOption,
+  VehicleJOTypeOption,
   CreateJORequestPayload,
   JOType,
   JOPriority,
@@ -29,6 +30,7 @@ interface CreateJODialogProps {
   vehicles: VehicleOption[];
   parts: VehiclePartOption[];
   branches: BranchOption[];
+  joTypes?: VehicleJOTypeOption[];
   onBranchChange?: (branchId: number | string) => void;
   onSubmit: (payload: CreateJORequestPayload) => Promise<void>;
   loading: boolean;
@@ -40,6 +42,7 @@ export function CreateJODialog({
   vehicles,
   parts,
   branches,
+  joTypes = [],
   onBranchChange,
   onSubmit,
   loading,
@@ -105,11 +108,16 @@ export function CreateJODialog({
     });
   }, [vehicles]);
 
-  const joTypeOptions = [
-    { value: "Repair", label: "Repair" },
-    { value: "Preventive Maintenance", label: "Preventive Maintenance" },
-    { value: "Inspection", label: "Inspection" },
-  ];
+  const joTypeOptions = React.useMemo(() => {
+    if (joTypes && joTypes.length > 0) {
+      return joTypes.map((t) => ({ value: t.type, label: t.type }));
+    }
+    return [
+      { value: "Repair", label: "Repair" },
+      { value: "Preventive Maintenance", label: "Preventive Maintenance" },
+      { value: "Inspection", label: "Inspection" },
+    ];
+  }, [joTypes]);
 
   const priorityOptions = [
     { value: "Low", label: "Low" },
@@ -142,8 +150,16 @@ export function CreateJODialog({
           part_id: Number(val),
           unit_cost: selectedPart ? Number(selectedPart.unit_cost) || 0 : 0,
         };
-      } else {
-        next[index] = { ...next[index], [field]: val };
+      } else if (field === "quantity") {
+        next[index] = {
+          ...next[index],
+          quantity: Math.max(1, Number(val) || 1),
+        };
+      } else if (field === "remarks") {
+        next[index] = {
+          ...next[index],
+          remarks: String(val || ""),
+        };
       }
       return next;
     });
@@ -153,33 +169,40 @@ export function CreateJODialog({
     setRequestedParts((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const resetForm = () => {
+    setBranchId("");
+    setVehicleId("");
+    setJoType(joTypeOptions[0]?.value || "Repair");
+    setPriority("Normal");
+    setOdometer("");
+    setDescription("");
+    setRequestedParts([]);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!branchId || !vehicleId || !description.trim()) return;
+    if (!vehicleId || !description.trim()) return;
+
+    const validParts = requestedParts
+      .filter((p) => p.part_id > 0 && p.quantity > 0)
+      .map((p) => ({
+        part_id: p.part_id,
+        quantity_requested: p.quantity,
+        unit_cost: p.unit_cost,
+        remarks: p.remarks,
+      }));
 
     await onSubmit({
       vehicle_id: Number(vehicleId),
-      branch_id: Number(branchId),
+      branch_id: branchId ? Number(branchId) : 1,
       jo_type: joType,
       priority,
       description,
       odometer_reading: odometer ? Number(odometer) : undefined,
-      parts: requestedParts
-        .filter((p) => p.part_id > 0 && p.quantity > 0)
-        .map((p) => ({
-          part_id: p.part_id,
-          quantity_requested: p.quantity,
-          unit_cost: p.unit_cost,
-          remarks: p.remarks,
-        })),
+      parts: validParts,
     });
 
-    // Reset and close
-    setBranchId("");
-    setVehicleId("");
-    setDescription("");
-    setOdometer("");
-    setRequestedParts([]);
+    resetForm();
     onOpenChange(false);
   };
 
@@ -187,14 +210,16 @@ export function CreateJODialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] sm:max-w-xl max-h-[90vh] overflow-y-auto overflow-x-hidden p-6">
         <DialogHeader>
-          <DialogTitle>Create Job Order Request</DialogTitle>
+          <DialogTitle className="text-lg font-bold">Create Job Order Request</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 pt-2 w-full min-w-0">
           {/* Branch & Vehicle Selection */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full min-w-0">
             <div className="space-y-1.5 min-w-0">
-              <Label htmlFor="branch">Branch *</Label>
+              <Label className="text-xs font-semibold">
+                Branch <span className="text-destructive">*</span>
+              </Label>
               <SearchableSelect
                 options={branchOptions}
                 value={branchId}
@@ -204,42 +229,34 @@ export function CreateJODialog({
             </div>
 
             <div className="space-y-1.5 min-w-0">
-              <Label htmlFor="vehicle">Vehicle *</Label>
+              <Label className="text-xs font-semibold">
+                Vehicle <span className="text-destructive">*</span>
+              </Label>
               <SearchableSelect
                 options={vehicleOptions}
                 value={vehicleId}
                 onValueChange={handleVehicleChange}
-                placeholder="Search and select vehicle..."
+                placeholder="Select vehicle..."
               />
             </div>
           </div>
 
-          {/* Odometer, Type & Priority */}
+          {/* Type & Priority */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full min-w-0">
             <div className="space-y-1.5 min-w-0">
-              <Label htmlFor="odometer">Current Odometer (km)</Label>
-              <Input
-                id="odometer"
-                type="number"
-                placeholder="e.g. 45000"
-                value={odometer}
-                onChange={(e) => setOdometer(e.target.value)}
-                className="w-full"
-              />
-            </div>
-
-            <div className="space-y-1.5 min-w-0">
-              <Label htmlFor="joType">JO Type *</Label>
+              <Label className="text-xs font-semibold">
+                JO Type <span className="text-destructive">*</span>
+              </Label>
               <SearchableSelect
                 options={joTypeOptions}
                 value={joType}
-                onValueChange={(val) => setJoType(val as JOType)}
-                placeholder="Select JO type..."
+                onValueChange={(val) => setJoType(val)}
+                placeholder="Select type..."
               />
             </div>
 
             <div className="space-y-1.5 min-w-0">
-              <Label htmlFor="priority">Priority</Label>
+              <Label className="text-xs font-semibold">Priority</Label>
               <SearchableSelect
                 options={priorityOptions}
                 value={priority}
@@ -247,11 +264,27 @@ export function CreateJODialog({
                 placeholder="Select priority..."
               />
             </div>
+
+            <div className="space-y-1.5 min-w-0">
+              <Label htmlFor="odometer" className="text-xs font-semibold">
+                Current Odometer (km)
+              </Label>
+              <Input
+                id="odometer"
+                type="number"
+                placeholder="e.g. 45000"
+                value={odometer}
+                onChange={(e) => setOdometer(e.target.value)}
+                className="h-9 text-xs"
+              />
+            </div>
           </div>
 
-          {/* Description with robust text-overflow constraints */}
+          {/* Description */}
           <div className="space-y-1.5 w-full min-w-0">
-            <Label htmlFor="description">Issue / Maintenance Description *</Label>
+            <Label htmlFor="description" className="text-xs font-semibold">
+              Issue / Maintenance Description <span className="text-destructive">*</span>
+            </Label>
             <Textarea
               id="description"
               placeholder="Describe symptoms, repair requirements, or scheduled maintenance items..."
@@ -263,18 +296,16 @@ export function CreateJODialog({
             />
           </div>
 
-          {/* Inventory & Parts Request Section */}
-          <div className="space-y-3 pt-2 border-t w-full min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="min-w-0">
-                <Label className="text-sm font-semibold flex items-center gap-1.5">
-                  <Package className="h-4 w-4 text-primary shrink-0" />
+          {/* Parts Section */}
+          <div className="space-y-2 border-t pt-3 w-full min-w-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-xs font-semibold flex items-center gap-1.5">
+                  <Package className="h-4 w-4 text-purple-600" />
                   Initial Parts Needed (Optional)
                 </Label>
-                <p className="text-xs text-muted-foreground truncate">
-                  {branchId
-                    ? "Stock counts reflect availability in the selected branch."
-                    : "Select a branch first to inspect local stock."}
+                <p className="text-[11px] text-muted-foreground">
+                  Check available stock directly from vehicle parts catalogue.
                 </p>
               </div>
               <Button
@@ -282,64 +313,53 @@ export function CreateJODialog({
                 variant="outline"
                 size="sm"
                 onClick={handleAddPartRow}
-                className="h-8 shrink-0 self-start sm:self-auto"
+                className="h-7 text-xs"
               >
-                <Plus className="h-3.5 w-3.5 mr-1" />
+                <Plus className="h-3 w-3 mr-1" />
                 Add Part
               </Button>
             </div>
 
             {requestedParts.length > 0 && (
-              <div className="space-y-2 w-full min-w-0">
-                {requestedParts.map((row, index) => {
-                  const selectedPart = parts.find((p) => p.id === row.part_id);
-                  const availableStock = selectedPart?.on_hand ?? 0;
-
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {requestedParts.map((row, idx) => {
+                  const selectedPart = parts.find((p) => Number(p.id) === Number(row.part_id));
+                  const stock = selectedPart ? selectedPart.on_hand ?? 0 : 0;
                   return (
                     <div
-                      key={index}
-                      className="grid grid-cols-12 gap-2 items-center bg-muted/40 p-2 rounded-md w-full min-w-0"
+                      key={idx}
+                      className="grid grid-cols-12 gap-2 items-center bg-muted/30 p-2 rounded-md text-xs border"
                     >
                       <div className="col-span-12 sm:col-span-6 min-w-0">
                         <SearchableSelect
                           options={partOptions}
                           value={row.part_id ? String(row.part_id) : ""}
-                          onValueChange={(val) => handleUpdatePartRow(index, "part_id", val)}
+                          onValueChange={(val) => handleUpdatePartRow(idx, "part_id", val)}
                           placeholder="Search part..."
-                          triggerClassName="h-8 text-xs w-full min-w-0"
                         />
                       </div>
-
-                      <div className="col-span-5 sm:col-span-3 min-w-0">
+                      <div className="col-span-5 sm:col-span-3 min-w-0 flex items-center gap-1">
                         <Input
                           type="number"
                           min="1"
-                          placeholder="Qty"
-                          className="h-8 text-xs w-full min-w-0"
+                          className="h-8 text-xs"
                           value={row.quantity}
-                          onChange={(e) =>
-                            handleUpdatePartRow(index, "quantity", Number(e.target.value))
-                          }
+                          onChange={(e) => handleUpdatePartRow(idx, "quantity", e.target.value)}
                         />
-                      </div>
-
-                      <div className="col-span-5 sm:col-span-2 text-xs min-w-0">
-                        <span
-                          className={`font-medium ${
-                            row.quantity > availableStock ? "text-destructive" : "text-emerald-600"
-                          }`}
-                        >
-                          {availableStock} Avail
+                        <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                          {stock} Avail
                         </span>
                       </div>
-
+                      <div className="col-span-5 sm:col-span-2 min-w-0 text-right font-medium text-foreground">
+                        ₱{((row.unit_cost || 0) * (row.quantity || 1)).toLocaleString()}
+                      </div>
                       <div className="col-span-2 sm:col-span-1 flex justify-end">
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                          onClick={() => handleRemovePartRow(index)}
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={() => handleRemovePartRow(idx)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -351,20 +371,19 @@ export function CreateJODialog({
             )}
           </div>
 
-          <DialogFooter className="pt-4 border-t flex flex-col-reverse sm:flex-row gap-2">
+          <DialogFooter className="pt-3 border-t flex flex-col-reverse sm:flex-row gap-2">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={loading}
-              className="w-full sm:w-auto"
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              disabled={loading || !branchId || !vehicleId || !description.trim()}
-              className="w-full sm:w-auto"
+              disabled={loading || !vehicleId || !description.trim()}
+              className="bg-primary text-primary-foreground"
             >
               {loading ? "Submitting..." : "Submit JO Request"}
             </Button>

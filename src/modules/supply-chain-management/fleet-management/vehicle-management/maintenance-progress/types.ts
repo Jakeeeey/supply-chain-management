@@ -103,9 +103,17 @@ export interface IssuePartsPayload {
   }>;
 }
 
+export interface AdditionalPartDiff {
+  part_id: number;
+  quantity_diff: number;
+  unit_cost: number;
+  remarks?: string;
+}
+
 export interface CompleteJOPayload {
   job_order_id: number;
   completion_remarks: string;
   labor_cost?: number;
   final_odometer?: number;
+  additional_parts?: AdditionalPartDiff[];
 }

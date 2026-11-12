@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     if (mode === "options") {
       const branchId = url.searchParams.get("branch_id");
 
-      const [vRes, uRes, pRes, sRes, bRes] = await Promise.all([
+      const [vRes, uRes, pRes, sRes, bRes, jtRes] = await Promise.all([
         fetch(`${DIRECTUS_URL}/items/vehicles?limit=-1`, {
           cache: "no-store",
           headers: directusHeaders(),
@@ -68,6 +68,10 @@ export async function GET(req: NextRequest) {
           cache: "no-store",
           headers: directusHeaders(),
         }).catch(() => null),
+        fetch(`${DIRECTUS_URL}/items/vehicle_jo_type?limit=-1&sort=type`, {
+          cache: "no-store",
+          headers: directusHeaders(),
+        }).catch(() => null),
       ]);
 
       const vehicles = vRes ? (await vRes.json().catch(() => ({})))?.data || [] : [];
@@ -75,6 +79,7 @@ export async function GET(req: NextRequest) {
       const parts = pRes ? (await pRes.json().catch(() => ({})))?.data || [] : [];
       const stocks = sRes ? (await sRes.json().catch(() => ({})))?.data || [] : [];
       const rawBranches = bRes ? (await bRes.json().catch(() => ({})))?.data || [] : [];
+      const rawJoTypes = jtRes ? (await jtRes.json().catch(() => ({})))?.data || [] : [];
 
       const branches = (Array.isArray(rawBranches) ? rawBranches : []).map((b: { id?: number; branch_id?: number; branch_name?: string; name?: string; branch_code?: string; location?: string }) => ({
         id: b.id ?? b.branch_id,
@@ -125,12 +130,18 @@ export async function GET(req: NextRequest) {
         };
       });
 
+      const defaultTypes = ["Repair", "Preventive Maintenance", "Inspection"];
+      const joTypesList = Array.isArray(rawJoTypes) && rawJoTypes.length > 0
+        ? rawJoTypes.map((t: any) => ({ id: t.id, type: t.type, description: t.description }))
+        : defaultTypes.map((t, idx) => ({ id: idx + 1, type: t }));
+
       return json({
         data: {
           vehicles,
           users,
           parts: partsWithStock,
           branches,
+          jo_types: joTypesList,
         },
       });
     }
@@ -260,6 +271,7 @@ export async function POST(req: NextRequest) {
         status: "Requested",
         requested_by: effectiveRequestedBy ? Number(effectiveRequestedBy) : null,
         requested_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
       };
 
       if (validBranchId) {
@@ -356,6 +368,142 @@ export async function PATCH(req: NextRequest) {
 
     if (!job_order_id) {
       return json({ error: "job_order_id is required." }, 400);
+    }
+
+    // 0. Update JO Request (When status is Requested)
+    if (action === "update_request") {
+      const { vehicle_id, branch_id, jo_type, priority, description, odometer_reading, parts } = payload;
+
+      // Verify that JO is still in Requested status
+      const existingJoRes = await fetch(`${DIRECTUS_URL}/items/vehicle_job_orders/${job_order_id}?fields=id,status,branch_id`, {
+        cache: "no-store",
+        headers: directusHeaders(),
+      });
+      const existingJo = (await existingJoRes.json().catch(() => ({})))?.data;
+      if (!existingJo) {
+        return json({ error: "Job Order not found." }, 404);
+      }
+      if (existingJo.status?.toLowerCase() !== "requested") {
+        return json({ error: "Only Job Orders in Requested status can be edited." }, 400);
+      }
+
+      const utcNow = new Date().toISOString();
+      const updateJoData: Record<string, unknown> = {
+        vehicle_id: Number(vehicle_id),
+        branch_id: Number(branch_id || existingJo.branch_id || 1),
+        jo_type,
+        priority: priority || "Normal",
+        description,
+        odometer_reading: odometer_reading ? Number(odometer_reading) : null,
+        updated_at: utcNow,
+      };
+
+      const userToken = req.cookies.get(COOKIE_NAME)?.value;
+      const currentUserId = getUserIdFromToken(userToken);
+      if (currentUserId) {
+        updateJoData.updated_by = currentUserId;
+      }
+
+      const patchJoRes = await fetch(`${DIRECTUS_URL}/items/vehicle_job_orders/${job_order_id}`, {
+        method: "PATCH",
+        headers: directusHeaders(),
+        body: JSON.stringify(updateJoData),
+      });
+
+      if (!patchJoRes.ok) {
+        const errData = await patchJoRes.json().catch(() => ({}));
+        return json({ error: errData?.errors?.[0]?.message || "Failed to update Job Order" }, patchJoRes.status);
+      }
+
+      // Handle updating parts requested:
+      // Release existing reserved stock for this JO
+      const oldPartsRes = await fetch(`${DIRECTUS_URL}/items/vehicle_job_order_parts?filter[job_order_id][_eq]=${job_order_id}&limit=-1`, {
+        cache: "no-store",
+        headers: directusHeaders(),
+      });
+      const oldParts = (await oldPartsRes.json().catch(() => ({ data: [] })))?.data || [];
+
+      for (const op of oldParts) {
+        const partId = Number(typeof op.part_id === "object" && op.part_id !== null ? op.part_id.id : op.part_id);
+        const reqQty = Number(op.quantity_requested) || 0;
+        if (partId && reqQty > 0) {
+          const sRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_stock?filter[part_id][_eq]=${partId}&limit=1`, {
+            cache: "no-store",
+            headers: directusHeaders(),
+          });
+          const sData = await sRes.json().catch(() => ({ data: [] }));
+          const exStock = sData.data?.[0];
+          if (exStock) {
+            await fetch(`${DIRECTUS_URL}/items/vehicle_part_stock/${exStock.id}`, {
+              method: "PATCH",
+              headers: directusHeaders(),
+              body: JSON.stringify({
+                reserved: Math.max(0, (Number(exStock.reserved) || 0) - reqQty),
+              }),
+            });
+          }
+        }
+        // Delete old job order part item
+        await fetch(`${DIRECTUS_URL}/items/vehicle_job_order_parts/${op.id}`, {
+          method: "DELETE",
+          headers: directusHeaders(),
+        });
+      }
+
+      // Insert new parts and reserve stock
+      if (Array.isArray(parts) && parts.length > 0) {
+        for (const p of parts) {
+          if (!p.part_id || !p.quantity_requested) continue;
+          const partId = Number(p.part_id);
+          const qty = Number(p.quantity_requested);
+          const cost = Number(p.unit_cost) || 0;
+
+          await fetch(`${DIRECTUS_URL}/items/vehicle_job_order_parts`, {
+            method: "POST",
+            headers: directusHeaders(),
+            body: JSON.stringify({
+              job_order_id: Number(job_order_id),
+              part_id: partId,
+              quantity_requested: qty,
+              quantity_issued: 0,
+              unit_cost: cost,
+              remarks: p.remarks || "",
+            }),
+          });
+
+          // Reserve in stock
+          try {
+            const stockFilter = branch_id
+              ? `filter[part_id][_eq]=${partId}&filter[branch_id][_eq]=${branch_id}&limit=1`
+              : `filter[part_id][_eq]=${partId}&limit=1`;
+            const sRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_stock?${stockFilter}`, {
+              cache: "no-store",
+              headers: directusHeaders(),
+            });
+            const sData = await sRes.json().catch(() => ({ data: [] }));
+            let exStock = sData.data?.[0];
+            if (!exStock) {
+              const fbRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_stock?filter[part_id][_eq]=${partId}&limit=1`, {
+                cache: "no-store",
+                headers: directusHeaders(),
+              });
+              const fbData = await fbRes.json().catch(() => ({ data: [] }));
+              exStock = fbData.data?.[0];
+            }
+            if (exStock) {
+              await fetch(`${DIRECTUS_URL}/items/vehicle_part_stock/${exStock.id}`, {
+                method: "PATCH",
+                headers: directusHeaders(),
+                body: JSON.stringify({
+                  reserved: (Number(exStock.reserved) || 0) + qty,
+                }),
+              });
+            }
+          } catch {}
+        }
+      }
+
+      return json({ success: true, message: "Job order request updated successfully." }, 200);
     }
 
     // 1. Approve or Reject & Assign Mechanic

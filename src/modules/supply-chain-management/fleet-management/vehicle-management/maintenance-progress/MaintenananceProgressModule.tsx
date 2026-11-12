@@ -5,7 +5,6 @@ import type { VehicleJobOrder } from "./types";
 import { useMaintenanceProgress } from "./hooks/useMaintenanceProgress";
 import { MaintenanceProgressToolbar } from "./components/MaintenanceProgressToolbar";
 import { MaintenanceProgressTable } from "./components/MaintenanceProgressTable";
-import { IssuePartsDialog } from "./components/IssuePartsDialog";
 import { CompleteJODialog } from "./components/CompleteJODialog";
 import { JODetailsDialog } from "./components/JODetailsDialog";
 
@@ -27,16 +26,14 @@ export default function MaintenanceProgressModule() {
     setPageSize,
     refresh,
     loadPartsForBranch,
-    issueParts,
     completeJO,
   } = useMaintenanceProgress();
 
-  const [openIssueParts, setOpenIssueParts] = React.useState(false);
   const [openComplete, setOpenComplete] = React.useState(false);
   const [openDetails, setOpenDetails] = React.useState(false);
   const [selectedJO, setSelectedJO] = React.useState<VehicleJobOrder | null>(null);
 
-  const handleOpenIssueParts = async (jo: VehicleJobOrder) => {
+  const handleOpenComplete = async (jo: VehicleJobOrder) => {
     setSelectedJO(jo);
     const branchId =
       typeof jo.branch_id === "object" && jo.branch_id !== null
@@ -45,11 +42,6 @@ export default function MaintenanceProgressModule() {
     if (branchId) {
       await loadPartsForBranch(branchId);
     }
-    setOpenIssueParts(true);
-  };
-
-  const handleOpenComplete = (jo: VehicleJobOrder) => {
-    setSelectedJO(jo);
     setOpenComplete(true);
   };
 
@@ -63,7 +55,7 @@ export default function MaintenanceProgressModule() {
       <div>
         <h1 className="text-xl font-bold tracking-tight">Maintenance Progress</h1>
         <p className="text-xs text-muted-foreground">
-          Track ongoing vehicle repairs, issue additional replacement parts, and record completion details.
+          Track ongoing vehicle repairs, review allocated parts or log additional parts used, and record completion details.
         </p>
       </div>
 
@@ -85,24 +77,15 @@ export default function MaintenanceProgressModule() {
         onPageChange={setCurrentPage}
         onPageSizeChange={setPageSize}
         onViewDetails={handleViewDetails}
-        onOpenIssueParts={handleOpenIssueParts}
         onOpenComplete={handleOpenComplete}
       />
 
-      {/* Dialogs */}
-      <IssuePartsDialog
-        open={openIssueParts}
-        onOpenChange={setOpenIssueParts}
-        jobOrder={selectedJO}
-        parts={parts}
-        onSubmit={issueParts}
-        loading={actionLoading}
-      />
-
+      {/* Unified Complete JO Modal with Part Allocation Review & Difference Calculation */}
       <CompleteJODialog
         open={openComplete}
         onOpenChange={setOpenComplete}
         jobOrder={selectedJO}
+        parts={parts}
         onSubmit={completeJO}
         loading={actionLoading}
       />

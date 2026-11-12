@@ -15,6 +15,8 @@ import {
   deleteVehicleDocument,
 } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/providers/fetchProviders";
 import { parseVehicleDocumentText } from "../../utils/vehicleDocParser";
+import { VehicleSearchableSelect } from "../VehicleSearchableSelect";
+import { DocumentPreviewModal, type DocumentPreviewTarget } from "./DocumentPreviewModal";
 import { createWorker } from "tesseract.js";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -107,6 +109,25 @@ function SectionSkeleton({ rows = 6 }: { rows?: number }) {
   );
 }
 
+function resolveVehiclePhoto(img?: string | null): string | null {
+  if (!img) return null;
+  const s = String(img).trim();
+  if (!s) return null;
+  if (
+    s.startsWith("http://") ||
+    s.startsWith("https://") ||
+    s.startsWith("data:") ||
+    s.startsWith("blob:") ||
+    s.startsWith("/uploads/")
+  ) {
+    return s;
+  }
+  if (s.startsWith("/")) {
+    return s;
+  }
+  return `/api/scm/fleet-management/vehicle-management/vehicle-list/assets/${encodeURIComponent(s)}`;
+}
+
 export default function DetailsTab({
   vehicle,
   typeOptions = [],
@@ -158,7 +179,16 @@ export default function DetailsTab({
   const [currentImage, setCurrentImage] = React.useState<string | null>(
     String(raw?.image ?? vehicle.image ?? "").trim() || null
   );
+  const [imageError, setImageError] = React.useState(false);
   const [uploadingImage, setUploadingImage] = React.useState(false);
+
+  // Document preview modal state
+  const [previewDoc, setPreviewDoc] = React.useState<DocumentPreviewTarget | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = React.useState(false);
+
+  React.useEffect(() => {
+    setImageError(false);
+  }, [currentImage]);
 
   // New document upload state
   const [showUploadDoc, setShowUploadDoc] = React.useState(false);
@@ -607,21 +637,15 @@ export default function DetailsTab({
 
                     <div className="grid gap-1.5">
                       <Label className="text-xs">Vehicle Type</Label>
-                      <Select
-                        value={editTypeId === null ? "" : String(editTypeId)}
-                        onValueChange={(v) => setEditTypeId(v ? Number(v) : null)}
-                      >
-                        <SelectTrigger className="h-9 text-xs">
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {typeOptions.map((t) => (
-                            <SelectItem key={t.id} value={String(t.id)}>
-                              {t.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <VehicleSearchableSelect
+                        options={typeOptions}
+                        value={editTypeId}
+                        onValueChange={(v) => setEditTypeId(v)}
+                        placeholder="Select type"
+                        searchPlaceholder="Search vehicle type..."
+                        emptyText="No vehicle types found."
+                        className="h-9 text-xs"
+                      />
                     </div>
 
                     <div className="grid gap-1.5">
@@ -677,40 +701,28 @@ export default function DetailsTab({
 
                     <div className="grid gap-1.5">
                       <Label className="text-xs">Fuel Type</Label>
-                      <Select
-                        value={editFuelTypeId === null ? "" : String(editFuelTypeId)}
-                        onValueChange={(v) => setEditFuelTypeId(v ? Number(v) : null)}
-                      >
-                        <SelectTrigger className="h-9 text-xs">
-                          <SelectValue placeholder="Select fuel type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {fuelOptions.map((f) => (
-                            <SelectItem key={f.id} value={String(f.id)}>
-                              {f.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <VehicleSearchableSelect
+                        options={fuelOptions}
+                        value={editFuelTypeId}
+                        onValueChange={(v) => setEditFuelTypeId(v)}
+                        placeholder="Select fuel type"
+                        searchPlaceholder="Search fuel type..."
+                        emptyText="No fuel types found."
+                        className="h-9 text-xs"
+                      />
                     </div>
 
                     <div className="grid gap-1.5">
                       <Label className="text-xs">Engine Type</Label>
-                      <Select
-                        value={editEngineTypeId === null ? "" : String(editEngineTypeId)}
-                        onValueChange={(v) => setEditEngineTypeId(v ? Number(v) : null)}
-                      >
-                        <SelectTrigger className="h-9 text-xs">
-                          <SelectValue placeholder="Select engine type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {engineOptions.map((eg) => (
-                            <SelectItem key={eg.id} value={String(eg.id)}>
-                              {eg.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <VehicleSearchableSelect
+                        options={engineOptions}
+                        value={editEngineTypeId}
+                        onValueChange={(v) => setEditEngineTypeId(v)}
+                        placeholder="Select engine type"
+                        searchPlaceholder="Search engine type..."
+                        emptyText="No engine types found."
+                        className="h-9 text-xs"
+                      />
                     </div>
 
                     <div className="grid gap-1.5">
@@ -731,13 +743,14 @@ export default function DetailsTab({
                   <div className="border-t pt-4">
                     <Label className="text-xs mb-2 block">Vehicle Photo</Label>
                     <div className="flex items-center gap-4">
-                      {currentImage ? (
+                      {resolveVehiclePhoto(currentImage) && !imageError ? (
                         <div className="relative h-24 w-32 rounded-md overflow-hidden border">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={currentImage}
+                            src={resolveVehiclePhoto(currentImage)!}
                             alt="Vehicle Preview"
                             className="h-full w-full object-cover"
+                            onError={() => setImageError(true)}
                           />
                         </div>
                       ) : (
@@ -798,7 +811,7 @@ export default function DetailsTab({
                     </div>
                   </div>
 
-                  {currentImage ? (
+                  {resolveVehiclePhoto(currentImage) && !imageError ? (
                     <div className="md:col-span-4">
                       <div className="flex items-center justify-between">
                         <div className="text-xs text-muted-foreground">Vehicle Photo</div>
@@ -829,9 +842,10 @@ export default function DetailsTab({
                       <div className="mt-2 overflow-hidden rounded-lg border">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={currentImage}
+                          src={resolveVehiclePhoto(currentImage)!}
                           alt="Vehicle"
                           className="h-44 w-full object-cover md:h-48"
+                          onError={() => setImageError(true)}
                         />
                       </div>
                     </div>
@@ -1200,19 +1214,23 @@ export default function DetailsTab({
                             <div className="flex items-center gap-1.5 self-start sm:self-auto shrink-0">
                               {d.file_id && (
                                 <Button
-                                  asChild
+                                  type="button"
                                   variant="outline"
                                   size="sm"
                                   className="h-7 gap-1 text-xs"
+                                  onClick={() => {
+                                    setPreviewDoc({
+                                      fileId: d.file_id,
+                                      fileName: d.file_name,
+                                      documentType: d.document_type,
+                                      documentNo: d.document_no,
+                                      remarks: d.remarks,
+                                    });
+                                    setShowPreviewModal(true);
+                                  }}
                                 >
-                                  <a
-                                    href={`${(process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "")}/assets/${d.file_id}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    <ExternalLink className="h-3 w-3" />
-                                    View File
-                                  </a>
+                                  <ExternalLink className="h-3 w-3" />
+                                  View File
                                 </Button>
                               )}
 
@@ -1282,6 +1300,13 @@ export default function DetailsTab({
           </Card>
         </>
       )}
+
+      {/* Interactive Document Preview Modal */}
+      <DocumentPreviewModal
+        open={showPreviewModal}
+        onOpenChange={setShowPreviewModal}
+        document={previewDoc}
+      />
     </div>
   );
 }

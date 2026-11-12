@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { VehicleJobOrder } from "./types";
+import type { VehicleJobOrder, IssuePartsPayload } from "./types";
 import { useMaintenanceStart } from "./hooks/useMaintenanceStart";
 import { MaintenanceStartToolbar } from "./components/MaintenanceStartToolbar";
 import { MaintenanceStartTable } from "./components/MaintenanceStartTable";
@@ -34,7 +34,7 @@ export default function MaintenanceStartModule() {
   const [openDetails, setOpenDetails] = React.useState(false);
   const [selectedJO, setSelectedJO] = React.useState<VehicleJobOrder | null>(null);
 
-  const handleOpenIssueParts = async (jo: VehicleJobOrder) => {
+  const handleStartMaintenanceClick = async (jo: VehicleJobOrder) => {
     setSelectedJO(jo);
     const branchId =
       typeof jo.branch_id === "object" && jo.branch_id !== null
@@ -51,12 +51,23 @@ export default function MaintenanceStartModule() {
     setOpenDetails(true);
   };
 
-  const handleStartMaintenance = async (jo: VehicleJobOrder) => {
-    if (!jo?.id) return;
+  const handleModalSubmit = async ({
+    issuePayload,
+    startMaintenance: shouldStart,
+  }: {
+    issuePayload?: IssuePartsPayload;
+    startMaintenance: boolean;
+  }) => {
+    if (!selectedJO?.id) return;
     try {
-      await startMaintenance(jo.id);
+      if (issuePayload && issuePayload.items.length > 0) {
+        await issueParts(issuePayload);
+      }
+      if (shouldStart) {
+        await startMaintenance(selectedJO.id);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Error in maintenance start and part allocation flow:", err);
     }
   };
 
@@ -65,7 +76,7 @@ export default function MaintenanceStartModule() {
       <div>
         <h1 className="text-xl font-bold tracking-tight">Maintenance Start</h1>
         <p className="text-xs text-muted-foreground">
-          View approved vehicle maintenance job orders, issue required parts, and initiate maintenance repair operations.
+          View approved vehicle maintenance job orders, allocate required parts, and initiate maintenance repair operations.
         </p>
       </div>
 
@@ -82,8 +93,7 @@ export default function MaintenanceStartModule() {
         jobOrders={jobOrders}
         loading={loading}
         onViewDetails={handleViewDetails}
-        onOpenIssueParts={handleOpenIssueParts}
-        onStartMaintenance={handleStartMaintenance}
+        onStartMaintenance={handleStartMaintenanceClick}
         currentPage={currentPage}
         pageSize={pageSize}
         totalCount={totalCount}
@@ -91,13 +101,13 @@ export default function MaintenanceStartModule() {
         onPageSizeChange={setPageSize}
       />
 
-      {/* Dialogs */}
+      {/* Mandatory Part Allocation & Start Maintenance Dialog */}
       <IssuePartsDialog
         open={openIssueParts}
         onOpenChange={setOpenIssueParts}
         jobOrder={selectedJO}
         parts={parts}
-        onSubmit={issueParts}
+        onSubmit={handleModalSubmit}
         loading={actionLoading}
       />
 

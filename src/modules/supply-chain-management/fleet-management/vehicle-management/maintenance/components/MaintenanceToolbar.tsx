@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SearchableSelect } from "./SearchableSelect";
 import { Search, Plus, RotateCcw, Wrench } from "lucide-react";
+import type { VehicleJOTypeOption } from "../types";
 
 interface MaintenanceToolbarProps {
   searchQuery: string;
@@ -16,6 +17,7 @@ interface MaintenanceToolbarProps {
   onTypeChange: (val: string) => void;
   onOpenCreate: () => void;
   onRefresh: () => void;
+  joTypes?: VehicleJOTypeOption[];
   counts: {
     all: number;
     requested: number;
@@ -34,14 +36,26 @@ export function MaintenanceToolbar({
   onTypeChange,
   onOpenCreate,
   onRefresh,
+  joTypes = [],
   counts,
 }: MaintenanceToolbarProps) {
-  const typeFilterOptions = [
-    { value: "all", label: "All JO Types" },
-    { value: "Repair", label: "Repair" },
-    { value: "Preventive Maintenance", label: "Preventive Maintenance" },
-    { value: "Inspection", label: "Inspection" },
-  ];
+  const typeFilterOptions = React.useMemo(() => {
+    const list = [
+      { value: "all", label: "All JO Types" },
+    ];
+    if (joTypes && joTypes.length > 0) {
+      joTypes.forEach((t) => {
+        list.push({ value: t.type, label: t.type });
+      });
+    } else {
+      list.push(
+        { value: "Repair", label: "Repair" },
+        { value: "Preventive Maintenance", label: "Preventive Maintenance" },
+        { value: "Inspection", label: "Inspection" }
+      );
+    }
+    return list;
+  }, [joTypes]);
 
   return (
     <div className="space-y-4">
@@ -50,7 +64,7 @@ export function MaintenanceToolbar({
         <div>
           <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <Wrench className="h-5 w-5 text-primary" />
-            Vehicle Maintenance & Job Orders
+            Vehicle Maintenance &amp; Job Orders
           </h2>
           <p className="text-sm text-muted-foreground">
             Track repairs, approve mechanic assignments, issue parts, and monitor vehicle maintenance lifecycles.

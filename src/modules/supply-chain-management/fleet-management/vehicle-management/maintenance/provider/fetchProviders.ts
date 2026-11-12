@@ -4,7 +4,9 @@ import type {
   UserOption,
   VehiclePartOption,
   BranchOption,
+  VehicleJOTypeOption,
   CreateJORequestPayload,
+  UpdateJORequestPayload,
   ApproveAssignPayload,
   IssuePartsPayload,
   CompleteJOPayload,
@@ -17,6 +19,7 @@ export interface MaintenanceOptionsResponse {
   users: UserOption[];
   parts: VehiclePartOption[];
   branches: BranchOption[];
+  jo_types: VehicleJOTypeOption[];
 }
 
 export async function fetchMaintenanceOptions(branchId?: number | string): Promise<MaintenanceOptionsResponse> {
@@ -26,7 +29,7 @@ export async function fetchMaintenanceOptions(branchId?: number | string): Promi
     throw new Error("Failed to load options");
   }
   const json = await res.json();
-  return json.data || { vehicles: [], users: [], parts: [], branches: [] };
+  return json.data || { vehicles: [], users: [], parts: [], branches: [], jo_types: [] };
 }
 
 export async function fetchJobOrders(): Promise<VehicleJobOrder[]> {
@@ -49,6 +52,18 @@ export async function createJobOrderRequest(payload: CreateJORequestPayload): Pr
     throw new Error(json.error || "Failed to submit JO Request");
   }
   return json.data;
+}
+
+export async function updateJobOrderRequest(payload: UpdateJORequestPayload): Promise<void> {
+  const res = await fetch(BASE_URL, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "update_request", ...payload }),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.error || "Failed to update JO Request");
+  }
 }
 
 export async function approveOrRejectJobOrder(payload: ApproveAssignPayload): Promise<void> {

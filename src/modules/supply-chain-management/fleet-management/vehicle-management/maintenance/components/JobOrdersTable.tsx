@@ -17,12 +17,14 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import {
   MoreHorizontal,
   Eye,
+  Pencil,
   Truck,
   UserCheck,
   Building2,
@@ -32,6 +34,7 @@ interface JobOrdersTableProps {
   jobOrders: VehicleJobOrder[];
   loading: boolean;
   onViewDetails: (jo: VehicleJobOrder) => void;
+  onEditRequest?: (jo: VehicleJobOrder) => void;
   onOpenApprove?: (jo: VehicleJobOrder) => void;
   onOpenIssueParts?: (jo: VehicleJobOrder) => void;
   onStartMaintenance?: (jo: VehicleJobOrder) => void;
@@ -48,6 +51,7 @@ export function JobOrdersTable({
   jobOrders,
   loading,
   onViewDetails,
+  onEditRequest,
   currentPage = 1,
   pageSize = 10,
   totalCount = 0,
@@ -98,19 +102,19 @@ export function JobOrdersTable({
   if (jobOrders.length === 0) {
     return (
       <div className="border border-dashed rounded-md p-12 text-center text-muted-foreground flex flex-col items-center justify-center gap-2">
-        <Truck className="h-10 w-10 text-muted-foreground/40 mb-1" />
-        <p className="text-base font-medium">No Job Orders found</p>
-        <p className="text-xs">Create a new Job Order request to begin maintenance.</p>
+        <Truck className="h-8 w-8 text-muted-foreground/50" />
+        <p className="text-sm font-medium">No job orders found</p>
+        <p className="text-xs text-muted-foreground">Try adjusting your filters or search query.</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="rounded-md border bg-card overflow-hidden">
+      <div className="border rounded-md overflow-hidden bg-card">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-muted/50">
               <TableHead className="w-[140px]">JO Number</TableHead>
               <TableHead>Vehicle</TableHead>
               <TableHead>Branch</TableHead>
@@ -125,38 +129,49 @@ export function JobOrdersTable({
           <TableBody>
             {jobOrders.map((jo) => {
               const vehicle = typeof jo.vehicle_id === "object" && jo.vehicle_id !== null ? jo.vehicle_id : null;
-              const mechanic = typeof jo.mechanic_id === "object" && jo.mechanic_id !== null ? jo.mechanic_id : null;
+              const vehiclePlate = vehicle?.vehicle_plate || vehicle?.plate_number || vehicle?.name || `Vehicle #${typeof jo.vehicle_id === "object" && jo.vehicle_id !== null ? (jo.vehicle_id.vehicle_id || jo.vehicle_id.id) : jo.vehicle_id}`;
+              const vehicleModel = vehicle ? [vehicle.make, vehicle.model].filter(Boolean).join(" ") : "";
               const branch = typeof jo.branch_id === "object" && jo.branch_id !== null ? jo.branch_id : null;
+              const branchLabel = branch?.branch_name || (jo.branch_id ? `Branch #${typeof jo.branch_id === "object" ? jo.branch_id.id : jo.branch_id}` : "N/A");
+              const mechanic = typeof jo.mechanic_id === "object" && jo.mechanic_id !== null ? jo.mechanic_id : null;
+
               const partsCount = jo.parts?.length || 0;
               const issuedCount = jo.parts?.reduce((acc, p) => acc + (p.quantity_issued || 0), 0) || 0;
+
+              const isRequested = jo.status?.toLowerCase() === "requested";
+
+              const formattedRequestedDate = jo.requested_at
+                ? new Date(jo.requested_at).toLocaleDateString("en-PH", {
+                    timeZone: "Asia/Manila",
+                    month: "numeric",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "";
 
               return (
                 <TableRow key={jo.id}>
                   {/* JO Number */}
                   <TableCell className="font-semibold text-primary">
                     {jo.jo_no}
-                    <div className="text-xs text-muted-foreground font-normal">
-                      {jo.requested_at ? new Date(jo.requested_at).toLocaleDateString() : ""}
-                    </div>
+                    {formattedRequestedDate && (
+                      <div className="text-[11px] text-muted-foreground font-normal">
+                        {formattedRequestedDate}
+                      </div>
+                    )}
                   </TableCell>
 
                   {/* Vehicle */}
                   <TableCell>
-                    <div className="font-medium text-foreground">
-                      {vehicle?.vehicle_plate || vehicle?.plate_number || `Vehicle #${typeof jo.vehicle_id === "object" && jo.vehicle_id !== null ? (jo.vehicle_id.vehicle_id || jo.vehicle_id.id) : jo.vehicle_id}`}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {vehicle ? ([vehicle.make, vehicle.model].filter(Boolean).join(" ") || vehicle.name || "") : ""}
-                    </div>
+                    <div className="font-medium text-foreground">{vehiclePlate}</div>
+                    {vehicleModel && <div className="text-xs text-muted-foreground">{vehicleModel}</div>}
                   </TableCell>
 
                   {/* Branch */}
                   <TableCell>
                     <div className="flex items-center gap-1.5 text-xs text-foreground">
                       <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                      <span>
-                        {branch?.branch_name || (jo.branch_id ? `Branch #${typeof jo.branch_id === "object" ? jo.branch_id.id : jo.branch_id}` : "N/A")}
-                      </span>
+                      <span className="truncate max-w-[120px]" title={branchLabel}>{branchLabel}</span>
                     </div>
                   </TableCell>
 
@@ -171,12 +186,14 @@ export function JobOrdersTable({
                   {/* Status */}
                   <TableCell>{getStatusBadge(jo.status)}</TableCell>
 
-                  {/* Mechanic */}
+                  {/* Assigned Mechanic */}
                   <TableCell>
                     {(() => {
                       if (!mechanic) {
                         return jo.mechanic_id ? (
-                          <span className="text-xs text-foreground font-medium">Mechanic #{String(typeof jo.mechanic_id === "object" ? (jo.mechanic_id.id || jo.mechanic_id.user_id) : jo.mechanic_id)}</span>
+                          <span className="text-xs text-foreground font-medium">
+                            Mechanic #{String(typeof jo.mechanic_id === "object" ? (jo.mechanic_id.id || jo.mechanic_id.user_id) : jo.mechanic_id)}
+                          </span>
                         ) : (
                           <span className="text-xs text-muted-foreground italic">Unassigned</span>
                         );
@@ -186,14 +203,14 @@ export function JobOrdersTable({
                       const full = [f, l].filter(Boolean).join(" ");
                       return (
                         <div className="flex items-center gap-1.5 text-xs text-foreground">
-                          <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+                          <UserCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                           <span>{full || `Mechanic #${mechanic.id || mechanic.user_id}`}</span>
                         </div>
                       );
                     })()}
                   </TableCell>
 
-                  {/* Parts Summary */}
+                  {/* Parts Status */}
                   <TableCell>
                     <div className="text-xs">
                       <span className="font-medium text-foreground">{partsCount} item(s)</span>
@@ -219,6 +236,17 @@ export function JobOrdersTable({
                           <Eye className="h-4 w-4 mr-2" />
                           View Details
                         </DropdownMenuItem>
+
+                        {/* Edit option available only when status is Requested */}
+                        {isRequested && onEditRequest && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => onEditRequest(jo)}>
+                              <Pencil className="h-4 w-4 mr-2 text-amber-600" />
+                              <span>Edit Request</span>
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
