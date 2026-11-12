@@ -7,7 +7,8 @@ import {
     PackageX,
     ClipboardList,
     AlertTriangle,
-    Loader2
+    Loader2,
+    Image as ImageIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -37,6 +38,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { DispatchRow, ReconciliationRow, RFIDMapping } from '../types';
 import { submitClearance, fetchRFIDTagsForDispatch } from '../providers/fetchProviders';
 import ReconciliationDetailModal from './ReconciliationDetailModal';
+import { DeliveryProofModal } from './DeliveryProofModal';
 
 interface ClearanceModalProps {
     isOpen: boolean;
@@ -57,6 +59,7 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [activeReconciliation, setActiveReconciliation] = useState<ReconciliationRow | null>(null);
+    const [proofModalInvoice, setProofModalInvoice] = useState<ReconciliationRow | null>(null);
     const [rfidTags, setRfidTags] = useState<RFIDMapping[]>([]);
     const [invoices, setInvoices] = useState<ReconciliationRow[]>([]);
 
@@ -393,8 +396,28 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                                 <TableCell className="text-right font-bold text-foreground tabular-nums">
                                                     ₱{inv.amount.toLocaleString()}
                                                 </TableCell>
-                                                <TableCell className="text-muted-foreground text-xs py-3 pr-6 max-w-[200px] truncate">
-                                                    {inv.status !== 'Fulfilled with Returns' ? inv.remarks || '---' : ''}
+                                                <TableCell className="text-muted-foreground text-xs py-3 pr-6">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="truncate max-w-[170px]">
+                                                            {inv.status !== 'Fulfilled with Returns' ? inv.remarks || '---' : ''}
+                                                        </span>
+                                                        {inv.deliveryProof && (inv.deliveryProof.photoFileId || inv.deliveryProof.signatureFileId) && (
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-7 px-2 text-[11px] font-semibold flex items-center gap-1.5 border-primary/30 text-primary hover:bg-primary/10 hover:text-primary transition-all shrink-0 rounded-md"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setProofModalInvoice(inv);
+                                                                }}
+                                                                title="View Proof of Delivery"
+                                                            >
+                                                                <ImageIcon className="w-3.5 h-3.5" />
+                                                                <span>Proof</span>
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
                                         );
@@ -413,6 +436,17 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                         reconciliation={activeReconciliation}
                         onSave={handleConfirmProductReconciliation}
                         rfidTags={rfidTags}
+                    />
+                )}
+
+                {proofModalInvoice && (
+                    <DeliveryProofModal
+                        isOpen={!!proofModalInvoice}
+                        onClose={() => setProofModalInvoice(null)}
+                        proof={proofModalInvoice.deliveryProof || null}
+                        invoiceNo={proofModalInvoice.invoiceNo}
+                        orderNo={proofModalInvoice.orderNo}
+                        customerName={proofModalInvoice.customerName}
                     />
                 )}
             </DialogContent>

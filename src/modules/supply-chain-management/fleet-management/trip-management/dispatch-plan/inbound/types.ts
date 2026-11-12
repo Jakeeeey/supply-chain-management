@@ -23,9 +23,29 @@ export interface KioskDispatchPlan {
     status: KioskStatus | string;
 }
 
+export interface DeliveryProof {
+    id: number;
+    postDispatchPlanId: number;
+    postDispatchInvoiceId: number;
+    driverUserId: number;
+    outcome: string;
+    remarks: string | null;
+    recipientName: string | null;
+    signatureFileId: string | null;
+    photoFileId: string;
+    capturedAt: string;
+    receivedAt: string;
+    latitude: number | null;
+    longitude: number | null;
+    commandId: string;
+}
+
 export interface CustomerInvoice {
+    id?: number;
+    invoice_id?: number;
     no: string;
     amount: number;
+    deliveryProof?: DeliveryProof | null;
 }
 
 export interface CustomerArrivalInfo {

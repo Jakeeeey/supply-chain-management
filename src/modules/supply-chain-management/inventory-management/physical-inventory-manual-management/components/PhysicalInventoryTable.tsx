@@ -28,6 +28,49 @@ type Props = {
     onPhysicalCountBlur: (row: GroupedPhysicalInventoryChildRow) => void;
 };
 
+type PhysicalCountInputProps = {
+    value: number;
+    disabled?: boolean;
+    onChange: (value: string) => void;
+    onBlur: () => void;
+};
+
+function PhysicalCountInput({ value, disabled, onChange, onBlur }: PhysicalCountInputProps) {
+    const [localValue, setLocalValue] = React.useState<string>(String(value ?? 0));
+    const [isFocused, setIsFocused] = React.useState(false);
+
+    // Sync from props only when the input is NOT actively focused/edited by the user
+    React.useEffect(() => {
+        if (!isFocused) {
+            setLocalValue(String(value ?? 0));
+        }
+    }, [value, isFocused]);
+
+    return (
+        <Input
+            inputMode="decimal"
+            className="ml-auto w-28 border-border bg-background text-right font-semibold tabular-nums shadow-sm focus-visible:ring-2"
+            value={localValue}
+            onFocus={() => {
+                setIsFocused(true);
+            }}
+            onChange={(e) => {
+                setLocalValue(e.target.value);
+                onChange(e.target.value);
+            }}
+            onBlur={() => {
+                setIsFocused(false);
+                if (!localValue.trim()) {
+                    setLocalValue("0");
+                }
+                onBlur();
+            }}
+            disabled={disabled}
+            placeholder="0"
+        />
+    );
+}
+
 function fmtQty(value: number): string {
     return Number.isFinite(value)
         ? value.toLocaleString("en-PH", { maximumFractionDigits: 0 })
@@ -225,16 +268,11 @@ export function PhysicalInventoryTable(props: Props) {
                                                     </TableCell>
 
                                                     <TableCell className="text-right">
-                                                        <Input
-                                                            inputMode="decimal"
-                                                            className="ml-auto w-28 border-border bg-background text-right font-semibold tabular-nums shadow-sm focus-visible:ring-2"
-                                                            value={String(row.physical_count)}
-                                                            onChange={(e) =>
-                                                                onPhysicalCountChange(row, e.target.value)
-                                                            }
+                                                        <PhysicalCountInput
+                                                            value={row.physical_count}
+                                                            onChange={(val) => onPhysicalCountChange(row, val)}
                                                             onBlur={() => onPhysicalCountBlur(row)}
                                                             disabled={!canEdit}
-                                                            placeholder="0"
                                                         />
                                                     </TableCell>
 
