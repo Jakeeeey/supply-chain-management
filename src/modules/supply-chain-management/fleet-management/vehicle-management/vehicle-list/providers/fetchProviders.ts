@@ -86,7 +86,7 @@ export async function listDispatchPlansByVehicle(vehicleId: number): Promise<Dis
 }
 
 /**
- * Upload vehicle photo
+ * Upload vehicle photo to Directus
  */
 export async function uploadVehicleImage(file: File): Promise<string> {
   const fd = new FormData();
@@ -99,9 +99,9 @@ export async function uploadVehicleImage(file: File): Promise<string> {
 
   if (!res.ok) throw new Error(await readError(res));
 
-  const json = (await res.json()) as DirectusItemResponse<{ path: string }>;
-  const p = String(json?.data?.path ?? "").trim();
-  if (!p) throw new Error("Upload succeeded but no path was returned.");
+  const json = (await res.json()) as DirectusItemResponse<{ path?: string; id?: string }>;
+  const p = String(json?.data?.id ?? json?.data?.path ?? "").trim();
+  if (!p) throw new Error("Upload succeeded but no file ID was returned.");
   return p;
 }
 
@@ -309,22 +309,44 @@ const VEHICLE_ALLOWED_KEYS = new Set([
   "cbm_height",
 ]);
 
+const VEHICLE_DECIMAL_KEYS = new Set([
+  "maximum_weight",
+  "minimum_load",
+  "max_liters",
+  "cbm_length",
+  "cbm_width",
+  "cbm_height",
+]);
+
 function sanitizeVehicleCreatePayload(payload: Record<string, unknown>) {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(payload || {})) {
     if (!VEHICLE_ALLOWED_KEYS.has(k)) continue;
-    if (v === undefined) continue;
+    if (v === undefined || v === null) continue;
     if (typeof v === "string" && v.trim() === "") continue;
+
+    if (VEHICLE_DECIMAL_KEYS.has(k)) {
+      // Strip any unit letters (e.g. "500kg", "P50000")
+      let cleaned = String(v).replace(/[^0-9.]/g, "");
+      const parts = cleaned.split(".");
+      if (parts.length > 2) {
+        cleaned = parts[0] + "." + parts.slice(1).join("");
+      }
+      out[k] = cleaned.length ? cleaned : "0.00";
+      continue;
+    }
+
     out[k] = v;
   }
   return out;
 }
 
 export async function createVehicle(payload: Record<string, unknown>) {
+  const sanitized = sanitizeVehicleCreatePayload(payload);
   const first = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(sanitized),
   });
 
   if (first.ok) {
@@ -338,9 +360,6 @@ export async function createVehicle(payload: Record<string, unknown>) {
     m.includes("field") || m.includes("invalid") || m.includes("payload");
 
   if (!looksLikeInvalidFields) throw new Error(msg);
-
-  // retry with only known vehicle columns
-  const sanitized = sanitizeVehicleCreatePayload(payload);
 
   const second = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list", {
     method: "POST",

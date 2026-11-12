@@ -41,7 +41,13 @@ export async function fetchAvailableStock(branchId: number): Promise<PartStock[]
   return Array.isArray(json?.data) ? json.data : [];
 }
 
-export async function submitStockOut(payload: StockOutPayload): Promise<unknown> {
+export async function submitStockOut(payload: StockOutPayload): Promise<{
+  success: boolean;
+  reference_no?: string;
+  count?: number;
+  data?: unknown;
+  items?: unknown[];
+}> {
   const res = await fetch("/api/scm/fleet-management/parts-and-inventory/stock-out", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

@@ -22,12 +22,17 @@ export default function VehicleListModule() {
 
   // Pagination state
   const [currentPage, setCurrentPage] = React.useState(1);
-  const pageSize = 10;
+  const [pageSize, setPageSize] = React.useState(10);
 
-  // Reset to first page when query or filter changes
+  // Reset to first page when query, filter, or pageSize changes
   React.useEffect(() => {
     setCurrentPage(1);
   }, [query, statusFilter]);
+
+  const handlePageSizeChange = React.useCallback((newSize: number) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+  }, []);
 
 
 
@@ -89,7 +94,10 @@ export default function VehicleListModule() {
           loading={loading}
           currentPage={currentPage}
           totalPages={totalPagesFiltered}
+          pageSize={pageSize}
+          totalCount={filteredByStatus.length}
           onPageChange={setCurrentPage}
+          onPageSizeChange={handlePageSizeChange}
           onViewHistory={(row) => {
             setSelected(row);
             setOpenHistory(true);

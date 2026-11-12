@@ -15,7 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableBranchSelect } from "./SearchableBranchSelect";
-import { Plus, Trash2, PackagePlus } from "lucide-react";
+import { Plus, Trash2, PackagePlus, AlertCircle } from "lucide-react";
+import { checkReferenceExists } from "../provider/fetchProviders";
 
 interface BatchStockInDialogProps {
   open: boolean;
@@ -44,6 +45,7 @@ export function BatchStockInDialog({
   const [referenceNo, setReferenceNo] = React.useState("");
   const [branchId, setBranchId] = React.useState("");
   const [generalRemarks, setGeneralRemarks] = React.useState("");
+  const [checkingRef, setCheckingRef] = React.useState(false);
   const [items, setItems] = React.useState<ItemRowState[]>([
     { part_id: "", quantity: "1", unit_cost: "0", remarks: "" },
   ]);
@@ -63,6 +65,7 @@ export function BatchStockInDialog({
       setItems([{ part_id: "", quantity: "1", unit_cost: "0", remarks: "" }]);
       setErrors({});
       setSubmitted(false);
+      setCheckingRef(false);
     }
   }, [open, branches]);
 
@@ -99,7 +102,25 @@ export function BatchStockInDialog({
     }
   };
 
-  const validate = (): boolean => {
+  const handleRefBlur = async () => {
+    if (!referenceNo.trim()) return;
+    setCheckingRef(true);
+    try {
+      const exists = await checkReferenceExists(referenceNo.trim());
+      if (exists) {
+        setErrors((prev) => ({
+          ...prev,
+          referenceNo: `Reference No. "${referenceNo.trim()}" is already in use. It must be unique across all branches.`,
+        }));
+      }
+    } catch {
+      // non-blocking
+    } finally {
+      setCheckingRef(false);
+    }
+  };
+
+  const validate = async (): Promise<boolean> => {
     let isValid = true;
     const itemErrors: { [index: number]: { part_id?: string; quantity?: string; unit_cost?: string } } = {};
 
@@ -107,6 +128,13 @@ export function BatchStockInDialog({
     if (!referenceNo.trim()) {
       refError = "Reference number is required (PO, DR, or Invoice)";
       isValid = false;
+    } else {
+      // Check uniqueness across all branches
+      const exists = await checkReferenceExists(referenceNo.trim());
+      if (exists) {
+        refError = `Reference No. "${referenceNo.trim()}" already exists in the system. Reference numbers must be unique across all branches.`;
+        isValid = false;
+      }
     }
 
     let bError: string | undefined;
@@ -142,7 +170,8 @@ export function BatchStockInDialog({
     e.preventDefault();
     setSubmitted(true);
 
-    if (!validate()) return;
+    const valid = await validate();
+    if (!valid) return;
 
     const payload: BatchStockInInput = {
       reference_no: referenceNo.trim(),
@@ -192,7 +221,7 @@ export function BatchStockInDialog({
               Stock In Received Items
             </DialogTitle>
             <DialogDescription>
-              Record newly delivered parts and inventory supplies under a Purchase Order / DR reference.
+              Record newly delivered parts and inventory supplies under a unique Purchase Order / DR reference.
             </DialogDescription>
           </DialogHeader>
 
@@ -206,16 +235,23 @@ export function BatchStockInDialog({
                   id="ref_no"
                   placeholder="e.g. PO-2026-0812 or DR-99482"
                   value={referenceNo}
+                  onBlur={handleRefBlur}
                   onChange={(e) => {
                     setReferenceNo(e.target.value);
-                    if (submitted && errors.referenceNo) {
+                    if (errors.referenceNo) {
                       setErrors((prev) => ({ ...prev, referenceNo: undefined }));
                     }
                   }}
-                  className={submitted && errors.referenceNo ? "border-destructive focus-visible:ring-destructive" : ""}
+                  className={errors.referenceNo ? "border-destructive focus-visible:ring-destructive" : ""}
                 />
-                {submitted && errors.referenceNo && (
-                  <p className="text-xs text-destructive">{errors.referenceNo}</p>
+                {checkingRef && (
+                  <p className="text-[11px] text-muted-foreground animate-pulse">Checking uniqueness...</p>
+                )}
+                {errors.referenceNo && (
+                  <p className="text-xs text-destructive flex items-center gap-1 mt-0.5">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    <span>{errors.referenceNo}</span>
+                  </p>
                 )}
               </div>
 
@@ -272,22 +308,20 @@ export function BatchStockInDialog({
                 {items.map((item, idx) => {
                   const rowErr = errors.items?.[idx];
                   const lineTotal = (Number(item.quantity) || 0) * (Number(item.unit_cost) || 0);
-                  const rowZIndex = 40 - idx;
 
                   return (
                     <div
                       key={idx}
-                      style={{ zIndex: rowZIndex }}
-                      className="p-3 bg-card/50 flex flex-col md:flex-row gap-3 items-start md:items-center relative"
+                      className="p-3 flex flex-col md:flex-row items-start md:items-center gap-3 text-sm"
                     >
-                      <div className="flex-1 w-full min-w-[280px] space-y-1 relative">
+                      <div className="flex-1 w-full min-w-[220px] space-y-1">
                         <Label className="text-xs text-muted-foreground">
-                          Part <span className="text-destructive font-bold">*</span>
+                          Spare Part Item <span className="text-destructive font-bold">*</span>
                         </Label>
                         <SearchableBranchSelect
                           options={partOptions}
                           value={item.part_id}
-                          onValueChange={(val) => handleItemChange(idx, "part_id", val)}
+                          onValueChange={(val: string) => handleItemChange(idx, "part_id", val)}
                           placeholder="Search part code or name..."
                           className={`h-9 text-xs w-full ${
                             submitted && rowErr?.part_id ? "border-destructive text-destructive" : ""
@@ -380,7 +414,7 @@ export function BatchStockInDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
               Cancel
             </Button>
-            <Button type="submit" disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Button type="submit" disabled={saving || checkingRef} className="bg-emerald-600 hover:bg-emerald-700 text-white">
               {saving ? "Processing..." : "Complete Stock In"}
             </Button>
           </DialogFooter>

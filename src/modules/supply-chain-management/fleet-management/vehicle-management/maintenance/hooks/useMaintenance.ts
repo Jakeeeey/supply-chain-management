@@ -7,7 +7,9 @@ import type {
   UserOption,
   VehiclePartOption,
   BranchOption,
+  VehicleJOTypeOption,
   CreateJORequestPayload,
+  UpdateJORequestPayload,
   ApproveAssignPayload,
   IssuePartsPayload,
   CompleteJOPayload,
@@ -16,11 +18,13 @@ import {
   fetchJobOrders,
   fetchMaintenanceOptions,
   createJobOrderRequest,
+  updateJobOrderRequest,
   approveOrRejectJobOrder,
   startMaintenance,
   issueJobOrderParts,
   completeJobOrder,
 } from "../provider/fetchProviders";
+import { toast } from "sonner";
 
 export function useMaintenance() {
   const [loading, setLoading] = React.useState(true);
@@ -32,6 +36,7 @@ export function useMaintenance() {
   const [users, setUsers] = React.useState<UserOption[]>([]);
   const [parts, setParts] = React.useState<VehiclePartOption[]>([]);
   const [branches, setBranches] = React.useState<BranchOption[]>([]);
+  const [joTypes, setJoTypes] = React.useState<VehicleJOTypeOption[]>([]);
 
   // Search and Filter states
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -56,6 +61,9 @@ export function useMaintenance() {
       setParts(opts.parts);
       if (opts.branches && opts.branches.length > 0) {
         setBranches(opts.branches);
+      }
+      if (opts.jo_types && opts.jo_types.length > 0) {
+        setJoTypes(opts.jo_types);
       }
     } catch (e: unknown) {
       const err = e as Error;
@@ -89,7 +97,27 @@ export function useMaintenance() {
     try {
       setActionLoading(true);
       await createJobOrderRequest(payload);
+      toast.success("Job order request submitted successfully!");
       await loadData();
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e?.message || "Failed to submit JO request.");
+      throw err;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUpdateRequest = async (payload: UpdateJORequestPayload) => {
+    try {
+      setActionLoading(true);
+      await updateJobOrderRequest(payload);
+      toast.success("Job order request updated successfully!");
+      await loadData();
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e?.message || "Failed to update JO request.");
+      throw err;
     } finally {
       setActionLoading(false);
     }
@@ -99,7 +127,16 @@ export function useMaintenance() {
     try {
       setActionLoading(true);
       await approveOrRejectJobOrder(payload);
+      if (payload.decision === "Approved") {
+        toast.success("Job order approved and mechanic assigned successfully!");
+      } else {
+        toast.success("Job order request has been rejected.");
+      }
       await loadData();
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e?.message || "Failed to process approval.");
+      throw err;
     } finally {
       setActionLoading(false);
     }
@@ -109,7 +146,12 @@ export function useMaintenance() {
     try {
       setActionLoading(true);
       await startMaintenance(joId);
+      toast.success("Maintenance started successfully!");
       await loadData();
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e?.message || "Failed to start maintenance.");
+      throw err;
     } finally {
       setActionLoading(false);
     }
@@ -119,7 +161,12 @@ export function useMaintenance() {
     try {
       setActionLoading(true);
       await issueJobOrderParts(payload);
+      toast.success("Parts issued and stock deducted successfully!");
       await loadData();
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e?.message || "Failed to issue parts.");
+      throw err;
     } finally {
       setActionLoading(false);
     }
@@ -129,7 +176,12 @@ export function useMaintenance() {
     try {
       setActionLoading(true);
       await completeJobOrder(payload);
+      toast.success("Job order completed successfully!");
       await loadData();
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e?.message || "Failed to complete job order.");
+      throw err;
     } finally {
       setActionLoading(false);
     }
@@ -185,6 +237,7 @@ export function useMaintenance() {
     users,
     parts,
     branches,
+    joTypes,
     searchQuery,
     setSearchQuery,
     statusFilter,
@@ -198,6 +251,7 @@ export function useMaintenance() {
     refresh: loadData,
     loadPartsForBranch,
     createRequest: handleCreateRequest,
+    updateRequest: handleUpdateRequest,
     approveAssign: handleApproveAssign,
     startRepair: handleStartMaintenance,
     issueParts: handleIssueParts,

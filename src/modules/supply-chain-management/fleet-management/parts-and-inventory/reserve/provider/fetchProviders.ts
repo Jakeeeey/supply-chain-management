@@ -37,6 +37,18 @@ export async function fetchAvailablePartsByBranch(branchId: string | number): Pr
   }
 }
 
+export async function fetchJobOrderRequestedParts(jobOrderId: number | string): Promise<JobOrderPart[]> {
+  if (!jobOrderId) return [];
+  try {
+    const res = await fetch(`${BASE_URL}?job_order_id=${encodeURIComponent(jobOrderId)}`, { cache: "no-store" });
+    if (!res.ok) return [];
+    const json: JobOrderPartsApiResponse = await res.json().catch(() => ({ data: [] }));
+    return json.data || [];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchIssuedPartsHistory(jobOrderId?: number): Promise<JobOrderPart[]> {
   const params = new URLSearchParams();
   if (jobOrderId) params.set("job_order_id", String(jobOrderId));

@@ -13,14 +13,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "./SearchableSelect";
-import { PackageCheck, Plus, Trash2, AlertTriangle, AlertCircle, Building2 } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, AlertCircle, Building2, Play, PackageCheck } from "lucide-react";
 
 interface IssuePartsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   jobOrder: VehicleJobOrder | null;
   parts: VehiclePartOption[];
-  onSubmit: (payload: IssuePartsPayload) => Promise<void>;
+  onSubmit: (payload: { issuePayload?: IssuePartsPayload; startMaintenance: boolean }) => Promise<void>;
   loading: boolean;
 }
 
@@ -58,7 +58,7 @@ export function IssuePartsDialog({
           })
         );
       } else {
-        setItems([{ part_id: 0, quantity: 1, unit_cost: 0 }]);
+        setItems([]);
       }
     }
   }, [open, jobOrder]);
@@ -69,7 +69,11 @@ export function IssuePartsDialog({
     typeof jobOrder.branch_id === "object" && jobOrder.branch_id !== null
       ? jobOrder.branch_id
       : null;
-  const branchName = branch?.branch_name || (jobOrder.branch_id ? `Branch #${typeof jobOrder.branch_id === "object" ? jobOrder.branch_id.id : jobOrder.branch_id}` : "Assigned Branch");
+  const branchName =
+    branch?.branch_name ||
+    (jobOrder.branch_id
+      ? `Branch #${typeof jobOrder.branch_id === "object" ? jobOrder.branch_id.id : jobOrder.branch_id}`
+      : "Assigned Branch");
 
   const effectiveBranchId =
     typeof jobOrder.branch_id === "object" && jobOrder.branch_id !== null
@@ -129,7 +133,7 @@ export function IssuePartsDialog({
 
   const hasStockErrors = zeroStockItems.length > 0 || exceedingStockItems.length > 0;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmitWithParts = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hasValidItems || hasStockErrors) return;
 
@@ -145,9 +149,19 @@ export function IssuePartsDialog({
     }
 
     await onSubmit({
-      job_order_id: jobOrder.id,
-      branch_id: effectiveBranchId,
-      items: Array.from(consolidatedMap.values()),
+      issuePayload: {
+        job_order_id: jobOrder.id,
+        branch_id: effectiveBranchId,
+        items: Array.from(consolidatedMap.values()),
+      },
+      startMaintenance: true,
+    });
+    onOpenChange(false);
+  };
+
+  const handleStartWithoutParts = async () => {
+    await onSubmit({
+      startMaintenance: true,
     });
     onOpenChange(false);
   };
@@ -157,28 +171,20 @@ export function IssuePartsDialog({
       <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <PackageCheck className="h-5 w-5 text-amber-600 shrink-0" />
-            Issue Parts from Inventory
+            <PackageCheck className="h-5 w-5 text-purple-600 shrink-0" />
+            <span>Part Allocation & Start Maintenance</span>
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-1 w-full min-w-0">
-          {/* JO & Context-Aware Branch Details */}
-          <div className="bg-muted/40 p-3 rounded-md text-sm space-y-1.5 border w-full min-w-0">
-            <div className="flex justify-between items-center gap-2">
-              <span className="text-muted-foreground text-xs">JO Reference:</span>
-              <span className="font-semibold text-xs text-primary">{jobOrder.jo_no}</span>
+        <form onSubmit={handleSubmitWithParts} className="space-y-4 pt-1 w-full min-w-0">
+          <div className="bg-muted/40 p-3 rounded-md text-sm space-y-1 w-full min-w-0">
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">JO Reference:</span>
+              <span className="font-semibold">{jobOrder.jo_no}</span>
             </div>
-            <div className="flex justify-between items-center gap-2">
-              <span className="text-muted-foreground text-xs">Operational Branch:</span>
-              <span className="font-medium text-xs text-foreground flex items-center gap-1 truncate">
-                <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                {branchName}
-              </span>
-            </div>
-            <div className="flex justify-between items-center gap-2">
-              <span className="text-muted-foreground text-xs">Vehicle:</span>
-              <span className="text-xs text-foreground truncate">
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Vehicle:</span>
+              <span>
                 {(() => {
                   if (typeof jobOrder.vehicle_id !== "object" || jobOrder.vehicle_id === null) {
                     return `ID #${jobOrder.vehicle_id}`;
@@ -190,23 +196,31 @@ export function IssuePartsDialog({
                 })()}
               </span>
             </div>
+            <div className="flex justify-between items-center pt-1 border-t border-border/50 text-xs">
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Building2 className="h-3 w-3 text-muted-foreground" />
+                Operational Branch:
+              </span>
+              <span className="font-medium text-foreground">{branchName}</span>
+            </div>
           </div>
 
-          {/* Zero Stock & Exceeding Stock Warning Banner */}
+          {/* Zero-Stock Warning Banner */}
           {zeroStockItems.length > 0 && (
-            <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start gap-2.5 text-xs text-destructive">
+            <div className="p-3 rounded-md bg-destructive/10 border border-destructive/20 text-xs flex items-start gap-2 text-destructive">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
               <div>
-                <strong className="font-semibold block">Zero-Stock Warning</strong>
+                <strong className="font-semibold block">Zero Stock Warning</strong>
                 <span>
-                  One or more selected parts have 0 available stock in {branchName}. Issuing is blocked until inventory is replenished.
+                  One or more selected parts have 0 available stock in {branchName}. You cannot issue parts with zero inventory.
                 </span>
               </div>
             </div>
           )}
 
-          {exceedingStockItems.length > 0 && (
-            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md flex items-start gap-2.5 text-xs text-amber-700 dark:text-amber-400">
+          {/* Insufficient Stock Warning Banner */}
+          {exceedingStockItems.length > 0 && zeroStockItems.length === 0 && (
+            <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/20 text-xs flex items-start gap-2 text-amber-700 dark:text-amber-400">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
               <div>
                 <strong className="font-semibold block">Insufficient Stock Warning</strong>
@@ -220,7 +234,7 @@ export function IssuePartsDialog({
           <div className="space-y-3 w-full min-w-0">
             <div className="flex items-center justify-between">
               <div>
-                <Label className="text-sm font-semibold">Parts to Deduct & Issue</Label>
+                <Label className="text-sm font-semibold">Allocated Parts to Deduct & Issue</Label>
                 <p className="text-[11px] text-muted-foreground">
                   Stock availability corresponds strictly to {branchName}.
                 </p>
@@ -237,86 +251,109 @@ export function IssuePartsDialog({
               </Button>
             </div>
 
-            {items.map((row, index) => {
-              const selectedPart = parts.find((p) => p.id === row.part_id);
-              const availableStock = selectedPart?.on_hand ?? 0;
-              const isZeroStock = row.part_id > 0 && availableStock <= 0;
-              const isExceeding = row.part_id > 0 && row.quantity > availableStock;
+            {items.length === 0 ? (
+              <div className="p-4 text-center border border-dashed rounded-md bg-muted/20 text-xs text-muted-foreground">
+                No parts initially requested for this job order. If replacement parts are needed, click &quot;Add Item&quot;, or proceed directly to start maintenance.
+              </div>
+            ) : (
+              items.map((row, index) => {
+                const selectedPart = parts.find((p) => p.id === row.part_id);
+                const availableStock = selectedPart?.on_hand ?? 0;
+                const isZeroStock = row.part_id > 0 && availableStock <= 0;
+                const isExceeding = row.part_id > 0 && row.quantity > availableStock;
 
-              return (
-                <div
-                  key={index}
-                  className={`grid grid-cols-12 gap-2 items-center p-2.5 rounded-md text-xs border transition-colors ${
-                    isZeroStock
-                      ? "bg-destructive/5 border-destructive/30"
-                      : isExceeding
-                      ? "bg-amber-500/5 border-amber-500/30"
-                      : "bg-muted/30 border-border"
-                  }`}
-                >
-                  <div className="col-span-12 sm:col-span-6 space-y-1 min-w-0">
-                    <Label className="text-[11px] text-muted-foreground">Part Catalogue</Label>
-                    <SearchableSelect
-                      options={partOptions}
-                      value={row.part_id ? String(row.part_id) : ""}
-                      onValueChange={(val) => handleUpdateRow(index, "part_id", val)}
-                      placeholder="Select part catalogue..."
-                    />
-                  </div>
+                return (
+                  <div
+                    key={index}
+                    className={`grid grid-cols-12 gap-2 items-center p-2.5 rounded-md text-xs border transition-colors ${
+                      isZeroStock
+                        ? "bg-destructive/5 border-destructive/30"
+                        : isExceeding
+                        ? "bg-amber-500/5 border-amber-500/30"
+                        : "bg-muted/30 border-border"
+                    }`}
+                  >
+                    <div className="col-span-12 sm:col-span-6 space-y-1 min-w-0">
+                      <Label className="text-[11px] text-muted-foreground">Part Catalogue</Label>
+                      <SearchableSelect
+                        options={partOptions}
+                        value={row.part_id ? String(row.part_id) : ""}
+                        onValueChange={(val) => handleUpdateRow(index, "part_id", val)}
+                        placeholder="Select part catalogue..."
+                      />
+                    </div>
 
-                  <div className="col-span-5 sm:col-span-2 space-y-1 min-w-0">
-                    <Label className="text-[11px] text-muted-foreground">Quantity</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      className="h-9 text-xs"
-                      value={row.quantity}
-                      onChange={(e) => handleUpdateRow(index, "quantity", e.target.value)}
-                    />
-                  </div>
+                    <div className="col-span-5 sm:col-span-2 space-y-1 min-w-0">
+                      <Label className="text-[11px] text-muted-foreground">Quantity</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        className="h-9 text-xs"
+                        value={row.quantity}
+                        onChange={(e) => handleUpdateRow(index, "quantity", e.target.value)}
+                      />
+                    </div>
 
-                  <div className="col-span-5 sm:col-span-3 space-y-1 min-w-0">
-                    <Label className="text-[11px] text-muted-foreground">Local Available</Label>
-                    <div
-                      className={`h-9 flex items-center font-semibold text-xs ${
-                        isZeroStock
-                          ? "text-destructive"
-                          : isExceeding
-                          ? "text-amber-600 dark:text-amber-400"
-                          : "text-emerald-600 dark:text-emerald-400"
-                      }`}
-                    >
-                      {availableStock} in stock
+                    <div className="col-span-5 sm:col-span-3 space-y-1 min-w-0">
+                      <Label className="text-[11px] text-muted-foreground">Local Available</Label>
+                      <div
+                        className={`h-9 flex items-center font-semibold text-xs ${
+                          isZeroStock
+                            ? "text-destructive"
+                            : isExceeding
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-emerald-600 dark:text-emerald-400"
+                        }`}
+                      >
+                        {availableStock} in stock
+                      </div>
+                    </div>
+
+                    <div className="col-span-2 sm:col-span-1 flex justify-end pt-5">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                        onClick={() => handleRemoveRow(index)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </div>
-
-                  <div className="col-span-2 sm:col-span-1 flex justify-end pt-5">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
-                      onClick={() => handleRemoveRow(index)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
 
-          <DialogFooter className="pt-3 border-t flex flex-col-reverse sm:flex-row gap-2">
+          <DialogFooter className="pt-3 border-t flex flex-col-reverse sm:flex-row gap-2 justify-between items-center">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={loading || !hasValidItems || hasStockErrors}
-              className="bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? "Processing..." : "Issue & Deduct Stock"}
-            </Button>
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              {items.length === 0 && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={loading}
+                  onClick={handleStartWithoutParts}
+                  className="gap-1.5"
+                >
+                  <Play className="h-3.5 w-3.5" />
+                  Start Without Parts
+                </Button>
+              )}
+              {hasValidItems && (
+                <Button
+                  type="submit"
+                  disabled={loading || hasStockErrors}
+                  className="bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 disabled:cursor-not-allowed gap-1.5"
+                >
+                  <Play className="h-3.5 w-3.5" />
+                  {loading ? "Processing..." : "Allocate Parts & Start Maintenance"}
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>

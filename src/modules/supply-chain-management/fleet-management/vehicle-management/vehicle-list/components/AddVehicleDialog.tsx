@@ -18,6 +18,7 @@ import {
   listAllVehicleDocuments,
 } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/providers/fetchProviders";
 import { parseVehicleDocumentText } from "../utils/vehicleDocParser";
+import { VehicleSearchableSelect } from "./VehicleSearchableSelect";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,26 @@ function requiredOk(v: string) {
 function toIntOrNull(v: string) {
   const n = Number(String(v || "").trim());
   return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
+function sanitizeInteger(val: string, maxLen?: number) {
+  const digits = val.replace(/\D/g, "");
+  return typeof maxLen === "number" ? digits.slice(0, maxLen) : digits;
+}
+
+function sanitizeDecimal(val: string) {
+  let cleaned = val.replace(/[^0-9.]/g, "");
+  const parts = cleaned.split(".");
+  if (parts.length > 2) {
+    cleaned = parts[0] + "." + parts.slice(1).join("");
+  }
+  return cleaned;
+}
+
+function cleanDecimalPayload(val: unknown): string | null {
+  if (val === null || val === undefined) return null;
+  const s = sanitizeDecimal(String(val).trim());
+  return s.length > 0 ? s : null;
 }
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
@@ -398,13 +419,13 @@ export function AddVehicleDialog({
     const seatsInt = toIntOrNull(form.seats || "");
     if (seatsInt !== null) payload.seats = seatsInt;
 
-    payload.maximum_weight = form.maximumWeight;
-    payload.minimum_load = form.minimumLoad;
-    payload.max_liters = form.maxLiters;
-    payload.purchased_date = form.purchasedDate;
-    payload.cbm_length = form.cbmLength;
-    payload.cbm_width = form.cbmWidth;
-    payload.cbm_height = form.cbmHeight;
+    payload.maximum_weight = cleanDecimalPayload(form.maximumWeight) ?? "0.00";
+    payload.minimum_load = cleanDecimalPayload(form.minimumLoad) ?? "0.00";
+    payload.max_liters = cleanDecimalPayload(form.maxLiters) ?? "0.00";
+    payload.purchased_date = form.purchasedDate || null;
+    payload.cbm_length = cleanDecimalPayload(form.cbmLength) ?? "0.00";
+    payload.cbm_width = cleanDecimalPayload(form.cbmWidth) ?? "0.00";
+    payload.cbm_height = cleanDecimalPayload(form.cbmHeight) ?? "0.00";
 
     if (imageId) payload.image = imageId;
 
@@ -556,9 +577,10 @@ export function AddVehicleDialog({
                   <Label>Year Model</Label>
                   <Input
                     value={form.yearModel}
-                    onChange={(e) => set("yearModel", e.target.value)}
+                    onChange={(e) => set("yearModel", sanitizeInteger(e.target.value, 4))}
                     placeholder="e.g. 2024"
                     inputMode="numeric"
+                    maxLength={4}
                   />
                 </div>
 
@@ -566,27 +588,15 @@ export function AddVehicleDialog({
                   <Label>
                     Vehicle Type <span className="text-destructive">*</span>
                   </Label>
-                  <Select
-                    value={form.typeId === null ? "" : String(form.typeId)}
-                    onValueChange={(v) => set("typeId", v ? Number(v) : null)}
-                  >
-                    <SelectTrigger className={touched && form.typeId === null ? "ring-1 ring-destructive" : ""}>
-                      <SelectValue placeholder="Select Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {typeOptions.length === 0 ? (
-                        <SelectItem value="no-options" disabled>
-                          No Types Available
-                        </SelectItem>
-                      ) : (
-                        typeOptions.map((t) => (
-                          <SelectItem key={t.id} value={String(t.id)}>
-                            {t.name}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <VehicleSearchableSelect
+                    options={typeOptions}
+                    value={form.typeId}
+                    onValueChange={(v) => set("typeId", v)}
+                    placeholder="Select Type"
+                    searchPlaceholder="Search vehicle type..."
+                    emptyText="No vehicle types found."
+                    hasError={touched && form.typeId === null}
+                  />
                 </div>
 
                 <div className="grid gap-2">
@@ -632,10 +642,11 @@ export function AddVehicleDialog({
                   </Label>
                   <Input
                     value={form.year}
-                    onChange={(e) => set("year", e.target.value)}
+                    onChange={(e) => set("year", sanitizeInteger(e.target.value, 4))}
                     className={touched && !requiredOk(form.year) ? "ring-1 ring-destructive" : ""}
                     placeholder="e.g. 2026"
                     inputMode="numeric"
+                    maxLength={4}
                   />
                 </div>
 
@@ -643,7 +654,7 @@ export function AddVehicleDialog({
                   <Label>Current Mileage (km)</Label>
                   <Input
                     value={form.mileageKm || ""}
-                    onChange={(e) => set("mileageKm", e.target.value)}
+                    onChange={(e) => set("mileageKm", sanitizeInteger(e.target.value))}
                     placeholder="0"
                     inputMode="numeric"
                   />
@@ -653,54 +664,30 @@ export function AddVehicleDialog({
                   <Label>
                     Fuel Type <span className="text-destructive">*</span>
                   </Label>
-                  <Select
-                    value={form.fuelTypeId === null ? "" : String(form.fuelTypeId)}
-                    onValueChange={(v) => set("fuelTypeId", v ? Number(v) : null)}
-                  >
-                    <SelectTrigger className={touched && form.fuelTypeId === null ? "ring-1 ring-destructive" : ""}>
-                      <SelectValue placeholder="Select Fuel Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {fuelOptions.length === 0 ? (
-                        <SelectItem value="no-options" disabled>
-                          No Fuel Types Available
-                        </SelectItem>
-                      ) : (
-                        fuelOptions.map((f) => (
-                          <SelectItem key={f.id} value={String(f.id)}>
-                            {f.name}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <VehicleSearchableSelect
+                    options={fuelOptions}
+                    value={form.fuelTypeId}
+                    onValueChange={(v) => set("fuelTypeId", v)}
+                    placeholder="Select Fuel Type"
+                    searchPlaceholder="Search fuel type..."
+                    emptyText="No fuel types found."
+                    hasError={touched && form.fuelTypeId === null}
+                  />
                 </div>
 
                 <div className="grid gap-2">
                   <Label>
                     Engine Type <span className="text-destructive">*</span>
                   </Label>
-                  <Select
-                    value={form.engineTypeId === null ? "" : String(form.engineTypeId)}
-                    onValueChange={(v) => set("engineTypeId", v ? Number(v) : null)}
-                  >
-                    <SelectTrigger className={touched && form.engineTypeId === null ? "ring-1 ring-destructive" : ""}>
-                      <SelectValue placeholder="Select Engine Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {engineOptions.length === 0 ? (
-                        <SelectItem value="no-options" disabled>
-                          No Engine Types Available
-                        </SelectItem>
-                      ) : (
-                        engineOptions.map((en) => (
-                          <SelectItem key={en.id} value={String(en.id)}>
-                            {en.name}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <VehicleSearchableSelect
+                    options={engineOptions}
+                    value={form.engineTypeId}
+                    onValueChange={(v) => set("engineTypeId", v)}
+                    placeholder="Select Engine Type"
+                    searchPlaceholder="Search engine type..."
+                    emptyText="No engine types found."
+                    hasError={touched && form.engineTypeId === null}
+                  />
                 </div>
 
                 <div className="grid gap-2">
@@ -718,10 +705,11 @@ export function AddVehicleDialog({
                   </Label>
                   <Input
                     value={form.seats || ""}
-                    onChange={(e) => set("seats", e.target.value)}
+                    onChange={(e) => set("seats", sanitizeInteger(e.target.value, 3))}
                     className={touched && !requiredOk(form.seats || "") ? "ring-1 ring-destructive" : ""}
                     placeholder="0"
                     inputMode="numeric"
+                    maxLength={3}
                   />
                 </div>
 
@@ -731,9 +719,10 @@ export function AddVehicleDialog({
                   </Label>
                   <Input
                     value={form.maximumWeight || ""}
-                    onChange={(e) => set("maximumWeight", e.target.value)}
+                    onChange={(e) => set("maximumWeight", sanitizeDecimal(e.target.value))}
                     className={touched && !requiredOk(form.maximumWeight || "") ? "ring-1 ring-destructive" : ""}
                     placeholder="0.00"
+                    inputMode="decimal"
                   />
                 </div>
 
@@ -743,9 +732,10 @@ export function AddVehicleDialog({
                   </Label>
                   <Input
                     value={form.minimumLoad || ""}
-                    onChange={(e) => set("minimumLoad", e.target.value)}
+                    onChange={(e) => set("minimumLoad", sanitizeDecimal(e.target.value))}
                     className={touched && !requiredOk(form.minimumLoad || "") ? "ring-1 ring-destructive" : ""}
                     placeholder="0.00"
+                    inputMode="decimal"
                   />
                 </div>
 
@@ -755,9 +745,10 @@ export function AddVehicleDialog({
                   </Label>
                   <Input
                     value={form.maxLiters || ""}
-                    onChange={(e) => set("maxLiters", e.target.value)}
+                    onChange={(e) => set("maxLiters", sanitizeDecimal(e.target.value))}
                     className={touched && !requiredOk(form.maxLiters || "") ? "ring-1 ring-destructive" : ""}
                     placeholder="0.00"
+                    inputMode="decimal"
                   />
                 </div>
 
@@ -779,9 +770,10 @@ export function AddVehicleDialog({
                   </Label>
                   <Input
                     value={form.cbmLength || ""}
-                    onChange={(e) => set("cbmLength", e.target.value)}
+                    onChange={(e) => set("cbmLength", sanitizeDecimal(e.target.value))}
                     className={touched && !requiredOk(form.cbmLength || "") ? "ring-1 ring-destructive" : ""}
                     placeholder="0.00"
+                    inputMode="decimal"
                   />
                 </div>
 
@@ -791,9 +783,10 @@ export function AddVehicleDialog({
                   </Label>
                   <Input
                     value={form.cbmWidth || ""}
-                    onChange={(e) => set("cbmWidth", e.target.value)}
+                    onChange={(e) => set("cbmWidth", sanitizeDecimal(e.target.value))}
                     className={touched && !requiredOk(form.cbmWidth || "") ? "ring-1 ring-destructive" : ""}
                     placeholder="0.00"
+                    inputMode="decimal"
                   />
                 </div>
 
@@ -803,9 +796,10 @@ export function AddVehicleDialog({
                   </Label>
                   <Input
                     value={form.cbmHeight || ""}
-                    onChange={(e) => set("cbmHeight", e.target.value)}
+                    onChange={(e) => set("cbmHeight", sanitizeDecimal(e.target.value))}
                     className={touched && !requiredOk(form.cbmHeight || "") ? "ring-1 ring-destructive" : ""}
                     placeholder="0.00"
+                    inputMode="decimal"
                   />
                 </div>
               </div>

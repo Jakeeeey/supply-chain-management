@@ -31,7 +31,7 @@ import { toast } from "sonner";
 import { saveDriver, updateDriver, uploadDriverLicenseFile } from "../providers/fetchProvider";
 import { parseLicenseText } from "../utils/ocrParser";
 import type { DriverWithDetails, User, Branch } from "../types";
-import { Camera, CheckCircle2, Sparkles, UploadCloud, AlertCircle } from "lucide-react";
+import { Camera, CheckCircle2, Sparkles, UploadCloud, AlertCircle, AlertTriangle, ZoomIn, Eye } from "lucide-react";
 import { createWorker } from "tesseract.js";
 
 interface DriverModalProps {
@@ -112,10 +112,10 @@ export function DriverModal({
     // OCR Capture State
     const [scannedFile, setScannedFile] = React.useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
-    const [ocrRawText, setOcrRawText] = React.useState<string>("");
     const [ocrProgress, setOcrProgress] = React.useState<number>(0);
     const [ocrStatusText, setOcrStatusText] = React.useState<string>("");
-    const [showRawOcrInput, setShowRawOcrInput] = React.useState(false);
+    const [ocrWarning, setOcrWarning] = React.useState<string | null>(null);
+    const [isLightboxOpen, setIsLightboxOpen] = React.useState<boolean>(false);
     const [isVerified, setIsVerified] = React.useState<boolean>(false);
 
     const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -190,7 +190,7 @@ export function DriverModal({
                 setPreviewUrl(null);
             }
             setScannedFile(null);
-            setOcrRawText("");
+            setOcrWarning(null);
         } else {
             setSelectedUserId("");
             setSelectedGoodBranchId("");
@@ -199,7 +199,6 @@ export function DriverModal({
             setLicenseForm(EMPTY_LICENSE_FORM);
             setScannedFile(null);
             setPreviewUrl(null);
-            setOcrRawText("");
             setIsVerified(false);
         }
     }, [editingDriver, isOpen]);
@@ -268,20 +267,25 @@ export function DriverModal({
             const ret = await worker.recognize(file);
             const extractedText = ret.data.text || "";
 
-            setOcrRawText(extractedText);
             const parsed = parseLicenseText(extractedText);
 
-            setLicenseForm((prev) => ({
-                ...prev,
-                license_no: parsed.license_no || prev.license_no,
-                license_classification: parsed.license_classification || prev.license_classification,
-                license_restrictions: parsed.license_restrictions || prev.license_restrictions,
-                license_expiry_date: parsed.license_expiry_date || prev.license_expiry_date,
-            }));
+            const hasReadableDetails = Boolean(parsed.license_no || parsed.license_expiry_date);
+            if (!hasReadableDetails) {
+                setOcrWarning("License text unclear—please enter details manually or upload a clearer scan.");
+            } else {
+                setOcrWarning(null);
+                setLicenseForm((prev) => ({
+                    ...prev,
+                    license_no: parsed.license_no || prev.license_no,
+                    license_classification: parsed.license_classification || prev.license_classification,
+                    license_restrictions: parsed.license_restrictions || prev.license_restrictions,
+                    license_expiry_date: parsed.license_expiry_date || prev.license_expiry_date,
+                }));
 
-            // Autofill contact info if found and not yet filled
-            if (parsed.address && !contactForm.contact_address) {
-                updateContactField("contact_address", parsed.address);
+                // Autofill contact info if found and not yet filled
+                if (parsed.address && !contactForm.contact_address) {
+                    updateContactField("contact_address", parsed.address);
+                }
             }
 
             const cleanScannedLic = normalizeLicense(parsed.license_no);
@@ -292,12 +296,15 @@ export function DriverModal({
             if (duplicate) {
                 const driverName = duplicate.user ? `${duplicate.user.user_fname} ${duplicate.user.user_lname}` : "another driver";
                 toast.warning(`Warning: License ${parsed.license_no} is already assigned to ${driverName}.`);
-            } else {
+            } else if (hasReadableDetails) {
                 toast.success("License scanned with Tesseract.js! Details autofilled.");
+            } else {
+                toast.warning("License text unclear. Please review and enter details manually.");
             }
         } catch (err: unknown) {
             console.error("Tesseract OCR error:", err);
-            toast.error("Failed to read license via OCR. You can still enter or edit details manually.");
+            setOcrWarning("License text unclear—please enter details manually or upload a clearer scan.");
+            toast.error("Failed to read license via OCR. You can still enter details manually.");
         } finally {
             if (worker) {
                 try {
@@ -311,19 +318,7 @@ export function DriverModal({
         }
     };
 
-    // Apply manual raw OCR text paste / scan
-    const handleApplyRawOcr = () => {
-        if (!ocrRawText.trim()) return;
-        const parsed = parseLicenseText(ocrRawText);
-        setLicenseForm((prev) => ({
-            ...prev,
-            license_no: parsed.license_no || prev.license_no,
-            license_classification: parsed.license_classification || prev.license_classification,
-            license_restrictions: parsed.license_restrictions || prev.license_restrictions,
-            license_expiry_date: parsed.license_expiry_date || prev.license_expiry_date,
-        }));
-        toast.success("Autofill updated from OCR text!");
-    };
+
 
     // Memoize good branch options
     const goodBranchOptions = React.useMemo((): { value: string; label: string }[] => {
@@ -428,6 +423,7 @@ export function DriverModal({
     };
 
     return (
+        <>
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-3xl max-h-[90vh] p-0 flex flex-col rounded-2xl border-white/10 overflow-hidden">
                 <DialogHeader className="p-6 pb-2 shrink-0 border-b">
@@ -507,56 +503,51 @@ export function DriverModal({
                                 </div>
                             )}
 
-                            {/* Preview & OCR Read Status */}
+                            {/* OCR Inline Warning Badge */}
+                            {ocrWarning && (
+                                <div className="flex items-center gap-2.5 p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 text-xs animate-in fade-in-50">
+                                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                                    <span className="font-medium leading-relaxed">{ocrWarning}</span>
+                                </div>
+                            )}
+
+                            {/* Preview & OCR Read Status with Lightbox Modal */}
                             {previewUrl && (
                                 <div className="flex flex-col sm:flex-row items-center gap-4 p-3 bg-background/80 rounded-lg border border-border">
-                                    <div className="relative w-36 h-20 rounded-md overflow-hidden border bg-muted flex items-center justify-center shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsLightboxOpen(true)}
+                                        className="group relative w-36 h-20 rounded-md overflow-hidden border bg-muted flex items-center justify-center shrink-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                        title="Click to view full image"
+                                    >
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={previewUrl} alt="License preview" className="w-full h-full object-cover" />
-                                    </div>
+                                        <img src={previewUrl} alt="License preview" className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-[11px] font-semibold">
+                                            <ZoomIn className="h-4 w-4" />
+                                            <span>Inspect</span>
+                                        </div>
+                                    </button>
                                     <div className="flex-1 space-y-1 text-xs">
                                         <div className="font-semibold text-foreground flex items-center gap-1.5">
                                             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                                             License Document Attached
                                         </div>
-                                        <p className="text-muted-foreground">
+                                        <p className="text-muted-foreground truncate max-w-xs">
                                             {scannedFile ? scannedFile.name : "Stored in Document Management records"}
                                         </p>
-                                        <div className="flex items-center gap-2 pt-1">
+                                        <div className="pt-1">
                                             <Button
                                                 type="button"
-                                                variant="ghost"
+                                                variant="outline"
                                                 size="sm"
-                                                className="h-6 px-2 text-[11px] text-primary"
-                                                onClick={() => setShowRawOcrInput(!showRawOcrInput)}
+                                                className="h-7 px-2.5 text-[11px] gap-1.5 font-medium hover:bg-muted"
+                                                onClick={() => setIsLightboxOpen(true)}
                                             >
-                                                {showRawOcrInput ? "Hide OCR Raw Text" : "View / Edit Raw OCR Text"}
+                                                <Eye className="h-3.5 w-3.5 text-primary" />
+                                                View Full License
                                             </Button>
                                         </div>
                                     </div>
-                                </div>
-                            )}
-
-                            {showRawOcrInput && (
-                                <div className="space-y-2 p-3 bg-background rounded-lg border border-border">
-                                    <label className="text-xs font-semibold text-muted-foreground">
-                                        OCR Scanned Text (Can edit and re-apply autofill):
-                                    </label>
-                                    <Textarea
-                                        value={ocrRawText}
-                                        onChange={(e) => setOcrRawText(e.target.value)}
-                                        placeholder="Paste or edit license text here..."
-                                        className="h-20 text-xs font-mono resize-none"
-                                    />
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="secondary"
-                                        className="h-7 text-xs font-bold"
-                                        onClick={handleApplyRawOcr}
-                                    >
-                                        Re-apply Autofill from Text
-                                    </Button>
                                 </div>
                             )}
 
@@ -918,5 +909,43 @@ export function DriverModal({
                 </div>
             </DialogContent>
         </Dialog>
+
+        {/* Full-Size License Image Lightbox Modal */}
+        <Dialog open={isLightboxOpen} onOpenChange={setIsLightboxOpen}>
+            <DialogContent className="max-w-4xl max-h-[90vh] p-4 flex flex-col gap-3">
+                <DialogHeader className="flex flex-row items-center justify-between pb-2 border-b">
+                    <div>
+                        <DialogTitle className="text-base font-bold">Driver License Image Preview</DialogTitle>
+                        <DialogDescription className="text-xs text-muted-foreground">
+                            Inspect full-resolution driver license for manual verification and audit.
+                        </DialogDescription>
+                    </div>
+                </DialogHeader>
+                <div className="relative flex-1 overflow-auto rounded-lg border bg-muted/40 min-h-[300px] max-h-[72vh] flex items-center justify-center p-2">
+                    {previewUrl ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                            src={previewUrl || undefined}
+                            alt="Full Driver License"
+                            className="max-h-[68vh] w-auto max-w-full object-contain rounded shadow-sm"
+                        />
+                    ) : (
+                        <p className="text-xs text-muted-foreground">No license image preview available.</p>
+                    )}
+                </div>
+                <div className="flex justify-end pt-1">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsLightboxOpen(false)}
+                        className="font-medium"
+                    >
+                        Close Preview
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+        </>
     );
 }

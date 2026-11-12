@@ -38,7 +38,7 @@ export function StockInTable({ movements, branches = [], loading }: StockInTable
     return map;
   }, [branches]);
 
-  // Group individual movements by reference_no (Header-Detail Structure)
+  // Group individual movements by (branch_id + reference_no) to prevent cross-branch overlap distortion
   const transactions = React.useMemo<StockInTransactionHeader[]>(() => {
     const map = new Map<string, StockInTransactionHeader>();
 
@@ -49,6 +49,7 @@ export function StockInTable({ movements, branches = [], loading }: StockInTable
         typeof m.branch_id === "object" && m.branch_id !== null
           ? (m.branch_id as Branch)
           : null;
+      const branchIdKey = branchObj?.id ?? (typeof m.branch_id === "number" ? m.branch_id : "unknown");
       const branchName =
         branchObj?.branch_name ||
         (m.branch_id ? branchMap.get(m.branch_id as number) : null) ||
@@ -56,8 +57,11 @@ export function StockInTable({ movements, branches = [], loading }: StockInTable
 
       const lineTotal = Number(m.quantity || 0) * Number(m.unit_cost || 0);
 
-      if (!map.has(ref)) {
-        map.set(ref, {
+      // Composite key guarantees each branch transaction with this reference remains completely isolated
+      const compositeKey = `${branchIdKey}::${ref}`;
+
+      if (!map.has(compositeKey)) {
+        map.set(compositeKey, {
           reference_no: ref,
           created_at: m.created_at,
           branch_id: m.branch_id,
@@ -69,7 +73,7 @@ export function StockInTable({ movements, branches = [], loading }: StockInTable
           items: [m],
         });
       } else {
-        const header = map.get(ref)!;
+        const header = map.get(compositeKey)!;
         header.total_items += 1;
         header.total_quantity += Number(m.quantity || 0);
         header.total_amount += lineTotal;
@@ -140,12 +144,13 @@ export function StockInTable({ movements, branches = [], loading }: StockInTable
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedTransactions.map((tx) => {
+            {paginatedTransactions.map((tx, idx) => {
               const dateStr = tx.created_at ? new Date(tx.created_at).toLocaleDateString() : "—";
+              const uniqueRowKey = `${typeof tx.branch_id === "object" && tx.branch_id ? tx.branch_id.id : tx.branch_id || "b"}::${tx.reference_no}::${idx}`;
 
               return (
                 <TableRow
-                  key={tx.reference_no}
+                  key={uniqueRowKey}
                   className="hover:bg-muted/40 cursor-pointer"
                   onClick={() => handleOpenDetails(tx)}
                 >

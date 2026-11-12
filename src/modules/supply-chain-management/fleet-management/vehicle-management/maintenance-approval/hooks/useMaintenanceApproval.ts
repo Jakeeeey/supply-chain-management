@@ -7,6 +7,7 @@ import {
   fetchApprovalOptions,
   approveOrRejectJobOrder,
 } from "../provider/fetchProviders";
+import { toast } from "sonner";
 
 export function useMaintenanceApproval() {
   const [loading, setLoading] = React.useState(true);
@@ -50,9 +51,16 @@ export function useMaintenanceApproval() {
     setActionLoading(true);
     try {
       await approveOrRejectJobOrder(payload);
+      if (payload.decision === "Approved") {
+        toast.success("Job order approved and mechanic assigned successfully!");
+      } else {
+        toast.success("Job order request has been rejected.");
+      }
       await loadData();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Error approving/rejecting job order:", err);
+      const e = err as Error;
+      toast.error(e?.message || "Failed to process job order approval.");
       throw err;
     } finally {
       setActionLoading(false);

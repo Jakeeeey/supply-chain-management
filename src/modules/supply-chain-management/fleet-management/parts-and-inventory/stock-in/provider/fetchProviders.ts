@@ -15,6 +15,20 @@ export async function fetchBranches(): Promise<Branch[]> {
   }
 }
 
+export async function checkReferenceExists(refNo: string): Promise<boolean> {
+  if (!refNo || !refNo.trim()) return false;
+  try {
+    const res = await fetch(`${BASE_URL}?check_ref=${encodeURIComponent(refNo.trim())}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return false;
+    const json = await res.json().catch(() => ({ exists: false }));
+    return Boolean(json.exists);
+  } catch {
+    return false;
+  }
+}
+
 export async function fetchStockInMovements(params?: {
   search?: string;
   branch_id?: string;

@@ -1,22 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
-import crypto from "crypto";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
+const DIRECTUS_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
+const DIRECTUS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN || "";
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-function safeExt(mime: string) {
-  if (mime === "image/jpeg") return "jpg";
-  if (mime === "image/png") return "png";
-  if (mime === "image/webp") return "webp";
-  return "bin";
+function directusHeaders(extra: Record<string, string> = {}) {
+  const h: Record<string, string> = { ...extra };
+  if (DIRECTUS_TOKEN) h.Authorization = `Bearer ${DIRECTUS_TOKEN}`;
+  return h;
 }
 
 export async function POST(req: NextRequest) {
   try {
+    if (!DIRECTUS_BASE) {
+      return NextResponse.json(
+        { error: "Directus API base URL is not configured." },
+        { status: 500 }
+      );
+    }
+
     const incoming = await req.formData();
     const file = incoming.get("file");
 
@@ -24,7 +30,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
     }
 
-    // ✅ size guard (5MB)
+    // Size guard (5MB)
     if (typeof file.size === "number" && file.size > MAX_BYTES) {
       return NextResponse.json(
         { error: "File too large. Maximum size is 5MB." },
@@ -32,7 +38,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ✅ type guard
+    // Type guard
     const mime = String(file.type || "").toLowerCase();
     if (!ALLOWED_TYPES.has(mime)) {
       return NextResponse.json(
@@ -41,30 +47,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const bytes = Buffer.from(await file.arrayBuffer());
+    // Forward multipart directly to Directus /files storage
+    const directusForm = new FormData();
+    directusForm.append("file", file);
 
-    // Extra safety (in case file.size is missing)
-    if (bytes.length > MAX_BYTES) {
+    const upstreamRes = await fetch(`${DIRECTUS_BASE}/files`, {
+      method: "POST",
+      headers: directusHeaders(),
+      body: directusForm,
+    });
+
+    if (!upstreamRes.ok) {
+      const detail = await upstreamRes
+        .json()
+        .catch(() => ({ message: "Directus file upload failed" }));
+      return NextResponse.json(detail, { status: upstreamRes.status });
+    }
+
+    const result = (await upstreamRes.json()) as { data?: { id?: string } };
+    const fileId = result?.data?.id;
+
+    if (!fileId) {
       return NextResponse.json(
-        { error: "File too large. Maximum size is 5MB." },
-        { status: 413 }
+        { error: "Directus file upload succeeded but no file ID was returned." },
+        { status: 500 }
       );
     }
 
-    // ✅ Save under /public/uploads/vehicles
-    const uploadsDir = path.join(process.cwd(), "public", "uploads", "vehicles");
-    await fs.mkdir(uploadsDir, { recursive: true });
-
-    const ext = safeExt(mime);
-    const name = `${Date.now()}-${crypto.randomBytes(8).toString("hex")}.${ext}`;
-
-    const diskPath = path.join(uploadsDir, name);
-    await fs.writeFile(diskPath, bytes);
-
-    // ✅ Store this path in DB (vehicles.image)
-    const publicPath = `/uploads/vehicles/${name}`;
-
-    return NextResponse.json({ data: { path: publicPath } }, { status: 200 });
+    // Return the Directus asset ID
+    return NextResponse.json({ data: { path: fileId, id: fileId } }, { status: 200 });
   } catch (e: unknown) {
     const err = e as Error;
     return NextResponse.json(

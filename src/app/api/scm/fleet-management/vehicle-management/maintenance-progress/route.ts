@@ -122,7 +122,7 @@ export async function GET(req: NextRequest) {
             part_code: partObj?.part_code || "",
             quantity_requested: Number(jp.quantity_requested) || 0,
             quantity_issued: Number(jp.quantity_issued) || 0,
-            unit_cost: Number(jp.unit_cost || partObj?.unit_cost) || 0,
+            unit_cost: Number(jp.unit_cost || partObj?.unit_cost || 0),
             remarks: jp.remarks || "",
           };
         });
@@ -140,118 +140,100 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function PATCH(req: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
     if (!DIRECTUS_URL) throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured");
 
-    const payload = await req.json();
-    const { action } = payload;
+    const payload = await req.json().catch(() => ({}));
+    const action = payload.action;
     const userId = getUserIdFromRequest(req);
     const utcNow = new Date().toISOString();
 
-    // 1. Issue Parts during Maintenance Progress
-    if (action === "issue_parts") {
-      const { job_order_id, branch_id, items } = payload;
-      if (!job_order_id || !items || !Array.isArray(items) || items.length === 0) {
-        return json({ error: "Missing job_order_id or parts items" }, 400);
-      }
+    // Helper function to process part deductions & movements
+    async function deductAndIssueParts(
+      jobOrderId: number,
+      effectiveBranchId: number,
+      items: Array<{ part_id: number; quantity: number; unit_cost: number; remarks?: string }>
+    ) {
+      if (!items || items.length === 0) return;
 
-      // Fetch Job Order to resolve true branch and vehicle details
-      const joRes = await fetch(`${DIRECTUS_URL}/items/vehicle_job_orders/${job_order_id}?fields=id,jo_no,branch_id,vehicle_id`, {
-        headers: directusHeaders(),
+      // Fetch JO details for context
+      const joDetailsRes = await fetch(`${DIRECTUS_URL}/items/vehicle_job_orders/${jobOrderId}?fields=id,jo_no,vehicle_id`, {
         cache: "no-store",
+        headers: directusHeaders(),
       });
-      const joData = await joRes.json().catch(() => ({}));
-      const jo = joData?.data;
-
-      const effectiveBranchId =
-        branch_id
-          ? Number(branch_id)
-          : typeof jo?.branch_id === "object" && jo?.branch_id !== null
-          ? Number(jo.branch_id.id)
-          : Number(jo?.branch_id || 1);
-
+      const joDetails = (await joDetailsRes.json().catch(() => ({})))?.data || {};
       const vehicleId =
-        typeof jo?.vehicle_id === "object" && jo?.vehicle_id !== null
-          ? Number(jo.vehicle_id.id || jo.vehicle_id.vehicle_id)
-          : jo?.vehicle_id
-          ? Number(jo.vehicle_id)
-          : null;
+        typeof joDetails.vehicle_id === "object" && joDetails.vehicle_id !== null
+          ? joDetails.vehicle_id.id || joDetails.vehicle_id.vehicle_id
+          : joDetails.vehicle_id;
+      const joNo = joDetails.jo_no || `JO-${jobOrderId}`;
 
-      const joNo = jo?.jo_no || `JO-#${job_order_id}`;
-
-      // Consolidate parts items to prevent duplicate rows & multiplier errors
-      const consolidatedMap = new Map<number, { quantity: number; unit_cost: number; remarks?: string }>();
-      for (const it of items) {
-        const pId = Number(it.part_id);
-        const qty = Number(it.quantity);
-        if (!pId || qty <= 0) continue;
-        const existing = consolidatedMap.get(pId);
+      // Consolidate duplicates
+      const consolidated = new Map<number, { part_id: number; quantity: number; unit_cost: number; remarks?: string }>();
+      for (const item of items) {
+        if (!item.part_id || Number(item.quantity) <= 0) continue;
+        const pId = Number(item.part_id);
+        const qty = Number(item.quantity);
+        const existing = consolidated.get(pId);
         if (existing) {
           existing.quantity += qty;
         } else {
-          consolidatedMap.set(pId, {
-            quantity: qty,
-            unit_cost: Number(it.unit_cost || 0),
-            remarks: it.remarks,
-          });
+          consolidated.set(pId, { ...item, part_id: pId, quantity: qty });
         }
       }
 
-      // Check stock availability in the designated branch (Zero-stock guard)
-      for (const [partId, item] of consolidatedMap.entries()) {
+      // Check stock availability
+      for (const [partId, item] of consolidated.entries()) {
         const stockFilter = new URLSearchParams({
           "filter[part_id][_eq]": String(partId),
           "filter[branch_id][_eq]": String(effectiveBranchId),
           limit: "1",
         });
-
-        const stockRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_stock?${stockFilter.toString()}`, {
+        const sRes = await fetch(`${DIRECTUS_URL}/items/vehicle_part_stock?${stockFilter.toString()}`, {
           headers: directusHeaders(),
           cache: "no-store",
         });
-        const stockBody = await stockRes.json().catch(() => ({ data: [] }));
-        const stockItem = stockBody?.data?.[0];
-        const onHand = Number(stockItem?.on_hand) || 0;
+        const sData = await sRes.json().catch(() => ({ data: [] }));
+        const onHand = Number(sData?.data?.[0]?.on_hand || 0);
 
-        if (onHand <= 0) {
-          return json(
-            { error: `Part #${partId} is out of stock in Branch #${effectiveBranchId}. Zero-stock issuance is prohibited.` },
-            400
-          );
-        }
-
-        if (item.quantity > onHand) {
-          return json(
-            { error: `Requested quantity (${item.quantity}) exceeds available stock (${onHand}) for Part #${partId} in Branch #${effectiveBranchId}.` },
-            400
-          );
+        if (onHand < item.quantity) {
+          throw new Error(`Insufficient stock for part ID #${partId} in branch. Available: ${onHand}, Requested: ${item.quantity}`);
         }
       }
 
-      // Execute deductions and movement logging
-      for (const [partId, item] of consolidatedMap.entries()) {
-        // A. Check if already recorded in vehicle_job_order_parts
-        const jopFilter = new URLSearchParams({
-          "filter[job_order_id][_eq]": String(job_order_id),
-          "filter[part_id][_eq]": String(partId),
-          limit: "1",
-        });
-        const jopRes = await fetch(`${DIRECTUS_URL}/items/vehicle_job_order_parts?${jopFilter.toString()}`, {
-          headers: directusHeaders(),
-          cache: "no-store",
-        });
-        const jopData = await jopRes.json().catch(() => ({ data: [] }));
-        const existingJop = jopData?.data?.[0];
+      // Query existing job order parts
+      const existingJoPartsRes = await fetch(
+        `${DIRECTUS_URL}/items/vehicle_job_order_parts?filter[job_order_id][_eq]=${jobOrderId}&limit=-1`,
+        { headers: directusHeaders(), cache: "no-store" }
+      );
+      const existingJoParts = (await existingJoPartsRes.json().catch(() => ({ data: [] })))?.data || [];
 
-        if (existingJop) {
-          await fetch(`${DIRECTUS_URL}/items/vehicle_job_order_parts/${existingJop.id}`, {
+      // Execute deductions and movement logging
+      for (const [partId, item] of consolidated.entries()) {
+        const matchingPartRow = existingJoParts.find(
+          (jp: { part_id: unknown }) => {
+            const rawPId = typeof jp.part_id === "object" && jp.part_id !== null ? (jp.part_id as { id: number }).id : jp.part_id;
+            return Number(rawPId) === Number(partId);
+          }
+        );
+
+        if (matchingPartRow) {
+          const currentIssued = Number(matchingPartRow.quantity_issued || 0);
+          const currentRequested = Number(matchingPartRow.quantity_requested || 0);
+          const newIssued = currentIssued + item.quantity;
+          const newRequested = Math.max(currentRequested, newIssued);
+
+          await fetch(`${DIRECTUS_URL}/items/vehicle_job_order_parts/${matchingPartRow.id}`, {
             method: "PATCH",
             headers: directusHeaders(),
             body: JSON.stringify({
-              quantity_issued: (Number(existingJop.quantity_issued) || 0) + item.quantity,
+              quantity_issued: newIssued,
+              quantity_requested: newRequested,
               issued_by: userId,
               issued_at: utcNow,
+              unit_cost: item.unit_cost,
+              remarks: item.remarks || matchingPartRow.remarks,
             }),
           });
         } else {
@@ -259,19 +241,19 @@ export async function PATCH(req: NextRequest) {
             method: "POST",
             headers: directusHeaders(),
             body: JSON.stringify({
-              job_order_id,
+              job_order_id: Number(jobOrderId),
               part_id: partId,
               quantity_requested: item.quantity,
               quantity_issued: item.quantity,
               unit_cost: item.unit_cost,
               issued_by: userId,
               issued_at: utcNow,
-              remarks: item.remarks || `Issued from Maintenance Progress (${joNo})`,
+              remarks: item.remarks || "Issued from Maintenance Progress",
             }),
-          }).catch(() => null);
+          });
         }
 
-        // B. Log movement in vehicle_part_movements
+        // Record stock movement
         await fetch(`${DIRECTUS_URL}/items/vehicle_part_movements`, {
           method: "POST",
           headers: directusHeaders(),
@@ -281,7 +263,7 @@ export async function PATCH(req: NextRequest) {
             movement_type: "Issue",
             quantity: item.quantity,
             unit_cost: item.unit_cost,
-            job_order_id: Number(job_order_id),
+            job_order_id: Number(jobOrderId),
             vehicle_id: vehicleId,
             reference_no: joNo,
             remarks: item.remarks || `Issued from Maintenance Progress (${joNo})`,
@@ -290,7 +272,7 @@ export async function PATCH(req: NextRequest) {
           }),
         }).catch(() => null);
 
-        // C. Deduct from vehicle_part_stock
+        // Deduct from vehicle_part_stock
         const stockFilter = new URLSearchParams({
           "filter[part_id][_eq]": String(partId),
           "filter[branch_id][_eq]": String(effectiveBranchId),
@@ -315,7 +297,7 @@ export async function PATCH(req: NextRequest) {
           });
         }
 
-        // D. Register to vehicle_installed_parts
+        // Register to vehicle_installed_parts
         if (vehicleId) {
           await fetch(`${DIRECTUS_URL}/items/vehicle_installed_parts`, {
             method: "POST",
@@ -324,22 +306,72 @@ export async function PATCH(req: NextRequest) {
               vehicle_id: vehicleId,
               part_id: partId,
               quantity: item.quantity,
-              job_order_id: Number(job_order_id),
+              job_order_id: Number(jobOrderId),
               installed_at: utcNow,
               remarks: item.remarks || `Fitted during maintenance (${joNo})`,
             }),
           }).catch(() => null);
         }
       }
+    }
+
+    // 1. Issue Parts action
+    if (action === "issue_parts") {
+      const { job_order_id, branch_id, items } = payload;
+      if (!job_order_id || !items || !Array.isArray(items) || items.length === 0) {
+        return json({ error: "Missing job_order_id or items array" }, 400);
+      }
+
+      const joRes = await fetch(`${DIRECTUS_URL}/items/vehicle_job_orders/${job_order_id}?fields=branch_id`, {
+        cache: "no-store",
+        headers: directusHeaders(),
+      });
+      const joData = await joRes.json().catch(() => ({}));
+      const joBranchId =
+        typeof joData?.data?.branch_id === "object" && joData?.data?.branch_id !== null
+          ? joData.data.branch_id.id
+          : joData?.data?.branch_id;
+
+      const effectiveBranchId = Number(branch_id || joBranchId || 1);
+
+      await deductAndIssueParts(Number(job_order_id), effectiveBranchId, items);
 
       return json({ success: true, message: "Parts issued successfully and stock accurately deducted." }, 200);
     }
 
-    // 2. Complete Job Order
+    // 2. Complete Job Order action (with automated difference part deduction)
     if (action === "complete_jo") {
-      const { job_order_id, completion_remarks, labor_cost, final_odometer } = payload;
+      const { job_order_id, completion_remarks, labor_cost, final_odometer, additional_parts } = payload;
       if (!job_order_id) {
         return json({ error: "Missing job_order_id" }, 400);
+      }
+
+      // Check for effective branch
+      const joRes = await fetch(`${DIRECTUS_URL}/items/vehicle_job_orders/${job_order_id}?fields=vehicle_id,branch_id`, {
+        cache: "no-store",
+        headers: directusHeaders(),
+      });
+      const joData = await joRes.json().catch(() => ({}));
+      const joBranchId =
+        typeof joData?.data?.branch_id === "object" && joData?.data?.branch_id !== null
+          ? joData.data.branch_id.id
+          : joData?.data?.branch_id;
+      const effectiveBranchId = Number(joBranchId || 1);
+
+      // If there are additional or exceeded parts with difference > 0, deduct them atomically
+      if (Array.isArray(additional_parts) && additional_parts.length > 0) {
+        const itemsToDeduct = additional_parts
+          .filter((p) => p.part_id > 0 && Number(p.quantity_diff) > 0)
+          .map((p) => ({
+            part_id: Number(p.part_id),
+            quantity: Number(p.quantity_diff),
+            unit_cost: Number(p.unit_cost) || 0,
+            remarks: p.remarks || "Additional parts consumed during repair completion",
+          }));
+
+        if (itemsToDeduct.length > 0) {
+          await deductAndIssueParts(Number(job_order_id), effectiveBranchId, itemsToDeduct);
+        }
       }
 
       // Update Job Order status with completed_by and strict UTC completed_at
@@ -376,11 +408,6 @@ export async function PATCH(req: NextRequest) {
       const patchData = await patchRes.json().catch(() => ({}));
 
       // Update vehicle odometer & status if provided
-      const joRes = await fetch(`${DIRECTUS_URL}/items/vehicle_job_orders/${job_order_id}?fields=vehicle_id`, {
-        cache: "no-store",
-        headers: directusHeaders(),
-      });
-      const joData = await joRes.json().catch(() => ({}));
       const vehicleId =
         typeof joData?.data?.vehicle_id === "object" && joData?.data?.vehicle_id !== null
           ? joData.data.vehicle_id.id || joData.data.vehicle_id.vehicle_id
@@ -400,7 +427,7 @@ export async function PATCH(req: NextRequest) {
         }).catch(() => null);
       }
 
-      return json(patchData, patchRes.status);
+      return json({ success: true, message: "Job order completed successfully.", data: patchData }, 200);
     }
 
     return json({ error: "Invalid action" }, 400);
